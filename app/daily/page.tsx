@@ -30,7 +30,7 @@ export default async function DailyListPage() {
           <Link
             key={d.date}
             href={`/daily/${d.date}`}
-            className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-gray-50 animate-fade-in-up"
+            className="flex items-center justify-between px-6 py-4 transition-all duration-300 ease-ios hover:bg-gray-50 active:bg-gray-100 animate-fade-in-up"
             style={{ animationDelay: `${idx * 40}ms` }}
           >
             <div>

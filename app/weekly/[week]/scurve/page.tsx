@@ -11,6 +11,9 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
 
   const series = buildSCurveSeries(db, week);
   const current = series.find((r) => r.week === week);
+  // Future weeks have no actual point on the curve — fall back to the latest
+  // reported actual so the stat card matches the Data Overall page.
+  const lastActual = [...series].reverse().find((r) => r.actualPct !== null)?.actualPct ?? null;
 
   return (
     <div className="h-full p-6">
@@ -18,7 +21,7 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
         series={series}
         currentWeek={week}
         planPct={current?.planPct ?? null}
-        actualPct={current?.actualPct ?? null}
+        actualPct={current?.actualPct ?? lastActual}
         project={db.project}
       />
     </div>

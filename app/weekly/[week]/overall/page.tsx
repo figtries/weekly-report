@@ -47,8 +47,12 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className={`rounded-xl border border-gray-200 ${s.bg} p-5 shadow-sm transition-shadow hover:shadow-md`}>
+        {stats.map((s, idx) => (
+          <div
+            key={s.label}
+            className={`rounded-xl border border-gray-200 ${s.bg} p-5 shadow-sm transition-all duration-500 ease-ios hover:shadow-md hover:-translate-y-0.5 animate-fade-in-up`}
+            style={{ animationDelay: `${idx * 70}ms` }}
+          >
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">{s.label}</p>
             <p className={`text-3xl font-semibold ${s.tone}`}>
               <AnimatedNumber value={s.value} suffix="%" />
@@ -62,7 +66,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
         week={week}
         compact
         title="Progress Breakdown"
-        subtitle="Type the cumulative Actual % and Plan % for each activity (blue boxes). Weighted factors, targets, variance and the S-Curve all recompute when you save."
+        subtitle="Type the cumulative Actual % and Plan % for each activity (blue boxes) — everything else is auto-calculated. Zero-weight milestones (Project Award, Completed, etc.) are hidden by default."
       />
     </div>
   );

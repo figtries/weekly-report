@@ -66,13 +66,15 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 ${
+                className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
                   isActive
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 active:scale-[0.98]'
+                    ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                {item.icon}
+                <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
+                  {item.icon}
+                </span>
                 <span>{item.name}</span>
               </Link>
             );

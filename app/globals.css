@@ -3,18 +3,66 @@
 :root {
   --background: #f9fafb;
   --foreground: #171717;
+
+  /* Motion system — Apple-style easing curves */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1); /* iOS sheet/nav curve */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* fast start, long soft landing */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1); /* gentle overshoot */
+  --ease-gentle: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
+
+  /* Expose easings as Tailwind utilities: ease-ios, ease-out-expo, ease-spring */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* Interactive elements share the iOS timing curve by default, so every
+   hover/focus/press feels like it belongs to one motion language. */
+button,
+a,
+select,
+input,
+textarea,
+label {
+  transition-timing-function: var(--ease-ios);
+}
+
+/* Soft, always-rounded scrollbars (macOS overlay style) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgb(0 0 0 / 0.14);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.3s var(--ease-ios);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(0 0 0 / 0.28);
+}
+
+/* ---------- Entrance animations ---------- */
 
 @keyframes fade-in {
   from {
@@ -28,7 +76,7 @@ body {
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -39,11 +87,22 @@ body {
 @keyframes scale-in {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes underline-in {
+  from {
+    transform: scaleX(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
   }
 }
 
@@ -57,19 +116,76 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in 0.35s ease-out both;
+  animation: fade-in 0.4s var(--ease-gentle) both;
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-in-up 0.55s var(--ease-out-expo) both;
 }
 
 .animate-scale-in {
-  animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: scale-in 0.35s var(--ease-out-expo) both;
+}
+
+.animate-underline {
+  animation: underline-in 0.3s var(--ease-out-expo) both;
+  transform-origin: center;
 }
 
 .animate-shimmer {
   background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ---------- Route view transitions ---------- */
+/* Old page slips away quickly; the new one settles in with a soft rise.
+   Asymmetric timing (fast exit, gentle delayed enter) is what makes it
+   feel deliberate instead of flickery. Transform + opacity only — GPU cheap. */
+
+::view-transition-old(.page-exit) {
+  animation: 120ms var(--ease-ios) both vt-out;
+}
+
+::view-transition-new(.page-enter) {
+  animation: 260ms var(--ease-out-expo) 30ms both vt-in;
+}
+
+@keyframes vt-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.995);
+  }
+}
+
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }

@@ -39,7 +39,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
       <button
         onClick={create}
         disabled={creating}
-        className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+        className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-50"
       >
         {creating ? 'Creating…' : '+ New Daily Report'}
       </button>

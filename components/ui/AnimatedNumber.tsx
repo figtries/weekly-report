@@ -6,7 +6,7 @@ export default function AnimatedNumber({
   value,
   decimals = 2,
   suffix = '',
-  duration = 600,
+  duration = 900,
 }: {
   value: number;
   decimals?: number;
@@ -25,7 +25,8 @@ export default function AnimatedNumber({
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
+      // ease-out-expo — races through the bulk of the change, then settles softly
+      const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
       setDisplay(from + (to - from) * eased);
       if (t < 1) {
         raf = requestAnimationFrame(tick);

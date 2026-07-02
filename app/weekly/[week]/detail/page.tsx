@@ -26,7 +26,7 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
         week={week}
         readOnly
         title="Detail Progress (WBS)"
-        subtitle="Read-only view — this is the printable detailed breakdown"
+        subtitle="Read-only view — this is the printable detailed breakdown. Use 'Show milestones' to include zero-weight marker rows."
       />
     </div>
   );

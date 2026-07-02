@@ -16,9 +16,15 @@ function planPctOf(node: RollupNode): number {
 /** Round to at most 2 decimals for display (percentages never need more). */
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-function flattenVisible(roots: RollupNode[], expanded: Set<string>): RollupNode[] {
+/** Milestone rows ("Project Award", "SPK-002 Completed", …) carry no weight — they can't affect any total. */
+function isMilestone(node: RollupNode): boolean {
+  return node.children.length === 0 && node.bobot === 0;
+}
+
+function flattenVisible(roots: RollupNode[], expanded: Set<string>, showMilestones: boolean): RollupNode[] {
   const out: RollupNode[] = [];
   const visit = (node: RollupNode) => {
+    if (!showMilestones && isMilestone(node)) return;
     out.push(node);
     if (node.children.length && expanded.has(node.id)) {
       node.children.forEach(visit);
@@ -60,9 +66,11 @@ export default function WbsTreeTable({
   );
   const [edits, setEdits] = useState<Record<string, EditState>>({});
   const [saving, setSaving] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
 
-  const visible = useMemo(() => flattenVisible(roots, expanded), [roots, expanded]);
+  const visible = useMemo(() => flattenVisible(roots, expanded, showMilestones), [roots, expanded, showMilestones]);
   const visibleAll = useMemo(() => flattenAll(roots), [roots]);
+  const milestoneCount = useMemo(() => visibleAll.filter(isMilestone).length, [visibleAll]);
   const dirtyCount = Object.keys(edits).length;
 
   function toggle(id: string) {
@@ -133,18 +141,29 @@ export default function WbsTreeTable({
           <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={expandAll} className="text-sm text-gray-500 transition-colors hover:text-gray-900">
+          <button onClick={expandAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
             Expand all
           </button>
           <span className="text-gray-300">|</span>
-          <button onClick={collapseAll} className="text-sm text-gray-500 transition-colors hover:text-gray-900">
+          <button onClick={collapseAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
             Collapse all
           </button>
+          {milestoneCount > 0 && (
+            <>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={() => setShowMilestones((v) => !v)}
+                className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]"
+              >
+                {showMilestones ? 'Hide milestones' : `Show milestones (${milestoneCount})`}
+              </button>
+            </>
+          )}
           {!readOnly && (
             <button
               onClick={save}
               disabled={!dirtyCount || saving}
-              className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+              className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40"
             >
               {saving ? 'Saving…' : dirtyCount ? `Save ${dirtyCount} change${dirtyCount > 1 ? 's' : ''}` : 'Saved'}
             </button>
@@ -175,6 +194,8 @@ export default function WbsTreeTable({
           <tbody>
             {visible.map((node) => {
               const isLeaf = node.children.length === 0;
+              const milestone = isMilestone(node);
+              const editable = isLeaf && !readOnly && !milestone;
               const cum = edits[node.id]?.cumProgressPct ?? round2(node.curProgressPct);
               const planPct = edits[node.id]?.planPct ?? round2(planPctOf(node));
               const curWF = (node.bobot * cum) / 100;
@@ -207,7 +228,7 @@ export default function WbsTreeTable({
                       {!isLeaf ? (
                         <button
                           onClick={() => toggle(node.id)}
-                          className="mr-1.5 flex h-4 w-4 items-center justify-center text-[10px] text-gray-400 transition-transform duration-200 hover:text-gray-700"
+                          className="mr-1.5 flex h-4 w-4 items-center justify-center text-[10px] text-gray-400 transition-all duration-300 ease-spring hover:text-gray-700"
                           style={{ transform: expanded.has(node.id) ? 'rotate(90deg)' : 'rotate(0deg)' }}
                         >
                           ▶
@@ -215,18 +236,25 @@ export default function WbsTreeTable({
                       ) : (
                         <span className="mr-1.5 inline-block h-4 w-4" />
                       )}
-                      <span className={isLeaf ? 'text-gray-700' : 'text-gray-900'}>{node.deskripsi}</span>
+                      <span className={milestone ? 'italic text-gray-400' : isLeaf ? 'text-gray-700' : 'text-gray-900'}>
+                        {node.deskripsi}
+                      </span>
+                      {milestone && (
+                        <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                          Milestone
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right text-gray-600">{node.bobot.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right text-gray-600">{milestone ? '—' : node.bobot.toFixed(2)}</td>
                   {!compact && (
-                    <td className="px-3 py-2 text-right text-gray-500">
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
                       {node.vol && node.satuan ? `${node.vol} ${node.satuan}` : ''}
                     </td>
                   )}
                   {!compact && (
                     <td className="bg-blue-50/40 px-3 py-2 text-right text-gray-500">
-                      {node.prevProgressPct.toFixed(2)}
+                      {milestone ? '—' : node.prevProgressPct.toFixed(2)}
                     </td>
                   )}
                   {!compact && (
@@ -235,12 +263,11 @@ export default function WbsTreeTable({
                         thisWeek < -0.001 ? 'text-red-500' : thisWeek > 0.001 ? 'text-emerald-600' : 'text-gray-400'
                       }`}
                     >
-                      {thisWeek > 0 ? '+' : ''}
-                      {thisWeek.toFixed(2)}
+                      {milestone ? '—' : `${thisWeek > 0 ? '+' : ''}${thisWeek.toFixed(2)}`}
                     </td>
                   )}
                   <td className="bg-purple-50/40 px-3 py-2 text-right">
-                    {isLeaf && !readOnly ? (
+                    {editable ? (
                       <input
                         type="number"
                         step="0.01"
@@ -248,15 +275,17 @@ export default function WbsTreeTable({
                         max={100}
                         value={cum}
                         onChange={(e) => setEdit(node.id, { cumProgressPct: parseFloat(e.target.value) || 0 })}
-                        className="w-20 rounded-md border border-blue-300 bg-white px-2 py-1 text-right text-gray-900 shadow-sm transition-colors hover:border-blue-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        className="w-20 rounded-md border border-blue-300 bg-white px-2 py-1 text-right text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-blue-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                     ) : (
-                      <span className="text-gray-700">{cum.toFixed(2)}</span>
+                      <span className="text-gray-700">{milestone ? '—' : cum.toFixed(2)}</span>
                     )}
                   </td>
-                  {!compact && <td className="px-3 py-2 text-right text-gray-700">{curWF.toFixed(2)}</td>}
+                  {!compact && (
+                    <td className="px-3 py-2 text-right text-gray-700">{milestone ? '—' : curWF.toFixed(2)}</td>
+                  )}
                   <td className="bg-green-50/40 px-3 py-2 text-right">
-                    {isLeaf && !readOnly ? (
+                    {editable ? (
                       <input
                         type="number"
                         step="0.01"
@@ -264,15 +293,21 @@ export default function WbsTreeTable({
                         max={100}
                         value={planPct}
                         onChange={(e) => setEdit(node.id, { planPct: parseFloat(e.target.value) || 0 })}
-                        className="w-20 rounded-md border border-blue-300 bg-white px-2 py-1 text-right text-gray-900 shadow-sm transition-colors hover:border-blue-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        className="w-20 rounded-md border border-blue-300 bg-white px-2 py-1 text-right text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-blue-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                     ) : (
-                      <span className="text-gray-700">{planPct.toFixed(2)}</span>
+                      <span className="text-gray-700">{milestone ? '—' : planPct.toFixed(2)}</span>
                     )}
                   </td>
-                  {!compact && <td className="px-3 py-2 text-right text-gray-700">{targetWF.toFixed(2)}</td>}
-                  <td className={`px-3 py-2 text-right font-medium ${variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {variance.toFixed(2)}
+                  {!compact && (
+                    <td className="px-3 py-2 text-right text-gray-700">{milestone ? '—' : targetWF.toFixed(2)}</td>
+                  )}
+                  <td
+                    className={`px-3 py-2 text-right font-medium ${
+                      milestone ? 'text-gray-400' : variance < 0 ? 'text-red-600' : 'text-green-600'
+                    }`}
+                  >
+                    {milestone ? '—' : variance.toFixed(2)}
                   </td>
                 </tr>
               );

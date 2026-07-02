@@ -16,7 +16,7 @@
       "name": "Yopi Budiana Perkasa"
     },
     "weekAnchorEndDate": "2025-10-30",
-    "currentWeek": 8
+    "currentWeek": 35
   },
   "wbsItems": [
     {
@@ -34591,7 +34591,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.184404
+          "targetWF": 0.186828
         },
         "w222": {
           "cumProgressPct": 0,
@@ -34611,11 +34611,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.002546
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.005093
         },
         "w230": {
           "cumProgressPct": 23,
@@ -34675,11 +34675,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.090007
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.067505
         },
         "w249": {
           "cumProgressPct": 0,
@@ -34687,11 +34687,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.155517
+          "targetWF": 0.205471
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.187472
+          "targetWF": 0.255941
         },
         "w253": {
           "cumProgressPct": 0,
@@ -34707,31 +34707,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.063209
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.063209
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.047407
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.031605
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.021302
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.034804
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.0347
         },
         "w265": {
           "cumProgressPct": 0,
@@ -34739,47 +34739,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004209
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003367
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003367
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.001684
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.001684
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.002525
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004209
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003367
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.000842
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005893
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005893
         },
         "w280": {
           "cumProgressPct": 0,
@@ -34787,15 +34787,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003367
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006734
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003367
         },
         "w285": {
           "cumProgressPct": 0,
@@ -35478,7 +35478,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.185864
+          "targetWF": 0.190452
         },
         "w222": {
           "cumProgressPct": 0,
@@ -35498,11 +35498,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.004821
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.009642
         },
         "w230": {
           "cumProgressPct": 23,
@@ -35562,11 +35562,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.170401
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.127801
         },
         "w249": {
           "cumProgressPct": 0,
@@ -35574,11 +35574,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.156748
+          "targetWF": 0.251321
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.188956
+          "targetWF": 0.318582
         },
         "w253": {
           "cumProgressPct": 0,
@@ -35594,31 +35594,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.119668
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.119668
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.089751
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.059834
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.040328
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.065891
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.065694
         },
         "w265": {
           "cumProgressPct": 0,
@@ -35626,47 +35626,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.007969
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006375
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006375
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003187
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003187
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004781
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.007969
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006375
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.001594
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011156
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011156
         },
         "w280": {
           "cumProgressPct": 0,
@@ -35674,15 +35674,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006375
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.01275
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006375
         },
         "w285": {
           "cumProgressPct": 0,
@@ -36365,7 +36365,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.186735
+          "targetWF": 0.192616
         },
         "w222": {
           "cumProgressPct": 0,
@@ -36385,11 +36385,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.006179
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.012358
         },
         "w230": {
           "cumProgressPct": 23,
@@ -36449,11 +36449,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.218404
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.163803
         },
         "w249": {
           "cumProgressPct": 0,
@@ -36461,11 +36461,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.157483
+          "targetWF": 0.278698
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.189842
+          "targetWF": 0.355984
         },
         "w253": {
           "cumProgressPct": 0,
@@ -36481,31 +36481,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.153379
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.153379
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.115034
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.076689
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.051689
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.084453
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.084201
         },
         "w265": {
           "cumProgressPct": 0,
@@ -36513,47 +36513,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.010213
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008171
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008171
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004085
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004085
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006128
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.010213
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008171
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.002043
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014299
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014299
         },
         "w280": {
           "cumProgressPct": 0,
@@ -36561,15 +36561,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008171
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.016341
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008171
         },
         "w285": {
           "cumProgressPct": 0,
@@ -37252,7 +37252,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.187607
+          "targetWF": 0.194781
         },
         "w222": {
           "cumProgressPct": 0,
@@ -37272,11 +37272,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.007537
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.015074
         },
         "w230": {
           "cumProgressPct": 23,
@@ -37336,11 +37336,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.266407
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.199805
         },
         "w249": {
           "cumProgressPct": 0,
@@ -37348,11 +37348,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.158218
+          "targetWF": 0.306074
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.190728
+          "targetWF": 0.393387
         },
         "w253": {
           "cumProgressPct": 0,
@@ -37368,31 +37368,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.18709
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.18709
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.140317
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.093545
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.06305
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.103015
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.102707
         },
         "w265": {
           "cumProgressPct": 0,
@@ -37400,47 +37400,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.012458
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.009967
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.009967
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004983
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004983
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.007475
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.012458
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.009967
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.002492
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017441
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017441
         },
         "w280": {
           "cumProgressPct": 0,
@@ -37448,15 +37448,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.009967
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.019933
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.009967
         },
         "w285": {
           "cumProgressPct": 0,
@@ -38139,7 +38139,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.188478
+          "targetWF": 0.196945
         },
         "w222": {
           "cumProgressPct": 0,
@@ -38159,11 +38159,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.008895
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.01779
         },
         "w230": {
           "cumProgressPct": 23,
@@ -38223,11 +38223,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.31441
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.235808
         },
         "w249": {
           "cumProgressPct": 0,
@@ -38235,11 +38235,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.158953
+          "targetWF": 0.333451
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.191614
+          "targetWF": 0.430789
         },
         "w253": {
           "cumProgressPct": 0,
@@ -38255,31 +38255,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.220801
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.220801
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.1656
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.1104
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.07441
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.121576
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.121213
         },
         "w265": {
           "cumProgressPct": 0,
@@ -38287,47 +38287,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014703
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011762
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011762
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005881
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005881
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008822
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014703
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011762
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.002941
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020584
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020584
         },
         "w280": {
           "cumProgressPct": 0,
@@ -38335,15 +38335,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011762
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023525
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011762
         },
         "w285": {
           "cumProgressPct": 0,
@@ -39026,7 +39026,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.189871
+          "targetWF": 0.200403
         },
         "w222": {
           "cumProgressPct": 0,
@@ -39046,11 +39046,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.011066
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.022131
         },
         "w230": {
           "cumProgressPct": 23,
@@ -39110,11 +39110,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.391128
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.293346
         },
         "w249": {
           "cumProgressPct": 0,
@@ -39122,11 +39122,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.160128
+          "targetWF": 0.377204
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.193031
+          "targetWF": 0.490565
         },
         "w253": {
           "cumProgressPct": 0,
@@ -39142,31 +39142,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.274678
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.274678
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.206008
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.137339
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.092567
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.151242
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.15079
         },
         "w265": {
           "cumProgressPct": 0,
@@ -39174,47 +39174,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.018291
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014632
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014632
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.007316
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.007316
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.010974
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.018291
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014632
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.003658
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.025607
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.025607
         },
         "w280": {
           "cumProgressPct": 0,
@@ -39222,15 +39222,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014632
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.029265
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.014632
         },
         "w285": {
           "cumProgressPct": 0,
@@ -39913,7 +39913,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.191264
+          "targetWF": 0.203862
         },
         "w222": {
           "cumProgressPct": 0,
@@ -39933,11 +39933,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.013236
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.026472
         },
         "w230": {
           "cumProgressPct": 23,
@@ -39997,11 +39997,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.467847
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.350885
         },
         "w249": {
           "cumProgressPct": 0,
@@ -40009,11 +40009,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.161303
+          "targetWF": 0.420958
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.194447
+          "targetWF": 0.550342
         },
         "w253": {
           "cumProgressPct": 0,
@@ -40029,31 +40029,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.328555
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.328555
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.246416
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.164277
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.110724
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.180908
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.180368
         },
         "w265": {
           "cumProgressPct": 0,
@@ -40061,47 +40061,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.021878
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017503
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017503
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008751
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.008751
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.013127
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.021878
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017503
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.004376
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.030629
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.030629
         },
         "w280": {
           "cumProgressPct": 0,
@@ -40109,15 +40109,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017503
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.035005
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017503
         },
         "w285": {
           "cumProgressPct": 0,
@@ -40800,7 +40800,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.192657
+          "targetWF": 0.207321
         },
         "w222": {
           "cumProgressPct": 0,
@@ -40820,11 +40820,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.015407
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.030813
         },
         "w230": {
           "cumProgressPct": 23,
@@ -40884,11 +40884,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.544566
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.408424
         },
         "w249": {
           "cumProgressPct": 0,
@@ -40896,11 +40896,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.162477
+          "targetWF": 0.464711
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.195863
+          "targetWF": 0.610118
         },
         "w253": {
           "cumProgressPct": 0,
@@ -40916,31 +40916,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.382432
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.382432
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.286824
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.191216
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12888
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.210573
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.209945
         },
         "w265": {
           "cumProgressPct": 0,
@@ -40948,47 +40948,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.025466
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020373
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020373
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.010186
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.010186
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.015279
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.025466
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020373
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005093
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.035652
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.035652
         },
         "w280": {
           "cumProgressPct": 0,
@@ -40996,15 +40996,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020373
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.040745
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.020373
         },
         "w285": {
           "cumProgressPct": 0,
@@ -41687,7 +41687,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.19405
+          "targetWF": 0.21078
         },
         "w222": {
           "cumProgressPct": 0,
@@ -41707,11 +41707,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.017577
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.035154
         },
         "w230": {
           "cumProgressPct": 23,
@@ -41771,11 +41771,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.621284
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.465963
         },
         "w249": {
           "cumProgressPct": 0,
@@ -41783,11 +41783,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.163652
+          "targetWF": 0.508465
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.197279
+          "targetWF": 0.669895
         },
         "w253": {
           "cumProgressPct": 0,
@@ -41803,31 +41803,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.436309
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.436309
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.327232
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.218155
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.147037
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.240239
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.239522
         },
         "w265": {
           "cumProgressPct": 0,
@@ -41835,47 +41835,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.029053
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023243
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023243
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011621
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.011621
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.017432
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.029053
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023243
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.005811
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.040675
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.040675
         },
         "w280": {
           "cumProgressPct": 0,
@@ -41883,15 +41883,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023243
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.046486
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.023243
         },
         "w285": {
           "cumProgressPct": 0,
@@ -42574,7 +42574,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.195443
+          "targetWF": 0.214238
         },
         "w222": {
           "cumProgressPct": 0,
@@ -42594,11 +42594,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.019748
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.039495
         },
         "w230": {
           "cumProgressPct": 23,
@@ -42658,11 +42658,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.698003
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.523502
         },
         "w249": {
           "cumProgressPct": 0,
@@ -42670,11 +42670,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.164827
+          "targetWF": 0.552218
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.198695
+          "targetWF": 0.729671
         },
         "w253": {
           "cumProgressPct": 0,
@@ -42690,31 +42690,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.490186
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.490186
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.36764
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.245093
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.165194
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.269905
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.269099
         },
         "w265": {
           "cumProgressPct": 0,
@@ -42722,47 +42722,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.032641
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026113
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026113
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.013056
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.013056
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.019585
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.032641
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026113
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.006528
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.045698
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.045698
         },
         "w280": {
           "cumProgressPct": 0,
@@ -42770,15 +42770,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026113
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.052226
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026113
         },
         "w285": {
           "cumProgressPct": 0,
@@ -43461,7 +43461,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.20723
+          "targetWF": 0.243506
         },
         "w222": {
           "cumProgressPct": 0,
@@ -43481,11 +43481,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.038114
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.076228
         },
         "w230": {
           "cumProgressPct": 23,
@@ -43545,11 +43545,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.347178
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.010384
         },
         "w249": {
           "cumProgressPct": 0,
@@ -43557,11 +43557,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.174767
+          "targetWF": 0.922451
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.210678
+          "targetWF": 1.235487
         },
         "w253": {
           "cumProgressPct": 0,
@@ -43577,31 +43577,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.946083
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.946083
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.709562
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.473041
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.318832
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.520929
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.519373
         },
         "w265": {
           "cumProgressPct": 0,
@@ -43609,47 +43609,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.062999
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.050399
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.050399
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.0252
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.0252
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.037799
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.062999
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.050399
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.0126
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.088198
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.088198
         },
         "w280": {
           "cumProgressPct": 0,
@@ -43657,15 +43657,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.050399
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.100798
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.050399
         },
         "w285": {
           "cumProgressPct": 0,
@@ -44348,7 +44348,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.208623
+          "targetWF": 0.246964
         },
         "w222": {
           "cumProgressPct": 0,
@@ -44368,11 +44368,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.040284
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.080569
         },
         "w230": {
           "cumProgressPct": 23,
@@ -44432,11 +44432,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.423896
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.067923
         },
         "w249": {
           "cumProgressPct": 0,
@@ -44444,11 +44444,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.175942
+          "targetWF": 0.966205
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.212094
+          "targetWF": 1.295264
         },
         "w253": {
           "cumProgressPct": 0,
@@ -44464,31 +44464,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.99996
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.99996
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.74997
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.49998
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.336989
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.550594
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.54895
         },
         "w265": {
           "cumProgressPct": 0,
@@ -44496,47 +44496,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.066586
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.053269
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.053269
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026635
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026635
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.039952
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.066586
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.053269
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.013317
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.093221
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.093221
         },
         "w280": {
           "cumProgressPct": 0,
@@ -44544,15 +44544,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.053269
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.106538
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.053269
         },
         "w285": {
           "cumProgressPct": 0,
@@ -45235,7 +45235,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.217811
+          "targetWF": 0.269779
         },
         "w222": {
           "cumProgressPct": 0,
@@ -45255,11 +45255,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.054602
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.109203
         },
         "w230": {
           "cumProgressPct": 23,
@@ -45319,11 +45319,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.929958
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.447468
         },
         "w249": {
           "cumProgressPct": 0,
@@ -45331,11 +45331,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.183691
+          "targetWF": 1.254818
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.221435
+          "targetWF": 1.68957
         },
         "w253": {
           "cumProgressPct": 0,
@@ -45351,31 +45351,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.355351
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.355351
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.016513
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.677676
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.456756
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.746279
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.74405
         },
         "w265": {
           "cumProgressPct": 0,
@@ -45383,47 +45383,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.090252
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072202
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072202
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.036101
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.036101
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.054151
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.090252
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072202
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.01805
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126352
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126352
         },
         "w280": {
           "cumProgressPct": 0,
@@ -45431,15 +45431,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072202
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.144403
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072202
         },
         "w285": {
           "cumProgressPct": 0,
@@ -46122,7 +46122,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.219204
+          "targetWF": 0.273238
         },
         "w222": {
           "cumProgressPct": 0,
@@ -46142,11 +46142,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.056772
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.113544
         },
         "w230": {
           "cumProgressPct": 23,
@@ -46206,11 +46206,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.006676
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.505007
         },
         "w249": {
           "cumProgressPct": 0,
@@ -46218,11 +46218,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.184865
+          "targetWF": 1.298571
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.222851
+          "targetWF": 1.749346
         },
         "w253": {
           "cumProgressPct": 0,
@@ -46238,31 +46238,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.409228
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.409228
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.056921
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.704614
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.474913
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 0.775944
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.773627
         },
         "w265": {
           "cumProgressPct": 0,
@@ -46270,47 +46270,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.093839
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075072
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075072
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.037536
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.037536
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.056303
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.093839
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075072
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.018768
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.131375
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.131375
         },
         "w280": {
           "cumProgressPct": 0,
@@ -46318,15 +46318,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075072
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.150143
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075072
         },
         "w285": {
           "cumProgressPct": 0,
@@ -47009,7 +47009,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.231082
+          "targetWF": 0.302734
         },
         "w222": {
           "cumProgressPct": 0,
@@ -47029,11 +47029,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.075282
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.150564
         },
         "w230": {
           "cumProgressPct": 23,
@@ -47093,11 +47093,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.660932
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.995699
         },
         "w249": {
           "cumProgressPct": 0,
@@ -47105,11 +47105,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.194883
+          "targetWF": 1.671701
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.234927
+          "targetWF": 2.259121
         },
         "w253": {
           "cumProgressPct": 0,
@@ -47125,31 +47125,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.868692
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.868692
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.401519
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.934346
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.629754
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.028933
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.02586
         },
         "w265": {
           "cumProgressPct": 0,
@@ -47157,47 +47157,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124435
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.099548
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.099548
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.049774
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.049774
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.074661
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124435
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.099548
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.024887
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.174209
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.174209
         },
         "w280": {
           "cumProgressPct": 0,
@@ -47205,15 +47205,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.099548
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.199095
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.099548
         },
         "w285": {
           "cumProgressPct": 0,
@@ -47896,7 +47896,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.232323
+          "targetWF": 0.305815
         },
         "w222": {
           "cumProgressPct": 0,
@@ -47916,11 +47916,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.077216
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.154431
         },
         "w230": {
           "cumProgressPct": 23,
@@ -47980,11 +47980,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.72927
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.046953
         },
         "w249": {
           "cumProgressPct": 0,
@@ -47992,11 +47992,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.19593
+          "targetWF": 1.710675
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.236189
+          "targetWF": 2.312367
         },
         "w253": {
           "cumProgressPct": 0,
@@ -48012,31 +48012,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.916684
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.916684
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.437513
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.958342
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.645927
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.055358
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.052206
         },
         "w265": {
           "cumProgressPct": 0,
@@ -48044,47 +48044,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12763
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.102105
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.102105
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.051052
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.051052
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.076578
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12763
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.102105
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.025526
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.178683
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.178683
         },
         "w280": {
           "cumProgressPct": 0,
@@ -48092,15 +48092,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.102105
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.204208
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.102105
         },
         "w285": {
           "cumProgressPct": 0,
@@ -48783,7 +48783,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.234147
+          "targetWF": 0.310344
         },
         "w222": {
           "cumProgressPct": 0,
@@ -48803,11 +48803,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.080058
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.160116
         },
         "w230": {
           "cumProgressPct": 23,
@@ -48867,11 +48867,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.829733
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.1223
         },
         "w249": {
           "cumProgressPct": 0,
@@ -48879,11 +48879,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.197468
+          "targetWF": 1.76797
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.238043
+          "targetWF": 2.390644
         },
         "w253": {
           "cumProgressPct": 0,
@@ -48899,31 +48899,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.987236
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.987236
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.490427
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.993618
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.669703
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.094205
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.090937
         },
         "w265": {
           "cumProgressPct": 0,
@@ -48931,47 +48931,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.132328
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.105863
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.105863
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.052931
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.052931
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.079397
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.132328
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.105863
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.026465
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.18526
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.18526
         },
         "w280": {
           "cumProgressPct": 0,
@@ -48979,15 +48979,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.105863
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.211725
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.105863
         },
         "w285": {
           "cumProgressPct": 0,
@@ -49670,7 +49670,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.235252
+          "targetWF": 0.313087
         },
         "w222": {
           "cumProgressPct": 0,
@@ -49690,11 +49690,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.081779
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.163558
         },
         "w230": {
           "cumProgressPct": 23,
@@ -49754,11 +49754,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.890572
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.16793
         },
         "w249": {
           "cumProgressPct": 0,
@@ -49766,11 +49766,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.198399
+          "targetWF": 1.802668
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.239166
+          "targetWF": 2.438049
         },
         "w253": {
           "cumProgressPct": 0,
@@ -49786,31 +49786,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.029962
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.029962
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.522471
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.014981
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.684102
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.11773
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.114393
         },
         "w265": {
           "cumProgressPct": 0,
@@ -49818,47 +49818,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.135173
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.108139
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.108139
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.05407
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.05407
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.081104
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.135173
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.108139
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.027034
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.189243
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.189243
         },
         "w280": {
           "cumProgressPct": 0,
@@ -49866,15 +49866,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.108139
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.216277
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.108139
         },
         "w285": {
           "cumProgressPct": 0,
@@ -50557,7 +50557,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.239423
+          "targetWF": 0.323444
         },
         "w222": {
           "cumProgressPct": 0,
@@ -50577,11 +50577,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.088278
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.176557
         },
         "w230": {
           "cumProgressPct": 23,
@@ -50641,11 +50641,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.120298
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.340224
         },
         "w249": {
           "cumProgressPct": 0,
@@ -50653,11 +50653,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.201917
+          "targetWF": 1.933683
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.243406
+          "targetWF": 2.617043
         },
         "w253": {
           "cumProgressPct": 0,
@@ -50673,31 +50673,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.191291
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.191291
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.643468
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.095645
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.73847
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.206561
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.202958
         },
         "w265": {
           "cumProgressPct": 0,
@@ -50705,47 +50705,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145916
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.116733
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.116733
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.058367
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.058367
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.08755
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145916
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.116733
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.029183
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.204283
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.204283
         },
         "w280": {
           "cumProgressPct": 0,
@@ -50753,15 +50753,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.116733
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.233466
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.116733
         },
         "w285": {
           "cumProgressPct": 0,
@@ -51444,7 +51444,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.243072
+          "targetWF": 0.332506
         },
         "w222": {
           "cumProgressPct": 0,
@@ -51464,11 +51464,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.093965
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.187931
         },
         "w230": {
           "cumProgressPct": 23,
@@ -51528,11 +51528,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.321307
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.490981
         },
         "w249": {
           "cumProgressPct": 0,
@@ -51540,11 +51540,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.204995
+          "targetWF": 2.048321
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.247117
+          "targetWF": 2.773663
         },
         "w253": {
           "cumProgressPct": 0,
@@ -51560,31 +51560,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.332454
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.332454
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.74934
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.166227
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.786042
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.284287
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.280453
         },
         "w265": {
           "cumProgressPct": 0,
@@ -51592,47 +51592,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.155316
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124253
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124253
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.062127
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.062127
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.09319
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.155316
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124253
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.031063
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.217443
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.217443
         },
         "w280": {
           "cumProgressPct": 0,
@@ -51640,15 +51640,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124253
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.248506
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.124253
         },
         "w285": {
           "cumProgressPct": 0,
@@ -52331,7 +52331,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.243947
+          "targetWF": 0.334679
         },
         "w222": {
           "cumProgressPct": 0,
@@ -52351,11 +52351,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.095329
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.190657
         },
         "w230": {
           "cumProgressPct": 23,
@@ -52415,11 +52415,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.369493
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.52712
         },
         "w249": {
           "cumProgressPct": 0,
@@ -52427,11 +52427,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.205733
+          "targetWF": 2.075803
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.248006
+          "targetWF": 2.811208
         },
         "w253": {
           "cumProgressPct": 0,
@@ -52447,31 +52447,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.366294
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.366294
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.77472
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.183147
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.797446
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.30292
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.29903
         },
         "w265": {
           "cumProgressPct": 0,
@@ -52479,47 +52479,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.15757
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126056
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126056
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.063028
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.063028
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.094542
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.15757
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126056
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.031514
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.220597
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.220597
         },
         "w280": {
           "cumProgressPct": 0,
@@ -52527,15 +52527,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126056
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.252111
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.126056
         },
         "w285": {
           "cumProgressPct": 0,
@@ -53218,7 +53218,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.245357
+          "targetWF": 0.338179
         },
         "w222": {
           "cumProgressPct": 0,
@@ -53238,11 +53238,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.097525
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.19505
         },
         "w230": {
           "cumProgressPct": 23,
@@ -53302,11 +53302,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.447127
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.585345
         },
         "w249": {
           "cumProgressPct": 0,
@@ -53314,11 +53314,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.206921
+          "targetWF": 2.120078
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.249439
+          "targetWF": 2.871697
         },
         "w253": {
           "cumProgressPct": 0,
@@ -53334,31 +53334,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.420813
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.420813
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.81561
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.210407
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.81582
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.33294
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.328959
         },
         "w265": {
           "cumProgressPct": 0,
@@ -53366,47 +53366,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.1612
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12896
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12896
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.06448
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.06448
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.09672
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.1612
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12896
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.03224
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.22568
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.22568
         },
         "w280": {
           "cumProgressPct": 0,
@@ -53414,15 +53414,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12896
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.25792
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.12896
         },
         "w285": {
           "cumProgressPct": 0,
@@ -54105,7 +54105,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.253385
+          "targetWF": 0.358113
         },
         "w222": {
           "cumProgressPct": 0,
@@ -54125,11 +54125,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.110035
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.22007
         },
         "w230": {
           "cumProgressPct": 23,
@@ -54189,11 +54189,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.889301
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.916976
         },
         "w249": {
           "cumProgressPct": 0,
@@ -54201,11 +54201,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.213692
+          "targetWF": 2.372255
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.257601
+          "targetWF": 3.216225
         },
         "w253": {
           "cumProgressPct": 0,
@@ -54221,31 +54221,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.731339
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.731339
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.048504
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.365669
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.920467
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.50392
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.499429
         },
         "w265": {
           "cumProgressPct": 0,
@@ -54253,47 +54253,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.181878
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145502
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145502
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072751
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.072751
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.109126
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.181878
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145502
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.036375
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.254629
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.254629
         },
         "w280": {
           "cumProgressPct": 0,
@@ -54301,15 +54301,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145502
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.291004
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.145502
         },
         "w285": {
           "cumProgressPct": 0,
@@ -54992,7 +54992,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.253774
+          "targetWF": 0.359079
         },
         "w222": {
           "cumProgressPct": 0,
@@ -55012,11 +55012,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.110641
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.221282
         },
         "w230": {
           "cumProgressPct": 23,
@@ -55076,11 +55076,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.910717
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.933038
         },
         "w249": {
           "cumProgressPct": 0,
@@ -55088,11 +55088,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.21402
+          "targetWF": 2.384469
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.257996
+          "targetWF": 3.232912
         },
         "w253": {
           "cumProgressPct": 0,
@@ -55108,31 +55108,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.746379
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.746379
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.059784
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.373189
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.925536
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.512201
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.507686
         },
         "w265": {
           "cumProgressPct": 0,
@@ -55140,47 +55140,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.182879
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.146304
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.146304
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.073152
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.073152
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.109727
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.182879
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.146304
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.036575
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.256031
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.256031
         },
         "w280": {
           "cumProgressPct": 0,
@@ -55188,15 +55188,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.146304
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.292606
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.146304
         },
         "w285": {
           "cumProgressPct": 0,
@@ -55879,7 +55879,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.256376
+          "targetWF": 0.365541
         },
         "w222": {
           "cumProgressPct": 0,
@@ -55899,11 +55899,11 @@
         },
         "w226": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.114696
         },
         "w227": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 0.229392
         },
         "w230": {
           "cumProgressPct": 23,
@@ -55963,11 +55963,11 @@
         },
         "w247": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 4.054054
         },
         "w248": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 3.040541
         },
         "w249": {
           "cumProgressPct": 0,
@@ -55975,11 +55975,11 @@
         },
         "w250": {
           "cumProgressPct": 0,
-          "targetWF": 0.216215
+          "targetWF": 2.466216
         },
         "w251": {
           "cumProgressPct": 0,
-          "targetWF": 0.260642
+          "targetWF": 3.344595
         },
         "w253": {
           "cumProgressPct": 0,
@@ -55995,31 +55995,31 @@
         },
         "w256": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.84704
         },
         "w257": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.84704
         },
         "w258": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 2.13528
         },
         "w259": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 1.42352
         },
         "w260": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.959459
         },
         "w263": {
           "cumProgressPct": 25,
-          "targetWF": 0
+          "targetWF": 1.567627
         },
         "w264": {
           "cumProgressPct": 100,
-          "targetWF": 0
+          "targetWF": 1.562946
         },
         "w265": {
           "cumProgressPct": 0,
@@ -56027,47 +56027,47 @@
         },
         "w268": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.189582
         },
         "w269": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.151666
         },
         "w270": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.151666
         },
         "w271": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075833
         },
         "w272": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.075833
         },
         "w273": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.113749
         },
         "w274": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.189582
         },
         "w275": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.151666
         },
         "w276": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.037916
         },
         "w278": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.265415
         },
         "w279": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.265415
         },
         "w280": {
           "cumProgressPct": 0,
@@ -56075,15 +56075,15 @@
         },
         "w282": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.151666
         },
         "w283": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.303331
         },
         "w284": {
           "cumProgressPct": 0,
-          "targetWF": 0
+          "targetWF": 0.151666
         },
         "w285": {
           "cumProgressPct": 0,
@@ -56095,67 +56095,67 @@
   "scurvePlan": [
     {
       "week": 1,
-      "valuePct": 0.056544
+      "valuePct": 0.056548
     },
     {
       "week": 2,
-      "valuePct": 0.155495
+      "valuePct": 0.155498
     },
     {
       "week": 3,
-      "valuePct": 0.262206
+      "valuePct": 0.262205
     },
     {
       "week": 4,
-      "valuePct": 0.586179
+      "valuePct": 0.586177
     },
     {
       "week": 5,
-      "valuePct": 4.028286
+      "valuePct": 4.028284
     },
     {
       "week": 6,
-      "valuePct": 6.757736
+      "valuePct": 6.757735
     },
     {
       "week": 7,
-      "valuePct": 7.125728
+      "valuePct": 7.12573
     },
     {
       "week": 8,
-      "valuePct": 10.157161
+      "valuePct": 10.157167
     },
     {
       "week": 9,
-      "valuePct": 10.546277
+      "valuePct": 10.546283
     },
     {
       "week": 10,
-      "valuePct": 18.993186
+      "valuePct": 18.993184
     },
     {
       "week": 11,
-      "valuePct": 19.581079
+      "valuePct": 19.581498
     },
     {
       "week": 12,
-      "valuePct": 22.247026
+      "valuePct": 22.247022
     },
     {
       "week": 13,
-      "valuePct": 23.92277
+      "valuePct": 23.922771
     },
     {
       "week": 14,
-      "valuePct": 25.599057
+      "valuePct": 25.599051
     },
     {
       "week": 15,
-      "valuePct": 25.903806
+      "valuePct": 25.903809
     },
     {
       "week": 16,
-      "valuePct": 26.208556
+      "valuePct": 26.208544
     },
     {
       "week": 17,
@@ -56163,55 +56163,55 @@
     },
     {
       "week": 18,
-      "valuePct": 38.186865
+      "valuePct": 38.186856
     },
     {
       "week": 19,
-      "valuePct": 39.497628
+      "valuePct": 39.497625
     },
     {
       "week": 20,
-      "valuePct": 42.285565
+      "valuePct": 42.285573
     },
     {
       "week": 21,
-      "valuePct": 43.087575
+      "valuePct": 43.087578
     },
     {
       "week": 22,
-      "valuePct": 45.80103
+      "valuePct": 45.801036
     },
     {
       "week": 23,
-      "valuePct": 47.731431
+      "valuePct": 47.731429
     },
     {
       "week": 24,
-      "valuePct": 48.266497
+      "valuePct": 48.266499
     },
     {
       "week": 25,
-      "valuePct": 52.759909
+      "valuePct": 52.759917
     },
     {
       "week": 26,
-      "valuePct": 58.561266
+      "valuePct": 58.561271
     },
     {
       "week": 27,
-      "valuePct": 61.73983
+      "valuePct": 61.739829
     },
     {
       "week": 28,
-      "valuePct": 64.648819
+      "valuePct": 64.648824
     },
     {
       "week": 29,
-      "valuePct": 65.702356
+      "valuePct": 65.70235
     },
     {
       "week": 30,
-      "valuePct": 66.245682
+      "valuePct": 66.24568
     },
     {
       "week": 31,
@@ -56219,15 +56219,15 @@
     },
     {
       "week": 32,
-      "valuePct": 67.441353
+      "valuePct": 67.441354
     },
     {
       "week": 33,
-      "valuePct": 67.963081
+      "valuePct": 67.963082
     },
     {
       "week": 34,
-      "valuePct": 70.125517
+      "valuePct": 71.28979
     },
     {
       "week": 35,
@@ -56235,27 +56235,27 @@
     },
     {
       "week": 36,
-      "valuePct": 71.927206
+      "valuePct": 71.927205
     },
     {
       "week": 37,
-      "valuePct": 72.496547
+      "valuePct": 72.496548
     },
     {
       "week": 38,
-      "valuePct": 72.836496
+      "valuePct": 72.836497
     },
     {
       "week": 39,
-      "valuePct": 73.176446
+      "valuePct": 73.176448
     },
     {
       "week": 40,
-      "valuePct": 73.516395
+      "valuePct": 73.516393
     },
     {
       "week": 41,
-      "valuePct": 74.059704
+      "valuePct": 74.0597
     },
     {
       "week": 42,
@@ -56263,19 +56263,19 @@
     },
     {
       "week": 43,
-      "valuePct": 75.146323
+      "valuePct": 75.146322
     },
     {
       "week": 44,
-      "valuePct": 75.689632
+      "valuePct": 75.689633
     },
     {
       "week": 45,
-      "valuePct": 76.232941
+      "valuePct": 76.232942
     },
     {
       "week": 46,
-      "valuePct": 80.830305
+      "valuePct": 80.830307
     },
     {
       "week": 47,
@@ -56283,7 +56283,7 @@
     },
     {
       "week": 48,
-      "valuePct": 84.957464
+      "valuePct": 84.957468
     },
     {
       "week": 49,
@@ -56291,11 +56291,11 @@
     },
     {
       "week": 50,
-      "valuePct": 90.134115
+      "valuePct": 90.134118
     },
     {
       "week": 51,
-      "valuePct": 90.618076
+      "valuePct": 90.618078
     },
     {
       "week": 52,
@@ -56303,23 +56303,23 @@
     },
     {
       "week": 53,
-      "valuePct": 91.760395
+      "valuePct": 91.760396
     },
     {
       "week": 54,
-      "valuePct": 93.387275
+      "valuePct": 93.387277
     },
     {
       "week": 55,
-      "valuePct": 94.810795
+      "valuePct": 94.810797
     },
     {
       "week": 56,
-      "valuePct": 95.152042
+      "valuePct": 95.152047
     },
     {
       "week": 57,
-      "valuePct": 95.70183
+      "valuePct": 95.701833
     },
     {
       "week": 58,
@@ -56327,11 +56327,11 @@
     },
     {
       "week": 59,
-      "valuePct": 98.984909
+      "valuePct": 98.984914
     },
     {
       "week": 60,
-      "valuePct": 100
+      "valuePct": 100.000003
     }
   ],
   "scurveActual": [
@@ -56365,111 +56365,115 @@
     },
     {
       "week": 8,
-      "valuePct": 10.970595
+      "valuePct": 10.970594
     },
     {
       "week": 9,
-      "valuePct": 15.887603
+      "valuePct": 15.887602
     },
     {
       "week": 10,
-      "valuePct": 23.995414
+      "valuePct": 23.995413
     },
     {
       "week": 11,
-      "valuePct": 24.563425
+      "valuePct": 24.563424
     },
     {
       "week": 12,
-      "valuePct": 25.392913
+      "valuePct": 25.392912
     },
     {
       "week": 13,
-      "valuePct": 25.722105
+      "valuePct": 25.722104
     },
     {
       "week": 14,
-      "valuePct": 26.132557
+      "valuePct": 26.132556
     },
     {
       "week": 15,
-      "valuePct": 27.461217
+      "valuePct": 27.461216
     },
     {
       "week": 16,
-      "valuePct": 29.399568
+      "valuePct": 29.399567
     },
     {
       "week": 17,
-      "valuePct": 35.6356
+      "valuePct": 35.635598
     },
     {
       "week": 18,
-      "valuePct": 39.080237
+      "valuePct": 39.080235
     },
     {
       "week": 19,
-      "valuePct": 39.986477
+      "valuePct": 39.986476
     },
     {
       "week": 20,
-      "valuePct": 43.9975
+      "valuePct": 43.997498
     },
     {
       "week": 21,
-      "valuePct": 44.312399
+      "valuePct": 44.312397
     },
     {
       "week": 22,
-      "valuePct": 46.802462
+      "valuePct": 46.80246
     },
     {
       "week": 23,
-      "valuePct": 47.024556
+      "valuePct": 47.024554
     },
     {
       "week": 24,
-      "valuePct": 47.239227
+      "valuePct": 47.239225
     },
     {
       "week": 25,
-      "valuePct": 50.029414
+      "valuePct": 50.029412
     },
     {
       "week": 26,
-      "valuePct": 51.286765
+      "valuePct": 51.286763
     },
     {
       "week": 27,
-      "valuePct": 54.826918
+      "valuePct": 54.826916
     },
     {
       "week": 28,
-      "valuePct": 57.962851
+      "valuePct": 57.962848
     },
     {
       "week": 29,
-      "valuePct": 58.752691
+      "valuePct": 58.752689
     },
     {
       "week": 30,
-      "valuePct": 60.635822
+      "valuePct": 60.635819
     },
     {
       "week": 31,
-      "valuePct": 62.031331
+      "valuePct": 62.031328
     },
     {
       "week": 32,
-      "valuePct": 63.17187
+      "valuePct": 63.171867
     },
     {
       "week": 33,
-      "valuePct": 63.91255
+      "valuePct": 63.912547
     },
     {
       "week": 34,
-      "valuePct": 66.345267
+      "valuePct": 66.345263
+    },
+    {
+      "week": 35,
+      "valuePct": 67.191279
     }
   ],
   "daily": [

@@ -56,7 +56,7 @@ export default function WeekTabs({
           <select
             value={selectedWeek}
             onChange={(e) => router.push(`/weekly/${e.target.value}/${activeTab}`)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="rounded-md border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 transition-all duration-300 ease-ios hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
             {weeks.map((w) => (
               <option key={w} value={w}>
@@ -67,14 +67,14 @@ export default function WeekTabs({
           </select>
         </div>
         {isCurrent ? (
-          <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+          <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 animate-scale-in">
             Current reporting week
           </span>
         ) : (
           <button
             onClick={setAsCurrent}
             disabled={saving}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow active:scale-95 disabled:opacity-50"
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-50 animate-scale-in"
             title="Make this the latest reported week — the S-Curve actual line runs up to here"
           >
             {saving ? 'Saving…' : `Set Week ${selectedWeek} as current`}
@@ -88,13 +88,13 @@ export default function WeekTabs({
             <Link
               key={tab.key}
               href={`/weekly/${selectedWeek}/${tab.key}`}
-              className={`relative px-3 py-2 text-sm font-medium transition-colors ${
-                isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'
+              className={`relative rounded-md px-3 py-2 text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
+                isActive ? 'text-blue-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
               {tab.label}
               {isActive && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-blue-600 transition-all" />
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600 animate-underline" />
               )}
             </Link>
           );

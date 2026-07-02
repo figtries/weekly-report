@@ -1,10 +1,11 @@
 'use client';
 
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -46,21 +47,35 @@ export default function SCurveClient({
 
         <div className="w-full min-h-0 flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#6b7280' }} interval={4} stroke="#d1d5db" />
+            <ComposedChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 4 }}>
+              <defs>
+                <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.22} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="#eef2f7" vertical={false} />
+              <XAxis
+                dataKey="week"
+                tick={{ fontSize: 12, fill: '#94a3b8' }}
+                interval={4}
+                tickLine={false}
+                axisLine={{ stroke: '#e5e7eb' }}
+                tickMargin={10}
+                padding={{ left: 12, right: 28 }}
+              />
               <YAxis
-                tick={{ fontSize: 12, fill: '#6b7280' }}
-                stroke="#d1d5db"
+                tick={{ fontSize: 12, fill: '#94a3b8' }}
+                tickLine={false}
+                axisLine={false}
                 domain={[0, 100]}
-                label={{
-                  value: 'Progress (%)',
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fontSize: 14, fill: '#6b7280' },
-                }}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(v) => `${v}%`}
+                width={44}
               />
               <Tooltip
+                animationDuration={250}
+                animationEasing="ease-out"
                 formatter={(value) => {
                   const n = typeof value === 'number' ? value : Number(value);
                   return Number.isFinite(n) ? `${n.toFixed(2)}%` : '';
@@ -69,32 +84,39 @@ export default function SCurveClient({
                   fontSize: 13,
                   backgroundColor: 'rgba(255,255,255,0.98)',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)',
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 14, paddingTop: 20 }} />
+              <Legend wrapperStyle={{ fontSize: 13, paddingTop: 12 }} iconType="plainline" />
+              <Area
+                type="monotone"
+                dataKey="actual"
+                stroke="#3b82f6"
+                strokeWidth={2.5}
+                fill="url(#actualFill)"
+                name="Actual"
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#3b82f6' }}
+                connectNulls
+                animationBegin={120}
+                animationDuration={700}
+                animationEasing="ease-out"
+              />
               <Line
                 type="monotone"
                 dataKey="plan"
                 stroke="#ef4444"
-                strokeWidth={3}
+                strokeWidth={2.5}
                 dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#ef4444' }}
                 name="Plan"
                 connectNulls
-                animationDuration={900}
+                animationBegin={120}
+                animationDuration={700}
+                animationEasing="ease-out"
               />
-              <Line
-                type="monotone"
-                dataKey="actual"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                dot={false}
-                name="Actual"
-                connectNulls
-                animationDuration={900}
-              />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
 

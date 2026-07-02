@@ -11,6 +11,13 @@ export interface SCurveRow {
  * Build the S-Curve series. Pass `upToWeek` to cut the curve off at the week
  * being viewed (so each week's S-Curve shows progress up to that week only,
  * not the whole project timeline).
+ *
+ * Every week is computed live from that week's WBS rollup — the exact same
+ * numbers shown on the Data Overall page — so the curve can never drift from
+ * the tables. The stored `scurvePlan` / `scurveActual` series are only used as
+ * a fallback for weeks that have no materialised leaf data. The actual line is
+ * drawn up to `project.currentWeek` (the latest reported week); later weeks
+ * only carry the plan.
  */
 export function buildSCurveSeries(db: Database, upToWeek?: number): SCurveRow[] {
   const maxPlanWeek = db.scurvePlan.length ? Math.max(...db.scurvePlan.map((p) => p.week)) : 0;
@@ -20,22 +27,18 @@ export function buildSCurveSeries(db: Database, upToWeek?: number): SCurveRow[] 
 
   const planMap = new Map(db.scurvePlan.map((p) => [p.week, p.valuePct]));
   const historyMap = new Map(db.scurveActual.map((p) => [p.week, p.valuePct]));
+  const weekMap = new Map(db.weeks.map((w) => [w.week, w]));
 
   const rows: SCurveRow[] = [];
   for (let week = 1; week <= maxWeek; week++) {
     let plan: number | null = planMap.get(week) ?? null;
-    let actual: number | null = historyMap.get(week) ?? null;
-    // The current reporting week is computed live from the WBS rollup so that
-    // editing leaf progress/plan moves the S-Curve immediately. Every other week
-    // uses the recorded baseline series (actual only exists up to the current week).
-    if (week === currentWeek) {
-      const meta = db.weeks.find((w) => w.week === week);
-      if (meta) {
-        const prevMeta = db.weeks.find((w) => w.week === week - 1);
-        const gt = computeGrandTotal(computeRollup(db.wbsItems, meta.leafData, prevMeta?.leafData ?? null));
-        actual = gt.curProgressPct;
-        plan = gt.targetWF;
-      }
+    let actual: number | null = week <= currentWeek ? historyMap.get(week) ?? null : null;
+    const meta = weekMap.get(week);
+    if (meta) {
+      const prevMeta = weekMap.get(week - 1);
+      const gt = computeGrandTotal(computeRollup(db.wbsItems, meta.leafData, prevMeta?.leafData ?? null));
+      plan = gt.targetWF;
+      actual = week <= currentWeek ? gt.curProgressPct : null;
     }
     rows.push({ week, planPct: plan, actualPct: actual });
   }

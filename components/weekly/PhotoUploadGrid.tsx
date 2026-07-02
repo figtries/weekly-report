@@ -48,7 +48,7 @@ export default function PhotoUploadGrid({
       {photos.map((photo, slot) => (
         <div
           key={slot}
-          className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm transition-all duration-300 hover:shadow-md animate-fade-in-up"
+          className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm transition-all duration-500 ease-ios hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
           style={{ animationDelay: `${slot * 60}ms` }}
         >
           {photo ? (
@@ -57,9 +57,9 @@ export default function PhotoUploadGrid({
                 src={photo}
                 alt={`Documentation ${slot + 1}`}
                 fill
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                className="object-cover transition-transform duration-700 ease-ios group-hover:scale-[1.04]"
               />
-              <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-300 ease-ios group-hover:opacity-100">
                 <span className="text-xs font-medium text-white">Photo {slot + 1}</span>
                 <button
                   onClick={() => handleRemove(slot)}
@@ -74,7 +74,7 @@ export default function PhotoUploadGrid({
             <button
               onClick={() => inputRefs.current[slot]?.click()}
               disabled={busySlot === slot}
-              className="flex h-full w-full flex-col items-center justify-center gap-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              className="flex h-full w-full flex-col items-center justify-center gap-2 text-gray-400 transition-all duration-300 ease-ios hover:bg-gray-100 hover:text-gray-600 active:scale-[0.98]"
             >
               <span className="text-2xl leading-none">+</span>
               <span className="text-xs font-medium">

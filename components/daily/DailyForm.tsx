@@ -127,14 +127,14 @@ export default function DailyForm({ report }: { report: DailyReport }) {
         <div className="flex items-center gap-2">
           <Link
             href={`/daily/${form.date}/print`}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97]"
           >
             Print
           </Link>
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-50"
           >
             {saving ? 'Saving…' : dirty ? 'Save Changes' : 'Saved'}
           </button>
@@ -196,7 +196,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
       <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">1. Man Hours</h2>
-          <button onClick={addManHour} className="text-sm text-blue-600 transition-colors hover:text-blue-800">
+          <button onClick={addManHour} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
             + Add company
           </button>
         </div>
@@ -249,7 +249,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                   {(row.previousHours + row.todayHours).toLocaleString()}
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  <button onClick={() => removeManHour(row.id)} className="text-gray-300 transition-colors hover:text-red-500">
+                  <button onClick={() => removeManHour(row.id)} className="text-gray-300 transition-all duration-200 ease-ios hover:text-red-500 hover:scale-110 active:scale-95">
                     ✕
                   </button>
                 </td>
@@ -310,7 +310,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
       <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">2. Permit to Work (PTW)</h2>
-          <button onClick={addPtw} className="text-sm text-blue-600 transition-colors hover:text-blue-800">
+          <button onClick={addPtw} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
             + Add permit
           </button>
         </div>
