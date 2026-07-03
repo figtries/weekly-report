@@ -28,16 +28,17 @@ export default function SCurveClient({
   actualPct: number | null;
   project: ProjectInfo;
 }) {
-  const chartData = series.map((r) => ({ week: `W${r.week}`, plan: r.planPct, actual: r.actualPct }));
+  // Anchor both lines at the same 0% origin so they start aligned.
+  const chartData = [
+    { week: 'W0', plan: 0, actual: 0 },
+    ...series.map((r) => ({ week: `W${r.week}`, plan: r.planPct, actual: r.actualPct })),
+  ];
   const variance = planPct !== null && actualPct !== null ? actualPct - planPct : null;
 
   return (
     <div className="flex h-full flex-col animate-fade-in-up">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4">
         <h1 className="text-2xl font-semibold text-gray-900">S-Curve Overview</h1>
-        <p className="text-sm text-gray-500">
-          Week 1 to Week {series.length} · Plan vs Actual — {project.name}
-        </p>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm">

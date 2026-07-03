@@ -11,7 +11,7 @@ export async function saveUploadedPhoto(
   const ext = path.extname(file.name) || '.jpg';
   const dir = path.join(process.cwd(), 'public', 'uploads', subdir, key);
   await fs.mkdir(dir, { recursive: true });
-  const filename = `slot-${slot}${ext}`;
+  const filename = `slot-${slot}-${Date.now()}${ext}`;
   await fs.writeFile(path.join(dir, filename), buffer);
   return `/uploads/${subdir}/${key}/${filename}`;
 }

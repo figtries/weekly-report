@@ -14,7 +14,11 @@ export default function WeeklyPrintSCurve({
   meta: WeeklyMeta;
   series: SCurveRow[];
 }) {
-  const chartData = series.map((r) => ({ week: `W${r.week}`, plan: r.planPct, actual: r.actualPct }));
+  // Anchor both lines at the same 0% origin so they start aligned.
+  const chartData = [
+    { week: 'W0', plan: 0, actual: 0 },
+    ...series.map((r) => ({ week: `W${r.week}`, plan: r.planPct, actual: r.actualPct })),
+  ];
 
   return (
     <div

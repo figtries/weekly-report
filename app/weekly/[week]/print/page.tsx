@@ -6,7 +6,8 @@ import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
 import WeeklyPrintDetail from '@/components/print/WeeklyPrintDetail';
 import WeeklyPrintSCurve from '@/components/print/WeeklyPrintSCurve';
 import WeeklyPrintDocumentation from '@/components/print/WeeklyPrintDocumentation';
-import PrintTrigger from '@/components/ui/PrintTrigger';
+
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function WeeklyPrintPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
@@ -20,9 +21,6 @@ export default async function WeeklyPrintPage({ params }: { params: Promise<{ we
 
   return (
     <div className="bg-gray-100 min-h-full">
-      <div className="sticky top-0 z-20 flex justify-center border-b border-gray-200 bg-white py-3 print:hidden">
-        <PrintTrigger label={`Print Weekly Report No. ${week}`} />
-      </div>
       <div className="flex flex-col items-center gap-6 py-6">
         <WeeklyPrintSummary project={db.project} meta={meta} roots={summaryRows} grandTotal={grandTotal} />
         <WeeklyPrintDetail project={db.project} meta={meta} roots={roots} />

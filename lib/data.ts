@@ -1,8 +1,14 @@
+import { cacheLife, cacheTag } from 'next/cache';
 import { readDb } from './db';
 import { computeGrandTotal, computeRollup, type GrandTotal, type RollupNode } from './rollup';
 import type { Database, WeeklyMeta } from './types';
 
+// Cached so every page renders into an instant static shell (see
+// unstable_instant exports); mutateDb expires the 'db' tag on every write.
 export async function getDb(): Promise<Database> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
   return readDb();
 }
 

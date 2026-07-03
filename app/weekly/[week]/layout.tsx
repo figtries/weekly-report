@@ -1,6 +1,16 @@
 import { getDb } from '@/lib/data';
 import WeekTabs from '@/components/weekly/WeekTabs';
 
+// Runtime prefetch (validated against the sample week) lets the router
+// prefetch each tab's full cached content — no skeleton flash between
+// subpages. 'static' isn't possible here: WeekTabs/Sidebar read usePathname().
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
+
+export async function generateStaticParams() {
+  const db = await getDb();
+  return db.weeks.map((w) => ({ week: String(w.week) }));
+}
+
 export default async function WeeklyWeekLayout({
   children,
   params,

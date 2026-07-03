@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getDb, getWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
-import WbsTreeTable from '@/components/weekly/WbsTreeTable';
+import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
+
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
@@ -21,13 +23,7 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
           <span className="font-medium text-blue-600">Data Overall</span>
         </p>
       </div>
-      <WbsTreeTable
-        roots={roots}
-        week={week}
-        readOnly
-        title="Detail Progress (WBS)"
-        subtitle="Read-only view — this is the printable detailed breakdown. Use 'Show milestones' to include zero-weight marker rows."
-      />
+      <WbsTreeVisual roots={roots} />
     </div>
   );
 }

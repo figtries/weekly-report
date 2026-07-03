@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { revalidateTag } from 'next/cache';
 import type { Database } from './types';
 
 const DB_PATH = path.join(process.cwd(), 'data', 'db.json');
@@ -20,6 +21,9 @@ export function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<
     const db = await readDb();
     const result = await mutator(db);
     await writeDb(db);
+    // Expire immediately (not stale-while-revalidate) so the router.refresh()
+    // that follows every mutation re-renders with the fresh data.
+    revalidateTag('db', { expire: 0 });
     return result;
   });
   queue = run.catch(() => undefined);

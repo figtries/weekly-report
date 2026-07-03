@@ -2,6 +2,13 @@ import { getDb } from '@/lib/data';
 import DailyForm from '@/components/daily/DailyForm';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { date: '2026-06-04' } }] };
+
+export async function generateStaticParams() {
+  const db = await getDb();
+  return db.daily.map((d) => ({ date: d.date }));
+}
+
 export default async function DailyDetailPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
   const db = await getDb();

@@ -21,10 +21,10 @@ function isMilestone(node: RollupNode): boolean {
   return node.children.length === 0 && node.bobot === 0;
 }
 
-function flattenVisible(roots: RollupNode[], expanded: Set<string>, showMilestones: boolean): RollupNode[] {
+function flattenVisible(roots: RollupNode[], expanded: Set<string>): RollupNode[] {
   const out: RollupNode[] = [];
   const visit = (node: RollupNode) => {
-    if (!showMilestones && isMilestone(node)) return;
+    if (isMilestone(node)) return;
     out.push(node);
     if (node.children.length && expanded.has(node.id)) {
       node.children.forEach(visit);
@@ -66,11 +66,9 @@ export default function WbsTreeTable({
   );
   const [edits, setEdits] = useState<Record<string, EditState>>({});
   const [saving, setSaving] = useState(false);
-  const [showMilestones, setShowMilestones] = useState(false);
 
-  const visible = useMemo(() => flattenVisible(roots, expanded, showMilestones), [roots, expanded, showMilestones]);
+  const visible = useMemo(() => flattenVisible(roots, expanded), [roots, expanded]);
   const visibleAll = useMemo(() => flattenAll(roots), [roots]);
-  const milestoneCount = useMemo(() => visibleAll.filter(isMilestone).length, [visibleAll]);
   const dirtyCount = Object.keys(edits).length;
 
   function toggle(id: string) {
@@ -148,17 +146,6 @@ export default function WbsTreeTable({
           <button onClick={collapseAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
             Collapse all
           </button>
-          {milestoneCount > 0 && (
-            <>
-              <span className="text-gray-300">|</span>
-              <button
-                onClick={() => setShowMilestones((v) => !v)}
-                className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]"
-              >
-                {showMilestones ? 'Hide milestones' : `Show milestones (${milestoneCount})`}
-              </button>
-            </>
-          )}
           {!readOnly && (
             <button
               onClick={save}

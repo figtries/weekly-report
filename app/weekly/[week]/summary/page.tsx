@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getDb, getWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
-import SummaryTable from '@/components/weekly/SummaryTable';
+import SummaryCards from '@/components/weekly/SummaryCards';
+
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function SummaryPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
@@ -15,17 +17,13 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
   return (
     <div className="p-8 animate-fade-in-up">
       <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900 mb-2">Summary Table</h1>
-        <p className="text-gray-600">Overall progress summary with detailed metrics — Week {week}</p>
+        <h1 className="text-3xl font-semibold text-gray-900 mb-2">Overall Summary</h1>
+        <p className="text-gray-600">
+          Progress per SPK contract — Week {week}. The ▲ mark on each bar shows where progress should be by now.
+        </p>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Progress Summary</h2>
-          <p className="text-sm text-gray-600 mt-1">Rollup by SPK contract</p>
-        </div>
-        <SummaryTable roots={summaryRows} grandTotal={grandTotal} />
-      </div>
+      <SummaryCards roots={summaryRows} grandTotal={grandTotal} />
     </div>
   );
 }

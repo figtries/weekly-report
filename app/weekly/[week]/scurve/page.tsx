@@ -3,6 +3,8 @@ import { getDb } from '@/lib/data';
 import { buildSCurveSeries } from '@/lib/scurve';
 import SCurveClient from '@/components/weekly/SCurveClient';
 
+export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
+
 export default async function SCurvePage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
@@ -16,7 +18,7 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
   const lastActual = [...series].reverse().find((r) => r.actualPct !== null)?.actualPct ?? null;
 
   return (
-    <div className="h-full p-6">
+    <div className="h-full px-8 py-6">
       <SCurveClient
         series={series}
         currentWeek={week}

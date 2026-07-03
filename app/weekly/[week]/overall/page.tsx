@@ -4,6 +4,15 @@ import { weekPeriodShort } from '@/lib/weeks';
 import WbsTreeTable from '@/components/weekly/WbsTreeTable';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
+// Validation disabled: dev HMR intermittently loses the AnimatedNumber client
+// module factory, so re-validation after every hot reload throws a spurious
+// error overlay. Prefetching itself is unaffected.
+export const unstable_instant = {
+  prefetch: 'runtime',
+  samples: [{ params: { week: '1' } }],
+  unstable_disableValidation: true,
+};
+
 export default async function DataOverallPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
@@ -11,7 +20,6 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
   const result = getWeekRollup(db, week);
   if (!result) notFound();
   const { roots, grandTotal } = result;
-  const isCurrent = week === db.project.currentWeek;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);
 
   const stats = [
@@ -36,13 +44,6 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
             Edit the activities below — Overall Summary, Detail Progress and the S-Curve update automatically.
           </p>
         </div>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            isCurrent ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
-          }`}
-        >
-          {isCurrent ? 'Current reporting week' : 'Past / future week'}
-        </span>
       </div>
 
       {/* Stat cards */}
@@ -66,7 +67,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
         week={week}
         compact
         title="Progress Breakdown"
-        subtitle="Type the cumulative Actual % and Plan % for each activity (blue boxes) — everything else is auto-calculated. Zero-weight milestones (Project Award, Completed, etc.) are hidden by default."
+        subtitle="Type the cumulative Actual % and Plan % for each activity (blue boxes) — everything else is auto-calculated. Zero-weight milestones (Project Award, Completed, etc.) are hidden."
       />
     </div>
   );
