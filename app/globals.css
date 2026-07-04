@@ -139,6 +139,19 @@ label {
   animation: fade-in 0.4s var(--ease-gentle) both;
 }
 
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s var(--ease-out-expo) both;
+}
+
 .animate-fade-in-up {
   animation: fade-in-up 0.55s var(--ease-out-expo) both;
 }

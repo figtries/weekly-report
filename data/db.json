@@ -16,7 +16,7 @@
       "name": "Yopi Budiana Perkasa"
     },
     "weekAnchorEndDate": "2025-10-30",
-    "currentWeek": 36
+    "currentWeek": 35
   },
   "wbsItems": [
     {
@@ -33035,11 +33035,17 @@
       "periodEnd": "2026-06-25",
       "documentation": [
         null,
-        "/uploads/weekly/35/slot-1.JPG",
+        null,
         "/uploads/weekly/35/slot-2.JPG",
         "/uploads/weekly/35/slot-3.JPG",
         "/uploads/weekly/35/slot-4.JPG",
-        "/uploads/weekly/35/slot-5.JPG"
+        "/uploads/weekly/35/slot-5.JPG",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
       ],
       "leafData": {
         "w2": {
@@ -56614,6 +56620,26 @@
         null,
         null
       ]
+    }
+  ],
+  "changeLog": [
+    {
+      "id": "2026-07-04T14:30:25.087Z-w5-actual",
+      "leafId": "w5",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 100,
+      "newValue": 99.5,
+      "at": "2026-07-04T14:30:25.087Z"
+    },
+    {
+      "id": "2026-07-04T14:30:47.566Z-w5-actual",
+      "leafId": "w5",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 99.5,
+      "newValue": 100,
+      "at": "2026-07-04T14:30:47.566Z"
     }
   ]
 }

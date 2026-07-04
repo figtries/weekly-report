@@ -1,12 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getDb, getWeekRollup } from '@/lib/data';
 import { weekPeriodShort } from '@/lib/weeks';
-import WbsTreeTable from '@/components/weekly/WbsTreeTable';
+import DataOverallWorkbench from '@/components/weekly/DataOverallWorkbench';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
-// Validation disabled: dev HMR intermittently loses the AnimatedNumber client
-// module factory, so re-validation after every hot reload throws a spurious
-// error overlay. Prefetching itself is unaffected.
 export const unstable_instant = {
   prefetch: 'runtime',
   samples: [{ params: { week: '1' } }],
@@ -21,6 +18,10 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);
+
+  // Only surface changes for this week — history strip + panel timeline stay
+  // scoped to what the user is currently editing.
+  const recentChanges = (db.changeLog ?? []).filter((c) => c.week === week);
 
   const stats = [
     { label: 'Plan / Target', value: grandTotal.targetWF, tone: 'text-red-600', bg: 'bg-red-50' },
@@ -41,7 +42,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
           <h1 className="mb-1 text-2xl sm:text-3xl font-semibold text-gray-900">Data Overall</h1>
           <p className="text-sm sm:text-base text-gray-600">
             The single source of truth for <span className="font-medium text-gray-900">Week {week}</span> · {period}.
-            Edit the activities below — Overall Summary, Detail Progress and the S-Curve update automatically.
+            Klik aktivitas untuk edit — Summary, Detail Progress, dan S-Curve auto-update setelah simpan.
           </p>
         </div>
       </div>
@@ -62,13 +63,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
         ))}
       </div>
 
-      <WbsTreeTable
-        roots={roots}
-        week={week}
-        compact
-        title="Progress Breakdown"
-        subtitle="Type the cumulative Actual % and Plan % for each activity (blue boxes) — everything else is auto-calculated. Zero-weight milestones (Project Award, Completed, etc.) are hidden."
-      />
+      <DataOverallWorkbench roots={roots} week={week} recentChanges={recentChanges} />
     </div>
   );
 }

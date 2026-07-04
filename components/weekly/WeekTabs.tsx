@@ -67,7 +67,6 @@ export default function WeekTabs({
       <div className="flex flex-col gap-y-2 md:flex-row md:items-center md:justify-between md:gap-x-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Week</span>
           <select
             value={selectedWeek}
             onChange={(e) => router.push(`/weekly/${e.target.value}/${activeTab}`)}
@@ -94,26 +93,6 @@ export default function WeekTabs({
               </span>
             )}
           </div>
-          {/* Subpage tabs only below lg — on desktop they live in the sidebar. */}
-          <nav className="lg:hidden -mx-3 mt-2 sm:mt-3 flex gap-1 overflow-x-auto scrollbar-none">
-            {TABS.map((tab) => {
-              const isActive = tab.key === activeTab;
-              return (
-                <Link
-                  key={tab.key}
-                  href={`/weekly/${selectedWeek}/${tab.key}`}
-                  className={`relative shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-                    isActive ? 'text-blue-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  {tab.label}
-                  {isActive && (
-                    <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600 animate-underline" />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
         {/* The "set as current" button goes invisible (not unmounted) once the
             week is current, so the print button beside it never moves or resizes. */}

@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -185,67 +186,103 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
   );
 }
 
-/* Compact pill nav for the mobile / tablet top bar — same items, same active
-   styling as the sidebar so both form factors feel like one app. */
-function MobileNav({ pathname }: { pathname: string | null }) {
-  const items = [
-    { name: 'Weekly', href: '/weekly', match: '/weekly', icon: weeklyIcon },
-    { name: 'Daily', href: '/daily', match: '/daily', icon: dailyIcon },
-  ];
-  return (
-    <nav className="flex items-center gap-1">
-      {items.map((item) => {
-        const isActive = pathname?.startsWith(item.match) ?? false;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-              isActive
-                ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            {item.icon}
-            <span className="max-[380px]:hidden">{item.name}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
-// usePathname suspends while prerendering dynamic routes' static shells, so it
-// lives behind Suspense — the fallback is the same nav without the active state.
 function ActiveNavList({ currentWeek }: { currentWeek: number }) {
   return <NavList pathname={usePathname()} currentWeek={currentWeek} />;
 }
 
-function ActiveMobileNav() {
-  return <MobileNav pathname={usePathname()} />;
+function MobileDrawer({ currentWeek }: { currentWeek: number }) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  const overlay = mounted
+    ? createPortal(
+        <>
+          {/* Backdrop */}
+          <div
+            className={`fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
+              open ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={() => setOpen(false)}
+          />
+
+          {/* Drawer */}
+          <div
+            className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+              open ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <div className="flex flex-col h-full">
+              <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
+                <div className="flex items-center gap-2.5">
+                  <Image
+                    src="/figtries-logo (1).png"
+                    alt="Figtries"
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 object-contain"
+                  />
+                  <div>
+                    <h1 className="text-sm font-semibold text-gray-900">Figtries</h1>
+                    <p className="text-[10px] text-gray-500">Progress Report</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Close menu"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <NavList pathname={pathname} currentWeek={currentWeek} />
+            </div>
+          </div>
+        </>,
+        document.body
+      )
+    : null;
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+        className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors active:scale-95"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      {overlay}
+    </>
+  );
 }
 
 export default function Sidebar({ currentWeek }: { currentWeek: number }) {
   return (
     <>
-      {/* Mobile / tablet: slim top bar */}
-      <header className="lg:hidden print:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Image
-            src="/figtries-logo (1).png"
-            alt="Figtries"
-            width={28}
-            height={28}
-            className="h-7 w-7 object-contain"
-          />
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold leading-tight text-gray-900">Figtries</h1>
-            <p className="truncate text-[10px] leading-tight text-gray-500">Progress Report</p>
-          </div>
-        </div>
-        <Suspense fallback={<MobileNav pathname={null} />}>
-          <ActiveMobileNav />
+      {/* Mobile / tablet: slim top bar with hamburger */}
+      <header className="lg:hidden print:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
+        <Suspense>
+          <MobileDrawer currentWeek={currentWeek} />
         </Suspense>
+        <span className="text-sm font-semibold text-gray-900">Progress Report</span>
       </header>
 
       {/* Desktop: full sidebar */}

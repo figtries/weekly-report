@@ -111,6 +111,16 @@ export interface DailyReport {
   photos: (string | null)[];
 }
 
+export interface ChangeLogEntry {
+  id: string;
+  leafId: string;
+  week: number;
+  field: 'cumProgressPct' | 'planPct';
+  oldValue: number;
+  newValue: number;
+  at: string;
+}
+
 export interface Database {
   project: ProjectInfo;
   wbsItems: WbsItem[];
@@ -118,4 +128,5 @@ export interface Database {
   scurvePlan: SCurvePoint[];
   scurveActual: SCurvePoint[];
   daily: DailyReport[];
+  changeLog?: ChangeLogEntry[];
 }
