@@ -90,6 +90,73 @@ export function computeRollup(
   return roots;
 }
 
+/**
+ * Hoist every "(SPK-###)" contract nested inside another contract's branch so
+ * it sits beside its sibling contracts. In the source WBS tree SPK-007
+ * (Overhaul Turbine, 1.4.4) lives under SPK-004 (1.4), but the report treats
+ * them as separate contracts (see getSummaryRows) — the Data Overall and
+ * Detail Progress trees should show them side by side too. Ancestors that
+ * lose the branch are re-aggregated, so the grand total is unchanged.
+ */
+export function promoteNestedSpkContracts(roots: RollupNode[]): RollupNode[] {
+  const SPK = /\(SPK-\d+\)/;
+  const isSpk = (n: RollupNode) => SPK.test(n.deskripsi);
+
+  // Collect moves first, then apply — mutating children arrays mid-walk would
+  // skip nodes. `spkContainer` is the array where the nearest SPK ancestor
+  // (after its own move, if any) ends up: that's where a nested SPK belongs.
+  const moves: { node: RollupNode; parent: RollupNode; dest: RollupNode[] }[] = [];
+  const walk = (
+    node: RollupNode,
+    parent: RollupNode | null,
+    container: RollupNode[],
+    spkContainer: RollupNode[] | null
+  ) => {
+    let finalContainer = container;
+    if (parent && spkContainer && spkContainer !== container && isSpk(node)) {
+      moves.push({ node, parent, dest: spkContainer });
+      finalContainer = spkContainer;
+    }
+    const childSpkContainer = isSpk(node) ? finalContainer : spkContainer;
+    node.children.forEach((c) => walk(c, node, node.children, childSpkContainer));
+  };
+  roots.forEach((r) => walk(r, null, roots, null));
+  if (moves.length === 0) return roots;
+
+  moves.forEach(({ node, parent, dest }) => {
+    parent.children = parent.children.filter((c) => c !== node);
+    dest.push(node);
+    if (parent.children.length === 0) {
+      // The branch was the parent's only content — collapse it to a
+      // zero-weight milestone so the UIs hide it instead of showing stale sums.
+      parent.isLeaf = true;
+      parent.bobot = parent.curWF = parent.prevWF = parent.targetWF = 0;
+      parent.curProgressPct = parent.prevProgressPct = 0;
+      parent.thisWeekWF = parent.thisWeekProgressPct = parent.variance = 0;
+    }
+  });
+
+  const refresh = (node: RollupNode, depth: number) => {
+    node.depth = depth;
+    node.children.sort((a, b) => a.order - b.order);
+    node.children.forEach((c) => refresh(c, depth + 1));
+    if (!node.isLeaf) {
+      node.bobot = node.children.reduce((sum, c) => sum + c.bobot, 0);
+      node.curWF = node.children.reduce((sum, c) => sum + c.curWF, 0);
+      node.prevWF = node.children.reduce((sum, c) => sum + c.prevWF, 0);
+      node.targetWF = node.children.reduce((sum, c) => sum + c.targetWF, 0);
+      node.curProgressPct = node.bobot > 0 ? (node.curWF / node.bobot) * 100 : 0;
+      node.prevProgressPct = node.bobot > 0 ? (node.prevWF / node.bobot) * 100 : 0;
+      node.thisWeekWF = node.curWF - node.prevWF;
+      node.thisWeekProgressPct = node.curProgressPct - node.prevProgressPct;
+      node.variance = node.curWF - node.targetWF;
+    }
+  };
+  roots.sort((a, b) => a.order - b.order);
+  roots.forEach((r) => refresh(r, 0));
+  return roots;
+}
+
 export interface GrandTotal {
   bobot: number;
   prevProgressPct: number;

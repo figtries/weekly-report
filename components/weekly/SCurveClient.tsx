@@ -35,20 +35,27 @@ export default function SCurveClient({
   ];
   const variance = planPct !== null && actualPct !== null ? actualPct - planPct : null;
 
+  // Scale the Y axis to the data (rounded up to the next multiple of 5) so the
+  // curve fills the chart without touching the top edge.
+  const maxVal = chartData.reduce((m, d) => Math.max(m, d.plan ?? 0, d.actual ?? 0), 0);
+  const yMax = Math.min(100, Math.max(20, Math.ceil((maxVal + 1) / 5) * 5));
+  const yStep = [10, 15, 20, 25].find((s) => yMax % s === 0 && yMax / s <= 6) ?? yMax / 5;
+  const yTicks = Array.from({ length: Math.round(yMax / yStep) + 1 }, (_, i) => i * yStep);
+
   return (
     <div className="flex h-full flex-col animate-fade-in-up">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4">
-        <h1 className="text-2xl font-semibold text-gray-900">S-Curve Overview</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">S-Curve Overview</h1>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white p-3 sm:p-5 shadow-sm">
         <div className="mb-2 flex shrink-0 items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Progress S-Curve Overall</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">Progress S-Curve Overall</h2>
         </div>
 
-        <div className="w-full min-h-0 flex-1">
+        <div className="w-full min-h-[240px] sm:min-h-[300px] flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 4 }}>
+            <ComposedChart data={chartData} margin={{ top: 12, right: 6, left: 8, bottom: 4 }}>
               <defs>
                 <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.22} />
@@ -63,14 +70,14 @@ export default function SCurveClient({
                 tickLine={false}
                 axisLine={{ stroke: '#e5e7eb' }}
                 tickMargin={10}
-                padding={{ left: 12, right: 28 }}
+                padding={{ left: 12, right: 0 }}
               />
               <YAxis
                 tick={{ fontSize: 12, fill: '#94a3b8' }}
                 tickLine={false}
                 axisLine={false}
-                domain={[0, 100]}
-                ticks={[0, 25, 50, 75, 100]}
+                domain={[0, yMax]}
+                ticks={yTicks}
                 tickFormatter={(v) => `${v}%`}
                 width={44}
               />
@@ -121,7 +128,7 @@ export default function SCurveClient({
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-3 grid shrink-0 grid-cols-4 gap-4 border-t border-gray-200 pt-3">
+        <div className="mt-3 grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 border-t border-gray-200 pt-3">
           <div>
             <p className="mb-0.5 text-[11px] font-medium uppercase text-gray-500">Current Week</p>
             <p className="text-xl font-semibold text-gray-900">Week {currentWeek}</p>

@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
-import { getDb } from '@/lib/data';
+import { getDb, getWeekMeta } from '@/lib/data';
 import { buildSCurveSeries } from '@/lib/scurve';
 import SCurveClient from '@/components/weekly/SCurveClient';
+import WeeklyPrintSCurve from '@/components/print/WeeklyPrintSCurve';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -9,7 +10,8 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
   const { week: weekParam } = await params;
   const week = Number(weekParam);
   const db = await getDb();
-  if (!db.weeks.some((w) => w.week === week)) notFound();
+  const meta = getWeekMeta(db, week);
+  if (!meta) notFound();
 
   const series = buildSCurveSeries(db, week);
   const current = series.find((r) => r.week === week);
@@ -18,14 +20,21 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
   const lastActual = [...series].reverse().find((r) => r.actualPct !== null)?.actualPct ?? null;
 
   return (
-    <div className="h-full px-8 py-6">
-      <SCurveClient
-        series={series}
-        currentWeek={week}
-        planPct={current?.planPct ?? null}
-        actualPct={current?.actualPct ?? lastActual}
-        project={db.project}
-      />
-    </div>
+    <>
+      <div className="h-full px-4 py-4 sm:px-6 sm:py-6 lg:px-8 print:hidden">
+        <SCurveClient
+          series={series}
+          currentWeek={week}
+          planPct={current?.planPct ?? null}
+          actualPct={current?.actualPct ?? lastActual}
+          project={db.project}
+        />
+      </div>
+      {/* A4 report sheet, only visible on paper. Recharts skips drawing inside
+          display:none, so keep the sheet laid out but invisible off-screen. */}
+      <div className="invisible fixed inset-x-0 top-0 -z-50 overflow-hidden print:visible print:static print:z-auto print:overflow-visible">
+        <WeeklyPrintSCurve project={db.project} meta={meta} series={series} />
+      </div>
+    </>
   );
 }

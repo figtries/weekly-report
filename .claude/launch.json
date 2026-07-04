@@ -9,6 +9,34 @@
       "autoPort": true
     },
     {
+      "name": "dev-preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-preview&& npm run dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "dev-preview2",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-preview2&& npm run dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "dev-preview3",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-preview3&& npm run dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "dev-preview4",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-preview4&& npm run dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "prod",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],

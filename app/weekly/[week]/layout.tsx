@@ -23,9 +23,9 @@ export default async function WeeklyWeekLayout({
   const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col print:block print:h-auto">
       <WeekTabs weeks={weeks} selectedWeek={Number(week)} projectCurrentWeek={db.project.currentWeek} />
-      <div className="flex-1 overflow-auto">{children}</div>
+      <div className="flex-1 overflow-auto print:overflow-visible">{children}</div>
     </div>
   );
 }

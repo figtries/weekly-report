@@ -111,9 +111,9 @@ export default function DailyForm({ report }: { report: DailyReport }) {
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{weekday}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
             <span>Hari ke-</span>
             <input
@@ -142,7 +142,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
       </div>
 
       {/* Weather */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Keadaan Cuaca</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
@@ -174,7 +174,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             </label>
           ))}
         </div>
-        <div className="mt-4 flex items-center gap-3 text-sm text-gray-600">
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <span>Waktu</span>
           <input
             type="time"
@@ -193,14 +193,15 @@ export default function DailyForm({ report }: { report: DailyReport }) {
       </section>
 
       {/* Man Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">1. Man Hours</h2>
           <button onClick={addManHour} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
             + Add company
           </button>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-gray-600">
               <th className="px-2 py-2 text-left font-medium">Company</th>
@@ -246,7 +247,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium text-gray-700">
-                  {(row.previousHours + row.todayHours).toLocaleString()}
+                  {(row.previousHours + row.todayHours).toLocaleString('en-US')}
                 </td>
                 <td className="px-2 py-1.5 text-center">
                   <button onClick={() => removeManHour(row.id)} className="text-gray-300 transition-all duration-200 ease-ios hover:text-red-500 hover:scale-110 active:scale-95">
@@ -257,12 +258,14 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Non-Effective Working Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Non Effective Working Hours</h2>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-gray-600">
               <th className="px-2 py-2 text-left font-medium">Cause</th>
@@ -304,10 +307,11 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Permit to Work */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">2. Permit to Work (PTW)</h2>
           <button onClick={addPtw} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
@@ -373,9 +377,10 @@ export default function DailyForm({ report }: { report: DailyReport }) {
       </section>
 
       {/* HSE Input */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">3. HSE Input</h2>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[480px] text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-gray-600">
               <th className="px-2 py-2 text-left font-medium">Activity</th>
@@ -409,10 +414,11 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Activities & Plan/Actual */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Daily Activities</h2>
         <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
@@ -442,7 +448,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:w-1/2">
+        <div className="grid grid-cols-2 gap-4 lg:w-1/2">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Plan (%)</label>
             <input

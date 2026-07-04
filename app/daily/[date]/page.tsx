@@ -16,7 +16,7 @@ export default async function DailyDetailPage({ params }: { params: Promise<{ da
 
   if (!report) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center animate-fade-in-up">
           <p className="text-gray-500">No daily report exists for {date} yet.</p>
         </div>
@@ -25,9 +25,9 @@ export default async function DailyDetailPage({ params }: { params: Promise<{ da
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <DailyForm report={report} />
-      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm animate-fade-in-up">
+      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Documentation</h2>
         <PhotoUploadGrid photos={report.photos} uploadUrl={`/api/daily/${date}/photos`} />
       </section>

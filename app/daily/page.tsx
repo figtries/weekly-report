@@ -15,11 +15,11 @@ export default async function DailyListPage() {
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
   return (
-    <div className="p-8 animate-fade-in-up">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up">
+      <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-gray-900 mb-2">Daily Reports</h1>
-          <p className="text-gray-600">Field man-hours, PTW, HSE and daily progress</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Daily Reports</h1>
+          <p className="text-sm sm:text-base text-gray-600">Field man-hours, PTW, HSE and daily progress</p>
         </div>
         <NewDailyButton defaultDate={defaultDate} />
       </div>
@@ -30,7 +30,7 @@ export default async function DailyListPage() {
           <Link
             key={d.date}
             href={`/daily/${d.date}`}
-            className="flex items-center justify-between px-6 py-4 transition-all duration-300 ease-ios hover:bg-gray-50 active:bg-gray-100 animate-fade-in-up"
+            className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 transition-all duration-300 ease-ios hover:bg-gray-50 active:bg-gray-100 animate-fade-in-up"
             style={{ animationDelay: `${idx * 40}ms` }}
           >
             <div>

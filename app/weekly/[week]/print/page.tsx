@@ -20,8 +20,9 @@ export default async function WeeklyPrintPage({ params }: { params: Promise<{ we
   const series = buildSCurveSeries(db, week);
 
   return (
-    <div className="bg-gray-100 min-h-full">
-      <div className="flex flex-col items-center gap-6 py-6">
+    <div className="bg-gray-100 min-h-full overflow-x-auto print:overflow-visible">
+      {/* w-max keeps the fixed-width A4 sheets scrollable (not left-clipped) on small screens */}
+      <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:w-auto print:min-w-0 print:p-0">
         <WeeklyPrintSummary project={db.project} meta={meta} roots={summaryRows} grandTotal={grandTotal} />
         <WeeklyPrintDetail project={db.project} meta={meta} roots={roots} />
         <WeeklyPrintSCurve project={db.project} meta={meta} series={series} />

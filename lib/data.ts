@@ -1,6 +1,12 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { readDb } from './db';
-import { computeGrandTotal, computeRollup, type GrandTotal, type RollupNode } from './rollup';
+import {
+  computeGrandTotal,
+  computeRollup,
+  promoteNestedSpkContracts,
+  type GrandTotal,
+  type RollupNode,
+} from './rollup';
 import type { Database, WeeklyMeta } from './types';
 
 // Cached so every page renders into an instant static shell (see
@@ -37,6 +43,8 @@ export function getWeekRollup(db: Database, week: number): WeekRollup | null {
   const meta = getWeekMeta(db, week);
   if (!meta) return null;
   const prevMeta = getPrevWeekMeta(db, week);
-  const roots = computeRollup(db.wbsItems, meta.leafData, prevMeta?.leafData ?? null);
+  const roots = promoteNestedSpkContracts(
+    computeRollup(db.wbsItems, meta.leafData, prevMeta?.leafData ?? null)
+  );
   return { meta, prevMeta, roots, grandTotal: computeGrandTotal(roots) };
 }

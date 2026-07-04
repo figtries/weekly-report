@@ -16,7 +16,7 @@
       "name": "Yopi Budiana Perkasa"
     },
     "weekAnchorEndDate": "2025-10-30",
-    "currentWeek": 35
+    "currentWeek": 36
   },
   "wbsItems": [
     {
@@ -34634,7 +34634,7 @@
           "targetWF": 0.094595
         },
         "w234": {
-          "cumProgressPct": 21,
+          "cumProgressPct": 61,
           "targetWF": 0.189189
         },
         "w235": {
@@ -34642,11 +34642,11 @@
           "targetWF": 0.189189
         },
         "w236": {
-          "cumProgressPct": 75,
+          "cumProgressPct": 78.47,
           "targetWF": 0.189189
         },
         "w237": {
-          "cumProgressPct": 35,
+          "cumProgressPct": 85,
           "targetWF": 0.141892
         },
         "w238": {
@@ -34658,7 +34658,7 @@
           "targetWF": 0.141892
         },
         "w240": {
-          "cumProgressPct": 0,
+          "cumProgressPct": 100,
           "targetWF": 1.439189
         },
         "w244": {

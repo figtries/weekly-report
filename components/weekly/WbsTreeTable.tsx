@@ -133,12 +133,12 @@ export default function WbsTreeTable({
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-6 sm:py-4">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{title}</h2>
           <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={expandAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
             Expand all
           </button>
@@ -163,7 +163,7 @@ export default function WbsTreeTable({
           <thead className="sticky top-0 z-20 bg-gray-50">
             <tr className="border-b border-gray-200">
               <th
-                className={`${compact ? 'min-w-[240px]' : 'min-w-[380px]'} sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-700`}
+                className={`${compact ? 'min-w-[200px] sm:min-w-[240px]' : 'min-w-[260px] sm:min-w-[380px]'} sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-700`}
               >
                 WBS / Deskripsi
               </th>
