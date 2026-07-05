@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getDb, getWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
-import WeeklyPrintDetail from '@/components/print/WeeklyPrintDetail';
+import PrintDetailLazy from '@/components/print/PrintDetailLazy';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -27,10 +27,9 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
         </div>
         <WbsTreeVisual roots={roots} />
       </div>
-      {/* A4 report sheet, only visible on paper */}
-      <div className="hidden print:block">
-        <WeeklyPrintDetail project={db.project} meta={meta} roots={roots} />
-      </div>
+      {/* A4 report sheet, only visible on paper — lazy-loaded client-side to
+         avoid blocking the server render with ~3 000 table cells */}
+      <PrintDetailLazy project={db.project} meta={meta} roots={roots} />
     </>
   );
 }

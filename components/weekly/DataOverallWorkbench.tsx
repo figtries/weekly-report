@@ -11,6 +11,7 @@ interface EditState {
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
+const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
 function isMilestone(n: RollupNode): boolean {
   return n.children.length === 0 && n.bobot === 0;
@@ -30,29 +31,26 @@ function flattenAll(roots: RollupNode[]): RollupNode[] {
   return out;
 }
 
-function findAncestors(all: RollupNode[], id: string): RollupNode[] {
-  const byChild = new Map<string, RollupNode>();
-  all.forEach((p) => p.children.forEach((c) => byChild.set(c.id, p)));
-  const chain: RollupNode[] = [];
-  let cur = byChild.get(id);
-  while (cur) {
-    chain.unshift(cur);
-    cur = byChild.get(cur.id);
-  }
-  return chain;
+function visibleChildren(n: RollupNode): RollupNode[] {
+  return n.children.filter((c) => !isMilestone(c));
 }
 
+function leafCount(n: RollupNode): number {
+  return flattenAll([n]).filter((x) => x.children.length === 0 && !isMilestone(x)).length;
+}
+
+/** "+5" adds, "-3" subtracts, "62.5" sets. Comma decimals accepted. */
 function parseInput(raw: string, current: number): number | null {
   const s = raw.trim().replace(',', '.');
   if (s === '') return 0;
   if (s.startsWith('+') || s.startsWith('-')) {
     const delta = parseFloat(s);
     if (Number.isNaN(delta)) return null;
-    return Math.max(0, Math.min(100, current + delta));
+    return clamp(round2(current + delta));
   }
   const n = parseFloat(s);
   if (Number.isNaN(n)) return null;
-  return Math.max(0, Math.min(100, n));
+  return clamp(round2(n));
 }
 
 function timeAgo(iso: string): string {
@@ -62,8 +60,29 @@ function timeAgo(iso: string): string {
   if (min < 60) return `${min} menit lalu`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h} jam lalu`;
-  const d = Math.floor(h / 24);
-  return `${d} hari lalu`;
+  return `${Math.floor(h / 24)} hari lalu`;
+}
+
+/** Human status — words first, numbers second. */
+function statusOf(cum: number, plan: number) {
+  if (cum >= 99.95)
+    return { label: 'Selesai', chip: 'bg-emerald-50 text-emerald-700', ring: '#10b981', ringText: '#047857' };
+  if (cum <= 0.05 && plan <= 0.05)
+    return { label: 'Belum mulai', chip: 'bg-gray-100 text-gray-500', ring: '#d1d5db', ringText: '#6b7280' };
+  const gap = cum - plan;
+  if (gap >= -1)
+    return { label: 'On track', chip: 'bg-blue-50 text-blue-700', ring: '#3b82f6', ringText: '#1d4ed8' };
+  if (gap >= -7.5)
+    return { label: 'Sedikit telat', chip: 'bg-amber-50 text-amber-700', ring: '#f59e0b', ringText: '#b45309' };
+  return { label: 'Perlu perhatian', chip: 'bg-red-50 text-red-600', ring: '#ef4444', ringText: '#b91c1c' };
+}
+
+function gapText(cum: number, plan: number): { text: string; cls: string } {
+  const gap = round2(cum - plan);
+  if (Math.abs(gap) < 0.05) return { text: 'sesuai target', cls: 'text-gray-500' };
+  if (gap >= -1 && gap < 0) return { text: 'hampir sesuai', cls: 'text-gray-500' };
+  if (gap < 0) return { text: `kurang ${Math.abs(gap).toFixed(1)}%`, cls: 'text-red-500' };
+  return { text: `unggul ${gap.toFixed(1)}%`, cls: 'text-emerald-600' };
 }
 
 export default function DataOverallWorkbench({
@@ -78,33 +97,95 @@ export default function DataOverallWorkbench({
   const router = useRouter();
 
   const flatAll = useMemo(() => flattenAll(roots), [roots]);
-  const editables = useMemo(
-    () => flatAll.filter((n) => n.children.length === 0 && !isMilestone(n)),
-    [flatAll]
+  // With a single umbrella root, the SPK contracts underneath are the real
+  // top-level "folders" users think in.
+  const homeNodes = useMemo(
+    () => (roots.length === 1 ? visibleChildren(roots[0]) : roots.filter((r) => !isMilestone(r))),
+    [roots]
   );
+  const pathBase = roots.length === 1 ? 1 : 0;
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(roots.map((r) => r.id))
-  );
+  const [path, setPath] = useState<RollupNode[]>([]);
+  const [direction, setDirection] = useState<'fwd' | 'back'>('fwd');
+  const [levelKey, setLevelKey] = useState(0);
   const [edits, setEdits] = useState<Record<string, EditState>>({});
   const [rawInputs, setRawInputs] = useState<Record<string, { cum?: string; plan?: string }>>({});
-  const [showDetail, setShowDetail] = useState(false);
+  const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
+  const [showLog, setShowLog] = useState(false);
 
-  const selected = selectedId ? flatAll.find((n) => n.id === selectedId) ?? null : null;
+  // Relative times ("2 menit lalu") drift between SSR and hydration, so those
+  // spans carry suppressHydrationWarning; this tick keeps them fresh afterwards.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setClockTick((v) => v + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Re-resolve path nodes after router.refresh() delivers fresh rollups —
+  // stale node objects would otherwise keep showing pre-save numbers. Each
+  // entry must be a child of the previous one; anything else (e.g. the same
+  // node pushed twice by a double-click) is dropped.
+  const currentPath = useMemo(() => {
+    const resolved: RollupNode[] = [];
+    let container = homeNodes;
+    for (const p of path) {
+      const fresh = container.find((n) => n.id === p.id);
+      if (!fresh) continue;
+      resolved.push(fresh);
+      container = fresh.children;
+    }
+    return resolved;
+  }, [path, flatAll, homeNodes]);
+
+  const currentNode = currentPath.length ? currentPath[currentPath.length - 1] : null;
+  const currentNodes = currentNode ? visibleChildren(currentNode) : homeNodes;
   const dirtyCount = Object.keys(edits).length;
 
-  // Close drawer on Escape.
+  function navigateInto(node: RollupNode) {
+    setDirection('fwd');
+    setPath((prev) => (prev[prev.length - 1]?.id === node.id ? prev : [...prev, node]));
+    setLevelKey((k) => k + 1);
+  }
+
+  function goBack() {
+    setDirection('back');
+    setPath((prev) => prev.slice(0, -1));
+    setLevelKey((k) => k + 1);
+  }
+
+  function goToLevel(index: number) {
+    // index = -1 means home
+    setDirection('back');
+    setPath((prev) => prev.slice(0, index + 1));
+    setLevelKey((k) => k + 1);
+  }
+
+  function jumpToLeaf(leaf: RollupNode) {
+    const byChild = new Map<string, RollupNode>();
+    flatAll.forEach((p) => p.children.forEach((c) => byChild.set(c.id, p)));
+    const chain: RollupNode[] = [];
+    let cur = byChild.get(leaf.id);
+    while (cur) {
+      chain.unshift(cur);
+      cur = byChild.get(cur.id);
+    }
+    setDirection('fwd');
+    setPath(chain.slice(pathBase));
+    setQuery('');
+    setLevelKey((k) => k + 1);
+  }
+
+  // Escape = back one level (matches the "folder" mental model).
   useEffect(() => {
-    if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null);
+      if (e.key === 'Escape' && path.length && !query) goBack();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path.length, query]);
 
   const recentIds = useMemo(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -115,31 +196,30 @@ export default function DataOverallWorkbench({
     return ids;
   }, [recentChanges]);
 
-  const todayCount = useMemo(() => {
+  const todayStart = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
+    return start.getTime();
+  }, []);
+
+  const todayCount = useMemo(() => {
     const leaves = new Set<string>();
     recentChanges.forEach((c) => {
-      if (new Date(c.at).getTime() >= start.getTime()) leaves.add(c.leafId);
+      if (new Date(c.at).getTime() >= todayStart) leaves.add(c.leafId);
     });
     return leaves.size;
-  }, [recentChanges]);
+  }, [recentChanges, todayStart]);
 
-  const historyForSelected = useMemo(() => {
-    if (!selectedId) return [];
-    return recentChanges
-      .filter((c) => c.leafId === selectedId)
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 5);
-  }, [recentChanges, selectedId]);
+  const sortedLog = useMemo(
+    () => [...recentChanges].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
+    [recentChanges]
+  );
 
-  function toggleGroup(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  function currentCum(node: RollupNode): number {
+    return round2(edits[node.id]?.cumProgressPct ?? node.curProgressPct);
+  }
+  function currentPlan(node: RollupNode): number {
+    return round2(edits[node.id]?.planPct ?? planPctOf(node));
   }
 
   function setEdit(id: string, patch: EditState) {
@@ -147,10 +227,9 @@ export default function DataOverallWorkbench({
       const merged = { ...prev[id], ...patch };
       const node = flatAll.find((n) => n.id === id);
       if (node) {
-        const origCum = round2(node.curProgressPct);
-        const origPlan = round2(planPctOf(node));
-        const cumSame = merged.cumProgressPct === undefined || round2(merged.cumProgressPct) === origCum;
-        const planSame = merged.planPct === undefined || round2(merged.planPct) === origPlan;
+        const cumSame =
+          merged.cumProgressPct === undefined || round2(merged.cumProgressPct) === round2(node.curProgressPct);
+        const planSame = merged.planPct === undefined || round2(merged.planPct) === round2(planPctOf(node));
         if (cumSame && planSame) {
           const next = { ...prev };
           delete next[id];
@@ -161,11 +240,15 @@ export default function DataOverallWorkbench({
     });
   }
 
-  function currentCum(node: RollupNode): number {
-    return round2(edits[node.id]?.cumProgressPct ?? node.curProgressPct);
+  function adjustCum(node: RollupNode, delta: number) {
+    const next = clamp(round2(currentCum(node) + delta));
+    setEdit(node.id, { cumProgressPct: next });
+    setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: String(next) } }));
   }
-  function currentPlan(node: RollupNode): number {
-    return round2(edits[node.id]?.planPct ?? planPctOf(node));
+
+  function discardAll() {
+    setEdits({});
+    setRawInputs({});
   }
 
   async function save() {
@@ -192,345 +275,403 @@ export default function DataOverallWorkbench({
       }
       setEdits({});
       setRawInputs({});
-      setSelectedId(null);
       router.refresh();
     } finally {
       setSaving(false);
     }
   }
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return null;
-    const q = query.toLowerCase();
-    return new Set(
-      editables.filter((n) => n.deskripsi.toLowerCase().includes(q)).map((n) => n.id)
-    );
-  }, [editables, query]);
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return flatAll
+      .filter((n) => n.children.length === 0 && !isMilestone(n) && n.deskripsi.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [flatAll, query]);
+
+  const ancestorsOf = useMemo(() => {
+    const byChild = new Map<string, RollupNode>();
+    flatAll.forEach((p) => p.children.forEach((c) => byChild.set(c.id, p)));
+    return (id: string): RollupNode[] => {
+      const chain: RollupNode[] = [];
+      let cur = byChild.get(id);
+      while (cur) {
+        chain.unshift(cur);
+        cur = byChild.get(cur.id);
+      }
+      return chain.slice(pathBase);
+    };
+  }, [flatAll, pathBase]);
+
+  const leafProps = {
+    week,
+    recentIds,
+    recentChanges,
+    edits,
+    rawInputs,
+    detailOpen,
+    currentCum,
+    currentPlan,
+    setEdit,
+    setRawInputs,
+    adjustCum,
+    toggleDetail: (id: string) =>
+      setDetailOpen((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+  };
 
   return (
     <div className="space-y-4">
-      {/* Change tracking strip */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-fade-in-up">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-50 text-purple-600">
-          <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div className="flex-1 text-sm text-gray-700">
-          {todayCount > 0 ? (
-            <>
-              <span className="font-semibold text-gray-900">{todayCount} aktivitas</span>
-              <span className="text-gray-500"> diupdate hari ini</span>
-            </>
-          ) : (
-            <>
-              <span className="font-medium text-gray-800">Belum ada perubahan hari ini.</span>
-              <span className="text-gray-500"> Pilih aktivitas untuk mulai edit.</span>
-            </>
-          )}
-        </div>
-        {dirtyCount > 0 && (
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-            {dirtyCount} perubahan belum disimpan
-          </span>
-        )}
-      </div>
-
-      {/* Full-width list */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm animate-fade-in-up">
-        <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-3.5">
-          <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      {/* Top bar: search + today's changes */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-1 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm transition-shadow focus-within:shadow-md">
+          <svg className="h-[18px] w-[18px] shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari aktivitas…"
-            className="flex-1 border-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+            placeholder="Cari aktivitas — langsung lompat tanpa buka folder…"
+            className="w-full border-none bg-transparent text-[14px] text-gray-900 outline-none placeholder:text-gray-400"
           />
-          <div className="text-xs text-gray-500">{editables.length} aktivitas</div>
+          {query && (
+            <button onClick={() => setQuery('')} className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Hapus pencarian">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
+        <button
+          onClick={() => setShowLog((v) => !v)}
+          disabled={recentChanges.length === 0}
+          className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-5 py-3.5 shadow-sm transition-all sm:w-auto ${
+            recentChanges.length > 0
+              ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
+              : 'cursor-default'
+          } ${showLog ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200'}`}
+        >
+          <span className={`h-2 w-2 shrink-0 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+          <span className="flex-1 text-left text-[13px] text-gray-600 sm:flex-none">
+            {todayCount > 0 ? (
+              <><span className="font-semibold text-gray-900">{todayCount} aktivitas</span> diupdate hari ini</>
+            ) : (
+              'Belum ada update hari ini'
+            )}
+          </span>
+          {recentChanges.length > 0 && (
+            <span className="ml-auto text-[12px] text-gray-400 sm:hidden">Lihat</span>
+          )}
+          {recentChanges.length > 0 && (
+            <svg
+              className="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-300"
+              style={{ transform: showLog ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </button>
+      </div>
 
-        <div className="divide-y divide-gray-100">
-          {roots.map((root) => (
-            <ActivityGroup
-              key={root.id}
-              node={root}
-              depth={0}
-              expanded={expanded}
-              onToggle={toggleGroup}
-              onSelect={setSelectedId}
-              filtered={filtered}
-              edits={edits}
-              recentIds={recentIds}
-              currentCum={currentCum}
-              currentPlan={currentPlan}
-            />
-          ))}
+      {/* Change log panel */}
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: showLog ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+              <div className="text-[14px] font-semibold text-gray-900">Riwayat perubahan · Week {week}</div>
+              <div className="text-[12px] text-gray-500">{sortedLog.length} perubahan tercatat</div>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {sortedLog.map((c, i) => {
+                const leaf = flatAll.find((n) => n.id === c.leafId);
+                const delta = round2(c.newValue - c.oldValue);
+                const isToday = new Date(c.at).getTime() >= todayStart;
+                const showDivider = i > 0 && isTodayAt(sortedLog[i - 1].at, todayStart) && !isToday;
+                return (
+                  <div key={c.id}>
+                    {showDivider && (
+                      <div className="bg-gray-50 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        Sebelumnya
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (leaf) {
+                          jumpToLeaf(leaf);
+                          setShowLog(false);
+                        }
+                      }}
+                      disabled={!leaf}
+                      className="flex w-full items-center gap-3.5 border-b border-gray-50 px-5 py-3 text-left transition-colors last:border-0 hover:bg-blue-50/40 disabled:pointer-events-none"
+                    >
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] ${
+                          delta > 0 ? 'bg-emerald-50 text-emerald-600' : delta < 0 ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-gray-900">
+                          {leaf?.deskripsi ?? 'Aktivitas tidak ditemukan'}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] text-gray-500">
+                          {c.field === 'cumProgressPct' ? 'Realisasi' : 'Target'}{' '}
+                          <span className="font-medium tabular-nums text-gray-700">{c.oldValue.toFixed(1)}%</span>
+                          {' → '}
+                          <span className="font-medium tabular-nums text-gray-700">{c.newValue.toFixed(1)}%</span>
+                          <span className={delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}>
+                            {' '}({delta > 0 ? '+' : ''}{delta.toFixed(1)}%)
+                          </span>
+                        </span>
+                      </span>
+                      <span suppressHydrationWarning className="shrink-0 text-[12px] text-gray-400">{timeAgo(c.at)}</span>
+                      {leaf && (
+                        <svg className="h-4 w-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+              {sortedLog.length === 0 && (
+                <div className="px-5 py-8 text-center text-[13px] text-gray-500">Belum ada perubahan tercatat minggu ini.</div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Sticky save bar */}
-      {dirtyCount > 0 && !selected && (
-        <div className="sticky bottom-4 z-30 mx-auto flex max-w-lg items-center justify-between rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-lg animate-fade-in-up">
-          <div className="text-sm text-gray-700">
-            <span className="font-semibold text-gray-900">{dirtyCount}</span> perubahan siap disimpan
+      {/* Search results replace the browser */}
+      {searchResults ? (
+        <div className="space-y-2.5 animate-fade-in">
+          <div className="px-1 text-[13px] text-gray-500">
+            {searchResults.length === 0
+              ? 'Tidak ada aktivitas yang cocok.'
+              : `${searchResults.length} aktivitas ditemukan`}
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setEdits({});
-                setRawInputs({});
-              }}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900"
-            >
-              Batal semua
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40"
-            >
-              {saving ? 'Menyimpan…' : 'Simpan semua'}
-            </button>
+          {searchResults.map((leaf) => (
+            <div key={leaf.id} className="animate-fade-in-up">
+              <button
+                onClick={() => jumpToLeaf(leaf)}
+                className="mb-1 flex items-center gap-1.5 px-1 text-[12px] text-gray-500 hover:text-blue-600"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                {ancestorsOf(leaf.id).map((a) => shortName(a.deskripsi)).join(' › ') || 'Level teratas'}
+                <span className="text-blue-500">· buka folder</span>
+              </button>
+              <LeafCard node={leaf} {...leafProps} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Breadcrumb + level header */}
+          {currentPath.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-fade-in">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+                <button
+                  onClick={goBack}
+                  className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 font-medium text-gray-700 transition-all hover:bg-gray-200 active:scale-[0.96]"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Kembali
+                </button>
+                <span className="mx-1 text-gray-300">|</span>
+                <button onClick={() => goToLevel(-1)} className="text-gray-500 transition-colors hover:text-blue-600">
+                  Semua kontrak
+                </button>
+                {currentPath.map((p, i) => (
+                  <span key={p.id} className="flex items-center gap-2">
+                    <span className="text-gray-300">›</span>
+                    {i === currentPath.length - 1 ? (
+                      <span className="font-semibold text-gray-900">{shortName(p.deskripsi)}</span>
+                    ) : (
+                      <button onClick={() => goToLevel(i)} className="text-gray-500 transition-colors hover:text-blue-600">
+                        {shortName(p.deskripsi)}
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              {currentNode && (
+                <div className="mt-3 flex items-center gap-4">
+                  <Ring
+                    pct={currentCumOf(currentNode, edits)}
+                    color={statusOf(currentCumOf(currentNode, edits), round2(planPctOf(currentNode))).ring}
+                    textColor={statusOf(currentCumOf(currentNode, edits), round2(planPctOf(currentNode))).ringText}
+                    size={48}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
+                    <p className="mt-0.5 text-[13px] text-gray-500">
+                      {leafCount(currentNode)} aktivitas · Bobot {currentNode.bobot.toFixed(2)}% ·{' '}
+                      Target {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
+                      <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
+                        {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Level cards — keyed so each navigation replays the slide animation */}
+          <div key={levelKey} className={direction === 'fwd' ? 'animate-level-fwd' : 'animate-level-back'}>
+            <div className="space-y-2.5">
+              {currentNodes.map((node, idx) =>
+                node.children.length > 0 ? (
+                  <FolderCard
+                    key={node.id}
+                    node={node}
+                    index={idx}
+                    onOpen={() => navigateInto(node)}
+                    cum={round2(node.curProgressPct)}
+                    plan={round2(planPctOf(node))}
+                  />
+                ) : (
+                  <div key={node.id} className="animate-fade-in-up" style={{ animationDelay: `${idx * 40}ms` }}>
+                    <LeafCard node={node} {...leafProps} />
+                  </div>
+                )
+              )}
+              {currentNodes.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 py-10 text-center text-sm text-gray-500">
+                  Tidak ada aktivitas di level ini.
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Floating save bar */}
+      {dirtyCount > 0 && (
+        <div className="sticky bottom-3 z-30 px-1 animate-fade-in-up sm:bottom-4 sm:px-0">
+          <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur sm:px-5 sm:py-3.5">
+            <div className="flex items-center gap-2.5 text-[14px] text-gray-700">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[12px] font-bold text-amber-800">
+                {dirtyCount}
+              </span>
+              perubahan belum disimpan
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={discardAll}
+                className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              >
+                Batal
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+              >
+                {saving ? 'Menyimpan…' : 'Simpan'}
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* Slide-in edit drawer */}
-      {selected && (
-        <EditDrawer
-          node={selected}
-          ancestors={findAncestors(flatAll, selected.id)}
-          cum={currentCum(selected)}
-          plan={currentPlan(selected)}
-          rawCum={rawInputs[selected.id]?.cum}
-          rawPlan={rawInputs[selected.id]?.plan}
-          onCumChange={(raw) => {
-            setRawInputs((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], cum: raw } }));
-            const parsed = parseInput(raw, round2(selected.curProgressPct));
-            if (parsed !== null) setEdit(selected.id, { cumProgressPct: parsed });
-          }}
-          onPlanChange={(raw) => {
-            setRawInputs((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], plan: raw } }));
-            const parsed = parseInput(raw, round2(planPctOf(selected)));
-            if (parsed !== null) setEdit(selected.id, { planPct: parsed });
-          }}
-          onQuickAction={(action) => {
-            const cur = round2(selected.curProgressPct);
-            let next = cur;
-            if (action === 'same-prev') next = round2(selected.prevProgressPct);
-            else if (action === 'plus5') next = Math.min(100, cur + 5);
-            else if (action === 'plus10') next = Math.min(100, cur + 10);
-            else if (action === 'done') next = 100;
-            setEdit(selected.id, { cumProgressPct: next });
-            setRawInputs((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], cum: String(next) } }));
-          }}
-          onReset={() => {
-            setEdits((prev) => {
-              const next = { ...prev };
-              delete next[selected.id];
-              return next;
-            });
-            setRawInputs((prev) => {
-              const next = { ...prev };
-              delete next[selected.id];
-              return next;
-            });
-          }}
-          isDirty={!!edits[selected.id]}
-          showDetail={showDetail}
-          onToggleDetail={() => setShowDetail((v) => !v)}
-          history={historyForSelected}
-          week={week}
-          dirtyCount={dirtyCount}
-          saving={saving}
-          onSave={save}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
     </div>
   );
+}
+
+function currentCumOf(node: RollupNode, edits: Record<string, EditState>): number {
+  return round2(edits[node.id]?.cumProgressPct ?? node.curProgressPct);
+}
+
+/** Trim long WBS descriptions for breadcrumbs. */
+function shortName(s: string): string {
+  return s.length > 28 ? s.slice(0, 26).trimEnd() + '…' : s;
+}
+
+function isTodayAt(iso: string, todayStart: number): boolean {
+  return new Date(iso).getTime() >= todayStart;
 }
 
 // ============================================================================
 
-function ActivityGroup({
-  node,
-  depth,
-  expanded,
-  onToggle,
-  onSelect,
-  filtered,
-  edits,
-  recentIds,
-  currentCum,
-  currentPlan,
-}: {
-  node: RollupNode;
-  depth: number;
-  expanded: Set<string>;
-  onToggle: (id: string) => void;
-  onSelect: (id: string) => void;
-  filtered: Set<string> | null;
-  edits: Record<string, EditState>;
-  recentIds: Set<string>;
-  currentCum: (n: RollupNode) => number;
-  currentPlan: (n: RollupNode) => number;
-}) {
-  if (isMilestone(node)) return null;
-  const isLeaf = node.children.length === 0;
-
-  if (filtered && isLeaf && !filtered.has(node.id)) return null;
-  if (filtered && !isLeaf) {
-    const anyMatch = flattenAll([node]).some((c) => filtered.has(c.id));
-    if (!anyMatch) return null;
-  }
-
-  if (isLeaf) {
-    return (
-      <LeafRow
-        node={node}
-        depth={depth}
-        onSelect={() => onSelect(node.id)}
-        isDirty={!!edits[node.id]}
-        isRecent={recentIds.has(node.id)}
-        cum={currentCum(node)}
-        plan={currentPlan(node)}
-      />
-    );
-  }
-
-  const isOpen = filtered !== null ? true : expanded.has(node.id);
-  const rollupCum = round2(node.curProgressPct);
-  const rollupPlan = round2(planPctOf(node));
-  const rollupGap = round2(rollupCum - rollupPlan);
-  const isTop = depth === 0;
-
+function Ring({ pct, color, textColor, size = 56 }: { pct: number; color: string; textColor: string; size?: number }) {
+  const stroke = size >= 56 ? 6 : 5;
+  const r = size / 2 - stroke - 1;
+  const c = 2 * Math.PI * r;
+  const off = c * (1 - clamp(pct) / 100);
   return (
-    <div>
-      <button
-        onClick={() => onToggle(node.id)}
-        className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-gray-50 ${
-          isTop ? 'bg-gray-50/70' : ''
-        }`}
-        style={{ paddingLeft: 20 + depth * 20 }}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0" aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F3F4F6" strokeWidth={stroke} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeDasharray={c}
+        strokeDashoffset={off}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s' }}
+      />
+      <text
+        x={size / 2}
+        y={size / 2 + 4.5}
+        textAnchor="middle"
+        fontSize={size >= 56 ? 13 : 12}
+        fontWeight={600}
+        fill={textColor}
       >
-        <svg
-          className="h-4 w-4 shrink-0 text-gray-500 transition-transform"
-          style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-        <div className="min-w-0 flex-1">
-          <div className={`truncate ${isTop ? 'text-sm font-semibold text-gray-900' : 'text-sm font-medium text-gray-800'}`}>
-            {node.deskripsi}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-            <span>Bobot <span className="font-medium text-gray-700">{node.bobot.toFixed(2)}%</span></span>
-            <span className="text-gray-300">·</span>
-            <span>
-              Plan <span className="font-medium text-gray-700">{rollupPlan.toFixed(1)}%</span>{' '}
-              <span className={rollupGap < 0 ? 'text-red-500' : rollupGap > 0 ? 'text-emerald-600' : 'text-gray-400'}>
-                ({rollupGap > 0 ? '+' : ''}{rollupGap.toFixed(1)}%)
-              </span>
-            </span>
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="text-base font-semibold text-gray-900">{rollupCum.toFixed(1)}%</div>
-          <div className="text-[11px] text-gray-500">actual</div>
-        </div>
-      </button>
-      {isOpen && (
-        <div className="divide-y divide-gray-50 border-t border-gray-50">
-          {node.children.map((child) => (
-            <ActivityGroup
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              expanded={expanded}
-              onToggle={onToggle}
-              onSelect={onSelect}
-              filtered={filtered}
-              edits={edits}
-              recentIds={recentIds}
-              currentCum={currentCum}
-              currentPlan={currentPlan}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+        {Math.round(pct)}
+      </text>
+    </svg>
   );
 }
 
-function LeafRow({
-  node, depth, onSelect, isDirty, isRecent, cum, plan,
+function FolderCard({
+  node, index, onOpen, cum, plan,
 }: {
   node: RollupNode;
-  depth: number;
-  onSelect: () => void;
-  isDirty: boolean;
-  isRecent: boolean;
+  index: number;
+  onOpen: () => void;
   cum: number;
   plan: number;
 }) {
-  const gap = round2(cum - plan);
-  const actualColor = cum >= 100
-    ? 'bg-emerald-500'
-    : cum >= 60
-      ? 'bg-blue-500'
-      : cum > 0
-        ? 'bg-amber-500'
-        : 'bg-gray-300';
-
+  const st = statusOf(cum, plan);
+  const gap = gapText(cum, plan);
   return (
     <button
-      onClick={onSelect}
-      className={`group flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors ${
-        isDirty
-          ? 'bg-amber-50 hover:bg-amber-100'
-          : 'hover:bg-blue-50/40'
-      }`}
-      style={{ paddingLeft: 20 + depth * 20 + 24 }}
+      onClick={onOpen}
+      className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition-all duration-300 ease-ios hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.99] animate-fade-in-up"
+      style={{ animationDelay: `${index * 40}ms` }}
     >
+      <Ring pct={cum} color={st.ring} textColor={st.ringText} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className="truncate text-sm font-medium text-gray-900">
-            {node.deskripsi}
-          </div>
-          {isRecent && (
-            <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
-              Baru
-            </span>
-          )}
-          {isDirty && (
-            <span className="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-              Edit
-            </span>
-          )}
-        </div>
-        <div className="relative mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-          <div className="absolute inset-y-0 left-0 bg-orange-200" style={{ width: `${Math.min(100, plan)}%` }} />
-          <div className={`absolute inset-y-0 left-0 ${actualColor}`} style={{ width: `${Math.min(100, cum)}%` }} />
-        </div>
-        <div className="mt-1.5 flex justify-between text-xs text-gray-500">
-          <span>Actual <span className="font-medium text-gray-700">{cum.toFixed(1)}%</span></span>
-          <span>
-            Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
-            {gap !== 0 && (
-              <span className={gap < 0 ? ' text-red-500' : ' text-emerald-600'}>
-                {' · '}{gap > 0 ? '+' : ''}{gap.toFixed(1)}%
-              </span>
-            )}
-          </span>
+        <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
+        <div className="mt-1 text-[13px] text-gray-500">
+          {leafCount(node)} aktivitas · Target {plan.toFixed(1)}% ·{' '}
+          <span className={gap.cls}>{gap.text}</span>
         </div>
       </div>
+      <span className={`hidden shrink-0 rounded-full px-3 py-1 text-[12px] font-medium sm:inline ${st.chip}`}>
+        {st.label}
+      </span>
       <svg
-        className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-blue-500"
+        className="h-5 w-5 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-500"
         fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -541,244 +682,193 @@ function LeafRow({
 
 // ============================================================================
 
-function EditDrawer({
-  node, ancestors, cum, plan, rawCum, rawPlan,
-  onCumChange, onPlanChange, onQuickAction, onReset,
-  isDirty, showDetail, onToggleDetail, history, week,
-  dirtyCount, saving, onSave, onClose,
-}: {
+interface LeafCardProps {
   node: RollupNode;
-  ancestors: RollupNode[];
-  cum: number;
-  plan: number;
-  rawCum?: string;
-  rawPlan?: string;
-  onCumChange: (raw: string) => void;
-  onPlanChange: (raw: string) => void;
-  onQuickAction: (a: 'same-prev' | 'plus5' | 'plus10' | 'done') => void;
-  onReset: () => void;
-  isDirty: boolean;
-  showDetail: boolean;
-  onToggleDetail: () => void;
-  history: ChangeLogEntry[];
   week: number;
-  dirtyCount: number;
-  saving: boolean;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  const gap = round2(cum - plan);
+  recentIds: Set<string>;
+  recentChanges: ChangeLogEntry[];
+  edits: Record<string, EditState>;
+  rawInputs: Record<string, { cum?: string; plan?: string }>;
+  detailOpen: Set<string>;
+  currentCum: (n: RollupNode) => number;
+  currentPlan: (n: RollupNode) => number;
+  setEdit: (id: string, patch: EditState) => void;
+  setRawInputs: React.Dispatch<React.SetStateAction<Record<string, { cum?: string; plan?: string }>>>;
+  adjustCum: (n: RollupNode, delta: number) => void;
+  toggleDetail: (id: string) => void;
+}
+
+function LeafCard({
+  node, week, recentIds, recentChanges, edits, rawInputs, detailOpen,
+  currentCum, currentPlan, setEdit, setRawInputs, adjustCum, toggleDetail,
+}: LeafCardProps) {
+  const cum = currentCum(node);
+  const plan = currentPlan(node);
+  const isDirty = !!edits[node.id];
+  const isRecent = recentIds.has(node.id);
+  const isDone = cum >= 99.95 && !isDirty;
+  const showDetail = detailOpen.has(node.id);
+  const gap = gapText(cum, plan);
+  const st = statusOf(cum, plan);
   const thisWeek = round2(cum - node.prevProgressPct);
-  const curWF = round2((node.bobot * cum) / 100);
+
+  const history = useMemo(
+    () =>
+      recentChanges
+        .filter((c) => c.leafId === node.id)
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+        .slice(0, 4),
+    [recentChanges, node.id]
+  );
+
+  const barColor = cum >= 99.95 ? 'bg-emerald-500' : st.ring === '#ef4444' ? 'bg-red-400' : st.ring === '#f59e0b' ? 'bg-amber-400' : 'bg-blue-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <button
-        aria-label="Tutup"
-        onClick={onClose}
-        className="flex-1 bg-gray-900/40 backdrop-blur-[2px] animate-fade-in"
-      />
-      {/* Drawer */}
-      <div className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl animate-slide-in-right">
-        {/* Sticky header */}
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-gray-100 bg-white/95 px-7 pt-6 pb-5 backdrop-blur">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1 text-[13px] text-gray-500">
-              {ancestors.length > 0 ? (
-                ancestors.map((a, i) => (
-                  <span key={a.id} className="flex items-center gap-1">
-                    <span className="truncate max-w-[180px]">{a.deskripsi}</span>
-                    {i < ancestors.length - 1 && <span className="text-gray-300">›</span>}
-                  </span>
-                ))
-              ) : (
-                <span>Aktivitas</span>
-              )}
-            </div>
-            <h3 className="mt-1.5 text-xl font-semibold leading-snug text-gray-900">{node.deskripsi}</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Tutup"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scroll body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="space-y-8 px-7 py-7">
-
-            {/* Big numbers */}
-            <section className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-blue-50 p-5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-700">Actual</div>
-                <div className="mt-2 text-[32px] font-semibold leading-none text-blue-700 tabular-nums">{cum.toFixed(1)}<span className="text-2xl">%</span></div>
-                <div className={`mt-2.5 text-[13px] font-medium ${thisWeek > 0 ? 'text-emerald-600' : thisWeek < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                  {thisWeek > 0 ? '+' : ''}{thisWeek.toFixed(1)}% minggu ini
-                </div>
-              </div>
-              <div className="rounded-2xl bg-orange-50 p-5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-orange-700">Plan</div>
-                <div className="mt-2 text-[32px] font-semibold leading-none text-orange-700 tabular-nums">{plan.toFixed(1)}<span className="text-2xl">%</span></div>
-                <div className={`mt-2.5 text-[13px] font-medium ${gap < 0 ? 'text-red-500' : gap > 0 ? 'text-emerald-600' : 'text-gray-500'}`}>
-                  Deviasi {gap > 0 ? '+' : ''}{gap.toFixed(1)}%
-                </div>
-              </div>
-            </section>
-
-            {/* Update progres */}
-            <section>
-              <div className="mb-4 flex items-center gap-2">
-                <div className="h-5 w-1 rounded-full bg-blue-500" />
-                <h4 className="text-[15px] font-semibold text-gray-900">Update progres</h4>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-[13px] font-medium text-gray-700">Realisasi baru</span>
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={rawCum ?? cum.toFixed(2)}
-                      onChange={(e) => onCumChange(e.target.value)}
-                      className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3.5 text-right text-base font-medium tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                    />
-                    <span className="text-sm font-medium text-gray-500">%</span>
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="text-[13px] font-medium text-gray-700">Target</span>
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={rawPlan ?? plan.toFixed(2)}
-                      onChange={(e) => onPlanChange(e.target.value)}
-                      className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3.5 text-right text-base font-medium tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                    />
-                    <span className="text-sm font-medium text-gray-500">%</span>
-                  </div>
-                </label>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <QuickBtn onClick={() => onQuickAction('same-prev')}>Sama seperti minggu lalu</QuickBtn>
-                <QuickBtn onClick={() => onQuickAction('plus5')}>+5%</QuickBtn>
-                <QuickBtn onClick={() => onQuickAction('plus10')}>+10%</QuickBtn>
-                <QuickBtn onClick={() => onQuickAction('done')}>Selesai (100%)</QuickBtn>
-              </div>
-              <div className="mt-3 text-[12px] leading-relaxed text-gray-500">
-                Tip: ketik <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-700">+5</code> di field untuk nambah 5% dari nilai sekarang.
-              </div>
-            </section>
-
-            {/* Detail lanjutan */}
-            <section>
-              <button
-                onClick={onToggleDetail}
-                className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left transition-all hover:border-gray-300 hover:bg-gray-50 ${
-                  showDetail ? 'bg-gray-50' : 'bg-white'
-                }`}
-              >
-                <svg
-                  className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-300"
-                  style={{ transform: showDetail ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-                <div className="flex-1 text-[14px] font-semibold text-gray-800">Detail lanjutan</div>
-                <div className="text-[12px] text-gray-500">Bobot, WBS, minggu lalu</div>
-              </button>
-              <div
-                className="grid transition-[grid-template-rows] duration-300 ease-out"
-                style={{ gridTemplateRows: showDetail ? '1fr' : '0fr' }}
-              >
-                <div className="overflow-hidden">
-                  <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-4 rounded-xl bg-gray-50 p-5">
-                    <Field label="Kode WBS" value={node.wbsCode} />
-                    <Field label="Bobot" value={`${node.bobot.toFixed(3)}%`} sub="dari total proyek" />
-                    <Field label="Kontribusi ke total" value={`${curWF.toFixed(3)}%`} sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`} />
-                    <Field label="Volume" value={node.vol && node.satuan ? `${node.vol} ${node.satuan}` : '—'} />
-                    <Field label={`Minggu lalu (W${week - 1})`} value={`${node.prevProgressPct.toFixed(2)}%`} />
-                    <Field label="Perubahan minggu ini" value={`${thisWeek > 0 ? '+' : ''}${thisWeek.toFixed(2)}%`} />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Riwayat */}
-            <section>
-              <div className="mb-4 flex items-center gap-2">
-                <div className="h-5 w-1 rounded-full bg-purple-500" />
-                <h4 className="text-[15px] font-semibold text-gray-900">Riwayat update</h4>
-              </div>
-              {history.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/40 py-6 text-center text-[13px] text-gray-500">
-                  Belum ada riwayat untuk aktivitas ini.
-                </div>
-              ) : (
-                <ol className="relative space-y-4 pl-5">
-                  <span className="absolute left-[7px] top-1.5 bottom-1.5 w-px bg-gray-200" aria-hidden />
-                  {history.map((h) => (
-                    <li key={h.id} className="relative">
-                      <span className={`absolute -left-[19px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${h.field === 'cumProgressPct' ? 'bg-blue-500' : 'bg-orange-500'}`} aria-hidden />
-                      <div className="text-[14px] font-medium text-gray-900 tabular-nums">
-                        {h.field === 'cumProgressPct' ? 'Actual' : 'Plan'}: {h.oldValue.toFixed(1)}% <span className="text-gray-400">→</span> {h.newValue.toFixed(1)}%
-                      </div>
-                      <div className="mt-0.5 text-[12px] text-gray-500">W{h.week} · {timeAgo(h.at)}</div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-
+    <div
+      className={`rounded-2xl border bg-white px-5 py-4 shadow-sm transition-all duration-300 ${
+        isDirty ? 'border-amber-300 ring-2 ring-amber-100' : 'border-gray-200'
+      } ${isDone ? 'opacity-70 hover:opacity-100' : ''}`}
+    >
+      {/* Title row — stepper wraps below the name on narrow screens */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-[55%] flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[14px] font-semibold leading-snug text-gray-900">{node.deskripsi}</span>
+            {isDone && (
+              <svg className="h-4 w-4 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {isRecent && !isDirty && (
+              <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">Baru</span>
+            )}
             {isDirty && (
-              <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <div className="flex items-center gap-2 text-[13px] text-amber-800">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.75-2.98l-7.07-12.24a2 2 0 00-3.48 0L3.18 16.02A2 2 0 004.93 19z" />
-                  </svg>
-                  Ada perubahan yang belum disimpan.
-                </div>
-                <button onClick={onReset} className="text-[13px] font-semibold text-amber-800 hover:text-amber-900">
-                  Reset
-                </button>
-              </div>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Belum disimpan</span>
             )}
           </div>
         </div>
 
-        {/* Sticky footer */}
-        <div className="sticky bottom-0 z-10 border-t border-gray-100 bg-white/95 px-7 py-4 backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[13px] text-gray-500">
-              {dirtyCount > 0 ? (
-                <><span className="font-semibold text-gray-900">{dirtyCount}</span> perubahan siap disimpan</>
-              ) : (
-                'Tidak ada perubahan'
+        {/* Stepper */}
+        {isDone ? (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">100%</span>
+            <button
+              onClick={() => adjustCum(node, -5)}
+              className="rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              title="Koreksi nilai"
+              aria-label="Koreksi nilai"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <StepBtn onClick={() => adjustCum(node, -5)} label="Kurangi 5%">−</StepBtn>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={rawInputs[node.id]?.cum ?? cum.toFixed(cum % 1 === 0 ? 0 : 1)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: raw } }));
+                const parsed = parseInput(raw, round2(node.curProgressPct));
+                if (parsed !== null) setEdit(node.id, { cumProgressPct: parsed });
+              }}
+              onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: undefined } }))}
+              className="h-10 w-[72px] rounded-xl border border-gray-300 bg-white text-center text-[15px] font-semibold tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            />
+            <span className="text-[13px] font-medium text-gray-400">%</span>
+            <StepBtn onClick={() => adjustCum(node, 5)} label="Tambah 5%">+</StepBtn>
+          </div>
+        )}
+      </div>
+
+      {/* Bars + meta (hidden for completed to keep them calm) */}
+      {!isDone && (
+        <>
+          <div className="relative mt-3.5 h-2 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-orange-300/40 transition-all duration-500"
+              style={{ width: `${clamp(plan)}%` }}
+            />
+            <div
+              className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${barColor}`}
+              style={{ width: `${clamp(cum)}%` }}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-gray-500">
+            <span>
+              Minggu lalu <span className="font-medium text-gray-700">{node.prevProgressPct.toFixed(1)}%</span>
+              {thisWeek !== 0 && (
+                <span className={thisWeek > 0 ? 'text-emerald-600' : 'text-red-500'}>
+                  {' '}({thisWeek > 0 ? '+' : ''}{thisWeek.toFixed(1)}%)
+                </span>
               )}
+            </span>
+            <span className="ml-auto flex flex-wrap items-center gap-2">
+              Target <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
+              <span className={gap.cls}>· {gap.text}</span>
+              <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+            </span>
+          </div>
+        </>
+      )}
+      {isDone && (
+        <div className="mt-1.5 flex items-center justify-end">
+          <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+        </div>
+      )}
+
+      {/* Expandable detail */}
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: showDetail ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-3.5 space-y-4 rounded-xl bg-gray-50 p-4">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
+              <Field label="Ubah target (plan)">
+                <div className="mt-1 flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={rawInputs[node.id]?.plan ?? plan.toFixed(plan % 1 === 0 ? 0 : 1)}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], plan: raw } }));
+                      const parsed = parseInput(raw, round2(planPctOf(node)));
+                      if (parsed !== null) setEdit(node.id, { planPct: parsed });
+                    }}
+                    onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], plan: undefined } }))}
+                    className="h-9 w-[70px] rounded-lg border border-gray-300 bg-white text-center text-[13px] font-semibold tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                  <span className="text-[12px] text-gray-400">%</span>
+                </div>
+              </Field>
+              <Field label="Kode WBS" value={node.wbsCode} />
+              <Field label="Bobot" value={`${node.bobot.toFixed(3)}%`} sub="dari total proyek" />
+              <Field label="Kontribusi ke total" value={`${round2((node.bobot * cum) / 100).toFixed(3)}%`} sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`} />
+              <Field label="Volume" value={node.vol && node.satuan ? `${node.vol} ${node.satuan}` : '—'} />
+              <Field label={`Minggu lalu (W${week - 1})`} value={`${node.prevProgressPct.toFixed(2)}%`} />
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                className="rounded-lg px-4 py-2.5 text-[14px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-              >
-                Tutup
-              </button>
-              <button
-                onClick={onSave}
-                disabled={saving || dirtyCount === 0}
-                className="rounded-lg bg-blue-600 px-5 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
-              >
-                {saving ? 'Menyimpan…' : 'Simpan semua'}
-              </button>
-            </div>
+            {history.length > 0 && (
+              <div className="border-t border-gray-200 pt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Riwayat</div>
+                <div className="space-y-1.5">
+                  {history.map((h) => (
+                    <div key={h.id} className="flex items-center gap-2 text-[12px]">
+                      <span className={`h-1.5 w-1.5 rounded-full ${h.field === 'cumProgressPct' ? 'bg-blue-500' : 'bg-orange-400'}`} />
+                      <span className="font-medium tabular-nums text-gray-800">
+                        {h.field === 'cumProgressPct' ? 'Actual' : 'Plan'} {h.oldValue.toFixed(1)}% → {h.newValue.toFixed(1)}%
+                      </span>
+                      <span suppressHydrationWarning className="text-gray-400">· {timeAgo(h.at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -786,23 +876,47 @@ function EditDrawer({
   );
 }
 
-function QuickBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function StepBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-[0.97]"
+      aria-label={label}
+      title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-medium text-gray-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-90"
     >
       {children}
     </button>
   );
 }
 
-function Field({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function DetailToggle({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+    >
+      Detail
+      <svg
+        className="h-3.5 w-3.5 transition-transform duration-300"
+        style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+  );
+}
+
+function Field({ label, value, sub, children }: { label: string; value?: string; sub?: string; children?: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-gray-900">{value}</div>
-      {sub && <div className="text-xs text-gray-500">{sub}</div>}
+      <div className="text-[11px] font-medium text-gray-500">{label}</div>
+      {children ?? (
+        <>
+          <div className="mt-0.5 text-[13px] font-semibold text-gray-900">{value}</div>
+          {sub && <div className="text-[11px] text-gray-400">{sub}</div>}
+        </>
+      )}
     </div>
   );
 }

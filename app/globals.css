@@ -152,6 +152,36 @@ label {
   animation: slide-in-right 0.35s var(--ease-out-expo) both;
 }
 
+@keyframes level-in-fwd {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes level-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-level-fwd {
+  animation: level-in-fwd 0.35s var(--ease-out-expo) both;
+}
+
+.animate-level-back {
+  animation: level-in-back 0.35s var(--ease-out-expo) both;
+}
+
 .animate-fade-in-up {
   animation: fade-in-up 0.55s var(--ease-out-expo) both;
 }

@@ -33269,7 +33269,7 @@
           "targetWF": 0
         },
         "w78": {
-          "cumProgressPct": 0,
+          "cumProgressPct": 65,
           "targetWF": 0.136486
         },
         "w79": {
@@ -56640,6 +56640,33 @@
       "oldValue": 99.5,
       "newValue": 100,
       "at": "2026-07-04T14:30:47.566Z"
+    },
+    {
+      "id": "2026-07-05T03:41:04.246Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 40,
+      "newValue": 45,
+      "at": "2026-07-05T03:41:04.246Z"
+    },
+    {
+      "id": "2026-07-05T03:41:35.058Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 45,
+      "newValue": 40,
+      "at": "2026-07-05T03:41:35.058Z"
+    },
+    {
+      "id": "2026-07-05T03:54:11.947Z-w78-actual",
+      "leafId": "w78",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 0,
+      "newValue": 65,
+      "at": "2026-07-05T03:54:11.947Z"
     }
   ]
 }

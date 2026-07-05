@@ -1,3 +1,5 @@
+'use client';
+
 import PrintHeader from './PrintHeader';
 import { flattenTree, type RollupNode } from '@/lib/rollup';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
