@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getDb, getWeekMeta } from '@/lib/data';
 import { buildSCurveSeries } from '@/lib/scurve';
 import SCurveClient from '@/components/weekly/SCurveClient';
-import WeeklyPrintSCurve from '@/components/print/WeeklyPrintSCurve';
+import PrintSCurveLazy from '@/components/print/PrintSCurveLazy';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -30,11 +30,9 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
           project={db.project}
         />
       </div>
-      {/* A4 report sheet, only visible on paper. Recharts skips drawing inside
-          display:none, so keep the sheet laid out but invisible off-screen. */}
-      <div className="invisible fixed inset-x-0 top-0 -z-50 overflow-hidden print:visible print:static print:z-auto print:overflow-visible">
-        <WeeklyPrintSCurve project={db.project} meta={meta} series={series} />
-      </div>
+      {/* A4 report sheet, only visible on paper — lazy-loaded client-side so
+          it never blocks the server render of the on-screen view */}
+      <PrintSCurveLazy project={db.project} meta={meta} series={series} />
     </>
   );
 }

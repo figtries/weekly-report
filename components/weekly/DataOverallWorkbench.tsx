@@ -56,33 +56,41 @@ function parseInput(raw: string, current: number): number | null {
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return 'baru saja';
-  if (min < 60) return `${min} menit lalu`;
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} jam lalu`;
-  return `${Math.floor(h / 24)} hari lalu`;
+  if (h < 24) return `${h} h ago`;
+  return `${Math.floor(h / 24)} d ago`;
 }
 
-/** Human status — words first, numbers second. */
+/**
+ * Human status — words first, numbers second. Every colour (ring, chip, bar)
+ * comes from this one place so they can never drift out of sync:
+ *   100%            → hijau  (Selesai)
+ *   di/atas target  → biru   (On track)
+ *   telat ≤ 7.5%    → kuning (Sedikit telat)
+ *   telat > 7.5%    → merah  (Perlu perhatian)
+ *   belum mulai     → abu    (Belum mulai)
+ */
 function statusOf(cum: number, plan: number) {
   if (cum >= 99.95)
-    return { label: 'Selesai', chip: 'bg-emerald-50 text-emerald-700', ring: '#10b981', ringText: '#047857' };
+    return { label: 'Done', chip: 'bg-emerald-50 text-emerald-700', ring: '#10b981', ringText: '#047857', bar: 'bg-emerald-500' };
   if (cum <= 0.05 && plan <= 0.05)
-    return { label: 'Belum mulai', chip: 'bg-gray-100 text-gray-500', ring: '#d1d5db', ringText: '#6b7280' };
+    return { label: 'Not started', chip: 'bg-gray-100 text-gray-500', ring: '#d1d5db', ringText: '#6b7280', bar: 'bg-gray-300' };
   const gap = cum - plan;
   if (gap >= -1)
-    return { label: 'On track', chip: 'bg-blue-50 text-blue-700', ring: '#3b82f6', ringText: '#1d4ed8' };
+    return { label: 'On track', chip: 'bg-blue-50 text-blue-700', ring: '#3b82f6', ringText: '#1d4ed8', bar: 'bg-blue-500' };
   if (gap >= -7.5)
-    return { label: 'Sedikit telat', chip: 'bg-amber-50 text-amber-700', ring: '#f59e0b', ringText: '#b45309' };
-  return { label: 'Perlu perhatian', chip: 'bg-red-50 text-red-600', ring: '#ef4444', ringText: '#b91c1c' };
+    return { label: 'Slightly behind', chip: 'bg-amber-50 text-amber-700', ring: '#f59e0b', ringText: '#b45309', bar: 'bg-amber-400' };
+  return { label: 'Needs attention', chip: 'bg-red-50 text-red-600', ring: '#ef4444', ringText: '#b91c1c', bar: 'bg-red-400' };
 }
 
 function gapText(cum: number, plan: number): { text: string; cls: string } {
   const gap = round2(cum - plan);
-  if (Math.abs(gap) < 0.05) return { text: 'sesuai target', cls: 'text-gray-500' };
-  if (gap >= -1 && gap < 0) return { text: 'hampir sesuai', cls: 'text-gray-500' };
-  if (gap < 0) return { text: `kurang ${Math.abs(gap).toFixed(1)}%`, cls: 'text-red-500' };
-  return { text: `unggul ${gap.toFixed(1)}%`, cls: 'text-emerald-600' };
+  if (Math.abs(gap) < 0.05) return { text: 'on target', cls: 'text-gray-500' };
+  if (gap >= -1 && gap < 0) return { text: 'nearly on target', cls: 'text-gray-500' };
+  if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-red-500' };
+  return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
 }
 
 export default function DataOverallWorkbench({
@@ -112,6 +120,8 @@ export default function DataOverallWorkbench({
   const [rawInputs, setRawInputs] = useState<Record<string, { cum?: string; plan?: string }>>({});
   const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
 
@@ -252,8 +262,10 @@ export default function DataOverallWorkbench({
   }
 
   async function save() {
-    if (!dirtyCount) return;
+    if (!dirtyCount || saving) return;
     setSaving(true);
+    setJustSaved(false);
+    setBarLeaving(false);
     try {
       const updates: Record<string, { cumProgressPct?: number; targetWF?: number }> = {};
       for (const [id, patch] of Object.entries(edits)) {
@@ -270,16 +282,71 @@ export default function DataOverallWorkbench({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        alert(body.error ?? 'Gagal menyimpan perubahan');
+        alert(body.error ?? 'Failed to save changes');
         return;
       }
-      setEdits({});
+      // Drop the transient typing buffer, but KEEP `edits` in place as an
+      // optimistic overlay. The reconcile effect below removes each edit once
+      // router.refresh() delivers matching server data — so the number never
+      // flickers back to its pre-save value ("kesave lalu balik lagi").
       setRawInputs({});
       router.refresh();
+      setJustSaved(true);
     } finally {
       setSaving(false);
     }
   }
+
+  // "Tersimpan ✓" toast timeline: hold the green confirmation briefly, then
+  // play the slide-out before unmounting — so the bar never blinks away.
+  useEffect(() => {
+    if (!justSaved) return;
+    const leave = setTimeout(() => setBarLeaving(true), 1400);
+    const done = setTimeout(() => {
+      setJustSaved(false);
+      setBarLeaving(false);
+    }, 1700);
+    return () => {
+      clearTimeout(leave);
+      clearTimeout(done);
+    };
+  }, [justSaved]);
+
+  // A fresh edit made while the "saved" toast is still up brings the
+  // unsaved-changes bar straight back.
+  useEffect(() => {
+    if (dirtyCount > 0 && justSaved && !saving) {
+      setJustSaved(false);
+      setBarLeaving(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyCount]);
+
+  // After router.refresh() lands fresh rollups, clear any pending edit that now
+  // matches the server. This is what actually ends the "belum disimpan" state —
+  // doing it here (instead of immediately in save()) keeps the displayed value
+  // steady across the save round-trip.
+  useEffect(() => {
+    setEdits((prev) => {
+      const ids = Object.keys(prev);
+      if (ids.length === 0) return prev;
+      let changed = false;
+      const next: Record<string, EditState> = {};
+      for (const id of ids) {
+        const node = flatAll.find((n) => n.id === id);
+        if (!node) {
+          next[id] = prev[id];
+          continue;
+        }
+        const e = prev[id];
+        const cumSame = e.cumProgressPct === undefined || round2(e.cumProgressPct) === round2(node.curProgressPct);
+        const planSame = e.planPct === undefined || round2(e.planPct) === round2(planPctOf(node));
+        if (cumSame && planSame) changed = true; // matched server → drop it
+        else next[id] = prev[id];
+      }
+      return changed ? next : prev;
+    });
+  }, [flatAll]);
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -326,9 +393,11 @@ export default function DataOverallWorkbench({
 
   return (
     <div className="space-y-4">
-      {/* Top bar: search + today's changes */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex flex-1 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm transition-shadow focus-within:shadow-md">
+      {/* Top bar: search + today's changes — mirrors the 4-column stat grid
+         above so the search lines up under Plan→This Week and the update pill
+         sits under Deviation. */}
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm transition-shadow focus-within:shadow-md lg:col-span-3">
           <svg className="h-[18px] w-[18px] shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -336,11 +405,11 @@ export default function DataOverallWorkbench({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari aktivitas — langsung lompat tanpa buka folder…"
+            placeholder="Search an activity — jump straight to it, no folders needed…"
             className="w-full border-none bg-transparent text-[14px] text-gray-900 outline-none placeholder:text-gray-400"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Hapus pencarian">
+            <button onClick={() => setQuery('')} className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Clear search">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -350,22 +419,26 @@ export default function DataOverallWorkbench({
         <button
           onClick={() => setShowLog((v) => !v)}
           disabled={recentChanges.length === 0}
-          className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-5 py-3.5 shadow-sm transition-all sm:w-auto ${
+          className={`flex w-full items-center gap-3 rounded-2xl border bg-white px-5 py-3.5 shadow-sm transition-all lg:col-span-1 ${
             recentChanges.length > 0
               ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
               : 'cursor-default'
           } ${showLog ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200'}`}
         >
-          <span className={`h-2 w-2 shrink-0 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-          <span className="flex-1 text-left text-[13px] text-gray-600 sm:flex-none">
+          {/* Dot sits in an 18px slot so its text starts at the exact same x as
+             the search input's text (which leads with an 18px magnifier). */}
+          <span className="flex w-[18px] shrink-0 items-center justify-center">
+            <span className={`h-2 w-2 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+          </span>
+          <span className="flex-1 text-left text-[14px] text-gray-600">
             {todayCount > 0 ? (
-              <><span className="font-semibold text-gray-900">{todayCount} aktivitas</span> diupdate hari ini</>
+              <><span className="font-semibold text-gray-900">{todayCount} {todayCount === 1 ? 'activity' : 'activities'}</span> updated today</>
             ) : (
-              'Belum ada update hari ini'
+              'No updates today yet'
             )}
           </span>
           {recentChanges.length > 0 && (
-            <span className="ml-auto text-[12px] text-gray-400 sm:hidden">Lihat</span>
+            <span className="ml-auto text-[12px] text-gray-400 sm:hidden">View</span>
           )}
           {recentChanges.length > 0 && (
             <svg
@@ -387,8 +460,8 @@ export default function DataOverallWorkbench({
         <div className="overflow-hidden">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
-              <div className="text-[14px] font-semibold text-gray-900">Riwayat perubahan · Week {week}</div>
-              <div className="text-[12px] text-gray-500">{sortedLog.length} perubahan tercatat</div>
+              <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
+              <div className="text-[12px] text-gray-500">{sortedLog.length} {sortedLog.length === 1 ? 'change' : 'changes'} recorded</div>
             </div>
             <div className="max-h-80 overflow-y-auto">
               {sortedLog.map((c, i) => {
@@ -400,7 +473,7 @@ export default function DataOverallWorkbench({
                   <div key={c.id}>
                     {showDivider && (
                       <div className="bg-gray-50 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                        Sebelumnya
+                        Earlier
                       </div>
                     )}
                     <button
@@ -422,10 +495,10 @@ export default function DataOverallWorkbench({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-gray-900">
-                          {leaf?.deskripsi ?? 'Aktivitas tidak ditemukan'}
+                          {leaf?.deskripsi ?? 'Activity not found'}
                         </span>
                         <span className="mt-0.5 block text-[12px] text-gray-500">
-                          {c.field === 'cumProgressPct' ? 'Realisasi' : 'Target'}{' '}
+                          {c.field === 'cumProgressPct' ? 'Actual' : 'Target'}{' '}
                           <span className="font-medium tabular-nums text-gray-700">{c.oldValue.toFixed(1)}%</span>
                           {' → '}
                           <span className="font-medium tabular-nums text-gray-700">{c.newValue.toFixed(1)}%</span>
@@ -445,7 +518,7 @@ export default function DataOverallWorkbench({
                 );
               })}
               {sortedLog.length === 0 && (
-                <div className="px-5 py-8 text-center text-[13px] text-gray-500">Belum ada perubahan tercatat minggu ini.</div>
+                <div className="px-5 py-8 text-center text-[13px] text-gray-500">No changes recorded this week yet.</div>
               )}
             </div>
           </div>
@@ -457,8 +530,8 @@ export default function DataOverallWorkbench({
         <div className="space-y-2.5 animate-fade-in">
           <div className="px-1 text-[13px] text-gray-500">
             {searchResults.length === 0
-              ? 'Tidak ada aktivitas yang cocok.'
-              : `${searchResults.length} aktivitas ditemukan`}
+              ? 'No matching activities.'
+              : `${searchResults.length} ${searchResults.length === 1 ? 'activity' : 'activities'} found`}
           </div>
           {searchResults.map((leaf) => (
             <div key={leaf.id} className="animate-fade-in-up">
@@ -469,8 +542,8 @@ export default function DataOverallWorkbench({
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
-                {ancestorsOf(leaf.id).map((a) => shortName(a.deskripsi)).join(' › ') || 'Level teratas'}
-                <span className="text-blue-500">· buka folder</span>
+                {ancestorsOf(leaf.id).map((a) => shortName(a.deskripsi)).join(' › ') || 'Top level'}
+                <span className="text-blue-500">· open folder</span>
               </button>
               <LeafCard node={leaf} {...leafProps} />
             </div>
@@ -484,16 +557,16 @@ export default function DataOverallWorkbench({
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                 <button
                   onClick={goBack}
-                  className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 font-medium text-gray-700 transition-all hover:bg-gray-200 active:scale-[0.96]"
+                  className="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-gray-600 transition-all hover:text-blue-600 active:scale-[0.96]"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
-                  Kembali
+                  Back
                 </button>
                 <span className="mx-1 text-gray-300">|</span>
                 <button onClick={() => goToLevel(-1)} className="text-gray-500 transition-colors hover:text-blue-600">
-                  Semua kontrak
+                  All contracts
                 </button>
                 {currentPath.map((p, i) => (
                   <span key={p.id} className="flex items-center gap-2">
@@ -519,7 +592,7 @@ export default function DataOverallWorkbench({
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
                     <p className="mt-0.5 text-[13px] text-gray-500">
-                      {leafCount(currentNode)} aktivitas · Bobot {currentNode.bobot.toFixed(2)}% ·{' '}
+                      {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% ·{' '}
                       Target {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
                       <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
                         {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
@@ -552,7 +625,7 @@ export default function DataOverallWorkbench({
               )}
               {currentNodes.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 py-10 text-center text-sm text-gray-500">
-                  Tidak ada aktivitas di level ini.
+                  No activities at this level.
                 </div>
               )}
             </div>
@@ -560,31 +633,59 @@ export default function DataOverallWorkbench({
         </>
       )}
 
-      {/* Floating save bar */}
-      {dirtyCount > 0 && (
-        <div className="sticky bottom-3 z-30 px-1 animate-fade-in-up sm:bottom-4 sm:px-0">
-          <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur sm:px-5 sm:py-3.5">
-            <div className="flex items-center gap-2.5 text-[14px] text-gray-700">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[12px] font-bold text-amber-800">
-                {dirtyCount}
-              </span>
-              perubahan belum disimpan
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={discardAll}
-                className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-              >
-                Batal
-              </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="rounded-lg bg-blue-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
-              >
-                {saving ? 'Menyimpan…' : 'Simpan'}
-              </button>
-            </div>
+      {/* Floating save bar — morphs through belum disimpan → menyimpan → tersimpan */}
+      {(dirtyCount > 0 || justSaved) && (
+        <div
+          className={`sticky bottom-3 z-30 px-1 sm:bottom-4 sm:px-0 ${
+            barLeaving ? 'animate-save-out' : 'animate-fade-in-up'
+          }`}
+        >
+          <div
+            className={`mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur transition-colors duration-300 sm:px-5 sm:py-3.5 ${
+              justSaved ? 'border-emerald-200 bg-emerald-50/95' : 'border-gray-200 bg-white/95'
+            }`}
+          >
+            {justSaved ? (
+              <div className="flex items-center gap-2.5 text-[14px] font-semibold text-emerald-700">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white animate-pop-in">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    <path className="animate-check-draw" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                Changes saved
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2.5 text-[14px] text-gray-700">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[12px] font-bold text-amber-800">
+                    {dirtyCount}
+                  </span>
+                  {dirtyCount === 1 ? 'unsaved change' : 'unsaved changes'}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={discardAll}
+                    disabled={saving}
+                    className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={save}
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70"
+                  >
+                    {saving && (
+                      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    )}
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -663,7 +764,7 @@ function FolderCard({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
         <div className="mt-1 text-[13px] text-gray-500">
-          {leafCount(node)} aktivitas · Target {plan.toFixed(1)}% ·{' '}
+          {leafCount(node)} activities · Target {plan.toFixed(1)}% ·{' '}
           <span className={gap.cls}>{gap.text}</span>
         </div>
       </div>
@@ -721,7 +822,8 @@ function LeafCard({
     [recentChanges, node.id]
   );
 
-  const barColor = cum >= 99.95 ? 'bg-emerald-500' : st.ring === '#ef4444' ? 'bg-red-400' : st.ring === '#f59e0b' ? 'bg-amber-400' : 'bg-blue-500';
+  // Colour is centralised in statusOf so the bar always matches the ring/chip.
+  const barColor = st.bar;
 
   return (
     <div
@@ -740,10 +842,10 @@ function LeafCard({
               </svg>
             )}
             {isRecent && !isDirty && (
-              <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">Baru</span>
+              <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">New</span>
             )}
             {isDirty && (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Belum disimpan</span>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Unsaved</span>
             )}
           </div>
         </div>
@@ -755,8 +857,8 @@ function LeafCard({
             <button
               onClick={() => adjustCum(node, -5)}
               className="rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
-              title="Koreksi nilai"
-              aria-label="Koreksi nilai"
+              title="Correct value"
+              aria-label="Correct value"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -765,7 +867,7 @@ function LeafCard({
           </div>
         ) : (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            <StepBtn onClick={() => adjustCum(node, -5)} label="Kurangi 5%">−</StepBtn>
+            <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
             <input
               type="text"
               inputMode="decimal"
@@ -780,7 +882,7 @@ function LeafCard({
               className="h-10 w-[72px] rounded-xl border border-gray-300 bg-white text-center text-[15px] font-semibold tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
             <span className="text-[13px] font-medium text-gray-400">%</span>
-            <StepBtn onClick={() => adjustCum(node, 5)} label="Tambah 5%">+</StepBtn>
+            <StepBtn onClick={() => adjustCum(node, 5)} label="Increase 5%">+</StepBtn>
           </div>
         )}
       </div>
@@ -788,19 +890,24 @@ function LeafCard({
       {/* Bars + meta (hidden for completed to keep them calm) */}
       {!isDone && (
         <>
-          <div className="relative mt-3.5 h-2 overflow-hidden rounded-full bg-gray-100">
+          {/* One clean fill in the status colour, with a tick marking the
+             target — no more stacked orange layer that read as a second bar. */}
+          <div className="relative mt-3.5 h-2.5 rounded-full bg-gray-100">
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-orange-300/40 transition-all duration-500"
-              style={{ width: `${clamp(plan)}%` }}
-            />
-            <div
-              className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${barColor}`}
+              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
               style={{ width: `${clamp(cum)}%` }}
             />
+            {plan > 0.5 && plan < 99.5 && (
+              <div
+                className="absolute -top-[3px] h-4 w-0.5 rounded-full bg-gray-600/70"
+                style={{ left: `calc(${clamp(plan)}% - 1px)` }}
+                title={`Target ${plan.toFixed(1)}%`}
+              />
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-gray-500">
             <span>
-              Minggu lalu <span className="font-medium text-gray-700">{node.prevProgressPct.toFixed(1)}%</span>
+              Last week <span className="font-medium text-gray-700">{node.prevProgressPct.toFixed(1)}%</span>
               {thisWeek !== 0 && (
                 <span className={thisWeek > 0 ? 'text-emerald-600' : 'text-red-500'}>
                   {' '}({thisWeek > 0 ? '+' : ''}{thisWeek.toFixed(1)}%)
@@ -829,7 +936,7 @@ function LeafCard({
         <div className="overflow-hidden">
           <div className="mt-3.5 space-y-4 rounded-xl bg-gray-50 p-4">
             <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
-              <Field label="Ubah target (plan)">
+              <Field label="Edit target (plan)">
                 <div className="mt-1 flex items-center gap-1.5">
                   <input
                     type="text"
@@ -847,15 +954,15 @@ function LeafCard({
                   <span className="text-[12px] text-gray-400">%</span>
                 </div>
               </Field>
-              <Field label="Kode WBS" value={node.wbsCode} />
-              <Field label="Bobot" value={`${node.bobot.toFixed(3)}%`} sub="dari total proyek" />
-              <Field label="Kontribusi ke total" value={`${round2((node.bobot * cum) / 100).toFixed(3)}%`} sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`} />
+              <Field label="WBS Code" value={node.wbsCode} />
+              <Field label="Weight" value={`${node.bobot.toFixed(3)}%`} sub="of the whole project" />
+              <Field label="Contribution to total" value={`${round2((node.bobot * cum) / 100).toFixed(3)}%`} sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`} />
               <Field label="Volume" value={node.vol && node.satuan ? `${node.vol} ${node.satuan}` : '—'} />
-              <Field label={`Minggu lalu (W${week - 1})`} value={`${node.prevProgressPct.toFixed(2)}%`} />
+              <Field label={`Last week (W${week - 1})`} value={`${node.prevProgressPct.toFixed(2)}%`} />
             </div>
             {history.length > 0 && (
               <div className="border-t border-gray-200 pt-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Riwayat</div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">History</div>
                 <div className="space-y-1.5">
                   {history.map((h) => (
                     <div key={h.id} className="flex items-center gap-2 text-[12px]">
@@ -895,7 +1002,7 @@ function DetailToggle({ open, onClick }: { open: boolean; onClick: () => void })
       onClick={onClick}
       className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
     >
-      Detail
+      Details
       <svg
         className="h-3.5 w-3.5 transition-transform duration-300"
         style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}

@@ -33039,13 +33039,7 @@
         "/uploads/weekly/35/slot-2.JPG",
         "/uploads/weekly/35/slot-3.JPG",
         "/uploads/weekly/35/slot-4.JPG",
-        "/uploads/weekly/35/slot-5.JPG",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
+        "/uploads/weekly/35/slot-5.JPG"
       ],
       "leafData": {
         "w2": {
@@ -33269,15 +33263,15 @@
           "targetWF": 0
         },
         "w78": {
-          "cumProgressPct": 65,
+          "cumProgressPct": 100,
           "targetWF": 0.136486
         },
         "w79": {
-          "cumProgressPct": 0,
+          "cumProgressPct": 100,
           "targetWF": 0.034122
         },
         "w80": {
-          "cumProgressPct": 0,
+          "cumProgressPct": 80,
           "targetWF": 0.068243
         },
         "w82": {
@@ -33505,7 +33499,7 @@
           "targetWF": 0.149952
         },
         "w153": {
-          "cumProgressPct": 40,
+          "cumProgressPct": 100,
           "targetWF": 0.119962
         },
         "w154": {
@@ -33710,7 +33704,7 @@
         },
         "w220": {
           "cumProgressPct": 100,
-          "targetWF": 0.18277
+          "targetWF": 0.2558787
         },
         "w222": {
           "cumProgressPct": 0,
@@ -56667,6 +56661,222 @@
       "oldValue": 0,
       "newValue": 65,
       "at": "2026-07-05T03:54:11.947Z"
+    },
+    {
+      "id": "2026-07-05T05:58:56.259Z-w5-actual",
+      "leafId": "w5",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 100,
+      "newValue": 95,
+      "at": "2026-07-05T05:58:56.259Z"
+    },
+    {
+      "id": "2026-07-05T05:59:00.602Z-w5-actual",
+      "leafId": "w5",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 95,
+      "newValue": 100,
+      "at": "2026-07-05T05:59:00.602Z"
+    },
+    {
+      "id": "2026-07-05T05:59:49.310Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 40,
+      "newValue": 55,
+      "at": "2026-07-05T05:59:49.310Z"
+    },
+    {
+      "id": "2026-07-05T05:59:57.028Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 55,
+      "newValue": 90,
+      "at": "2026-07-05T05:59:57.028Z"
+    },
+    {
+      "id": "2026-07-05T06:00:02.345Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 90,
+      "newValue": 60,
+      "at": "2026-07-05T06:00:02.345Z"
+    },
+    {
+      "id": "2026-07-05T08:41:55.558Z-w78-actual",
+      "leafId": "w78",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 65,
+      "newValue": 100,
+      "at": "2026-07-05T08:41:55.558Z"
+    },
+    {
+      "id": "2026-07-05T08:42:04.999Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 0,
+      "newValue": 50,
+      "at": "2026-07-05T08:42:04.999Z"
+    },
+    {
+      "id": "2026-07-05T08:42:13.206Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 0,
+      "newValue": 50,
+      "at": "2026-07-05T08:42:13.206Z"
+    },
+    {
+      "id": "2026-07-05T08:42:16.875Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 50,
+      "newValue": 40,
+      "at": "2026-07-05T08:42:16.875Z"
+    },
+    {
+      "id": "2026-07-05T08:44:02.946Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 50,
+      "newValue": 65,
+      "at": "2026-07-05T08:44:02.946Z"
+    },
+    {
+      "id": "2026-07-05T08:50:42.722Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 65,
+      "newValue": 60,
+      "at": "2026-07-05T08:50:42.722Z"
+    },
+    {
+      "id": "2026-07-05T08:51:32.790Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 60,
+      "newValue": 65,
+      "at": "2026-07-05T08:51:32.790Z"
+    },
+    {
+      "id": "2026-07-05T08:54:16.487Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 65,
+      "newValue": 75,
+      "at": "2026-07-05T08:54:16.487Z"
+    },
+    {
+      "id": "2026-07-05T08:54:21.961Z-w79-actual",
+      "leafId": "w79",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 75,
+      "newValue": 100,
+      "at": "2026-07-05T08:54:21.961Z"
+    },
+    {
+      "id": "2026-07-05T08:54:27.862Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 40,
+      "newValue": 100,
+      "at": "2026-07-05T08:54:27.862Z"
+    },
+    {
+      "id": "2026-07-05T08:54:32.854Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 100,
+      "newValue": 75,
+      "at": "2026-07-05T08:54:32.854Z"
+    },
+    {
+      "id": "2026-07-05T08:54:35.342Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 75,
+      "newValue": 85,
+      "at": "2026-07-05T08:54:35.342Z"
+    },
+    {
+      "id": "2026-07-05T08:54:38.567Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 85,
+      "newValue": 75,
+      "at": "2026-07-05T08:54:38.567Z"
+    },
+    {
+      "id": "2026-07-05T08:59:07.405Z-w80-actual",
+      "leafId": "w80",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 75,
+      "newValue": 80,
+      "at": "2026-07-05T08:59:07.405Z"
+    },
+    {
+      "id": "2026-07-05T09:00:01.590Z-w220-plan",
+      "leafId": "w220",
+      "week": 35,
+      "field": "planPct",
+      "oldValue": 49.999863216438094,
+      "newValue": 60,
+      "at": "2026-07-05T09:00:01.590Z"
+    },
+    {
+      "id": "2026-07-05T09:01:12.575Z-w220-plan",
+      "leafId": "w220",
+      "week": 35,
+      "field": "planPct",
+      "oldValue": 60,
+      "newValue": 70,
+      "at": "2026-07-05T09:01:12.575Z"
+    },
+    {
+      "id": "2026-07-05T09:02:35.401Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 60,
+      "newValue": 70,
+      "at": "2026-07-05T09:02:35.401Z"
+    },
+    {
+      "id": "2026-07-05T09:02:41.340Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 70,
+      "newValue": 55,
+      "at": "2026-07-05T09:02:41.340Z"
+    },
+    {
+      "id": "2026-07-05T09:02:44.810Z-w153-actual",
+      "leafId": "w153",
+      "week": 35,
+      "field": "cumProgressPct",
+      "oldValue": 55,
+      "newValue": 100,
+      "at": "2026-07-05T09:02:44.810Z"
     }
   ]
 }

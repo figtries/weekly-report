@@ -263,7 +263,7 @@ function MobileDrawer({ currentWeek }: { currentWeek: number }) {
       <button
         onClick={() => setOpen(true)}
         aria-label="Open menu"
-        className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors active:scale-95"
+        className="-ml-2 flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors active:scale-95"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />

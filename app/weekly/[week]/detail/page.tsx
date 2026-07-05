@@ -4,7 +4,11 @@ import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
 import PrintDetailLazy from '@/components/print/PrintDetailLazy';
 
-export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
+export const unstable_instant = {
+  prefetch: 'runtime',
+  samples: [{ params: { week: '1' } }],
+  unstable_disableValidation: true,
+};
 
 export default async function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
@@ -21,8 +25,8 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
         <div className="mb-5 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Detail Progress</h1>
           <p className="text-sm sm:text-base text-gray-600">
-            Full WBS breakdown — Week {week} · {leafCount} activity items · edit in{' '}
-            <span className="font-medium text-blue-600">Data Overall</span>
+            Full breakdown of Week {week} · {leafCount} activities — start from the big picture, then explore
+            by contract. Numbers are edited in <span className="font-medium text-blue-600">Data Overall</span>.
           </p>
         </div>
         <WbsTreeVisual roots={roots} />

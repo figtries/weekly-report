@@ -1,3 +1,5 @@
+'use client';
+
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { weekPeriodLabel } from '@/lib/weeks';
 

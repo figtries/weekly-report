@@ -42,7 +42,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
           <h1 className="mb-1 text-2xl sm:text-3xl font-semibold text-gray-900">Data Overall</h1>
           <p className="text-sm sm:text-base text-gray-600">
             The single source of truth for <span className="font-medium text-gray-900">Week {week}</span> · {period}.
-            Klik aktivitas untuk edit — Summary, Detail Progress, dan S-Curve auto-update setelah simpan.
+            Click an activity to edit — Summary, Detail Progress, and S-Curve auto-update after saving.
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getDb, getWeekMeta } from '@/lib/data';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
-import WeeklyPrintDocumentation from '@/components/print/WeeklyPrintDocumentation';
+import PrintDocumentationLazy from '@/components/print/PrintDocumentationLazy';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -21,10 +21,9 @@ export default async function DocumentationPage({ params }: { params: Promise<{ 
         </div>
         <PhotoUploadGrid photos={meta.documentation} uploadUrl={`/api/weeks/${week}/photos`} />
       </div>
-      {/* A4 report sheet, only visible on paper */}
-      <div className="hidden print:block">
-        <WeeklyPrintDocumentation project={db.project} meta={meta} />
-      </div>
+      {/* A4 report sheet, only visible on paper — lazy-loaded client-side so
+         it never blocks the server render of the on-screen view */}
+      <PrintDocumentationLazy project={db.project} meta={meta} />
     </>
   );
 }

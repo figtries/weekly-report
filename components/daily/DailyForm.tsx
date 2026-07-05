@@ -115,7 +115,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-            <span>Hari ke-</span>
+            <span>Day no.</span>
             <input
               type="number"
               value={form.hariKe ?? ''}
@@ -143,14 +143,14 @@ export default function DailyForm({ report }: { report: DailyReport }) {
 
       {/* Weather */}
       <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Keadaan Cuaca</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Weather</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
-              ['hujanDeras', 'hujanDerasJam', 'Hujan Deras'],
-              ['hujanSedang', 'hujanSedangJam', 'Hujan Sedang'],
-              ['berawanMendung', 'berawanMendungJam', 'Berawan / Mendung'],
-              ['cerahTerang', 'cerahTerangJam', 'Cerah / Terang'],
+              ['hujanDeras', 'hujanDerasJam', 'Heavy Rain'],
+              ['hujanSedang', 'hujanSedangJam', 'Moderate Rain'],
+              ['berawanMendung', 'berawanMendungJam', 'Cloudy / Overcast'],
+              ['cerahTerang', 'cerahTerangJam', 'Clear / Sunny'],
             ] as const
           ).map(([checkKey, jamKey, label]) => (
             <label
@@ -166,7 +166,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
               <span className="flex-1 text-sm text-gray-700">{label}</span>
               <input
                 type="text"
-                placeholder="jam"
+                placeholder="hrs"
                 value={form.weather[jamKey]}
                 onChange={(e) => updateWeather(jamKey, e.target.value)}
                 className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -175,14 +175,14 @@ export default function DailyForm({ report }: { report: DailyReport }) {
           ))}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-          <span>Waktu</span>
+          <span>Time</span>
           <input
             type="time"
             value={form.weather.waktuMulai}
             onChange={(e) => updateWeather('waktuMulai', e.target.value)}
             className="rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <span>s/d</span>
+          <span>to</span>
           <input
             type="time"
             value={form.weather.waktuSelesai}

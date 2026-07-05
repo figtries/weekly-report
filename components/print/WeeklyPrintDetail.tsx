@@ -45,19 +45,19 @@ export default function WeeklyPrintDetail({
                   WBS
                 </th>
                 <th rowSpan={2} className="border border-black px-1 py-1 text-left font-bold" style={{ width: '29%' }}>
-                  DESKRIPSI
+                  DESCRIPTION
                 </th>
                 <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  BOBOT (%)
+                  WEIGHT (%)
                 </th>
                 <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  MINGGU LALU
+                  LAST WEEK
                 </th>
                 <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  MINGGU INI
+                  THIS WEEK
                 </th>
                 <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  CUMM. MINGGU INI
+                  CUMM. THIS WEEK
                 </th>
                 <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold">
                   TARGET (%)

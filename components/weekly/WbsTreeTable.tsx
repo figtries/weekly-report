@@ -165,9 +165,9 @@ export default function WbsTreeTable({
               <th
                 className={`${compact ? 'min-w-[200px] sm:min-w-[240px]' : 'min-w-[260px] sm:min-w-[380px]'} sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-700`}
               >
-                WBS / Deskripsi
+                WBS / Description
               </th>
-              <th className="px-3 py-2 text-right font-semibold text-gray-700">Bobot (%)</th>
+              <th className="px-3 py-2 text-right font-semibold text-gray-700">Weight (%)</th>
               {!compact && <th className="px-3 py-2 text-right font-semibold text-gray-700">Vol</th>}
               {!compact && <th className="bg-blue-50 px-3 py-2 text-right font-semibold text-gray-700">Prev (%)</th>}
               {!compact && <th className="px-3 py-2 text-right font-semibold text-gray-700">This Week (%)</th>}

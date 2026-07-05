@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
+import WeekSelect from './WeekSelect';
 
 const TABS = [
   { key: 'overall', label: 'Data Overall' },
@@ -67,25 +68,12 @@ export default function WeekTabs({
       <div className="flex flex-col gap-y-2 md:flex-row md:items-center md:justify-between md:gap-x-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={selectedWeek}
-            onChange={(e) => router.push(`/weekly/${e.target.value}/${activeTab}`)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-300 ease-ios hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
-          >
-            {weeks.map((w) => (
-              <option
-                key={w}
-                value={w}
-                style={
-                  w === projectCurrentWeek
-                    ? { backgroundColor: '#d1fae5', color: '#047857', fontWeight: 600 }
-                    : undefined
-                }
-              >
-                Week {w}
-              </option>
-            ))}
-          </select>
+          <WeekSelect
+            weeks={weeks}
+            selectedWeek={selectedWeek}
+            projectCurrentWeek={projectCurrentWeek}
+            activeTab={activeTab}
+          />
             {isCurrent && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 animate-pop-in">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />

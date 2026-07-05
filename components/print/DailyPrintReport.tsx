@@ -36,9 +36,9 @@ export default function DailyPrintReport({ project, report }: { project: Project
         <table className="mb-4 w-full border-collapse border border-black text-xs">
           <tbody>
             <tr>
-              <td className="w-1/4 border border-black px-2 py-1 font-semibold">Hari / Tanggal</td>
+              <td className="w-1/4 border border-black px-2 py-1 font-semibold">Day / Date</td>
               <td className="w-1/4 border border-black px-2 py-1">{weekdayLabel(report.date)}</td>
-              <td className="w-1/4 border border-black px-2 py-1 font-semibold">Hari ke-</td>
+              <td className="w-1/4 border border-black px-2 py-1 font-semibold">Day No.</td>
               <td className="w-1/4 border border-black px-2 py-1">{report.hariKe ?? ''}</td>
             </tr>
             <tr>
@@ -48,7 +48,7 @@ export default function DailyPrintReport({ project, report }: { project: Project
               <td className="border border-black px-2 py-1">{project.customer}</td>
             </tr>
             <tr>
-              <td className="border border-black px-2 py-1 font-semibold">Kontrak No.</td>
+              <td className="border border-black px-2 py-1 font-semibold">Contract No.</td>
               <td className="border border-black px-2 py-1">{project.contractNo}</td>
               <td className="border border-black px-2 py-1 font-semibold">Document No.</td>
               <td className="border border-black px-2 py-1">{project.documentNoDaily}</td>
@@ -66,15 +66,15 @@ export default function DailyPrintReport({ project, report }: { project: Project
           <tbody>
             <tr>
               <td className="border border-black px-2 py-1 text-center font-semibold" colSpan={4}>
-                KEADAAN CUACA
+                WEATHER
               </td>
             </tr>
             <tr>
               {[
-                ['Hujan Deras', report.weather.hujanDeras, report.weather.hujanDerasJam],
-                ['Hujan Sedang', report.weather.hujanSedang, report.weather.hujanSedangJam],
-                ['Berawan / Mendung', report.weather.berawanMendung, report.weather.berawanMendungJam],
-                ['Cerah / Terang', report.weather.cerahTerang, report.weather.cerahTerangJam],
+                ['Heavy Rain', report.weather.hujanDeras, report.weather.hujanDerasJam],
+                ['Moderate Rain', report.weather.hujanSedang, report.weather.hujanSedangJam],
+                ['Cloudy / Overcast', report.weather.berawanMendung, report.weather.berawanMendungJam],
+                ['Clear / Sunny', report.weather.cerahTerang, report.weather.cerahTerangJam],
               ].map(([label, checked, jam]) => (
                 <td key={label as string} className="border border-black px-2 py-2 text-center">
                   <div className="font-semibold">{label}</div>
@@ -84,7 +84,7 @@ export default function DailyPrintReport({ project, report }: { project: Project
             </tr>
             <tr>
               <td className="border border-black px-2 py-1 text-center font-semibold" colSpan={4}>
-                Waktu: {report.weather.waktuMulai} s/d {report.weather.waktuSelesai}
+                Time: {report.weather.waktuMulai} to {report.weather.waktuSelesai}
               </td>
             </tr>
           </tbody>

@@ -1,3 +1,5 @@
+'use client';
+
 import PrintHeader from './PrintHeader';
 import type { GrandTotal, SummaryRow } from '@/lib/rollup';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
@@ -36,21 +38,21 @@ export default function WeeklyPrintSummary({
               NO.
             </th>
             <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">
-              DESKRIPSI
+              DESCRIPTION
             </th>
             <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">
-              BOBOT
+              WEIGHT
               <br />
               (%)
             </th>
             <th colSpan={2} className="border border-black px-2 py-2 text-center font-bold">
-              MINGGU LALU
+              LAST WEEK
             </th>
             <th colSpan={2} className="border border-black px-2 py-2 text-center font-bold">
-              MINGGU INI
+              THIS WEEK
             </th>
             <th colSpan={2} className="border border-black px-2 py-2 text-center font-bold">
-              CUMM. MINGGU INI
+              CUMM. THIS WEEK
             </th>
             <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">
               TARGET

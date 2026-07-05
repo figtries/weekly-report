@@ -43,7 +43,7 @@ export default async function DailyListPage() {
                   timeZone: 'UTC',
                 })}
               </p>
-              <p className="text-sm text-gray-500">Hari ke-{d.hariKe ?? '-'}</p>
+              <p className="text-sm text-gray-500">Day {d.hariKe ?? '-'}</p>
             </div>
             <p className="text-sm text-gray-500">
               Plan {d.planPct.toFixed(0)}% · Actual {d.actualPct.toFixed(0)}%

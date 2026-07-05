@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getDb, getWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
-import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
+import PrintSummaryLazy from '@/components/print/PrintSummaryLazy';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -27,10 +27,9 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
 
         <SummaryCards roots={summaryRows} grandTotal={grandTotal} />
       </div>
-      {/* A4 report sheet, only visible on paper */}
-      <div className="hidden print:block">
-        <WeeklyPrintSummary project={db.project} meta={meta} roots={summaryRows} grandTotal={grandTotal} />
-      </div>
+      {/* A4 report sheet, only visible on paper — lazy-loaded client-side so
+         it never blocks the server render of the on-screen view */}
+      <PrintSummaryLazy project={db.project} meta={meta} roots={summaryRows} grandTotal={grandTotal} />
     </>
   );
 }
