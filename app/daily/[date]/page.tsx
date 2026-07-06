@@ -25,9 +25,9 @@ export default async function DailyDetailPage({ params }: { params: Promise<{ da
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <DailyForm report={report} />
-      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up">
+    <div className="p-4 sm:p-6 lg:p-8 print:p-0">
+      <DailyForm report={report} project={db.project} />
+      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up print:hidden">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Documentation</h2>
         <PhotoUploadGrid photos={report.photos} uploadUrl={`/api/daily/${date}/photos`} />
       </section>

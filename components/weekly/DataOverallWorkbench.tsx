@@ -396,8 +396,8 @@ export default function DataOverallWorkbench({
       {/* Top bar: search + today's changes — mirrors the 4-column stat grid
          above so the search lines up under Plan→This Week and the update pill
          sits under Deviation. */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm transition-shadow focus-within:shadow-md lg:col-span-3">
+      <div className="grid grid-cols-1 gap-2 sm:gap-4 lg:grid-cols-4">
+        <div className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-shadow focus-within:shadow-md lg:col-span-3">
           <svg className="h-[18px] w-[18px] shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -405,7 +405,7 @@ export default function DataOverallWorkbench({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search an activity — jump straight to it, no folders needed…"
+            placeholder="Search an activity…"
             className="w-full border-none bg-transparent text-[14px] text-gray-900 outline-none placeholder:text-gray-400"
           />
           {query && (
@@ -419,7 +419,7 @@ export default function DataOverallWorkbench({
         <button
           onClick={() => setShowLog((v) => !v)}
           disabled={recentChanges.length === 0}
-          className={`flex w-full items-center gap-3 rounded-2xl border bg-white px-5 py-3.5 shadow-sm transition-all lg:col-span-1 ${
+          className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all lg:col-span-1 ${
             recentChanges.length > 0
               ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
               : 'cursor-default'

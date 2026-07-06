@@ -64,7 +64,7 @@ export default function WeekTabs({
   const isPrintable = activeTab !== 'overall';
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 print:hidden">
+    <div className="px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4 print:hidden">
       <div className="flex flex-col gap-y-2 md:flex-row md:items-center md:justify-between md:gap-x-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -84,13 +84,13 @@ export default function WeekTabs({
         </div>
         {/* The "set as current" button goes invisible (not unmounted) once the
             week is current, so the print button beside it never moves or resizes. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <button
             onClick={setAsCurrent}
             disabled={isCurrent || phase !== 'idle'}
             aria-hidden={isCurrent}
             tabIndex={isCurrent ? -1 : 0}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in ${
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in ${
               isCurrent ? 'invisible' : ''
             } ${
               phase === 'done'
@@ -127,7 +127,7 @@ export default function WeekTabs({
           {isPrintable && (
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path

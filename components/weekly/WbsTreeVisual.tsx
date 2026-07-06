@@ -223,7 +223,7 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
   return (
     <div className="space-y-5">
       {/* Search */}
-      <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm transition-shadow focus-within:shadow-md">
+      <div className="flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-shadow focus-within:shadow-md">
         <svg className="h-[18px] w-[18px] shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
@@ -231,7 +231,7 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search an activity — jump straight to it…"
+          placeholder="Search an activity…"
           className="w-full border-none bg-transparent text-[14px] text-gray-900 outline-none placeholder:text-gray-400"
         />
         {query && (

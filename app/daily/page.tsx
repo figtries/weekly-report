@@ -1,6 +1,5 @@
-import Link from 'next/link';
 import { getDb } from '@/lib/data';
-import NewDailyButton from '@/components/daily/NewDailyButton';
+import DailyReportsView from '@/components/daily/DailyReportsView';
 
 function nextDateAfter(lastDate: string | undefined): string {
   if (!lastDate) return new Date().toISOString().slice(0, 10);
@@ -16,41 +15,15 @@ export default async function DailyListPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up">
-      <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Daily Reports</h1>
-          <p className="text-sm sm:text-base text-gray-600">Field man-hours, PTW, HSE and daily progress</p>
-        </div>
-        <NewDailyButton defaultDate={defaultDate} />
-      </div>
-
-      <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
-        {sorted.length === 0 && <p className="p-6 text-sm text-gray-500">No daily reports yet — create one above.</p>}
-        {sorted.map((d, idx) => (
-          <Link
-            key={d.date}
-            href={`/daily/${d.date}`}
-            className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 transition-all duration-300 ease-ios hover:bg-gray-50 active:bg-gray-100 animate-fade-in-up"
-            style={{ animationDelay: `${idx * 40}ms` }}
-          >
-            <div>
-              <p className="font-medium text-gray-900">
-                {new Date(`${d.date}T00:00:00Z`).toLocaleDateString('en-GB', {
-                  weekday: 'long',
-                  day: '2-digit',
-                  month: 'long',
-                  year: 'numeric',
-                  timeZone: 'UTC',
-                })}
-              </p>
-              <p className="text-sm text-gray-500">Day {d.hariKe ?? '-'}</p>
-            </div>
-            <p className="text-sm text-gray-500">
-              Plan {d.planPct.toFixed(0)}% · Actual {d.actualPct.toFixed(0)}%
-            </p>
-          </Link>
-        ))}
-      </div>
+      <DailyReportsView
+        reports={sorted.map((d) => ({
+          date: d.date,
+          hariKe: d.hariKe,
+          planPct: d.planPct,
+          actualPct: d.actualPct,
+        }))}
+        defaultDate={defaultDate}
+      />
     </div>
   );
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow } from '@/lib/types';
+import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
+import DailyPrintReport from '@/components/print/DailyPrintReport';
 
 let rowIdCounter = 0;
 function newRowId(prefix: string) {
@@ -11,11 +11,39 @@ function newRowId(prefix: string) {
   return `${prefix}-${Date.now()}-${rowIdCounter}`;
 }
 
-export default function DailyForm({ report }: { report: DailyReport }) {
+export default function DailyForm({ report, project }: { report: DailyReport; project: ProjectInfo }) {
   const router = useRouter();
   const [form, setForm] = useState<DailyReport>(report);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  // The A4 print sheet is heavy (two full pages of tables). We only mount it
+  // while actually printing — a snapshot of the current form — so it never
+  // re-renders on every keystroke during editing.
+  const [printData, setPrintData] = useState<DailyReport | null>(null);
+
+  useEffect(() => {
+    if (!printData) return;
+    let cancelled = false;
+    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('[data-print-sheet] img'));
+    Promise.all(
+      imgs.map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              img.addEventListener('load', () => resolve(), { once: true });
+              img.addEventListener('error', () => resolve(), { once: true });
+            })
+      )
+    ).then(() => {
+      if (cancelled) return;
+      window.print();
+      setPrintData(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [printData]);
 
   function update<K extends keyof DailyReport>(key: K, value: DailyReport[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -95,6 +123,8 @@ export default function DailyForm({ report }: { report: DailyReport }) {
         return;
       }
       setDirty(false);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 1800);
       router.refresh();
     } finally {
       setSaving(false);
@@ -110,7 +140,8 @@ export default function DailyForm({ report }: { report: DailyReport }) {
   });
 
   return (
-    <div className="animate-fade-in-up space-y-6">
+    <>
+    <div className="animate-fade-in-up space-y-6 print:hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
@@ -118,25 +149,58 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             <span>Day no.</span>
             <input
               type="number"
+              min={1}
               value={form.hariKe ?? ''}
-              onChange={(e) => update('hariKe', e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => update('hariKe', e.target.value ? Math.max(1, Number(e.target.value)) : null)}
               className="w-16 rounded border border-gray-300 px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href={`/daily/${form.date}/print`}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97]"
+          <button
+            onClick={() => setPrintData(form)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
           >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path
+                fillRule="evenodd"
+                d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0118 8.653v4.097A2.25 2.25 0 0115.75 15h-.241l.305 1.984A1.75 1.75 0 0114.084 19H5.915a1.75 1.75 0 01-1.729-2.016L4.492 15H4.25A2.25 2.25 0 012 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.126-.153V2.75zm1.5 3.212c1.158-.083 2.325-.126 3.5-.126s2.342.043 3.5.126V2.75a.25.25 0 00-.25-.25h-6.5a.25.25 0 00-.25.25v3.212zM5.457 15l-.427 2.775a.25.25 0 00.247.225h9.446a.25.25 0 00.247-.225L14.543 15H5.457z"
+                clipRule="evenodd"
+              />
+            </svg>
             Print
-          </Link>
+          </button>
           <button
             onClick={save}
-            disabled={saving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-50"
+            disabled={saving || !dirty}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] disabled:cursor-default ${
+              justSaved
+                ? 'bg-emerald-600 text-white shadow-md'
+                : dirty
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+                  : 'bg-gray-100 text-gray-400'
+            }`}
           >
-            {saving ? 'Saving…' : dirty ? 'Save Changes' : 'Saved'}
+            {saving ? (
+              'Saving…'
+            ) : justSaved ? (
+              <>
+                <svg className="h-4 w-4 animate-fade-in-up" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 10.5l3.5 3.5L15 6.5"
+                    stroke="currentColor"
+                    strokeWidth="2.25"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Saved!
+              </>
+            ) : dirty ? (
+              'Save Changes'
+            ) : (
+              'Saved'
+            )}
           </button>
         </div>
       </div>
@@ -169,25 +233,25 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 placeholder="hrs"
                 value={form.weather[jamKey]}
                 onChange={(e) => updateWeather(jamKey, e.target.value)}
-                className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-16 rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
           ))}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-600">
+        <div className="mt-4 grid grid-cols-[auto_1fr_auto_1fr] items-center gap-2 text-sm text-gray-600">
           <span>Time</span>
           <input
             type="time"
             value={form.weather.waktuMulai}
             onChange={(e) => updateWeather('waktuMulai', e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <span>to</span>
+          <span className="text-center">to</span>
           <input
             type="time"
             value={form.weather.waktuSelesai}
             onChange={(e) => updateWeather('waktuSelesai', e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </section>
@@ -219,31 +283,34 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                   <input
                     value={row.company}
                     onChange={(e) => updateManHour(row.id, { company: e.target.value })}
-                    className="w-full rounded border border-transparent px-1.5 py-1 transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded border border-gray-300 px-1.5 py-1 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.pobQty}
-                    onChange={(e) => updateManHour(row.id, { pobQty: Number(e.target.value) || 0 })}
-                    className="w-16 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateManHour(row.id, { pobQty: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.previousHours}
-                    onChange={(e) => updateManHour(row.id, { previousHours: Number(e.target.value) || 0 })}
-                    className="w-20 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateManHour(row.id, { previousHours: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.todayHours}
-                    onChange={(e) => updateManHour(row.id, { todayHours: Number(e.target.value) || 0 })}
-                    className="w-20 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateManHour(row.id, { todayHours: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium text-gray-700">
@@ -282,17 +349,19 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.previous}
-                    onChange={(e) => updateNonEffective(row.id, { previous: Number(e.target.value) || 0 })}
-                    className="w-16 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateNonEffective(row.id, { previous: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.today}
-                    onChange={(e) => updateNonEffective(row.id, { today: Number(e.target.value) || 0 })}
-                    className="w-16 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateNonEffective(row.id, { today: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium text-gray-700">{row.previous + row.today}</td>
@@ -300,7 +369,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                   <input
                     value={row.remark}
                     onChange={(e) => updateNonEffective(row.id, { remark: e.target.value })}
-                    className="w-full rounded border border-transparent px-1.5 py-1 transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded border border-gray-300 px-1.5 py-1 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
               </tr>
@@ -318,52 +387,52 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             + Add permit
           </button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-6">
           {form.ptw.length === 0 && <p className="text-sm text-gray-400">No permits recorded for this day.</p>}
           {form.ptw.map((row) => (
-            <div key={row.id} className="grid grid-cols-1 gap-2 rounded-md border border-gray-200 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div key={row.id} className="grid grid-cols-1 gap-2 rounded-lg border-2 border-gray-300 p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
               <textarea
                 value={row.description}
                 onChange={(e) => updatePtw(row.id, { description: e.target.value })}
                 placeholder="Description"
                 rows={2}
-                className="col-span-full rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="col-span-full resize-none rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 value={row.type}
                 onChange={(e) => updatePtw(row.id, { type: e.target.value })}
                 placeholder="Type"
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 value={row.pwtNo}
                 onChange={(e) => updatePtw(row.id, { pwtNo: e.target.value })}
                 placeholder="PWT No"
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 value={row.pa}
                 onChange={(e) => updatePtw(row.id, { pa: e.target.value })}
                 placeholder="PA"
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 value={row.status}
                 onChange={(e) => updatePtw(row.id, { status: e.target.value })}
                 placeholder="Status"
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 type="date"
                 value={row.issued}
                 onChange={(e) => updatePtw(row.id, { issued: e.target.value })}
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 type="date"
                 value={row.validity}
                 onChange={(e) => updatePtw(row.id, { validity: e.target.value })}
-                className="rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <button
                 onClick={() => removePtw(row.id)}
@@ -396,17 +465,19 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.previous}
-                    onChange={(e) => updateHse(row.id, { previous: Number(e.target.value) || 0 })}
-                    className="w-16 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateHse(row.id, { previous: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
+                    min={0}
                     value={row.today}
-                    onChange={(e) => updateHse(row.id, { today: Number(e.target.value) || 0 })}
-                    className="w-16 rounded border border-transparent px-1.5 py-1 text-right transition-colors hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => updateHse(row.id, { today: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium text-gray-700">{row.previous + row.today}</td>
@@ -431,7 +502,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
               onChange={(e) => update('activitiesToday', e.target.value)}
               rows={5}
               placeholder="Describe the activities carried out today…"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -444,18 +515,19 @@ export default function DailyForm({ report }: { report: DailyReport }) {
               onChange={(e) => update('activitiesTomorrow', e.target.value)}
               rows={5}
               placeholder="Describe the planned activities for tomorrow…"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4 lg:w-1/2">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Plan (%)</label>
             <input
               type="number"
+              min={0}
               step="0.01"
               value={form.planPct}
-              onChange={(e) => update('planPct', Number(e.target.value) || 0)}
+              onChange={(e) => update('planPct', Math.max(0, Number(e.target.value) || 0))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -463,14 +535,25 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             <label className="mb-1 block text-xs font-medium text-gray-600">Actual (%)</label>
             <input
               type="number"
+              min={0}
               step="0.01"
               value={form.actualPct}
-              onChange={(e) => update('actualPct', Number(e.target.value) || 0)}
+              onChange={(e) => update('actualPct', Math.max(0, Number(e.target.value) || 0))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
         </div>
       </section>
     </div>
+
+    {/* Mounted only while printing (snapshot of the current form). Pressing
+       Print jumps straight to the browser dialog, and it unmounts afterward so
+       it never weighs down editing. */}
+    {printData && (
+      <div data-print-sheet className="hidden print:block">
+        <DailyPrintReport project={project} report={printData} />
+      </div>
+    )}
+    </>
   );
 }

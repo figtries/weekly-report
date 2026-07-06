@@ -24,9 +24,11 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
       <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up print:hidden">
         <div className="mb-5 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Detail Progress</h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Full breakdown of Week {week} · {leafCount} activities — start from the big picture, then explore
-            by contract. Numbers are edited in <span className="font-medium text-blue-600">Data Overall</span>.
+          <p className="text-xs sm:text-base text-gray-600">
+            Week {week} · {leafCount} activities.{' '}
+            <span className="hidden sm:inline">Explore by contract — numbers are edited in </span>
+            <span className="sm:hidden">Edit in </span>
+            <span className="font-medium text-blue-600">Data Overall</span>.
           </p>
         </div>
         <WbsTreeVisual roots={roots} />

@@ -360,6 +360,14 @@ label {
     height: auto !important;
     overflow: visible !important;
   }
+  /* Zero page margin so each fixed A4 sheet maps 1:1 to a physical page
+     (the sheet's own padding provides the printable margin). Without this
+     the browser adds ~1cm margins and every sheet spills onto a second,
+     mostly-blank page. */
+  @page {
+    size: A4;
+    margin: 0;
+  }
 }
 
 /* ---------- Reduced motion ---------- */

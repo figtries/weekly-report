@@ -16,7 +16,7 @@
       "name": "Yopi Budiana Perkasa"
     },
     "weekAnchorEndDate": "2025-10-30",
-    "currentWeek": 35
+    "currentWeek": 30
   },
   "wbsItems": [
     {
@@ -56564,6 +56564,768 @@
           "status": "OPEN"
         }
       ],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-06-05",
+      "hariKe": 1,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-06-18",
+      "hariKe": 2,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-06-19",
+      "hariKe": 3,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-06-25",
+      "hariKe": 4,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-08-07",
+      "hariKe": 5,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
+      "hseInput": [
+        {
+          "id": "hse1",
+          "activity": "Fatality",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse2",
+          "activity": "Lost Time Incident (LTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse3",
+          "activity": "Non - Lost Time Incident (NLTI)",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse4",
+          "activity": "Unsafe Condition / Unsafe Action",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse5",
+          "activity": "Near Miss",
+          "previous": 0,
+          "today": 0
+        },
+        {
+          "id": "hse6",
+          "activity": "Medical Treatment",
+          "previous": 0,
+          "today": 0
+        }
+      ],
+      "activitiesToday": "",
+      "activitiesTomorrow": "",
+      "planPct": 0,
+      "actualPct": 0,
+      "photos": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "date": "2026-08-03",
+      "hariKe": 6,
+      "weather": {
+        "hujanDeras": false,
+        "hujanDerasJam": "",
+        "hujanSedang": false,
+        "hujanSedangJam": "",
+        "berawanMendung": false,
+        "berawanMendungJam": "",
+        "cerahTerang": false,
+        "cerahTerangJam": "",
+        "waktuMulai": "06:00",
+        "waktuSelesai": "18:00"
+      },
+      "manHours": [
+        {
+          "id": "mh1",
+          "company": "PTI - Office",
+          "pobQty": 3,
+          "previousHours": 3872,
+          "todayHours": 0
+        },
+        {
+          "id": "mh2",
+          "company": "PTI - Site",
+          "pobQty": 7,
+          "previousHours": 8556,
+          "todayHours": 0
+        },
+        {
+          "id": "mh3",
+          "company": "Vendor",
+          "pobQty": 1,
+          "previousHours": 168,
+          "todayHours": 0
+        }
+      ],
+      "nonEffective": [
+        {
+          "id": "ne1",
+          "cause": "Bad Weather",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne2",
+          "cause": "General Safety Meeting",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne3",
+          "cause": "Crew Change Day",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne4",
+          "cause": "Personnel Standby",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        },
+        {
+          "id": "ne5",
+          "cause": "Fire Drill",
+          "previous": 0,
+          "today": 0,
+          "remark": ""
+        }
+      ],
+      "ptw": [],
       "hseInput": [
         {
           "id": "hse1",
