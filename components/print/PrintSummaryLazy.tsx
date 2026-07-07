@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import type { GrandTotal, SummaryRow } from '@/lib/rollup';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
+import { useDeferredPrint } from './useDeferredPrint';
 
 const WeeklyPrintSummary = dynamic(() => import('./WeeklyPrintSummary'), { ssr: false });
 
@@ -17,6 +18,10 @@ export default function PrintSummaryLazy({
   roots: SummaryRow[];
   grandTotal: GrandTotal;
 }) {
+  const shouldRender = useDeferredPrint();
+
+  if (!shouldRender) return null;
+
   return (
     <div className="hidden print:block">
       <WeeklyPrintSummary project={project} meta={meta} roots={roots} grandTotal={grandTotal} />

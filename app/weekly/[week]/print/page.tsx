@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekRollup } from '@/lib/data';
+import { getCachedWeekRollup, getDb } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import { buildSCurveSeries } from '@/lib/scurve';
 import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
@@ -12,8 +12,7 @@ export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { wee
 export default async function WeeklyPrintPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const db = await getDb();
-  const result = getWeekRollup(db, week);
+  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
   if (!result) notFound();
   const { meta, roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);

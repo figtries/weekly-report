@@ -48,3 +48,12 @@ export function getWeekRollup(db: Database, week: number): WeekRollup | null {
   );
   return { meta, prevMeta, roots, grandTotal: computeGrandTotal(roots) };
 }
+
+export async function getCachedWeekRollup(week: number): Promise<WeekRollup | null> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
+
+  const db = await readDb();
+  return getWeekRollup(db, week);
+}

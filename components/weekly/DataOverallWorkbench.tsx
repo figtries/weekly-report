@@ -124,14 +124,17 @@ export default function DataOverallWorkbench({
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
+  const [recentCutoff] = useState(() => Date.now() - 24 * 60 * 60 * 1000);
 
-  // Relative times ("2 menit lalu") drift between SSR and hydration, so those
-  // spans carry suppressHydrationWarning; this tick keeps them fresh afterwards.
+  // Relative times drift between SSR and hydration, so those spans carry
+  // suppressHydrationWarning; this tick only runs while relative times are open.
   const [, setClockTick] = useState(0);
   useEffect(() => {
+    if (!showLog && detailOpen.size === 0) return;
+
     const t = setInterval(() => setClockTick((v) => v + 1), 60_000);
     return () => clearInterval(t);
-  }, []);
+  }, [detailOpen.size, showLog]);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
   // stale node objects would otherwise keep showing pre-save numbers. Each
@@ -147,7 +150,7 @@ export default function DataOverallWorkbench({
       container = fresh.children;
     }
     return resolved;
-  }, [path, flatAll, homeNodes]);
+  }, [path, homeNodes]);
 
   const currentNode = currentPath.length ? currentPath[currentPath.length - 1] : null;
   const currentNodes = currentNode ? visibleChildren(currentNode) : homeNodes;
@@ -194,17 +197,15 @@ export default function DataOverallWorkbench({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path.length, query]);
 
   const recentIds = useMemo(() => {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     const ids = new Set<string>();
     recentChanges.forEach((c) => {
-      if (new Date(c.at).getTime() >= cutoff) ids.add(c.leafId);
+      if (new Date(c.at).getTime() >= recentCutoff) ids.add(c.leafId);
     });
     return ids;
-  }, [recentChanges]);
+  }, [recentChanges, recentCutoff]);
 
   const todayStart = useMemo(() => {
     const start = new Date();
@@ -233,6 +234,11 @@ export default function DataOverallWorkbench({
   }
 
   function setEdit(id: string, patch: EditState) {
+    if (justSaved && !saving) {
+      setJustSaved(false);
+      setBarLeaving(false);
+    }
+
     setEdits((prev) => {
       const merged = { ...prev[id], ...patch };
       const node = flatAll.find((n) => n.id === id);

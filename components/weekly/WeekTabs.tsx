@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -24,15 +23,23 @@ export default function WeekTabs({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [phase, setPhase] = useState<'idle' | 'done'>('idle');
+  const [phaseState, setPhaseState] = useState<{
+    selectedWeek: number;
+    projectCurrentWeek: number;
+    phase: 'idle' | 'done';
+  }>({ selectedWeek, projectCurrentWeek, phase: 'idle' });
   const [, startTransition] = useTransition();
 
   const activeTab = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'overall';
   const isCurrent = selectedWeek === projectCurrentWeek;
+  const phase =
+    phaseState.selectedWeek === selectedWeek && phaseState.projectCurrentWeek === projectCurrentWeek
+      ? phaseState.phase
+      : 'idle';
 
-  useEffect(() => {
-    setPhase('idle');
-  }, [selectedWeek, projectCurrentWeek]);
+  function setPhase(phase: 'idle' | 'done') {
+    setPhaseState({ selectedWeek, projectCurrentWeek, phase });
+  }
 
   async function setAsCurrent() {
     // Optimistic: play the success animation immediately, save in the background.
@@ -65,7 +72,7 @@ export default function WeekTabs({
 
   return (
     <div className="px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4 print:hidden">
-      <div className="flex flex-col gap-y-2 md:flex-row md:items-center md:justify-between md:gap-x-4">
+      <div className="flex items-start justify-between gap-2 md:items-center md:gap-x-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
           <WeekSelect
@@ -84,13 +91,13 @@ export default function WeekTabs({
         </div>
         {/* The "set as current" button goes invisible (not unmounted) once the
             week is current, so the print button beside it never moves or resizes. */}
-        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-start justify-end gap-2 sm:items-center">
           <button
             onClick={setAsCurrent}
             disabled={isCurrent || phase !== 'idle'}
             aria-hidden={isCurrent}
             tabIndex={isCurrent ? -1 : 0}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in ${
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in sm:px-4 sm:text-sm ${
               isCurrent ? 'invisible' : ''
             } ${
               phase === 'done'
@@ -121,13 +128,25 @@ export default function WeekTabs({
                 </svg>
               )}
             {phase === 'done'
-              ? `Week ${selectedWeek} is now current!`
-              : `Set Week ${selectedWeek} as current`}
+              ? (
+                <>
+                  <span className="hidden sm:inline">Week {selectedWeek} is now current!</span>
+                  <span className="sm:hidden">Done</span>
+                </>
+              )
+              : (
+                <>
+                  <span className="hidden sm:inline">Set Week {selectedWeek} as current</span>
+                  <span className="sm:hidden">Set Current</span>
+                </>
+              )}
           </button>
           {isPrintable && (
           <button
-            onClick={() => window.print()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
+            onClick={() => window.dispatchEvent(new Event('weekly-print-request'))}
+            aria-label={`Print ${activeLabel}`}
+            title={`Print ${activeLabel}`}
+            className="inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:w-auto sm:px-4 sm:py-2"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path
@@ -136,7 +155,7 @@ export default function WeekTabs({
                 clipRule="evenodd"
               />
             </svg>
-            Print {activeLabel}
+            <span className="hidden sm:inline">Print {activeLabel}</span>
           </button>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekRollup } from '@/lib/data';
+import { getCachedWeekRollup, getDb } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
 import PrintDetailLazy from '@/components/print/PrintDetailLazy';
@@ -13,8 +13,7 @@ export const unstable_instant = {
 export default async function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const db = await getDb();
-  const result = getWeekRollup(db, week);
+  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
   if (!result) notFound();
   const { meta, roots } = result;
   const leafCount = flattenTree(roots).filter((n) => n.children.length === 0).length;

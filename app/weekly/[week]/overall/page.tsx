@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekRollup } from '@/lib/data';
+import { getCachedWeekRollup, getDb } from '@/lib/data';
 import { weekPeriodShort } from '@/lib/weeks';
 import DataOverallWorkbench from '@/components/weekly/DataOverallWorkbench';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
@@ -13,8 +13,7 @@ export const unstable_instant = {
 export default async function DataOverallPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const db = await getDb();
-  const result = getWeekRollup(db, week);
+  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
@@ -9,6 +9,31 @@ let rowIdCounter = 0;
 function newRowId(prefix: string) {
   rowIdCounter += 1;
   return `${prefix}-${Date.now()}-${rowIdCounter}`;
+}
+
+function selectDisplayedZero(e: FocusEvent<HTMLInputElement>) {
+  if (e.currentTarget.value === '0') {
+    e.currentTarget.select();
+  }
+}
+
+function replaceDisplayedZero(
+  e: KeyboardEvent<HTMLInputElement>,
+  setValue: (value: number) => void,
+  minValue = 0
+) {
+  if (e.ctrlKey || e.metaKey || e.altKey || !/^\d$/.test(e.key) || e.currentTarget.value !== '0') {
+    return;
+  }
+
+  e.preventDefault();
+  setValue(Math.max(minValue, Number(e.key)));
+}
+
+function normalizeLeadingZero(e: FormEvent<HTMLInputElement>) {
+  if (/^0\d/.test(e.currentTarget.value)) {
+    e.currentTarget.value = String(Number(e.currentTarget.value));
+  }
 }
 
 export default function DailyForm({ report, project }: { report: DailyReport; project: ProjectInfo }) {
@@ -142,6 +167,16 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   return (
     <>
     <div className="animate-fade-in-up space-y-6 print:hidden">
+      <button
+        onClick={() => router.push('/daily')}
+        className="mb-4 inline-flex items-center gap-2 text-gray-600 transition-all duration-200 ease-ios hover:text-gray-900 active:scale-[0.96]"
+        aria-label="Back to daily reports"
+      >
+        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+        </svg>
+        <span className="text-sm font-medium">Back</span>
+      </button>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
@@ -150,8 +185,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
             <input
               type="number"
               min={1}
-              value={form.hariKe ?? ''}
+              value={form.hariKe ?? 0}
               onChange={(e) => update('hariKe', e.target.value ? Math.max(1, Number(e.target.value)) : null)}
+              onFocus={selectDisplayedZero}
+              onInput={normalizeLeadingZero}
+              onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('hariKe', value), 1)}
               className="w-16 rounded border border-gray-300 px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -291,7 +329,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.pobQty}
-                    onChange={(e) => updateManHour(row.id, { pobQty: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateManHour(row.id, { pobQty: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateManHour(row.id, { pobQty: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { pobQty: value }))}
                     className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -300,7 +342,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.previousHours}
-                    onChange={(e) => updateManHour(row.id, { previousHours: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateManHour(row.id, { previousHours: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateManHour(row.id, { previousHours: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { previousHours: value }))}
                     className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -309,7 +355,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.todayHours}
-                    onChange={(e) => updateManHour(row.id, { todayHours: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateManHour(row.id, { todayHours: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateManHour(row.id, { todayHours: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { todayHours: value }))}
                     className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -351,7 +401,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.previous}
-                    onChange={(e) => updateNonEffective(row.id, { previous: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateNonEffective(row.id, { previous: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateNonEffective(row.id, { previous: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateNonEffective(row.id, { previous: value }))}
                     className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -360,7 +414,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.today}
-                    onChange={(e) => updateNonEffective(row.id, { today: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateNonEffective(row.id, { today: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateNonEffective(row.id, { today: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateNonEffective(row.id, { today: value }))}
                     className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -467,7 +525,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.previous}
-                    onChange={(e) => updateHse(row.id, { previous: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateHse(row.id, { previous: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateHse(row.id, { previous: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateHse(row.id, { previous: value }))}
                     className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -476,7 +538,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
                     type="number"
                     min={0}
                     value={row.today}
-                    onChange={(e) => updateHse(row.id, { today: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateHse(row.id, { today: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                    onBlur={(e) => { if (e.target.value === '') updateHse(row.id, { today: 0 }); }}
+                    onFocus={selectDisplayedZero}
+                    onInput={normalizeLeadingZero}
+                    onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateHse(row.id, { today: value }))}
                     className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </td>
@@ -527,7 +593,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
               min={0}
               step="0.01"
               value={form.planPct}
-              onChange={(e) => update('planPct', Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => update('planPct', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+              onBlur={(e) => { if (e.target.value === '') update('planPct', 0); }}
+              onFocus={selectDisplayedZero}
+              onInput={normalizeLeadingZero}
+              onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('planPct', value))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -538,7 +608,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
               min={0}
               step="0.01"
               value={form.actualPct}
-              onChange={(e) => update('actualPct', Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => update('actualPct', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+              onBlur={(e) => { if (e.target.value === '') update('actualPct', 0); }}
+              onFocus={selectDisplayedZero}
+              onInput={normalizeLeadingZero}
+              onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('actualPct', value))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
