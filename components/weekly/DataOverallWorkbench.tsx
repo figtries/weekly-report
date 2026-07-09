@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { memo, useEffect, useMemo, useState, useTransition } from 'react';
+import { saveWeekUpdatesAction } from '@/lib/actions';
 import type { RollupNode } from '@/lib/rollup';
 import type { ChangeLogEntry } from '@/lib/types';
 
@@ -117,8 +117,6 @@ export default function DataOverallWorkbench({
   week: number;
   recentChanges: ChangeLogEntry[];
 }) {
-  const router = useRouter();
-
   const flatAll = useMemo(() => flattenAll(roots), [roots]);
   // With a single umbrella root, the SPK contracts underneath are the real
   // top-level "folders" users think in.
@@ -134,7 +132,7 @@ export default function DataOverallWorkbench({
   const [edits, setEdits] = useState<Record<string, EditState>>({});
   const [rawInputs, setRawInputs] = useState<Record<string, { cum?: string; plan?: string }>>({});
   const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
+  const [saving, startSaveTransition] = useTransition();
   const [justSaved, setJustSaved] = useState(false);
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
@@ -272,12 +270,11 @@ export default function DataOverallWorkbench({
     setRawInputs({});
   }
 
-  async function save() {
+  function save() {
     if (!dirtyCount || saving) return;
-    setSaving(true);
     setJustSaved(false);
     setBarLeaving(false);
-    try {
+    startSaveTransition(async () => {
       const updates: Record<string, { cumProgressPct?: number; targetWF?: number }> = {};
       for (const [id, patch] of Object.entries(edits)) {
         const node = flatAll.find((n) => n.id === id);
@@ -286,26 +283,18 @@ export default function DataOverallWorkbench({
         if (patch.cumProgressPct !== undefined) updates[id].cumProgressPct = patch.cumProgressPct;
         if (patch.planPct !== undefined) updates[id].targetWF = (node.bobot * patch.planPct) / 100;
       }
-      const res = await fetch(`/api/weeks/${week}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
-      });
+      const res = await saveWeekUpdatesAction(week, updates);
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        alert(body.error ?? 'Failed to save changes');
+        alert(res.error);
         return;
       }
       // Drop the transient typing buffer, but KEEP `edits` in place as an
       // optimistic overlay. The reconcile effect below removes each edit once
-      // router.refresh() delivers matching server data — so the number never
-      // flickers back to its pre-save value ("kesave lalu balik lagi").
+      // the action's refresh delivers matching server data — so the number
+      // never flickers back to its pre-save value ("kesave lalu balik lagi").
       setRawInputs({});
-      router.refresh();
       setJustSaved(true);
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   // "Tersimpan ✓" toast timeline: hold the green confirmation briefly, then
@@ -629,7 +618,7 @@ export default function DataOverallWorkbench({
                     plan={round2(planPctOf(node))}
                   />
                 ) : (
-                  <div key={node.id} className="animate-fade-in-up" style={{ animationDelay: `${idx * 40}ms` }}>
+                  <div key={node.id} className="animate-fade-in-up" style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}>
                     <LeafCard node={node} {...leafProps} />
                   </div>
                 )
@@ -769,7 +758,7 @@ const FolderCard = memo(function FolderCard({
     <button
       onClick={onOpen}
       className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition-all duration-300 ease-ios hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.99] animate-fade-in-up"
-      style={{ animationDelay: `${index * 40}ms` }}
+      style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
     >
       <Ring pct={cum} color={st.ring} textColor={st.ringText} />
       <div className="min-w-0 flex-1">

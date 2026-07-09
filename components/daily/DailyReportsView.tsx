@@ -75,7 +75,7 @@ export default function DailyReportsView({
             key={d.date}
             href={`/daily/${d.date}`}
             className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 transition-all duration-300 ease-ios hover:bg-gray-50 active:bg-gray-100 animate-fade-in-up"
-            style={{ animationDelay: `${idx * 40}ms` }}
+            style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
           >
             <div>
               <p className="font-medium text-gray-900">

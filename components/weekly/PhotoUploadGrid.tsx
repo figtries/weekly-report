@@ -6,6 +6,38 @@ import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 6;
 
+// Resize + re-encode in the browser so a 5MB camera photo uploads as a few
+// hundred KB — uploads finish fast and fit within online storage limits.
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.82;
+const SKIP_BELOW_BYTES = 350 * 1024;
+
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= SKIP_BELOW_BYTES) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
+    );
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file; // unsupported format — upload the original
+  }
+}
+
 export default function PhotoUploadGrid({
   photos,
   uploadUrl,
@@ -28,9 +60,10 @@ export default function PhotoUploadGrid({
   async function handleFile(slot: number, file: File) {
     setBusySlot(slot);
     try {
+      const compressed = await compressImage(file);
       const formData = new FormData();
       formData.append('slot', String(slot));
-      formData.append('file', file);
+      formData.append('file', compressed);
       const res = await fetch(uploadUrl, { method: 'POST', body: formData });
       if (!res.ok) {
         const body = await res.json();

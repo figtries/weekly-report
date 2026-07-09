@@ -3,14 +3,16 @@
 import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { createDailyAction } from '@/lib/actions';
 
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(defaultDate);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  // Covers the action AND the navigation that follows, so the button reads
+  // "Creating…" until the new report page is actually on screen.
+  const [creating, startTransition] = useTransition();
 
   const weekdayPreview = date
     ? new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -28,27 +30,17 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     setOpen(true);
   }
 
-  async function create() {
-    setCreating(true);
+  function create() {
     setError(null);
-    try {
-      const res = await fetch('/api/daily', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date }),
-      });
-      const body = await res.json();
+    startTransition(async () => {
+      const res = await createDailyAction(date);
       if (!res.ok) {
-        setError(body.error ?? 'Failed to create daily report');
+        setError(res.error);
         return;
       }
       setOpen(false);
-      startTransition(() => {
-        router.push(`/daily/${date}`);
-      });
-    } finally {
-      setCreating(false);
-    }
+      router.push(`/daily/${date}`);
+    });
   }
 
   return (

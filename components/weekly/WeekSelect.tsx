@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 export default function WeekSelect({
   weeks,
@@ -18,6 +18,7 @@ export default function WeekSelect({
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [activeIdx, setActiveIdx] = useState(() => weeks.indexOf(selectedWeek));
+  const [isPending, startTransition] = useTransition();
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -40,8 +41,31 @@ export default function WeekSelect({
 
   function pick(w: number) {
     close();
-    if (w !== selectedWeek) router.push(`/weekly/${w}/${activeTab}`);
+    if (w !== selectedWeek) {
+      startTransition(() => router.push(`/weekly/${w}/${activeTab}`));
+    }
   }
+
+  // Warm the router cache so picking a week commits instantly. On open:
+  // the neighbours of the selection plus the project's current week (the
+  // likeliest jumps). While browsing: whatever row the cursor/keys are on.
+  useEffect(() => {
+    if (!open) return;
+    const idx = weeks.indexOf(selectedWeek);
+    const targets = new Set<number>([
+      projectCurrentWeek,
+      ...weeks.slice(Math.max(0, idx - 2), idx + 3),
+    ]);
+    targets.forEach((w) => {
+      if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+    });
+  }, [open, weeks, selectedWeek, projectCurrentWeek, activeTab, router]);
+
+  useEffect(() => {
+    if (!open) return;
+    const w = weeks[activeIdx];
+    if (w != null && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+  }, [open, activeIdx, weeks, selectedWeek, activeTab, router]);
 
   // Close on outside click.
   useEffect(() => {
@@ -101,17 +125,24 @@ export default function WeekSelect({
         className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-2.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
       >
         <span>Week {selectedWeek}</span>
-        <svg
-          className="h-4 w-4 text-gray-400 transition-transform duration-200 ease-ios"
-          style={{ transform: open && !closing ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          strokeWidth={2.2}
-          aria-hidden
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        {isPending ? (
+          <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        ) : (
+          <svg
+            className="h-4 w-4 text-gray-400 transition-transform duration-200 ease-ios"
+            style={{ transform: open && !closing ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={2.2}
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
       </button>
 
       {open && (

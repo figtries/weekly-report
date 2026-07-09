@@ -1,7 +1,8 @@
 'use client';
 
-import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState } from 'react';
+import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { saveDailyAction } from '@/lib/actions';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
 
@@ -39,7 +40,7 @@ function normalizeLeadingZero(e: FormEvent<HTMLInputElement>) {
 export default function DailyForm({ report, project }: { report: DailyReport; project: ProjectInfo }) {
   const router = useRouter();
   const [form, setForm] = useState<DailyReport>(report);
-  const [saving, setSaving] = useState(false);
+  const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   // The A4 print sheet is heavy (two full pages of tables). We only mount it
@@ -123,37 +124,28 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     update('ptw', form.ptw.filter((r) => r.id !== id));
   }
 
-  async function save() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/daily/${form.date}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hariKe: form.hariKe,
-          weather: form.weather,
-          manHours: form.manHours,
-          nonEffective: form.nonEffective,
-          ptw: form.ptw,
-          hseInput: form.hseInput,
-          activitiesToday: form.activitiesToday,
-          activitiesTomorrow: form.activitiesTomorrow,
-          planPct: form.planPct,
-          actualPct: form.actualPct,
-        }),
+  function save() {
+    startSaveTransition(async () => {
+      const res = await saveDailyAction(form.date, {
+        hariKe: form.hariKe,
+        weather: form.weather,
+        manHours: form.manHours,
+        nonEffective: form.nonEffective,
+        ptw: form.ptw,
+        hseInput: form.hseInput,
+        activitiesToday: form.activitiesToday,
+        activitiesTomorrow: form.activitiesTomorrow,
+        planPct: form.planPct,
+        actualPct: form.actualPct,
       });
       if (!res.ok) {
-        const body = await res.json();
-        alert(body.error ?? 'Failed to save');
+        alert(res.error);
         return;
       }
       setDirty(false);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 1800);
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   const weekday = new Date(`${form.date}T00:00:00Z`).toLocaleDateString('en-GB', {

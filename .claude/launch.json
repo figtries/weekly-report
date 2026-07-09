@@ -41,6 +41,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],
       "port": 3000
+    },
+    {
+      "name": "prod-verify",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-verify&& npx next start -p 3211"],
+      "port": 3211
     }
   ]
 }

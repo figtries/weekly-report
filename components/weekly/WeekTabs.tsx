@@ -1,7 +1,8 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-import { useTransition } from 'react';
+import { usePathname } from 'next/navigation';
+import { useOptimistic, useTransition } from 'react';
+import { setCurrentWeekAction } from '@/lib/actions';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -22,28 +23,20 @@ export default function WeekTabs({
   projectCurrentWeek: number;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
+  // Optimistic: the green "Current" badge flips instantly on click; the server
+  // action confirms in the background and the value reverts only on failure.
+  const [optimisticCurrent, setOptimisticCurrent] = useOptimistic(projectCurrentWeek);
 
   const activeTab = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'overall';
-  const isCurrent = selectedWeek === projectCurrentWeek;
+  const isCurrent = selectedWeek === optimisticCurrent;
 
-  async function setAsCurrent() {
-    try {
-      const res = await fetch('/api/project', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentWeek: selectedWeek }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        alert(body.error ?? 'Failed to set current week');
-        return;
-      }
-      startTransition(() => router.refresh());
-    } catch {
-      alert('Failed to set current week');
-    }
+  function setAsCurrent() {
+    startTransition(async () => {
+      setOptimisticCurrent(selectedWeek);
+      const res = await setCurrentWeekAction(selectedWeek);
+      if (!res.ok) alert(res.error);
+    });
   }
 
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'Page';
@@ -58,7 +51,7 @@ export default function WeekTabs({
           <WeekSelect
             weeks={weeks}
             selectedWeek={selectedWeek}
-            projectCurrentWeek={projectCurrentWeek}
+            projectCurrentWeek={optimisticCurrent}
             activeTab={activeTab}
           />
             {isCurrent && (
@@ -74,7 +67,7 @@ export default function WeekTabs({
         <div className="flex shrink-0 items-start justify-end gap-2 sm:items-center">
           <button
             onClick={setAsCurrent}
-            disabled={isCurrent}
+            disabled={isCurrent || isPending}
             aria-hidden={isCurrent}
             tabIndex={isCurrent ? -1 : 0}
             className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in sm:px-4 sm:text-sm ${

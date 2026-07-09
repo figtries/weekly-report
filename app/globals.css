@@ -226,7 +226,7 @@ label {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.55s var(--ease-out-expo) both;
+  animation: fade-in-up 0.4s var(--ease-out-expo) both;
 }
 
 .animate-scale-in {
@@ -325,11 +325,11 @@ label {
    feel deliberate instead of flickery. Transform + opacity only — GPU cheap. */
 
 ::view-transition-old(.page-exit) {
-  animation: 120ms var(--ease-ios) both vt-out;
+  animation: 100ms var(--ease-ios) both vt-out;
 }
 
 ::view-transition-new(.page-enter) {
-  animation: 260ms var(--ease-out-expo) 30ms both vt-in;
+  animation: 200ms var(--ease-out-expo) 10ms both vt-in;
 }
 
 @keyframes vt-out {

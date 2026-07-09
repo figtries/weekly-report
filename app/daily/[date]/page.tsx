@@ -1,16 +1,21 @@
+import { Suspense } from 'react';
 import { getDb } from '@/lib/data';
 import DailyForm from '@/components/daily/DailyForm';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
+import DailyDetailLoading from './loading';
 
-export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { date: '2026-06-04' } }] };
+// No unstable_instant here: with every date enumerated by generateStaticParams
+// and the whole page cached, default link prefetching already carries the full
+// content. The previous `prefetch: 'runtime'` config made navigations stop at
+// the loading skeleton — the rest of the payload never streamed in, so day
+// clicks appeared to hang.
 
 export async function generateStaticParams() {
   const db = await getDb();
   return db.daily.map((d) => ({ date: d.date }));
 }
 
-export default async function DailyDetailPage({ params }: { params: Promise<{ date: string }> }) {
-  const { date } = await params;
+async function DailyDetail({ date }: { date: string }) {
   const db = await getDb();
   const report = db.daily.find((d) => d.date === date);
 
@@ -32,5 +37,15 @@ export default async function DailyDetailPage({ params }: { params: Promise<{ da
         <PhotoUploadGrid photos={report.photos} uploadUrl={`/api/daily/${date}/photos`} />
       </section>
     </div>
+  );
+}
+
+export default function DailyDetailPage({ params }: { params: Promise<{ date: string }> }) {
+  return (
+    <Suspense fallback={<DailyDetailLoading />}>
+      {params.then(({ date }) => (
+        <DailyDetail date={date} />
+      ))}
+    </Suspense>
   );
 }
