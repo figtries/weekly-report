@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RollupNode } from '@/lib/rollup';
 import type { ChangeLogEntry } from '@/lib/types';
@@ -61,6 +61,21 @@ function timeAgo(iso: string): string {
   const h = Math.floor(min / 60);
   if (h < 24) return `${h} h ago`;
   return `${Math.floor(h / 24)} d ago`;
+}
+
+// Self-contained ticker — only this tiny span re-renders every minute,
+// not the entire Workbench.
+function RelativeTime({ iso, className }: { iso: string; className?: string }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((v) => v + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <span suppressHydrationWarning className={className}>
+      {timeAgo(iso)}
+    </span>
+  );
 }
 
 /**
@@ -125,16 +140,6 @@ export default function DataOverallWorkbench({
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
   const [recentCutoff] = useState(() => Date.now() - 24 * 60 * 60 * 1000);
-
-  // Relative times drift between SSR and hydration, so those spans carry
-  // suppressHydrationWarning; this tick only runs while relative times are open.
-  const [, setClockTick] = useState(0);
-  useEffect(() => {
-    if (!showLog && detailOpen.size === 0) return;
-
-    const t = setInterval(() => setClockTick((v) => v + 1), 60_000);
-    return () => clearInterval(t);
-  }, [detailOpen.size, showLog]);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
   // stale node objects would otherwise keep showing pre-save numbers. Each
@@ -749,7 +754,7 @@ function Ring({ pct, color, textColor, size = 56 }: { pct: number; color: string
   );
 }
 
-function FolderCard({
+const FolderCard = memo(function FolderCard({
   node, index, onOpen, cum, plan,
 }: {
   node: RollupNode;
@@ -785,7 +790,7 @@ function FolderCard({
       </svg>
     </button>
   );
-}
+});
 
 // ============================================================================
 
@@ -805,7 +810,7 @@ interface LeafCardProps {
   toggleDetail: (id: string) => void;
 }
 
-function LeafCard({
+const LeafCard = memo(function LeafCard({
   node, week, recentIds, recentChanges, edits, rawInputs, detailOpen,
   currentCum, currentPlan, setEdit, setRawInputs, adjustCum, toggleDetail,
 }: LeafCardProps) {
@@ -987,7 +992,7 @@ function LeafCard({
       </div>
     </div>
   );
-}
+});
 
 function StepBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (

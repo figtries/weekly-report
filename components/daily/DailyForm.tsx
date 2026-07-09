@@ -167,47 +167,18 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   return (
     <>
     <div className="animate-fade-in-up space-y-6 print:hidden">
-      <button
-        onClick={() => router.push('/daily')}
-        className="mb-4 inline-flex items-center gap-2 text-gray-600 transition-all duration-200 ease-ios hover:text-gray-900 active:scale-[0.96]"
-        aria-label="Back to daily reports"
-      >
-        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-          <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
-        </svg>
-        <span className="text-sm font-medium">Back</span>
-      </button>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
-          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-            <span>Day no.</span>
-            <input
-              type="number"
-              min={1}
-              value={form.hariKe ?? 0}
-              onChange={(e) => update('hariKe', e.target.value ? Math.max(1, Number(e.target.value)) : null)}
-              onFocus={selectDisplayedZero}
-              onInput={normalizeLeadingZero}
-              onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('hariKe', value), 1)}
-              className="w-16 rounded border border-gray-300 px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => router.push('/daily')}
+          className="inline-flex items-center gap-2 text-gray-600 transition-all duration-200 ease-ios hover:text-gray-900 active:scale-[0.96]"
+          aria-label="Back to daily reports"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-medium">Back</span>
+        </button>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPrintData(form)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path
-                fillRule="evenodd"
-                d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0118 8.653v4.097A2.25 2.25 0 0115.75 15h-.241l.305 1.984A1.75 1.75 0 0114.084 19H5.915a1.75 1.75 0 01-1.729-2.016L4.492 15H4.25A2.25 2.25 0 012 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.126-.153V2.75zm1.5 3.212c1.158-.083 2.325-.126 3.5-.126s2.342.043 3.5.126V2.75a.25.25 0 00-.25-.25h-6.5a.25.25 0 00-.25.25v3.212zM5.457 15l-.427 2.775a.25.25 0 00.247.225h9.446a.25.25 0 00.247-.225L14.543 15H5.457z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Print
-          </button>
           <button
             onClick={save}
             disabled={saving || !dirty}
@@ -240,6 +211,52 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
               'Saved'
             )}
           </button>
+          <button
+            onClick={() => setPrintData(form)}
+            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-blue-600 sm:px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
+            aria-label="Print Daily Report"
+            title="Print Daily Report"
+          >
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path
+                fillRule="evenodd"
+                d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0118 8.653v4.097A2.25 2.25 0 0115.75 15h-.241l.305 1.984A1.75 1.75 0 0114.084 19H5.915a1.75 1.75 0 01-1.729-2.016L4.492 15H4.25A2.25 2.25 0 012 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.126-.153V2.75zm1.5 3.212c1.158-.083 2.325-.126 3.5-.126s2.342.043 3.5.126V2.75a.25.25 0 00-.25-.25h-6.5a.25.25 0 00-.25.25v3.212zM5.457 15l-.427 2.775a.25.25 0 00.247.225h9.446a.25.25 0 00.247-.225L14.543 15H5.457z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="hidden sm:inline">Print</span>
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
+          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+            <span>Day no.</span>
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={form.hariKe ?? 0}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return update('hariKe', null);
+                let num = Number(val);
+                if (num > 7) num = 7;
+                if (num < 1) num = 1;
+                update('hariKe', num);
+              }}
+              onFocus={selectDisplayedZero}
+              onInput={(e) => {
+                normalizeLeadingZero(e);
+                const val = Number(e.currentTarget.value);
+                if (val > 7) e.currentTarget.value = '7';
+                if (val < 1 && e.currentTarget.value !== '') e.currentTarget.value = '1';
+              }}
+              onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('hariKe', Math.min(7, value)), 1)}
+              className="w-16 rounded border border-gray-300 px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
       </div>
 

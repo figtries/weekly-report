@@ -7,6 +7,7 @@ import {
   type GrandTotal,
   type RollupNode,
 } from './rollup';
+import { buildSCurveSeries, type SCurveRow } from './scurve';
 import type { Database, WeeklyMeta } from './types';
 
 // Cached so every page renders into an instant static shell (see
@@ -56,4 +57,13 @@ export async function getCachedWeekRollup(week: number): Promise<WeekRollup | nu
 
   const db = await readDb();
   return getWeekRollup(db, week);
+}
+
+export async function getCachedSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
+
+  const db = await readDb();
+  return buildSCurveSeries(db, upToWeek);
 }

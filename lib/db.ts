@@ -28,7 +28,7 @@ export async function readDb(): Promise<Database> {
 
 async function writeDb(db: Database): Promise<void> {
   await ensureWritable();
-  await fs.writeFile(WRITABLE_PATH, JSON.stringify(db, null, 2), 'utf-8');
+  await fs.writeFile(WRITABLE_PATH, JSON.stringify(db), 'utf-8');
 }
 
 export function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {

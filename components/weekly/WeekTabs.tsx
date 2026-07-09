@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -23,28 +23,12 @@ export default function WeekTabs({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [phaseState, setPhaseState] = useState<{
-    selectedWeek: number;
-    projectCurrentWeek: number;
-    phase: 'idle' | 'done';
-  }>({ selectedWeek, projectCurrentWeek, phase: 'idle' });
   const [, startTransition] = useTransition();
 
   const activeTab = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'overall';
   const isCurrent = selectedWeek === projectCurrentWeek;
-  const phase =
-    phaseState.selectedWeek === selectedWeek && phaseState.projectCurrentWeek === projectCurrentWeek
-      ? phaseState.phase
-      : 'idle';
-
-  function setPhase(phase: 'idle' | 'done') {
-    setPhaseState({ selectedWeek, projectCurrentWeek, phase });
-  }
 
   async function setAsCurrent() {
-    // Optimistic: play the success animation immediately, save in the background.
-    setPhase('done');
-    const beat = new Promise((r) => setTimeout(r, 900));
     try {
       const res = await fetch('/api/project', {
         method: 'PATCH',
@@ -53,15 +37,11 @@ export default function WeekTabs({
       });
       if (!res.ok) {
         const body = await res.json();
-        setPhase('idle');
         alert(body.error ?? 'Failed to set current week');
         return;
       }
-      // Let the "Done!" beat finish before the badge takes over.
-      await beat;
       startTransition(() => router.refresh());
     } catch {
-      setPhase('idle');
       alert('Failed to set current week');
     }
   }
@@ -94,52 +74,16 @@ export default function WeekTabs({
         <div className="flex shrink-0 items-start justify-end gap-2 sm:items-center">
           <button
             onClick={setAsCurrent}
-            disabled={isCurrent || phase !== 'idle'}
+            disabled={isCurrent}
             aria-hidden={isCurrent}
             tabIndex={isCurrent ? -1 : 0}
             className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in sm:px-4 sm:text-sm ${
-              isCurrent ? 'invisible' : ''
-            } ${
-              phase === 'done'
-                ? 'bg-emerald-500 animate-success-bump'
-                : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70'
+              isCurrent ? 'invisible' : 'bg-emerald-500 hover:bg-emerald-600 disabled:opacity-70'
             }`}
             title="Make this the latest reported week — the S-Curve actual line runs up to here"
           >
-              {phase === 'done' ? (
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path
-                    className="animate-check-draw"
-                    d="M4.5 10.5l3.5 3.5 7.5-8"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    pathLength={24}
-                  />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 111.415-1.415l2.792 2.793 6.793-6.793a1 1 0 011.415 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              )}
-            {phase === 'done'
-              ? (
-                <>
-                  <span className="hidden sm:inline">Week {selectedWeek} is now current!</span>
-                  <span className="sm:hidden">Done</span>
-                </>
-              )
-              : (
-                <>
-                  <span className="hidden sm:inline">Set Week {selectedWeek} as current</span>
-                  <span className="sm:hidden">Set Current</span>
-                </>
-              )}
+            <span className="hidden sm:inline">Set Week {selectedWeek} as current</span>
+            <span className="sm:hidden">Set as Current</span>
           </button>
           {isPrintable && (
           <button

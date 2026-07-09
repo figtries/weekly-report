@@ -70,7 +70,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
             className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
             onClick={() => !creating && setOpen(false)}
           />
-          <div className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl animate-scale-in">
+          <div className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl animate-scale-in">
             <h2 className="text-lg font-semibold text-gray-900">New Daily Report</h2>
             <p className="mt-1 text-sm text-gray-500">Choose the day for this report.</p>
 
@@ -82,7 +82,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
                 setDate(e.target.value);
                 setError(null);
               }}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 block w-full min-w-0 rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-gray-700">{weekdayPreview}</p>}
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}

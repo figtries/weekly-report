@@ -1,19 +1,24 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekMeta } from '@/lib/data';
-import { buildSCurveSeries } from '@/lib/scurve';
-import SCurveClient from '@/components/weekly/SCurveClient';
+import dynamic from 'next/dynamic';
+import { getDb, getWeekMeta, getCachedSCurveSeries } from '@/lib/data';
 import PrintSCurveLazy from '@/components/print/PrintSCurveLazy';
+
+// Recharts (≈200KB) is client-only — dynamic import keeps it out of the
+// SSR bundle so the server render is never blocked by it.
+const SCurveClient = dynamic(() => import('@/components/weekly/SCurveClient'), { ssr: false });
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function SCurvePage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const db = await getDb();
+  const [db, series] = await Promise.all([
+    getDb(),
+    getCachedSCurveSeries(week),
+  ]);
   const meta = getWeekMeta(db, week);
   if (!meta) notFound();
 
-  const series = buildSCurveSeries(db, week);
   const current = series.find((r) => r.week === week);
   // Future weeks have no actual point on the curve — fall back to the latest
   // reported actual so the stat card matches the Data Overall page.

@@ -98,7 +98,7 @@ export default function WeekSelect({
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white py-1.5 pl-3 pr-2.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
+        className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-2.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
       >
         <span>Week {selectedWeek}</span>
         <svg

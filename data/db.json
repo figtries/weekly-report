@@ -16,7 +16,7 @@
       "name": "Yopi Budiana Perkasa"
     },
     "weekAnchorEndDate": "2025-10-30",
-    "currentWeek": 26
+    "currentWeek": 15
   },
   "wbsItems": [
     {
@@ -25064,7 +25064,7 @@
           "targetWF": 0
         },
         "w5": {
-          "cumProgressPct": 76.329493,
+          "cumProgressPct": 96.33,
           "targetWF": 0.793702
         },
         "w8": {
@@ -25104,15 +25104,15 @@
           "targetWF": 0.01876
         },
         "w20": {
-          "cumProgressPct": 76.329493,
+          "cumProgressPct": 100,
           "targetWF": 0.046901
         },
         "w21": {
-          "cumProgressPct": 76.329493,
+          "cumProgressPct": 86.33,
           "targetWF": 0.028141
         },
         "w22": {
-          "cumProgressPct": 76.329493,
+          "cumProgressPct": 86.33,
           "targetWF": 0.01876
         },
         "w24": {
@@ -57379,7 +57379,7 @@
     },
     {
       "date": "2026-08-08",
-      "hariKe": 6,
+      "hariKe": 7,
       "weather": {
         "hujanDeras": false,
         "hujanDerasJam": "",
@@ -57766,6 +57766,51 @@
       "oldValue": 55,
       "newValue": 100,
       "at": "2026-07-05T09:02:44.810Z"
+    },
+    {
+      "id": "2026-07-09T01:51:25.911Z-w5-actual",
+      "leafId": "w5",
+      "week": 26,
+      "field": "cumProgressPct",
+      "oldValue": 76.329493,
+      "newValue": 96.33,
+      "at": "2026-07-09T01:51:25.911Z"
+    },
+    {
+      "id": "2026-07-09T01:51:25.911Z-w20-actual",
+      "leafId": "w20",
+      "week": 26,
+      "field": "cumProgressPct",
+      "oldValue": 76.329493,
+      "newValue": 86.33,
+      "at": "2026-07-09T01:51:25.911Z"
+    },
+    {
+      "id": "2026-07-09T01:51:25.911Z-w21-actual",
+      "leafId": "w21",
+      "week": 26,
+      "field": "cumProgressPct",
+      "oldValue": 76.329493,
+      "newValue": 86.33,
+      "at": "2026-07-09T01:51:25.911Z"
+    },
+    {
+      "id": "2026-07-09T01:51:25.911Z-w22-actual",
+      "leafId": "w22",
+      "week": 26,
+      "field": "cumProgressPct",
+      "oldValue": 76.329493,
+      "newValue": 86.33,
+      "at": "2026-07-09T01:51:25.911Z"
+    },
+    {
+      "id": "2026-07-09T01:51:35.277Z-w20-actual",
+      "leafId": "w20",
+      "week": 26,
+      "field": "cumProgressPct",
+      "oldValue": 86.33,
+      "newValue": 100,
+      "at": "2026-07-09T01:51:35.277Z"
     }
   ]
 }
