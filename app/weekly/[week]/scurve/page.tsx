@@ -1,11 +1,7 @@
 import { notFound } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { getDb, getWeekMeta, getCachedSCurveSeries } from '@/lib/data';
 import PrintSCurveLazy from '@/components/print/PrintSCurveLazy';
-
-// Recharts (≈200KB) is client-only — dynamic import keeps it out of the
-// SSR bundle so the server render is never blocked by it.
-const SCurveClient = dynamic(() => import('@/components/weekly/SCurveClient'), { ssr: false });
+import SCurveClient from '@/components/weekly/SCurveClient';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
