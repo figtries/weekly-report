@@ -90,7 +90,13 @@ export default function PhotoUploadGrid({
 
   function applyResponse(body: unknown) {
     const next = photosFromResponse(body);
-    if (next) setLocalPhotos(next);
+    if (next) {
+      setLocalPhotos(next);
+      // Tell interested siblings (the daily editor's print snapshot) about the
+      // new list right away — the server refresh below can lose a race against
+      // a quick Print click.
+      window.dispatchEvent(new CustomEvent('photos-updated', { detail: { uploadUrl, photos: next } }));
+    }
     // Keep the server tree (and the print sheet) in sync in the background.
     // Done through a Server Action (not router.refresh) so the re-render runs
     // in a request where the expired 'db' tag is guaranteed visible.

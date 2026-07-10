@@ -47,6 +47,30 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   // re-renders on every keystroke during editing.
   const [printData, setPrintData] = useState<DailyReport | null>(null);
 
+  // Photos are managed by PhotoUploadGrid (rendered outside this form), so the
+  // form's own copy — the one the print snapshot uses — goes stale the moment
+  // a photo is uploaded. Mirror the saved list from the server-refreshed prop…
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, photos: report.photos }));
+  }, [report.photos]);
+
+  // …and instantly from the grid's upload responses, so printing right after
+  // an upload never races the background server refresh.
+  useEffect(() => {
+    function onPhotosUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail as {
+        uploadUrl?: string;
+        photos?: (string | null)[];
+      } | null;
+      if (detail?.uploadUrl === `/api/daily/${report.date}/photos` && Array.isArray(detail.photos)) {
+        const photos = detail.photos;
+        setForm((prev) => ({ ...prev, photos }));
+      }
+    }
+    window.addEventListener('photos-updated', onPhotosUpdated);
+    return () => window.removeEventListener('photos-updated', onPhotosUpdated);
+  }, [report.date]);
+
   useEffect(() => {
     if (!printData) return;
     let cancelled = false;
