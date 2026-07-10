@@ -65,8 +65,9 @@ export default function DailyReportsView({
     if (!date) return;
     setDeleteError(null);
     startDeleteTransition(async () => {
+      // On success the action redirects back to /daily (in-place refresh here).
       const res = await deleteDailyAction(date);
-      if (!res.ok) {
+      if (res && !res.ok) {
         setDeleteError(res.error);
         return;
       }

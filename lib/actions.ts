@@ -1,6 +1,7 @@
 'use server';
 
 import { refresh, updateTag } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { mutateDb } from './db';
 import { applyCreateDaily, applyDeleteDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
 import { deleteUploadedPhoto } from './upload';
@@ -35,10 +36,14 @@ export async function createDailyAction(date: string): Promise<ActionResult> {
     await mutateDb((db) => applyCreateDaily(db, date));
     updateTag('db');
     refresh();
-    return { ok: true };
   } catch (err) {
     return fail(err);
   }
+  // Navigate server-side, inside this request: the destination page renders
+  // with the freshly-expired cache, so it always sees the new report. A
+  // client-side push after the action can race tag propagation on Vercel and
+  // permanently cache a stale "not found" render for the new date.
+  redirect(`/daily/${date}`);
 }
 
 export async function deleteDailyAction(date: string): Promise<ActionResult> {
@@ -48,10 +53,21 @@ export async function deleteDailyAction(date: string): Promise<ActionResult> {
     await Promise.all(removed.photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)));
     updateTag('db');
     refresh();
-    return { ok: true };
   } catch (err) {
     return fail(err);
   }
+  // Same server-side navigation as createDailyAction — the list re-renders
+  // fresh in this request (from the list it acts as an in-place refresh).
+  redirect('/daily');
+}
+
+// Read-your-own-writes refresh for mutations that go through the /api photo
+// routes: re-renders the current page inside this action request, where the
+// expired 'db' tag is guaranteed visible (router.refresh() from the client
+// can race tag propagation and cache a stale render instead).
+export async function refreshDbAction(): Promise<void> {
+  updateTag('db');
+  refresh();
 }
 
 export async function saveDailyAction(

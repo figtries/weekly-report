@@ -2,11 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
 
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [date, setDate] = useState(defaultDate);
@@ -44,13 +42,14 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
   function create() {
     setError(null);
     startTransition(async () => {
+      // On success the action redirects to the new report server-side, so the
+      // result only resolves with a value when something went wrong.
       const res = await createDailyAction(date);
-      if (!res.ok) {
+      if (res && !res.ok) {
         setError(res.error);
         return;
       }
       closeModal();
-      router.push(`/daily/${date}`);
     });
   }
 

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { refreshDbAction } from '@/lib/actions';
 
 const PAGE_SIZE = 6;
 
@@ -69,7 +69,6 @@ export default function PhotoUploadGrid({
   photos: (string | null)[];
   uploadUrl: string;
 }) {
-  const router = useRouter();
   const [busySlot, setBusySlot] = useState<number | null>(null);
   const [pageBusy, setPageBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +92,9 @@ export default function PhotoUploadGrid({
     const next = photosFromResponse(body);
     if (next) setLocalPhotos(next);
     // Keep the server tree (and the print sheet) in sync in the background.
-    router.refresh();
+    // Done through a Server Action (not router.refresh) so the re-render runs
+    // in a request where the expired 'db' tag is guaranteed visible.
+    refreshDbAction().catch(() => undefined);
   }
 
   async function handleFile(slot: number, file: File) {

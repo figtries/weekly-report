@@ -16,6 +16,9 @@ const MAX_LOG = 500;
 // apply exactly the same rules.
 
 export function applyCreateDaily(db: Database, date: string): DailyReport {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
+    throw new Error(`Invalid date: ${date}`);
+  }
   if (db.daily.some((d) => d.date === date)) {
     throw new Error(`Daily report for ${date} already exists`);
   }

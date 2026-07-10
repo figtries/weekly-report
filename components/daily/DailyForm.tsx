@@ -2,7 +2,6 @@
 
 import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { deleteDailyAction, saveDailyAction } from '@/lib/actions';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -40,7 +39,6 @@ function normalizeLeadingZero(e: FormEvent<HTMLInputElement>) {
 }
 
 export default function DailyForm({ report, project }: { report: DailyReport; project: ProjectInfo }) {
-  const router = useRouter();
   const [form, setForm] = useState<DailyReport>(report);
   const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
@@ -157,12 +155,11 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   function confirmDelete() {
     setDeleteError(null);
     startDeleteTransition(async () => {
+      // On success the action redirects to /daily server-side.
       const res = await deleteDailyAction(form.date);
-      if (!res.ok) {
+      if (res && !res.ok) {
         setDeleteError(res.error);
-        return;
       }
-      router.push('/daily');
     });
   }
 

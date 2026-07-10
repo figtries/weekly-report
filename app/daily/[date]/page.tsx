@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { getDb } from '@/lib/data';
 import DailyForm from '@/components/daily/DailyForm';
+import CreateReportHere from '@/components/daily/CreateReportHere';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import DailyDetailLoading from './loading';
 
@@ -20,10 +21,12 @@ async function DailyDetail({ date }: { date: string }) {
   const report = db.daily.find((d) => d.date === date);
 
   if (!report) {
+    const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date));
     return (
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center animate-fade-in-up">
           <p className="text-gray-500">No daily report exists for {date} yet.</p>
+          {isValidDate && <CreateReportHere date={date} />}
         </div>
       </div>
     );
