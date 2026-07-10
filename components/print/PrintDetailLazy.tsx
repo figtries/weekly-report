@@ -16,12 +16,12 @@ export default function PrintDetailLazy({
   meta: WeeklyMeta;
   roots: RollupNode[];
 }) {
-  const shouldRender = useDeferredPrint(350);
+  const shouldRender = useDeferredPrint();
 
   if (!shouldRender) return null;
 
   return (
-    <div className="hidden print:block">
+    <div data-print-sheet className="hidden print:block">
       <WeeklyPrintDetail project={project} meta={meta} roots={roots} />
     </div>
   );

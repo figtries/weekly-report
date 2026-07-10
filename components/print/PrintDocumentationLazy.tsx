@@ -18,7 +18,7 @@ export default function PrintDocumentationLazy({
   if (!shouldRender) return null;
 
   return (
-    <div className="hidden print:block">
+    <div data-print-sheet className="hidden print:block">
       <WeeklyPrintDocumentation project={project} meta={meta} />
     </div>
   );

@@ -2,7 +2,8 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { mutateDb } from './db';
-import { applyCreateDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
+import { applyCreateDaily, applyDeleteDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
+import { deleteUploadedPhoto } from './upload';
 import type { DailyReport, LeafSnapshot } from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
@@ -33,6 +34,20 @@ export async function createDailyAction(date: string): Promise<ActionResult> {
   try {
     await mutateDb((db) => applyCreateDaily(db, date));
     updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function deleteDailyAction(date: string): Promise<ActionResult> {
+  try {
+    const removed = await mutateDb((db) => applyDeleteDaily(db, date));
+    // Best-effort cleanup of the report's stored photos.
+    await Promise.all(removed.photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)));
+    updateTag('db');
+    refresh();
     return { ok: true };
   } catch (err) {
     return fail(err);

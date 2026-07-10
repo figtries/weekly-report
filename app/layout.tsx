@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
+import StorageWarning from "@/components/layout/StorageWarning";
 import { getDb, getLatestWeek } from "@/lib/data";
 
 const inter = Inter({
@@ -24,12 +25,17 @@ export default async function RootLayout({
   const db = await getDb();
   const currentWeek = getLatestWeek(db) || 1;
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    // data-scroll-behavior lets Next.js suspend smooth scrolling during route
+    // transitions so page changes don't visibly scroll-animate.
+    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} h-full antialiased`}>
       <body className="h-full flex flex-col lg:flex-row bg-gray-50 font-sans print:block print:h-auto">
         <Sidebar currentWeek={currentWeek} />
-        <main className="flex-1 min-h-0 overflow-auto print:h-auto print:overflow-visible">
-          {children}
-        </main>
+        <div className="flex-1 min-h-0 flex flex-col print:block print:h-auto">
+          <StorageWarning />
+          <main className="flex-1 min-h-0 overflow-auto print:h-auto print:overflow-visible">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );

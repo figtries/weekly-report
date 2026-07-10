@@ -23,7 +23,7 @@ export default function PrintSummaryLazy({
   if (!shouldRender) return null;
 
   return (
-    <div className="hidden print:block">
+    <div data-print-sheet className="hidden print:block">
       <WeeklyPrintSummary project={project} meta={meta} roots={roots} grandTotal={grandTotal} />
     </div>
   );

@@ -19,8 +19,13 @@ export default function WeekSelect({
   const [closing, setClosing] = useState(false);
   const [activeIdx, setActiveIdx] = useState(() => weeks.indexOf(selectedWeek));
   const [isPending, startTransition] = useTransition();
+  // The picked week shows in the trigger immediately; the server render
+  // catches up in the background (and selectedWeek takes over on arrival).
+  const [pickedWeek, setPickedWeek] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const displayedWeek = isPending && pickedWeek !== null ? pickedWeek : selectedWeek;
 
   function close() {
     setClosing(true);
@@ -42,24 +47,34 @@ export default function WeekSelect({
   function pick(w: number) {
     close();
     if (w !== selectedWeek) {
+      setPickedWeek(w);
       startTransition(() => router.push(`/weekly/${w}/${activeTab}`));
     }
   }
 
-  // Warm the router cache so picking a week commits instantly. On open:
+  // Warm the router cache so picking a week commits instantly. As soon as the
+  // control mounts (not only on open — open-then-click can beat a prefetch):
   // the neighbours of the selection plus the project's current week (the
   // likeliest jumps). While browsing: whatever row the cursor/keys are on.
   useEffect(() => {
-    if (!open) return;
     const idx = weeks.indexOf(selectedWeek);
     const targets = new Set<number>([
       projectCurrentWeek,
-      ...weeks.slice(Math.max(0, idx - 2), idx + 3),
+      ...weeks.slice(Math.max(0, idx - 3), idx + 4),
     ]);
-    targets.forEach((w) => {
-      if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
-    });
-  }, [open, weeks, selectedWeek, projectCurrentWeek, activeTab, router]);
+    const warm = () =>
+      targets.forEach((w) => {
+        if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+      });
+    // Defer to idle time so warming never competes with rendering this page.
+    // (Safari has no requestIdleCallback — fall back to a short timeout.)
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(id);
+  }, [weeks, selectedWeek, projectCurrentWeek, activeTab, router]);
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +139,7 @@ export default function WeekSelect({
         aria-expanded={open}
         className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-2.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
       >
-        <span>Week {selectedWeek}</span>
+        <span>Week {displayedWeek}</span>
         {isPending ? (
           <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" aria-hidden>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

@@ -139,6 +139,27 @@ label {
   animation: fade-in 0.4s var(--ease-gentle) both;
 }
 
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-fade-out {
+  animation: fade-out 0.16s var(--ease-ios) both;
+}
+
+@keyframes scale-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+.animate-scale-out {
+  animation: scale-out 0.16s var(--ease-ios) both;
+}
+
 @keyframes slide-in-right {
   from {
     transform: translateX(100%);

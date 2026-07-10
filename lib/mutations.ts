@@ -64,6 +64,13 @@ export function applyPatchDaily(
   return report;
 }
 
+export function applyDeleteDaily(db: Database, date: string): DailyReport {
+  const idx = db.daily.findIndex((d) => d.date === date);
+  if (idx === -1) throw new Error(`Daily report for ${date} not found`);
+  const [removed] = db.daily.splice(idx, 1);
+  return removed;
+}
+
 export function applyWeekUpdates(
   db: Database,
   week: number,

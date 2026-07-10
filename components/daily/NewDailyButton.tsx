@@ -8,6 +8,7 @@ import { createDailyAction } from '@/lib/actions';
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [date, setDate] = useState(defaultDate);
   const [error, setError] = useState<string | null>(null);
   // Covers the action AND the navigation that follows, so the button reads
@@ -27,7 +28,17 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
   function openModal() {
     setDate(defaultDate);
     setError(null);
+    setClosing(false);
     setOpen(true);
+  }
+
+  // Play the exit animation before unmounting, mirroring the entrance.
+  function closeModal() {
+    setClosing(true);
+    setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, 160);
   }
 
   function create() {
@@ -38,7 +49,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
         setError(res.error);
         return;
       }
-      setOpen(false);
+      closeModal();
       router.push(`/daily/${date}`);
     });
   }
@@ -59,10 +70,10 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
         createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
-            onClick={() => !creating && setOpen(false)}
+            className={`absolute inset-0 bg-black/40 backdrop-blur-sm ${closing ? 'animate-fade-out' : 'animate-fade-in'}`}
+            onClick={() => !creating && closeModal()}
           />
-          <div className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl animate-scale-in">
+          <div className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl ${closing ? 'animate-scale-out' : 'animate-scale-in'}`}>
             <h2 className="text-lg font-semibold text-gray-900">New Daily Report</h2>
             <p className="mt-1 text-sm text-gray-500">Choose the day for this report.</p>
 
@@ -81,7 +92,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
 
             <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => setOpen(false)}
+                onClick={closeModal}
                 disabled={creating}
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50"
               >
