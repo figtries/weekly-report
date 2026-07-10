@@ -34,8 +34,10 @@ export async function setCurrentWeekAction(week: number): Promise<ActionResult> 
 export async function createDailyAction(date: string): Promise<ActionResult> {
   try {
     await mutateDb((db) => applyCreateDaily(db, date));
+    // No refresh() here: the redirect below already renders the destination
+    // fresh in this same request — refreshing the origin page too would
+    // double the server render work and the response payload.
     updateTag('db');
-    refresh();
   } catch (err) {
     return fail(err);
   }
@@ -48,11 +50,16 @@ export async function createDailyAction(date: string): Promise<ActionResult> {
 
 export async function deleteDailyAction(date: string): Promise<ActionResult> {
   try {
+    // applyDeleteDaily is idempotent: deleting a report that is already gone
+    // (a stale list can show rows that no longer exist) is treated as done,
+    // and the redirect below re-renders the list fresh — healing the staleness
+    // instead of surfacing a "not found" error.
     const removed = await mutateDb((db) => applyDeleteDaily(db, date));
-    // Best-effort cleanup of the report's stored photos.
-    await Promise.all(removed.photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)));
+    if (removed) {
+      // Best-effort cleanup of the report's stored photos.
+      await Promise.all(removed.photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)));
+    }
     updateTag('db');
-    refresh();
   } catch (err) {
     return fail(err);
   }

@@ -67,9 +67,12 @@ export function applyPatchDaily(
   return report;
 }
 
-export function applyDeleteDaily(db: Database, date: string): DailyReport {
+// Idempotent: a delete aimed at an already-gone report (e.g. clicked on a
+// stale list render) returns null instead of throwing — the desired end
+// state is reached either way.
+export function applyDeleteDaily(db: Database, date: string): DailyReport | null {
   const idx = db.daily.findIndex((d) => d.date === date);
-  if (idx === -1) throw new Error(`Daily report for ${date} not found`);
+  if (idx === -1) return null;
   const [removed] = db.daily.splice(idx, 1);
   return removed;
 }

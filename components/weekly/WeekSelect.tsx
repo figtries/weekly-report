@@ -82,6 +82,26 @@ export default function WeekSelect({
     if (w != null && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
   }, [open, activeIdx, weeks, selectedWeek, activeTab, router]);
 
+  // Prefetch every week row the moment it becomes visible in the open panel
+  // (including while scrolling), so whichever week the user can see and click
+  // is already in the router cache when the click lands.
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const w = Number((entry.target as HTMLElement).dataset.week);
+          if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+          observer.unobserve(entry.target);
+        }
+      },
+      { root: listRef.current }
+    );
+    listRef.current.querySelectorAll('[data-week]').forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [open, weeks, selectedWeek, activeTab, router]);
+
   // Close on outside click.
   useEffect(() => {
     if (!open) return;
@@ -163,7 +183,7 @@ export default function WeekSelect({
       {open && (
         <div
           role="listbox"
-          className={`absolute left-0 top-full z-50 mt-2 w-36 origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ring-1 ring-black/5 sm:w-full ${
+          className={`absolute left-0 top-full z-50 mt-2 w-full origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ring-1 ring-black/5 ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
@@ -176,6 +196,7 @@ export default function WeekSelect({
                 <button
                   key={w}
                   data-idx={i}
+                  data-week={w}
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => pick(w)}

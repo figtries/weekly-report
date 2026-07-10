@@ -47,6 +47,12 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-verify&& npx next start -p 3211"],
       "port": 3211
+    },
+    {
+      "name": "prod-3213",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "-p", "3213"],
+      "port": 3213
     }
   ]
 }

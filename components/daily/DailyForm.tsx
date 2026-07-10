@@ -2,9 +2,8 @@
 
 import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { deleteDailyAction, saveDailyAction } from '@/lib/actions';
+import { saveDailyAction } from '@/lib/actions';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
 
 let rowIdCounter = 0;
@@ -43,10 +42,6 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Covers the delete action AND the navigation back to the list.
-  const [deleting, startDeleteTransition] = useTransition();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   // The A4 print sheet is heavy (two full pages of tables). We only mount it
   // while actually printing — a snapshot of the current form — so it never
   // re-renders on every keystroke during editing.
@@ -152,17 +147,6 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     });
   }
 
-  function confirmDelete() {
-    setDeleteError(null);
-    startDeleteTransition(async () => {
-      // On success the action redirects to /daily server-side.
-      const res = await deleteDailyAction(form.date);
-      if (res && !res.ok) {
-        setDeleteError(res.error);
-      }
-    });
-  }
-
   const weekday = new Date(`${form.date}T00:00:00Z`).toLocaleDateString('en-GB', {
     weekday: 'long',
     day: '2-digit',
@@ -186,25 +170,6 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
           <span className="text-sm font-medium">Back</span>
         </Link>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setDeleteError(null);
-              setConfirmingDelete(true);
-            }}
-            disabled={deleting}
-            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white sm:px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition-all duration-300 ease-ios hover:bg-red-50 hover:shadow active:scale-[0.96] disabled:opacity-60"
-            aria-label="Delete Daily Report"
-            title="Delete Daily Report"
-          >
-            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-              />
-            </svg>
-            <span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete'}</span>
-          </button>
           <button
             onClick={save}
             disabled={saving || !dirty}
@@ -662,25 +627,6 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
         </div>
       </section>
     </div>
-
-    <ConfirmDialog
-      open={confirmingDelete}
-      title="Delete daily report"
-      message={
-        <>
-          <p>
-            Delete the report for <span className="font-medium text-gray-700">{weekday}</span>? This will also
-            remove its photos and cannot be undone.
-          </p>
-          {deleteError && <p className="mt-2 text-red-600">{deleteError}</p>}
-        </>
-      }
-      confirmLabel="Delete"
-      busyLabel="Deleting…"
-      busy={deleting}
-      onConfirm={confirmDelete}
-      onCancel={() => setConfirmingDelete(false)}
-    />
 
     {/* Mounted only while printing (snapshot of the current form). Pressing
        Print jumps straight to the browser dialog, and it unmounts afterward so

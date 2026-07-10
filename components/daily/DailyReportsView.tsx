@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react';
 import { deleteDailyAction } from '@/lib/actions';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import NewDailyButton from './NewDailyButton';
@@ -53,25 +53,28 @@ export default function DailyReportsView({
   }, [reports]);
 
   const [selected, setSelected] = useState<string>('all');
-  const filtered = selected === 'all' ? reports : reports.filter((r) => monthKey(r.date) === selected);
-  const selectedLabel = selected === 'all' ? 'All months' : monthLabel(selected);
 
   const [confirmDate, setConfirmDate] = useState<string | null>(null);
-  const [deleting, startDeleteTransition] = useTransition();
+  const [, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Rows disappear the moment the user confirms; the server list arriving via
+  // the action's redirect confirms it, and on failure the row pops back.
+  const [hiddenDates, hideDate] = useOptimistic<string[], string>([], (dates, date) => [...dates, date]);
+
+  const visible = reports.filter((r) => !hiddenDates.includes(r.date));
+  const filtered = selected === 'all' ? visible : visible.filter((r) => monthKey(r.date) === selected);
+  const selectedLabel = selected === 'all' ? 'All months' : monthLabel(selected);
 
   function confirmDelete() {
     const date = confirmDate;
     if (!date) return;
     setDeleteError(null);
+    setConfirmDate(null); // close the dialog immediately — the row vanishes optimistically
     startDeleteTransition(async () => {
+      hideDate(date);
       // On success the action redirects back to /daily (in-place refresh here).
       const res = await deleteDailyAction(date);
-      if (res && !res.ok) {
-        setDeleteError(res.error);
-        return;
-      }
-      setConfirmDate(null);
+      if (res && !res.ok) setDeleteError(res.error);
     });
   }
 
@@ -94,19 +97,23 @@ export default function DailyReportsView({
         </div>
       </div>
 
+      {deleteError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 animate-fade-in-up">
+          Could not delete the report: {deleteError}
+        </div>
+      )}
+
       <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
-        {reports.length === 0 && (
+        {visible.length === 0 && (
           <p className="p-6 text-sm text-gray-500">No daily reports yet — create one above.</p>
         )}
-        {reports.length > 0 && filtered.length === 0 && (
+        {visible.length > 0 && filtered.length === 0 && (
           <p className="p-6 text-sm text-gray-500">No daily reports for {selectedLabel}.</p>
         )}
         {filtered.map((d, idx) => (
           <div
             key={d.date}
-            className={`flex items-center gap-2 px-4 sm:px-6 transition-all duration-300 ease-ios hover:bg-gray-50 animate-fade-in-up ${
-              deleting && confirmDate === d.date ? 'opacity-40' : ''
-            }`}
+            className="flex items-center gap-2 px-4 sm:px-6 transition-all duration-300 ease-ios hover:bg-gray-50 animate-fade-in-up"
             style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
           >
             <Link
@@ -162,18 +169,13 @@ export default function DailyReportsView({
         open={confirmDate !== null}
         title="Delete daily report"
         message={
-          <>
-            <p>
-              Delete the report for{' '}
-              <span className="font-medium text-gray-700">{confirmDate ? fullDateLabel(confirmDate) : ''}</span>?
-              This will also remove its photos and cannot be undone.
-            </p>
-            {deleteError && <p className="mt-2 text-red-600">{deleteError}</p>}
-          </>
+          <p>
+            Delete the report for{' '}
+            <span className="font-medium text-gray-700">{confirmDate ? fullDateLabel(confirmDate) : ''}</span>?
+            This will also remove its photos and cannot be undone.
+          </p>
         }
         confirmLabel="Delete"
-        busyLabel="Deleting…"
-        busy={deleting}
         onConfirm={confirmDelete}
         onCancel={() => setConfirmDate(null)}
       />

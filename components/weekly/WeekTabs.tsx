@@ -1,7 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { useOptimistic, useTransition } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useOptimistic, useTransition } from 'react';
 import { setCurrentWeekAction } from '@/lib/actions';
 import WeekSelect from './WeekSelect';
 
@@ -23,6 +23,7 @@ export default function WeekTabs({
   projectCurrentWeek: number;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // Optimistic: the green "Current" badge flips instantly on click; the server
   // action confirms in the background and the value reverts only on failure.
@@ -30,6 +31,25 @@ export default function WeekTabs({
 
   const activeTab = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'overall';
   const isCurrent = selectedWeek === optimisticCurrent;
+
+  // Keep the likeliest next hops warm: this week's sibling tabs and the daily
+  // list. `weeks` gets a fresh identity on every server re-render (i.e. after
+  // each mutation/refresh clears the client cache), so this re-warms exactly
+  // when previously prefetched payloads have been invalidated.
+  useEffect(() => {
+    const warm = () => {
+      for (const t of TABS) {
+        if (t.key !== activeTab) router.prefetch(`/weekly/${selectedWeek}/${t.key}`);
+      }
+      router.prefetch('/daily');
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 400);
+    return () => window.clearTimeout(id);
+  }, [selectedWeek, activeTab, weeks, router]);
 
   function setAsCurrent() {
     startTransition(async () => {
@@ -70,12 +90,12 @@ export default function WeekTabs({
             disabled={isCurrent || isPending}
             aria-hidden={isCurrent}
             tabIndex={isCurrent ? -1 : 0}
-            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in sm:px-4 sm:text-sm ${
-              isCurrent ? 'invisible' : 'bg-emerald-500 hover:bg-emerald-600 disabled:opacity-70'
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in ${
+              isCurrent ? 'invisible' : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70'
             }`}
             title="Make this the latest reported week — the S-Curve actual line runs up to here"
           >
-            <span className="hidden sm:inline">Set Week {selectedWeek} as current</span>
+            <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
             <span className="sm:hidden">Set as Current</span>
           </button>
           {isPrintable && (

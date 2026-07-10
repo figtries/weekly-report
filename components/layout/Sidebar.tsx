@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 const weeklyIcon = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,6 +102,7 @@ const weeklyPages = [
 ];
 
 function NavList({ pathname, currentWeek }: { pathname: string | null; currentWeek: number }) {
+  const router = useRouter();
   const onWeekly = pathname?.startsWith('/weekly') ?? false;
   const onDaily = pathname?.startsWith('/daily') ?? false;
   // Manual toggle wins until the next navigation, then the route decides again.
@@ -113,6 +114,23 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
 
   // Keep sub-links on the week being viewed; fall back to the reporting week.
   const week = Number(pathname?.match(/^\/weekly\/(\d+)/)?.[1] ?? currentWeek);
+
+  // After every navigation, warm the sidebar's own targets during idle time:
+  // the five weekly tabs of the viewed week plus the daily list. This is what
+  // keeps daily ↔ weekly jumps instant, even right after a mutation cleared
+  // the prefetch cache (router.prefetch dedupes anything already warm).
+  useEffect(() => {
+    const warm = () => {
+      for (const page of weeklyPages) router.prefetch(`/weekly/${week}/${page.key}`);
+      router.prefetch('/daily');
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 400);
+    return () => window.clearTimeout(id);
+  }, [pathname, week, router]);
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">

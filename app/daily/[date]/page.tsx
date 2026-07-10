@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { connection } from 'next/server';
 import { getDb } from '@/lib/data';
 import DailyForm from '@/components/daily/DailyForm';
 import CreateReportHere from '@/components/daily/CreateReportHere';
@@ -21,6 +22,12 @@ async function DailyDetail({ date }: { date: string }) {
   const report = db.daily.find((d) => d.date === date);
 
   if (!report) {
+    // Render the "not found" state per request, never from cache: on Vercel a
+    // lambda that hasn't seen the latest tag purge could otherwise render this
+    // branch for a date that DOES exist, and that stale miss would be stored
+    // as the path's cached entry until the next mutation. With connection()
+    // the miss is dynamic — the next visit re-checks and shows the report.
+    await connection();
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date));
     return (
       <div className="p-4 sm:p-6 lg:p-8">
