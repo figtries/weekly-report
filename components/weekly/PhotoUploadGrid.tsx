@@ -6,6 +6,12 @@ import { refreshDbAction } from '@/lib/actions';
 
 const PAGE_SIZE = 6;
 
+// A local server answers page actions in ~50ms — without a floor the button
+// label flicks to "Working…" and back within a few frames, which reads as the
+// two labels glitching over each other. Long enough for the label handoff
+// (150ms exit + 200ms delayed enter) to play out and register.
+const MIN_PAGE_BUSY_MS = 650;
+
 // Resize + re-encode in the browser so a 5MB camera photo uploads as a few
 // hundred KB — uploads finish fast and fit within online storage limits.
 const MAX_DIMENSION = 1600;
@@ -144,6 +150,7 @@ export default function PhotoUploadGrid({
   }
 
   async function handlePageAction(action: 'addPage' | 'removePage') {
+    const startedAt = performance.now();
     setPageBusy(true);
     setError(null);
     try {
@@ -161,6 +168,8 @@ export default function PhotoUploadGrid({
     } catch {
       setError('Action failed — check your connection and try again.');
     } finally {
+      const remaining = MIN_PAGE_BUSY_MS - (performance.now() - startedAt);
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
       setPageBusy(false);
     }
   }
@@ -272,7 +281,28 @@ export default function PhotoUploadGrid({
         className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 text-sm font-medium text-gray-500 transition-all duration-300 ease-ios hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
       >
         <span className="text-lg leading-none">+</span>
-        {pageBusy ? 'Working…' : 'Add page (6 more photos)'}
+        {/* Both labels stay mounted, stacked in one grid cell, and hand off
+            sequentially (old fades out, new fades in after a delay). Swapping
+            a single text node in place repaints mid-frame and can flash both
+            labels overlapped for an instant. */}
+        <span className="grid text-center">
+          <span
+            aria-hidden={pageBusy}
+            className={`col-start-1 row-start-1 transition-[opacity,transform] duration-200 ease-ios ${
+              pageBusy ? 'opacity-0 -translate-y-1' : 'opacity-100 translate-y-0 delay-150'
+            }`}
+          >
+            Add page (6 more photos)
+          </span>
+          <span
+            aria-hidden={!pageBusy}
+            className={`col-start-1 row-start-1 transition-[opacity,transform] duration-200 ease-ios ${
+              pageBusy ? 'opacity-100 translate-y-0 delay-150' : 'opacity-0 translate-y-1'
+            }`}
+          >
+            Working…
+          </span>
+        </span>
       </button>
     </div>
   );

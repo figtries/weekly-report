@@ -64,10 +64,10 @@ export default function WeekTabs({
   const isPrintable = activeTab !== 'overall';
 
   return (
-    <div className="px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4 print:hidden">
+    <div className="px-3 sm:px-6 lg:px-8 pt-2 pb-1 sm:pt-4 sm:pb-2 print:hidden">
       <div className="flex items-start justify-between gap-2 md:items-center md:gap-x-4">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
           <WeekSelect
             weeks={weeks}
             selectedWeek={selectedWeek}
@@ -75,29 +75,29 @@ export default function WeekTabs({
             activeTab={activeTab}
           />
             {isCurrent && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 animate-pop-in">
+              <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 animate-pop-in">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 Current
               </span>
             )}
           </div>
         </div>
-        {/* The "set as current" button goes invisible (not unmounted) once the
-            week is current, so the print button beside it never moves or resizes. */}
+        {/* The "set as current" button unmounts once the week is current; the
+            group is justify-end, so the print button at the right edge never
+            moves. Freeing the width keeps the Current badge on the same row as
+            the week select on narrow screens. */}
         <div className="flex shrink-0 items-start justify-end gap-2 sm:items-center">
+          {!isCurrent && (
           <button
             onClick={setAsCurrent}
-            disabled={isCurrent || isPending}
-            aria-hidden={isCurrent}
-            tabIndex={isCurrent ? -1 : 0}
-            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] animate-scale-in ${
-              isCurrent ? 'invisible' : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70'
-            }`}
+            disabled={isPending}
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-emerald-700 active:scale-[0.96] disabled:opacity-70 animate-scale-in"
             title="Make this the latest reported week — the S-Curve actual line runs up to here"
           >
             <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
             <span className="sm:hidden">Set as Current</span>
           </button>
+          )}
           {isPrintable && (
           <button
             onClick={() => window.dispatchEvent(new Event('weekly-print-request'))}

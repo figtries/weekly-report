@@ -35,7 +35,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
   ];
 
   return (
-    <div className="px-3 py-3 sm:p-6 lg:p-8 animate-fade-in-up space-y-4 sm:space-y-6">
+    <div className="px-3 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-6 lg:px-8 lg:pt-6 lg:pb-8 animate-fade-in-up space-y-5 sm:space-y-6">
       <div>
         <h1 className="mb-0.5 text-xl sm:text-3xl font-semibold text-gray-900">Data Overall</h1>
         <p className="text-xs sm:text-base text-gray-600 leading-relaxed">

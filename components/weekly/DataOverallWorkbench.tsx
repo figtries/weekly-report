@@ -392,7 +392,7 @@ export default function DataOverallWorkbench({
   };
 
   return (
-    <div className="space-y-4">
+    <div>
       {/* Top bar: search + today's changes — mirrors the 4-column stat grid
          above so the search lines up under Plan→This Week and the update pill
          sits under Deviation. */}
@@ -454,7 +454,7 @@ export default function DataOverallWorkbench({
 
       {/* Change log panel */}
       <div
-        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${showLog ? 'mt-3' : 'mt-0'}`}
         style={{ gridTemplateRows: showLog ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
@@ -527,7 +527,7 @@ export default function DataOverallWorkbench({
 
       {/* Search results replace the browser */}
       {searchResults ? (
-        <div className="space-y-2.5 animate-fade-in">
+        <div className="mt-3 space-y-2.5 animate-fade-in">
           <div className="px-1 text-[13px] text-gray-500">
             {searchResults.length === 0
               ? 'No matching activities.'
@@ -553,7 +553,7 @@ export default function DataOverallWorkbench({
         <>
           {/* Breadcrumb + level header */}
           {currentPath.length > 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-fade-in">
+            <div className="mt-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-fade-in">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                 <button
                   onClick={goBack}
@@ -605,7 +605,7 @@ export default function DataOverallWorkbench({
           )}
 
           {/* Level cards — keyed so each navigation replays the slide animation */}
-          <div key={levelKey} className={direction === 'fwd' ? 'animate-level-fwd' : 'animate-level-back'}>
+          <div key={levelKey} className={`mt-3 ${direction === 'fwd' ? 'animate-level-fwd' : 'animate-level-back'}`}>
             <div className="space-y-2.5">
               {currentNodes.map((node, idx) =>
                 node.children.length > 0 ? (
