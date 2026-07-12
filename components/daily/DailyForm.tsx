@@ -308,9 +308,14 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
               <span className="flex-1 text-sm text-gray-700">{label}</span>
               <input
                 type="text"
+                inputMode="decimal"
                 placeholder="hrs"
                 value={form.weather[jamKey]}
-                onChange={(e) => updateWeather(jamKey, e.target.value)}
+                onChange={(e) => {
+                  // Only allow digits and a single decimal point.
+                  const cleaned = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                  updateWeather(jamKey, cleaned);
+                }}
                 className="w-16 rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
