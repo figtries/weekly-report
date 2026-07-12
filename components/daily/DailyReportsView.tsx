@@ -253,7 +253,7 @@ function MonthDropdown({
 
       {open && (
         <div
-          className={`absolute left-0 z-30 mt-2 w-full origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ${
+          className={`absolute left-0 z-30 mt-2 max-h-[60vh] w-max min-w-full max-w-[calc(100vw-2rem)] origin-top-left overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white p-1 shadow-xl sm:min-w-[13rem] ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
@@ -288,13 +288,13 @@ function MonthOption({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors ${
-        active ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm transition-colors active:scale-[0.98] sm:py-2 ${
+        active ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50 active:bg-gray-50'
       }`}
     >
       <span className="flex items-center gap-2">
         <svg
-          className={`h-4 w-4 ${active ? 'text-blue-600' : 'text-transparent'}`}
+          className={`h-4 w-4 shrink-0 ${active ? 'text-blue-600' : 'text-transparent'}`}
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden="true"
@@ -303,7 +303,7 @@ function MonthOption({
         </svg>
         {label}
       </span>
-      <span className={active ? 'text-blue-400' : 'text-gray-400'}>{count}</span>
+      <span className={`shrink-0 tabular-nums ${active ? 'text-blue-400' : 'text-gray-400'}`}>{count}</span>
     </button>
   );
 }
