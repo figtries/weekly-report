@@ -74,6 +74,14 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
   useEffect(() => {
     if (!printData) return;
     let cancelled = false;
+    // Unmount the sheet only after the print dialog closes: on iOS Safari
+    // window.print() returns before the preview is generated, so cleaning up
+    // right after the call unmounted the content mid-snapshot and printed a
+    // blank page. afterprint fires once the dialog is dismissed everywhere.
+    function done() {
+      if (!cancelled) setPrintData(null);
+    }
+    window.addEventListener('afterprint', done, { once: true });
     const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('[data-print-sheet] img'));
     Promise.all(
       imgs.map((img) =>
@@ -87,10 +95,10 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     ).then(() => {
       if (cancelled) return;
       window.print();
-      setPrintData(null);
     });
     return () => {
       cancelled = true;
+      window.removeEventListener('afterprint', done);
     };
   }, [printData]);
 
@@ -308,21 +316,28 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
             </label>
           ))}
         </div>
-        <div className="mt-4 grid grid-cols-[auto_1fr_auto_1fr] items-center gap-2 text-sm text-gray-600">
-          <span>Time</span>
-          <input
-            type="time"
-            value={form.weather.waktuMulai}
-            onChange={(e) => updateWeather('waktuMulai', e.target.value)}
-            className="w-full rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="text-center">to</span>
-          <input
-            type="time"
-            value={form.weather.waktuSelesai}
-            onChange={(e) => updateWeather('waktuSelesai', e.target.value)}
-            className="w-full rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        {/* Same card styling as the weather rows above, so the two columns
+            stay aligned on any screen width; the labels replace the old
+            floating "Time … to …" text. */}
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:max-w-md">
+          <label className="rounded-md border border-gray-200 px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 hover:border-blue-300">
+            <span className="mb-0.5 block text-xs font-medium text-gray-500">Start time</span>
+            <input
+              type="time"
+              value={form.weather.waktuMulai}
+              onChange={(e) => updateWeather('waktuMulai', e.target.value)}
+              className="block w-full border-0 bg-transparent p-0 text-sm text-gray-800 focus:outline-none"
+            />
+          </label>
+          <label className="rounded-md border border-gray-200 px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 hover:border-blue-300">
+            <span className="mb-0.5 block text-xs font-medium text-gray-500">End time</span>
+            <input
+              type="time"
+              value={form.weather.waktuSelesai}
+              onChange={(e) => updateWeather('waktuSelesai', e.target.value)}
+              className="block w-full border-0 bg-transparent p-0 text-sm text-gray-800 focus:outline-none"
+            />
+          </label>
         </div>
       </section>
 
@@ -652,11 +667,12 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
     </div>
 
-    {/* Mounted only while printing (snapshot of the current form). Pressing
-       Print jumps straight to the browser dialog, and it unmounts afterward so
-       it never weighs down editing. */}
+    {/* Mounted only while printing (snapshot of the current form) and
+       unmounted on afterprint, so it never weighs down editing. Parked
+       off-screen rather than display:none — iOS Safari's print preview only
+       includes content that is actually rendered on screen. */}
     {printData && (
-      <div data-print-sheet className="hidden print:block">
+      <div data-print-sheet aria-hidden="true" className="absolute -left-[9999px] top-0 print:static">
         <DailyPrintReport project={project} report={printData} />
       </div>
     )}

@@ -2,15 +2,17 @@
 
 import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
 
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [date, setDate] = useState(defaultDate);
   const [error, setError] = useState<string | null>(null);
-  // Covers the action AND the navigation that follows, so the button reads
-  // "Creating…" until the new report page is actually on screen.
+  // Covers the action AND the navigation that follows, so the dialog keeps
+  // its progress state until the new report page takes over the screen.
   const [creating, startTransition] = useTransition();
 
   const weekdayPreview = date
@@ -42,14 +44,15 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
   function create() {
     setError(null);
     startTransition(async () => {
-      // On success the action redirects to the new report server-side, so the
-      // result only resolves with a value when something went wrong.
       const res = await createDailyAction(date);
-      if (res && !res.ok) {
+      if (!res.ok) {
         setError(res.error);
         return;
       }
-      closeModal();
+      // Navigate client-side instead of redirecting inside the action: the
+      // destination's loading skeleton appears immediately, so the wait reads
+      // as "the page is being prepared" rather than a frozen dialog.
+      router.push(`/daily/${date}`);
     });
   }
 
@@ -72,39 +75,61 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
             className={`absolute inset-0 bg-black/40 backdrop-blur-sm ${closing ? 'animate-fade-out' : 'animate-fade-in'}`}
             onClick={() => !creating && closeModal()}
           />
-          <div className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl ${closing ? 'animate-scale-out' : 'animate-scale-in'}`}>
+          <div
+            className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-xl sm:p-6 ${
+              closing ? 'animate-scale-out' : 'animate-scale-in'
+            }`}
+          >
             <h2 className="text-lg font-semibold text-gray-900">New Daily Report</h2>
             <p className="mt-1 text-sm text-gray-500">Choose the day for this report.</p>
 
-            <label className="mt-5 block text-xs font-medium text-gray-600">Date</label>
+            <label htmlFor="new-daily-date" className="mt-5 block text-xs font-medium text-gray-600">
+              Date
+            </label>
+            {/* text-base (16px) on phones: anything smaller makes iOS Safari
+                zoom the whole page when the field is focused. */}
             <input
+              id="new-daily-date"
               type="date"
               value={date}
+              disabled={creating}
               onChange={(e) => {
                 setDate(e.target.value);
                 setError(null);
               }}
-              className="mt-1 block w-full min-w-0 rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 block h-11 w-full min-w-0 appearance-none rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm [&::-webkit-date-and-time-value]:text-left"
             />
             {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-gray-700">{weekdayPreview}</p>}
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button
                 onClick={closeModal}
                 disabled={creating}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50"
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
               >
                 Cancel
               </button>
               <button
                 onClick={create}
                 disabled={creating || !date}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2"
               >
+                {creating && (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2.5" />
+                    <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                )}
                 {creating ? 'Creating…' : 'Create'}
               </button>
             </div>
+
+            {creating && (
+              <p role="status" className="mt-3 text-center text-xs text-gray-500 animate-fade-in">
+                Setting up the report page — this only takes a moment…
+              </p>
+            )}
           </div>
         </div>,
         document.body

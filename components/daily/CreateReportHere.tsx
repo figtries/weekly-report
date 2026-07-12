@@ -15,13 +15,14 @@ export default function CreateReportHere({ date }: { date: string }) {
     setError(null);
     startTransition(async () => {
       const res = await createDailyAction(date);
-      if (res && !res.ok) {
-        if (res.error.includes('already exists')) {
-          await refreshDbAction();
-          return;
-        }
+      if (!res.ok && !res.error.includes('already exists')) {
         setError(res.error);
+        return;
       }
+      // Created (or already existed): re-render this page from inside a
+      // server action, where the expired 'db' tag is guaranteed visible, so
+      // the empty state swaps to the actual report.
+      await refreshDbAction();
     });
   }
 

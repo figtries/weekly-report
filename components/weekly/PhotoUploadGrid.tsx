@@ -87,6 +87,29 @@ export default function PhotoUploadGrid({
     setLocalPhotos(photos);
   }, [photos]);
 
+  // Optimistic previews: object URLs of just-picked files, shown immediately
+  // while the upload runs (and kept afterwards — same pixels, no refetch).
+  // The ref is the source of truth (only touched from event handlers); the
+  // state is a render mirror of it.
+  const [previews, setPreviews] = useState<Record<number, string>>({});
+  const previewsRef = useRef<Record<number, string>>({});
+  useEffect(
+    () => () => {
+      Object.values(previewsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    },
+    []
+  );
+
+  function setPreview(slot: number, url: string | null) {
+    const old = previewsRef.current[slot];
+    if (old && old !== url) URL.revokeObjectURL(old);
+    const next = { ...previewsRef.current };
+    if (url) next[slot] = url;
+    else delete next[slot];
+    previewsRef.current = next;
+    setPreviews(next);
+  }
+
   const pages: (string | null)[][] = [];
   for (let i = 0; i < localPhotos.length; i += PAGE_SIZE) {
     pages.push(localPhotos.slice(i, i + PAGE_SIZE));
@@ -112,8 +135,11 @@ export default function PhotoUploadGrid({
   async function handleFile(slot: number, file: File) {
     setBusySlot(slot);
     setError(null);
+    let ok = false;
     try {
       const compressed = await compressImage(file);
+      // Show the photo right away — the network round trip happens behind it.
+      setPreview(slot, URL.createObjectURL(compressed));
       const formData = new FormData();
       formData.append('slot', String(slot));
       formData.append('file', compressed);
@@ -123,10 +149,12 @@ export default function PhotoUploadGrid({
         setError(errorFromResponse(body, res, 'Upload failed'));
         return;
       }
+      ok = true;
       applyResponse(body);
     } catch {
       setError('Upload failed — check your connection and try again.');
     } finally {
+      if (!ok) setPreview(slot, null);
       setBusySlot(null);
     }
   }
@@ -134,6 +162,11 @@ export default function PhotoUploadGrid({
   async function handleRemove(slot: number) {
     setBusySlot(slot);
     setError(null);
+    // Optimistic: clear the slot immediately, put the photo back on failure.
+    const previous = localPhotos[slot] ?? null;
+    setPreview(slot, null);
+    setLocalPhotos((prev) => prev.map((p, i) => (i === slot ? null : p)));
+    let ok = false;
     try {
       const res = await fetch(`${uploadUrl}?slot=${slot}`, { method: 'DELETE' });
       const body = await readJsonSafe(res);
@@ -141,10 +174,12 @@ export default function PhotoUploadGrid({
         setError(errorFromResponse(body, res, 'Could not remove photo'));
         return;
       }
+      ok = true;
       applyResponse(body);
     } catch {
       setError('Could not remove photo — check your connection and try again.');
     } finally {
+      if (!ok) setLocalPhotos((prev) => prev.map((p, i) => (i === slot ? previous : p)));
       setBusySlot(null);
     }
   }
@@ -209,33 +244,57 @@ export default function PhotoUploadGrid({
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {pagePhotos.map((photo, i) => {
               const slot = pageIndex * PAGE_SIZE + i;
+              const preview = previews[slot] ?? null;
+              const displayed = preview ?? photo;
+              const uploading = busySlot === slot && preview !== null;
               return (
                 <div
                   key={slot}
                   className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm transition-all duration-500 ease-ios hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
-                  {photo ? (
+                  {displayed ? (
                     <>
-                      <Image
-                        src={photo}
-                        alt={`Documentation ${slot + 1}`}
-                        fill
-                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                        className="object-cover transition-transform duration-700 ease-ios group-hover:scale-[1.04]"
-                      />
-                      {/* Touch screens have no hover — keep the overlay visible below sm
-                          so photos can actually be removed on mobile. */}
-                      <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-300 ease-ios group-hover:opacity-100 max-sm:opacity-100">
-                        <span className="text-xs font-medium text-white">Photo {slot + 1}</span>
-                        <button
-                          onClick={() => handleRemove(slot)}
-                          disabled={busySlot === slot}
-                          className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-white disabled:opacity-60"
-                        >
-                          {busySlot === slot ? 'Removing…' : 'Remove'}
-                        </button>
-                      </div>
+                      {preview ? (
+                        // Object URLs can't go through the image optimizer —
+                        // render the picked file directly.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preview}
+                          alt={`Documentation ${slot + 1}`}
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-ios group-hover:scale-[1.04]"
+                        />
+                      ) : (
+                        <Image
+                          src={displayed}
+                          alt={`Documentation ${slot + 1}`}
+                          fill
+                          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                          className="object-cover transition-transform duration-700 ease-ios group-hover:scale-[1.04]"
+                        />
+                      )}
+                      {uploading ? (
+                        <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2">
+                          <span className="text-xs font-medium text-white">Uploading…</span>
+                          <svg className="h-4 w-4 animate-spin text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        </div>
+                      ) : (
+                        /* Touch screens have no hover — keep the overlay visible below sm
+                           so photos can actually be removed on mobile. */
+                        <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-300 ease-ios group-hover:opacity-100 max-sm:opacity-100">
+                          <span className="text-xs font-medium text-white">Photo {slot + 1}</span>
+                          <button
+                            onClick={() => handleRemove(slot)}
+                            disabled={busySlot === slot}
+                            className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-white disabled:opacity-60"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <button
@@ -252,7 +311,7 @@ export default function PhotoUploadGrid({
                         <span className="text-2xl leading-none">+</span>
                       )}
                       <span className="text-xs font-medium">
-                        {busySlot === slot ? 'Uploading…' : `Add photo ${slot + 1}`}
+                        {busySlot === slot ? 'Working…' : `Add photo ${slot + 1}`}
                       </span>
                     </button>
                   )}

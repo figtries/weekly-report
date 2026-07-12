@@ -55,25 +55,25 @@ export default function ConfirmDialog({
         onClick={() => !busy && onCancel()}
       />
       <div
-        className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-xl ${
+        className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-xl sm:p-6 ${
           open ? 'animate-scale-in' : 'animate-scale-out'
         }`}
       >
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
         <div className="mt-1 text-sm text-gray-500">{message}</div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
           <button
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={busy}
-            className={`rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:shadow-md active:scale-[0.96] disabled:opacity-60 ${
+            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2 ${
               destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >

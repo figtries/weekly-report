@@ -35,24 +35,24 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
   ];
 
   return (
-    <div className="px-3 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-6 lg:px-8 lg:pt-6 lg:pb-8 animate-fade-in-up space-y-5 sm:space-y-6">
-      <div>
-        <h1 className="mb-0.5 text-xl sm:text-3xl font-semibold text-gray-900">Data Overall</h1>
-        <p className="text-xs sm:text-base text-gray-600 leading-relaxed">
+    <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up space-y-5 sm:space-y-6">
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Data Overall</h1>
+        <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
           The single source of truth for <span className="font-medium text-gray-900">Week {week}</span> · {period}.{' '}
           <span className="hidden sm:inline">Click an activity to edit — Summary, Detail Progress, and S-Curve auto-update after saving.</span>
         </p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((s, idx) => (
           <div
             key={s.label}
-            className={`rounded-xl border border-gray-200 ${s.bg} px-3 py-3 sm:p-5 shadow-sm transition-all duration-500 ease-ios hover:shadow-md hover:-translate-y-0.5 animate-fade-in-up`}
+            className={`rounded-xl border border-gray-200 ${s.bg} px-4 py-3.5 sm:p-5 shadow-sm transition-all duration-500 ease-ios hover:shadow-md hover:-translate-y-0.5 animate-fade-in-up`}
             style={{ animationDelay: `${idx * 70}ms` }}
           >
-            <p className="mb-1 text-[11px] sm:text-xs font-medium uppercase tracking-wide text-gray-500">{s.label}</p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">{s.label}</p>
             <p className={`text-2xl sm:text-3xl font-semibold ${s.tone}`}>
               <AnimatedNumber value={s.value} suffix="%" />
             </p>

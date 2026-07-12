@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { mutateDb } from '@/lib/db';
-import { deleteUploadedPhoto, saveUploadedPhoto } from '@/lib/upload';
+import { deleteUploadedPhoto, preparePhotoUpload } from '@/lib/upload';
 
 const PAGE_SIZE = 6;
 
@@ -18,17 +19,24 @@ export async function POST(
   }
 
   try {
-    const relPath = await saveUploadedPhoto(file, 'daily', date, slot);
+    const { relPath, persist } = await preparePhotoUpload(file, 'daily', date, slot);
     let previousPath: string | null = null;
-    const updated = await mutateDb((db) => {
-      const report = db.daily.find((d) => d.date === date);
-      if (!report) throw new Error(`Daily report for ${date} not found`);
-      if (slot >= report.photos.length) throw new Error(`Slot ${slot} out of range`);
-      previousPath = report.photos[slot] ?? null;
-      report.photos[slot] = relPath;
-      return report;
-    });
-    await deleteUploadedPhoto(previousPath);
+    // Photo write and db mutation run concurrently — neither needs the
+    // other's result, only the precomputed path.
+    const [updated] = await Promise.all([
+      mutateDb((db) => {
+        const report = db.daily.find((d) => d.date === date);
+        if (!report) throw new Error(`Daily report for ${date} not found`);
+        if (slot >= report.photos.length) throw new Error(`Slot ${slot} out of range`);
+        previousPath = report.photos[slot] ?? null;
+        report.photos[slot] = relPath;
+        return report;
+      }),
+      persist(),
+    ]);
+    // Replaced photo is unreachable once the db points elsewhere — clean it
+    // up after the response instead of making the client wait for it.
+    after(() => deleteUploadedPhoto(previousPath).catch(() => undefined));
     return NextResponse.json(updated);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
@@ -51,7 +59,7 @@ export async function DELETE(
       report.photos[slot] = null;
       return report;
     });
-    await deleteUploadedPhoto(removedPath);
+    after(() => deleteUploadedPhoto(removedPath).catch(() => undefined));
     return NextResponse.json(updated);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

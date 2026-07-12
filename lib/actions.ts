@@ -2,6 +2,7 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { mutateDb } from './db';
 import { applyCreateDaily, applyDeleteDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
 import { deleteUploadedPhoto } from './upload';
@@ -34,18 +35,18 @@ export async function setCurrentWeekAction(week: number): Promise<ActionResult> 
 export async function createDailyAction(date: string): Promise<ActionResult> {
   try {
     await mutateDb((db) => applyCreateDaily(db, date));
-    // No refresh() here: the redirect below already renders the destination
-    // fresh in this same request — refreshing the origin page too would
-    // double the server render work and the response payload.
+    // No refresh() here: the caller navigates straight to the new report, so
+    // re-rendering the origin page would be wasted work. updateTag makes that
+    // navigation render with fresh data (read-your-own-writes). Navigation
+    // itself is client-side (router.push) so the destination's loading
+    // skeleton shows immediately instead of a frozen dialog; if the render
+    // still races tag propagation on Vercel, the report page's fresh-read
+    // fallback (app/daily/[date]/page.tsx) finds the new report anyway.
     updateTag('db');
+    return { ok: true };
   } catch (err) {
     return fail(err);
   }
-  // Navigate server-side, inside this request: the destination page renders
-  // with the freshly-expired cache, so it always sees the new report. A
-  // client-side push after the action can race tag propagation on Vercel and
-  // permanently cache a stale "not found" render for the new date.
-  redirect(`/daily/${date}`);
 }
 
 export async function deleteDailyAction(date: string): Promise<ActionResult> {
@@ -56,8 +57,12 @@ export async function deleteDailyAction(date: string): Promise<ActionResult> {
     // instead of surfacing a "not found" error.
     const removed = await mutateDb((db) => applyDeleteDaily(db, date));
     if (removed) {
-      // Best-effort cleanup of the report's stored photos.
-      await Promise.all(removed.photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)));
+      // Best-effort cleanup of the report's stored photos — after the
+      // response, so the redirect isn't held up by storage round trips.
+      const photos = removed.photos;
+      after(() =>
+        Promise.all(photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)))
+      );
     }
     updateTag('db');
   } catch (err) {

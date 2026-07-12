@@ -14,12 +14,16 @@ export function photoRedisKey(relativePath: string): string {
   return `weekly-report:photo:${relativePath}`;
 }
 
-export async function saveUploadedPhoto(
+// Split into "compute the path" and "write the bytes" so callers can overlap
+// the (slow, payload-heavy) photo write with the db mutation instead of
+// paying for them back to back. All validation happens here, before any I/O,
+// so a rejected upload never leaves partial state behind.
+export async function preparePhotoUpload(
   file: File,
   subdir: string,
   key: string,
   slot: number
-): Promise<string> {
+): Promise<{ relPath: string; persist: () => Promise<void> }> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const ext = path.extname(file.name) || '.jpg';
   const filename = `slot-${slot}-${Date.now()}${ext}`;
@@ -29,17 +33,25 @@ export async function saveUploadedPhoto(
     if (buffer.byteLength > MAX_REDIS_PHOTO_BYTES) {
       throw new Error('Photo is too large — please use a smaller image (max ~700KB).');
     }
-    await redisSet(
-      photoRedisKey(relPath),
-      JSON.stringify({ mime: file.type || 'image/jpeg', data: buffer.toString('base64') })
-    );
-    return relPath;
+    return {
+      relPath,
+      persist: async () => {
+        await redisSet(
+          photoRedisKey(relPath),
+          JSON.stringify({ mime: file.type || 'image/jpeg', data: buffer.toString('base64') })
+        );
+      },
+    };
   }
 
-  const dir = path.join(UPLOAD_ROOT, subdir, key);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, filename), buffer);
-  return relPath;
+  return {
+    relPath,
+    persist: async () => {
+      const dir = path.join(UPLOAD_ROOT, subdir, key);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, filename), buffer);
+    },
+  };
 }
 
 export async function deleteUploadedPhoto(relativePath: string | null | undefined): Promise<void> {

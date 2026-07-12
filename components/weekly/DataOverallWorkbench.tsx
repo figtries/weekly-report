@@ -137,7 +137,6 @@ export default function DataOverallWorkbench({
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
-  const [recentCutoff] = useState(() => Date.now() - 24 * 60 * 60 * 1000);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
   // stale node objects would otherwise keep showing pre-save numbers. Each
@@ -202,32 +201,27 @@ export default function DataOverallWorkbench({
     return () => window.removeEventListener('keydown', onKey);
   }, [path.length, query]);
 
-  const recentIds = useMemo(() => {
-    const ids = new Set<string>();
-    recentChanges.forEach((c) => {
-      if (new Date(c.at).getTime() >= recentCutoff) ids.add(c.leafId);
-    });
-    return ids;
-  }, [recentChanges, recentCutoff]);
-
   const todayStart = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     return start.getTime();
   }, []);
 
-  const todayCount = useMemo(() => {
-    const leaves = new Set<string>();
-    recentChanges.forEach((c) => {
-      if (new Date(c.at).getTime() >= todayStart) leaves.add(c.leafId);
-    });
-    return leaves.size;
-  }, [recentChanges, todayStart]);
-
   const sortedLog = useMemo(
     () => [...recentChanges].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
     [recentChanges]
   );
+
+  // Single source of truth for "today": the update pill, the New badges and
+  // the history divider all read from this one filtered list, so the pill
+  // number always matches the entries shown in the Change history panel.
+  const todayLog = useMemo(
+    () => sortedLog.filter((c) => new Date(c.at).getTime() >= todayStart),
+    [sortedLog, todayStart]
+  );
+  const todayCount = todayLog.length;
+
+  const recentIds = useMemo(() => new Set(todayLog.map((c) => c.leafId)), [todayLog]);
 
   function currentCum(node: RollupNode): number {
     return round2(edits[node.id]?.cumProgressPct ?? node.curProgressPct);
@@ -428,11 +422,13 @@ export default function DataOverallWorkbench({
           {/* Dot sits in an 18px slot so its text starts at the exact same x as
              the search input's text (which leads with an 18px magnifier). */}
           <span className="flex w-[18px] shrink-0 items-center justify-center">
-            <span className={`h-2 w-2 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+            <span suppressHydrationWarning className={`h-2 w-2 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
           </span>
-          <span className="flex-1 text-left text-[14px] text-gray-600">
+          {/* "Today" is the viewer's local midnight, which the server can't
+             know — suppress the one-off SSR/client text mismatch. */}
+          <span suppressHydrationWarning className="flex-1 text-left text-[14px] text-gray-600">
             {todayCount > 0 ? (
-              <><span className="font-semibold text-gray-900">{todayCount} {todayCount === 1 ? 'activity' : 'activities'}</span> updated today</>
+              <><span className="font-semibold text-gray-900">{todayCount} {todayCount === 1 ? 'update' : 'updates'}</span> today</>
             ) : (
               'No updates today yet'
             )}
@@ -461,7 +457,10 @@ export default function DataOverallWorkbench({
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
               <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
-              <div className="text-[12px] text-gray-500">{sortedLog.length} {sortedLog.length === 1 ? 'change' : 'changes'} recorded</div>
+              <div suppressHydrationWarning className="text-[12px] text-gray-500">
+                {todayCount > 0 && <span className="font-medium text-emerald-600">{todayCount} today · </span>}
+                {sortedLog.length} {sortedLog.length === 1 ? 'update' : 'updates'} recorded
+              </div>
             </div>
             <div className="max-h-80 overflow-y-auto">
               {sortedLog.map((c, i) => {
@@ -518,7 +517,7 @@ export default function DataOverallWorkbench({
                 );
               })}
               {sortedLog.length === 0 && (
-                <div className="px-5 py-8 text-center text-[13px] text-gray-500">No changes recorded this week yet.</div>
+                <div className="px-5 py-8 text-center text-[13px] text-gray-500">No updates recorded this week yet.</div>
               )}
             </div>
           </div>
