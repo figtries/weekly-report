@@ -43,15 +43,6 @@ export default function DailyReportsView({
   reports: DailyListItem[];
   defaultDate: string;
 }) {
-  const months = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of reports) {
-      const k = monthKey(r.date);
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [reports]);
-
   const [selected, setSelected] = useState<string>('all');
 
   const [confirmDate, setConfirmDate] = useState<string | null>(null);
@@ -62,6 +53,16 @@ export default function DailyReportsView({
   const [hiddenDates, hideDate] = useOptimistic<string[], string>([], (dates, date) => [...dates, date]);
 
   const visible = reports.filter((r) => !hiddenDates.includes(r.date));
+
+  const months = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of visible) {
+      const k = monthKey(r.date);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [visible]);
+
   const filtered = selected === 'all' ? visible : visible.filter((r) => monthKey(r.date) === selected);
   const selectedLabel = selected === 'all' ? 'All months' : monthLabel(selected);
 
@@ -88,7 +89,7 @@ export default function DailyReportsView({
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <MonthDropdown
             months={months}
-            total={reports.length}
+            total={visible.length}
             selected={selected}
             label={selectedLabel}
             onSelect={setSelected}
@@ -233,7 +234,7 @@ function MonthDropdown({
     <div ref={ref} className="relative flex-1 sm:flex-none">
       <button
         onClick={() => (open ? close() : setOpen(true))}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97] sm:w-auto sm:justify-start"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97] sm:w-auto sm:min-w-[12.5rem] sm:justify-between"
       >
         <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
@@ -252,7 +253,7 @@ function MonthDropdown({
 
       {open && (
         <div
-          className={`absolute left-0 z-30 mt-2 w-56 origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ${
+          className={`absolute left-0 z-30 mt-2 w-full origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
@@ -287,7 +288,7 @@ function MonthOption({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors ${
         active ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50'
       }`}
     >
