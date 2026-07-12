@@ -455,14 +455,14 @@ export default function DataOverallWorkbench({
       >
         <div className="overflow-hidden">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+            <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
               <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
               <div suppressHydrationWarning className="text-[12px] text-gray-500">
                 {todayCount > 0 && <span className="font-medium text-emerald-600">{todayCount} today · </span>}
                 {sortedLog.length} {sortedLog.length === 1 ? 'update' : 'updates'} recorded
               </div>
             </div>
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[70vh] sm:max-h-96 overflow-y-auto overscroll-contain divide-y divide-gray-100">
               {sortedLog.map((c, i) => {
                 const leaf = flatAll.find((n) => n.id === c.leafId);
                 const delta = round2(c.newValue - c.oldValue);
@@ -471,7 +471,7 @@ export default function DataOverallWorkbench({
                 return (
                   <div key={c.id}>
                     {showDivider && (
-                      <div className="bg-gray-50 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      <div className="bg-gray-50/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                         Earlier
                       </div>
                     )}
@@ -483,32 +483,38 @@ export default function DataOverallWorkbench({
                         }
                       }}
                       disabled={!leaf}
-                      className="flex w-full items-center gap-3.5 border-b border-gray-50 px-5 py-3 text-left transition-colors last:border-0 hover:bg-blue-50/40 disabled:pointer-events-none"
+                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-blue-50/40 disabled:pointer-events-none"
                     >
                       <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] ${
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
                           delta > 0 ? 'bg-emerald-50 text-emerald-600' : delta < 0 ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-gray-900">
-                          {leaf?.deskripsi ?? 'Activity not found'}
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[13px] font-medium text-gray-900">
+                            {leaf?.deskripsi ?? 'Activity not found'}
+                          </span>
+                          <span suppressHydrationWarning className="shrink-0 text-[11px] text-gray-400">{timeAgo(c.at)}</span>
                         </span>
-                        <span className="mt-0.5 block text-[12px] text-gray-500">
-                          {c.field === 'cumProgressPct' ? 'Actual' : 'Target'}{' '}
+                        <span className="mt-1 flex items-center gap-1.5 text-[12px] text-gray-500">
+                          <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                            c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                          }`}>
+                            {c.field === 'cumProgressPct' ? 'Actual' : 'Target'}
+                          </span>
                           <span className="font-medium tabular-nums text-gray-700">{c.oldValue.toFixed(1)}%</span>
-                          {' → '}
+                          <span className="text-gray-400">→</span>
                           <span className="font-medium tabular-nums text-gray-700">{c.newValue.toFixed(1)}%</span>
-                          <span className={delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}>
-                            {' '}({delta > 0 ? '+' : ''}{delta.toFixed(1)}%)
+                          <span className={`font-semibold tabular-nums ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                            ({delta > 0 ? '+' : ''}{delta.toFixed(1)}%)
                           </span>
                         </span>
                       </span>
-                      <span suppressHydrationWarning className="shrink-0 text-[12px] text-gray-400">{timeAgo(c.at)}</span>
                       {leaf && (
-                        <svg className="h-4 w-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <svg className="mt-1 h-4 w-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       )}
