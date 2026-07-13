@@ -3,7 +3,42 @@
 import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
 import type { SCurveRow } from '@/lib/scurve';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
-import { weekPeriodLabel } from '@/lib/weeks';
+import { formatDateShort, weekEndDate, weekPeriodLabel } from '@/lib/weeks';
+
+// Excel-style callout ("18-Jun-26; 65.90%") anchored to one point of a line.
+// Recharts calls this for every point; all but targetIndex render nothing.
+function makeEndCallout(color: string, dateLabel: string, targetIndex: number, dy: number) {
+  return function EndCallout(props: unknown) {
+    const { viewBox, index, value } = props as {
+      viewBox?: { x?: number; y?: number };
+      index?: number;
+      value?: number | null;
+    };
+    if (index !== targetIndex || viewBox?.x == null || viewBox?.y == null || value == null) return null;
+    const text = `${dateLabel}; ${Number(value).toFixed(2)}%`;
+    const width = text.length * 5.4 + 12;
+    const height = 16;
+    const boxX = viewBox.x - width - 16;
+    const boxY = viewBox.y + dy - height / 2;
+    return (
+      <g>
+        <path d={`M${viewBox.x},${viewBox.y} L${boxX + width},${boxY + height / 2}`} stroke={color} strokeWidth={1} fill="none" />
+        <rect x={boxX} y={boxY} width={width} height={height} fill="#fff" stroke={color} strokeWidth={1.2} />
+        <text
+          x={boxX + width / 2}
+          y={boxY + height / 2}
+          dominantBaseline="central"
+          textAnchor="middle"
+          fontSize={9.5}
+          fontWeight={700}
+          fill={color}
+        >
+          {text}
+        </text>
+      </g>
+    );
+  };
+}
 
 export default function WeeklyPrintSCurve({
   project,
@@ -16,9 +51,17 @@ export default function WeeklyPrintSCurve({
 }) {
   // Anchor both lines at the same 0% origin so they start aligned.
   const chartData = [
-    { week: 'W0', plan: 0, actual: 0 },
-    ...series.map((r) => ({ week: `W${r.week}`, plan: r.planPct, actual: r.actualPct })),
+    { week: 'W0', weekNum: 0, plan: 0, actual: 0 },
+    ...series.map((r) => ({ week: `W${r.week}`, weekNum: r.week, plan: r.planPct, actual: r.actualPct })),
   ];
+
+  const lastIdxOf = (key: 'plan' | 'actual') => {
+    for (let i = chartData.length - 1; i > 0; i--) if (chartData[i][key] != null) return i;
+    return -1;
+  };
+  const lastPlanIdx = lastIdxOf('plan');
+  const lastActualIdx = lastIdxOf('actual');
+  const dateAt = (idx: number) => formatDateShort(weekEndDate(project.weekAnchorEndDate, chartData[idx].weekNum));
 
   return (
     <div
@@ -67,6 +110,7 @@ export default function WeeklyPrintSCurve({
             name="CUM. PLAN"
             isAnimationActive={false}
             connectNulls
+            label={lastPlanIdx > 0 ? makeEndCallout('#ef4444', dateAt(lastPlanIdx), lastPlanIdx, -30) : undefined}
           />
           <Line
             type="monotone"
@@ -77,6 +121,7 @@ export default function WeeklyPrintSCurve({
             name="CUM. ACTUAL"
             isAnimationActive={false}
             connectNulls
+            label={lastActualIdx > 0 ? makeEndCallout('#3b82f6', dateAt(lastActualIdx), lastActualIdx, 30) : undefined}
           />
         </LineChart>
       </div>
