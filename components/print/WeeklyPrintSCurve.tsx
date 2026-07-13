@@ -23,9 +23,9 @@ export default function WeeklyPrintSCurve({
   return (
     <div
       className="border-[3px] border-black bg-white text-black"
-      style={{ width: '210mm', height: '297mm', padding: '12mm', margin: '0 auto', pageBreakAfter: 'always' }}
+      style={{ width: '210mm', height: '297mm', padding: '12mm', margin: '0 auto', boxSizing: 'border-box', pageBreakInside: 'avoid', pageBreakAfter: 'auto' }}
     >
-      <div className="mb-6 border-2 border-black p-4 text-center">
+      <div className="mb-4 border-2 border-black p-4 text-center">
         <h1 className="mb-2 text-2xl font-bold">PROGRESS S-CURVE OVERALL</h1>
         <div className="flex justify-center gap-12 text-base">
           <span>
@@ -37,8 +37,8 @@ export default function WeeklyPrintSCurve({
         </div>
       </div>
 
-      <div className="mb-6 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '480px', padding: '15px' }}>
-        <LineChart width={770} height={450} data={chartData} margin={{ top: 25, right: 40, left: 25, bottom: 70 }}>
+      <div className="mb-4 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '440px', padding: '10px' }}>
+        <LineChart width={770} height={420} data={chartData} margin={{ top: 20, right: 40, left: 25, bottom: 65 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#999" />
           <XAxis
             dataKey="week"
@@ -57,7 +57,7 @@ export default function WeeklyPrintSCurve({
             stroke="#000"
             strokeWidth={1.5}
           />
-          <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10, fontWeight: 600 }} iconType="line" />
+          <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10, fontWeight: 600, textAlign: 'center', width: '100%' }} iconType="line" />
           <Line
             type="monotone"
             dataKey="plan"
@@ -81,7 +81,7 @@ export default function WeeklyPrintSCurve({
         </LineChart>
       </div>
 
-      <div className="mb-6 overflow-hidden border-2 border-black">
+      <div className="mb-4 overflow-hidden border-2 border-black">
         <table className="w-full border-collapse" style={{ fontSize: '6.5px', tableLayout: 'fixed' }}>
           <thead>
             <tr>
@@ -120,15 +120,15 @@ export default function WeeklyPrintSCurve({
         </table>
       </div>
 
-      <div className="mt-10 grid grid-cols-2 gap-12">
+      <div className="mt-6 grid grid-cols-2 gap-12">
         <div className="text-center">
-          <p className="mb-20 text-base font-bold">{project.signatureLeft.company}</p>
+          <p className="mb-16 text-base font-bold">{project.signatureLeft.company}</p>
           <div className="border-t-2 border-black pt-2">
             <p className="text-base font-medium">{project.signatureLeft.name}</p>
           </div>
         </div>
         <div className="text-center">
-          <p className="mb-20 text-base font-bold">{project.signatureRight.company}</p>
+          <p className="mb-16 text-base font-bold">{project.signatureRight.company}</p>
           <div className="border-t-2 border-black pt-2">
             <p className="text-base font-medium">{project.signatureRight.name}</p>
           </div>
