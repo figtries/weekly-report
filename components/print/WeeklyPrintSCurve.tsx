@@ -18,21 +18,21 @@ function makeEndCallout(color: string, dateLabel: string, targetIndex: number, d
     const text = `${dateLabel}; ${Number(value).toFixed(2)}%`;
     const width = text.length * 5.4 + 12;
     const height = 16;
-    const boxX = viewBox.x - width - 16;
-    const boxY = viewBox.y + dy - height / 2;
+    const px = viewBox.x;
+    const py = viewBox.y;
+    // Box sits left of the point; flip right if the point is too close to the
+    // left edge, and clamp vertically so a ~100% point can't push it off-canvas.
+    let boxX = px - width - 16;
+    if (boxX < 4) boxX = px + 16;
+    const boxY = Math.max(4, py + dy - height / 2);
+    const anchorX = boxX > px ? boxX : boxX + width;
     return (
       <g>
-        <path d={`M${viewBox.x},${viewBox.y} L${boxX + width},${boxY + height / 2}`} stroke={color} strokeWidth={1} fill="none" />
+        <path d={`M${px},${py} L${anchorX},${boxY + height / 2}`} stroke={color} strokeWidth={1} fill="none" />
         <rect x={boxX} y={boxY} width={width} height={height} fill="#fff" stroke={color} strokeWidth={1.2} />
-        <text
-          x={boxX + width / 2}
-          y={boxY + height / 2}
-          dominantBaseline="central"
-          textAnchor="middle"
-          fontSize={9.5}
-          fontWeight={700}
-          fill={color}
-        >
+        {/* Manual vertical centering (y + ~1/3 font size) — iOS Safari and some
+            print rasterizers ignore dominant-baseline on <text>. */}
+        <text x={boxX + width / 2} y={boxY + height / 2 + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={color}>
           {text}
         </text>
       </g>
