@@ -38,7 +38,7 @@ export default function WeeklyPrintSCurve({
       </div>
 
       <div className="mb-4 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '440px', padding: '10px' }}>
-        <LineChart width={770} height={420} data={chartData} margin={{ top: 20, right: 40, left: 25, bottom: 65 }}>
+        <LineChart width={900} height={420} data={chartData} margin={{ top: 25, right: 20, left: 10, bottom: 65 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#999" />
           <XAxis
             dataKey="week"
@@ -122,13 +122,13 @@ export default function WeeklyPrintSCurve({
 
       <div className="mt-6 grid grid-cols-2 gap-12">
         <div className="text-center">
-          <p className="mb-16 text-base font-bold">{project.signatureLeft.company}</p>
+          <p className="mb-32 text-base font-bold">{project.signatureLeft.company}</p>
           <div className="border-t-2 border-black pt-2">
             <p className="text-base font-medium">{project.signatureLeft.name}</p>
           </div>
         </div>
         <div className="text-center">
-          <p className="mb-16 text-base font-bold">{project.signatureRight.company}</p>
+          <p className="mb-32 text-base font-bold">{project.signatureRight.company}</p>
           <div className="border-t-2 border-black pt-2">
             <p className="text-base font-medium">{project.signatureRight.name}</p>
           </div>
