@@ -38,7 +38,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     setTimeout(() => {
       setOpen(false);
       setClosing(false);
-    }, 160);
+    }, 120);
   }
 
   function create() {
@@ -60,7 +60,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     <>
       <button
         onClick={openModal}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:flex-none"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:flex-none"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
@@ -106,14 +106,14 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
               <button
                 onClick={closeModal}
                 disabled={creating}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
               >
                 Cancel
               </button>
               <button
                 onClick={create}
                 disabled={creating || !date}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2"
               >
                 {creating && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">

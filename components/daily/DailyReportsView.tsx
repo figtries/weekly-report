@@ -114,8 +114,8 @@ export default function DailyReportsView({
         {filtered.map((d, idx) => (
           <div
             key={d.date}
-            className="flex items-center gap-2 px-4 sm:px-6 transition-all duration-300 ease-ios hover:bg-gray-50 animate-fade-in-up"
-            style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
+            className="flex items-center gap-2 px-4 sm:px-6 transition-colors duration-150 ease-ios hover:bg-gray-50 animate-fade-in-up"
+            style={{ animationDelay: `${Math.min(idx, 8) * 20}ms` }}
           >
             <Link
               href={`/daily/${d.date}`}
@@ -206,7 +206,7 @@ function MonthDropdown({
     setTimeout(() => {
       setOpen(false);
       setClosing(false);
-    }, 140);
+    }, 110);
   }
 
   useEffect(() => {
@@ -234,7 +234,7 @@ function MonthDropdown({
     <div ref={ref} className="relative flex-1 sm:flex-none">
       <button
         onClick={() => (open ? close() : setOpen(true))}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97] sm:w-auto sm:min-w-[12.5rem] sm:justify-between"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 ease-ios hover:bg-gray-50 hover:shadow active:scale-[0.97] sm:w-auto sm:min-w-[12.5rem] sm:justify-between"
       >
         <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />

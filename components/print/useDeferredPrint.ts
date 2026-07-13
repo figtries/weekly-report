@@ -17,6 +17,19 @@ function sheetReady(): boolean {
     for (const img of sheet.querySelectorAll('img')) {
       if (!img.complete) return false;
     }
+    // Recharts paints its line paths a frame after the surrounding markup
+    // mounts, so the header/table can report "ready" while the chart box is
+    // still blank. Wait until every chart in the sheet has drawn its curves
+    // (a non-empty `d`) — otherwise printing races the paint and the S-curve
+    // comes out empty on some runs but not others.
+    for (const chart of sheet.querySelectorAll('[data-print-chart]')) {
+      const curves = chart.querySelectorAll('path.recharts-curve');
+      if (curves.length === 0) return false;
+      for (const curve of curves) {
+        const d = curve.getAttribute('d');
+        if (!d || d.length < 2) return false;
+      }
+    }
   }
   return true;
 }

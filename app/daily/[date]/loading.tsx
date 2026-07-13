@@ -1,6 +1,6 @@
 export default function DailyDetailLoading() {
   return (
-    <div className="p-8 space-y-6 animate-fade-in">
+    <div className="p-8 space-y-6 animate-loading-reveal">
       <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div className="space-y-2">
           <div className="h-7 w-72 max-w-full rounded-lg animate-shimmer" />

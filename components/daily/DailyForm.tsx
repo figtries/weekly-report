@@ -189,7 +189,9 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
 
   return (
     <>
-    <div className="animate-fade-in-up space-y-6 print:hidden">
+    {/* The toolbar renders instantly; each card below rises in with a short
+        cascade instead of the whole page animating as one slow block. */}
+    <div className="space-y-6 print:hidden">
       <div className="flex items-center justify-between mb-4">
         <Link
           href="/daily"
@@ -205,7 +207,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] disabled:cursor-default ${
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-all duration-200 ease-ios active:scale-[0.96] disabled:cursor-default ${
               justSaved
                 ? 'bg-emerald-600 text-white shadow-md'
                 : dirty
@@ -236,7 +238,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
           </button>
           <button
             onClick={() => setPrintData(form)}
-            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-blue-600 sm:px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
+            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-blue-600 sm:px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
             aria-label="Print Daily Report"
             title="Print Daily Report"
           >
@@ -251,7 +253,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
@@ -284,7 +286,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </div>
 
       {/* Weather */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '40ms' }}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Weather</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
@@ -347,7 +349,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
 
       {/* Man Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '80ms' }}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">1. Man Hours</h2>
           <button onClick={addManHour} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
@@ -431,7 +433,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
 
       {/* Non-Effective Working Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Non Effective Working Hours</h2>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
@@ -490,7 +492,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
 
       {/* Permit to Work */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '160ms' }}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">2. Permit to Work (PTW)</h2>
           <button onClick={addPtw} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
@@ -556,7 +558,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
 
       {/* HSE Input */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '200ms' }}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">3. HSE Input</h2>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[480px] text-sm">
@@ -607,7 +609,7 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
       </section>
 
       {/* Activities & Plan/Actual */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '240ms' }}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Daily Activities</h2>
         <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>

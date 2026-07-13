@@ -1,6 +1,6 @@
 export default function DailyLoading() {
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-8 animate-loading-reveal">
       <div className="mb-8 space-y-2">
         <div className="h-8 w-56 rounded-lg animate-shimmer" />
         <div className="h-4 w-80 max-w-full rounded-md animate-shimmer" />

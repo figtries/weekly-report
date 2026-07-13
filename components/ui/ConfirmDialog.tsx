@@ -33,7 +33,7 @@ export default function ConfirmDialog({
       setVisible(true);
       return;
     }
-    const t = window.setTimeout(() => setVisible(false), 160);
+    const t = window.setTimeout(() => setVisible(false), 120);
     return () => window.clearTimeout(t);
   }, [open]);
 
@@ -66,14 +66,14 @@ export default function ConfirmDialog({
           <button
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-300 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={busy}
-            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2 ${
+            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2 ${
               destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >

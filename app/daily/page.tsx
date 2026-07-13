@@ -13,8 +13,11 @@ export default async function DailyListPage() {
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
+  // Opacity-only entrance on the wrapper: the route view transition already
+  // moves the page and the list rows do their own staggered rise — a second
+  // translate here made every navigation read as two animations.
   return (
-    <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-fade-in">
       <DailyReportsView
         reports={sorted.map((d) => ({
           date: d.date,

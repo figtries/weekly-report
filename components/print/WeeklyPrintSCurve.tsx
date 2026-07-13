@@ -37,8 +37,8 @@ export default function WeeklyPrintSCurve({
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '440px', padding: '10px' }}>
-        <LineChart width={900} height={420} data={chartData} margin={{ top: 25, right: 20, left: 10, bottom: 65 }}>
+      <div data-print-chart className="mb-6 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '470px', padding: '16px' }}>
+        <LineChart width={650} height={432} data={chartData} margin={{ top: 30, right: 50, left: 15, bottom: 58 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#999" />
           <XAxis
             dataKey="week"
