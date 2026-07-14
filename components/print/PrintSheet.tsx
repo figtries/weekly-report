@@ -1,14 +1,22 @@
-// Keeps a mounted print sheet out of view WITHOUT hiding it from the paint
-// pipeline. Do not "simplify" to display:none, visibility:hidden or opacity:0:
-// Android Chrome's print rasterizer only outputs subtrees that were already
-// painted on screen, so all three variants printed blank pages on Android
-// (desktop and iOS were fine, which is why this kept slipping through).
-// Offscreen-left keeps the sheet laid out AND painted — Recharts also needs
-// real layout to draw — and @media print restores it into the flow. Same
-// technique as DailyForm's print sheet, which is proven on Android.
+// Renders the print sheet ON-SCREEN (painted) while it is mounted, then lets
+// @media print drop it into the normal page flow for paper.
+//
+// Why not offscreen? Chrome/Samsung Internet on Android print by rasterizing
+// what was ALREADY PAINTED on screen. Anything far off-canvas (left:-9999px),
+// display:none, visibility:hidden or opacity:0 is never painted, so Android
+// captured an empty layer and printed a blank page — even though desktop and
+// iOS (which re-lay-out for print) looked fine, which is why this kept slipping
+// through. The sheet is only mounted during the brief print window (unmounted
+// on `afterprint`), so covering the viewport for that moment is harmless and is
+// the one state Android is guaranteed to rasterize. Recharts also needs real
+// on-screen layout to draw its curves.
 export default function PrintSheet({ children }: { children: React.ReactNode }) {
   return (
-    <div data-print-sheet aria-hidden="true" className="absolute -left-[9999px] top-0 print:static">
+    <div
+      data-print-sheet
+      aria-hidden="true"
+      className="fixed inset-0 z-[9999] overflow-auto bg-white print:static print:z-auto print:overflow-visible"
+    >
       {children}
     </div>
   );

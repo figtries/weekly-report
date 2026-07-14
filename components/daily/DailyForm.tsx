@@ -675,11 +675,16 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     </div>
 
     {/* Mounted only while printing (snapshot of the current form) and
-       unmounted on afterprint, so it never weighs down editing. Parked
-       off-screen rather than display:none — iOS Safari's print preview only
-       includes content that is actually rendered on screen. */}
+       unmounted on afterprint, so it never weighs down editing. Rendered
+       on-screen (not off-screen / display:none) because Android Chrome prints
+       by rasterizing what was already painted — off-canvas content came out
+       blank. See PrintSheet.tsx for the full rationale. */}
     {printData && (
-      <div data-print-sheet aria-hidden="true" className="absolute -left-[9999px] top-0 print:static">
+      <div
+        data-print-sheet
+        aria-hidden="true"
+        className="fixed inset-0 z-[9999] overflow-auto bg-white print:static print:z-auto print:overflow-visible"
+      >
         <DailyPrintReport project={project} report={printData} />
       </div>
     )}
