@@ -225,12 +225,16 @@ function MobileDrawer({ currentWeek }: { currentWeek: number }) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // print:hidden on BOTH: these are portalled to <body>, so the toolbar's own
+  // print:hidden does not reach them. Parked off-screen with a transform, the
+  // closed drawer still printed — its shadow bled onto the top-left of every
+  // printed page.
   const overlay = mounted
     ? createPortal(
         <>
           {/* Backdrop */}
           <div
-            className={`fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
+            className={`fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 print:hidden ${
               open ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
             onClick={() => setOpen(false)}
@@ -238,7 +242,7 @@ function MobileDrawer({ currentWeek }: { currentWeek: number }) {
 
           {/* Drawer */}
           <div
-            className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] print:hidden ${
               open ? 'translate-x-0' : '-translate-x-full'
             }`}
           >

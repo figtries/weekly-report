@@ -396,6 +396,21 @@ a:active {
     height: auto !important;
     overflow: visible !important;
   }
+  /* Paper has no depth. Shadows and blurs are screen affordances that a printer
+     renders as grey smudges — and print-color-adjust: exact (below) makes the
+     browser print them faithfully instead of quietly dropping them. The closed
+     mobile drawer, parked off-screen with a transform and portalled to <body>
+     where the toolbar's print:hidden couldn't reach it, smeared its shadow-2xl
+     across the top-left corner of every printed page. */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
   /* THE paper margin — declared once, here, and nowhere else. Sheets add no
      margin of their own on paper (see .print-sheet-a4), so the printable box
      is whatever the engine says it is and the sheet always fits it exactly.
