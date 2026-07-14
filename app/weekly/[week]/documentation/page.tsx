@@ -14,7 +14,7 @@ export default async function DocumentationPage({ params }: { params: Promise<{ 
 
   return (
     <>
-      <div className="p-4 sm:p-6 lg:p-8 animate-fade-in-up print:hidden">
+      <div className="px-3 py-4 sm:p-6 lg:p-8 animate-fade-in-up print:hidden">
         <div className="mb-5 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Documentation</h1>
           <p className="text-sm sm:text-base text-gray-600">Field photos for Week {week} — 6 photos per printed page</p>
