@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { useDeferredPrint } from './useDeferredPrint';
+import PrintSheet from './PrintSheet';
 
 const WeeklyPrintDocumentation = dynamic(() => import('./WeeklyPrintDocumentation'), { ssr: false });
 
@@ -18,8 +19,8 @@ export default function PrintDocumentationLazy({
   if (!shouldRender) return null;
 
   return (
-    <div data-print-sheet className="hidden print:block">
+    <PrintSheet>
       <WeeklyPrintDocumentation project={project} meta={meta} />
-    </div>
+    </PrintSheet>
   );
 }

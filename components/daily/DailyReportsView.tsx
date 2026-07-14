@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { deleteDailyAction } from '@/lib/actions';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import NewDailyButton from './NewDailyButton';
@@ -48,11 +48,20 @@ export default function DailyReportsView({
   const [confirmDate, setConfirmDate] = useState<string | null>(null);
   const [, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Rows disappear the moment the user confirms; the server list arriving via
-  // the action's redirect confirms it, and on failure the row pops back.
-  const [hiddenDates, hideDate] = useOptimistic<string[], string>([], (dates, date) => [...dates, date]);
+  // Deleted rows are hidden with real state, not useOptimistic: the refreshed
+  // list can still arrive stale on Vercel (tag propagation races the action's
+  // re-render), and optimistic state reverts once the transition settles —
+  // popping the deleted row back until a manual reload. Real state keeps the
+  // row hidden through a stale response; confirmDelete restores it on failure.
+  const [deletedDates, setDeletedDates] = useState<string[]>([]);
 
-  const visible = reports.filter((r) => !hiddenDates.includes(r.date));
+  // Adjust-during-render (guarded): once the incoming list no longer contains
+  // a hidden date the server has confirmed the delete, so the mask is dropped
+  // — a report re-created for the same date can never be hidden by mistake.
+  const stillListed = deletedDates.filter((date) => reports.some((r) => r.date === date));
+  if (stillListed.length !== deletedDates.length) setDeletedDates(stillListed);
+
+  const visible = reports.filter((r) => !deletedDates.includes(r.date));
 
   const months = useMemo(() => {
     const counts = new Map<string, number>();
@@ -70,12 +79,22 @@ export default function DailyReportsView({
     const date = confirmDate;
     if (!date) return;
     setDeleteError(null);
-    setConfirmDate(null); // close the dialog immediately — the row vanishes optimistically
+    setConfirmDate(null); // close the dialog immediately — the row vanishes with it
+    setDeletedDates((dates) => [...dates, date]);
     startDeleteTransition(async () => {
-      hideDate(date);
-      // On success the action redirects back to /daily (in-place refresh here).
-      const res = await deleteDailyAction(date);
-      if (res && !res.ok) setDeleteError(res.error);
+      let error: string | null = null;
+      try {
+        // On success the action refreshes the list in the same request.
+        const res = await deleteDailyAction(date);
+        if (!res.ok) error = res.error;
+      } catch {
+        error = 'Network error — please try again';
+      }
+      if (error) {
+        // The report is still there: bring its row back and say why.
+        setDeletedDates((dates) => dates.filter((d) => d !== date));
+        setDeleteError(error);
+      }
     });
   }
 

@@ -87,7 +87,11 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
               Date
             </label>
             {/* text-base (16px) on phones: anything smaller makes iOS Safari
-                zoom the whole page when the field is focused. */}
+                zoom the whole page when the field is focused.
+                flex items-center + the ::-webkit-date-and-time-value rules:
+                iOS renders the date value in that pseudo-element, which
+                ignores the input's fixed height — without these it sticks to
+                the top of the field. Other browsers don't have the pseudo. */}
             <input
               id="new-daily-date"
               type="date"
@@ -97,7 +101,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
                 setDate(e.target.value);
                 setError(null);
               }}
-              className="mt-1 block h-11 w-full min-w-0 appearance-none rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm [&::-webkit-date-and-time-value]:text-left"
+              className="mt-1 flex h-11 w-full min-w-0 appearance-none items-center rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
             />
             {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-gray-700">{weekdayPreview}</p>}
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}

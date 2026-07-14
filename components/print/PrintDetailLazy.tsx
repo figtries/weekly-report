@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import type { RollupNode } from '@/lib/rollup';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { useDeferredPrint } from './useDeferredPrint';
+import PrintSheet from './PrintSheet';
 
 const WeeklyPrintDetail = dynamic(() => import('./WeeklyPrintDetail'), { ssr: false });
 
@@ -21,8 +22,8 @@ export default function PrintDetailLazy({
   if (!shouldRender) return null;
 
   return (
-    <div data-print-sheet className="hidden print:block">
+    <PrintSheet>
       <WeeklyPrintDetail project={project} meta={meta} roots={roots} />
-    </div>
+    </PrintSheet>
   );
 }

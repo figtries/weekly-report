@@ -1,7 +1,6 @@
 'use server';
 
 import { refresh, updateTag } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { mutateDb } from './db';
 import { applyCreateDaily, applyDeleteDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
@@ -53,24 +52,28 @@ export async function deleteDailyAction(date: string): Promise<ActionResult> {
   try {
     // applyDeleteDaily is idempotent: deleting a report that is already gone
     // (a stale list can show rows that no longer exist) is treated as done,
-    // and the redirect below re-renders the list fresh — healing the staleness
+    // and the refresh below re-renders the list fresh — healing the staleness
     // instead of surfacing a "not found" error.
     const removed = await mutateDb((db) => applyDeleteDaily(db, date));
     if (removed) {
       // Best-effort cleanup of the report's stored photos — after the
-      // response, so the redirect isn't held up by storage round trips.
+      // response, so the refresh isn't held up by storage round trips.
       const photos = removed.photos;
       after(() =>
         Promise.all(photos.map((p) => deleteUploadedPhoto(p).catch(() => undefined)))
       );
     }
+    // refresh(), not redirect('/daily'): deletes always start on the list
+    // page, and a redirect's payload arrives via a separate GET that can race
+    // tag propagation on Vercel and hand the router a list still containing
+    // the deleted row. refresh() re-renders inside this action request, where
+    // the expired 'db' tag is guaranteed visible — and adds no history entry.
     updateTag('db');
+    refresh();
+    return { ok: true };
   } catch (err) {
     return fail(err);
   }
-  // Same server-side navigation as createDailyAction — the list re-renders
-  // fresh in this request (from the list it acts as an in-place refresh).
-  redirect('/daily');
 }
 
 // Read-your-own-writes refresh for mutations that go through the /api photo
