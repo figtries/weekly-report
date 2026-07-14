@@ -3,22 +3,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // Print overlay: mounts the real A4 sheet(s) on screen, auto-opens the system
-// print dialog once the content is ready, and closes itself when the dialog is
-// dismissed. The overlay is NOT cosmetic — it is the fix for Android printing
-// blank pages, so do not "simplify" it away:
-//   - display:none / visibility:hidden / opacity:0 / offscreen (left:-9999px)
-//     sheets print blank: Android's print rasterizer only outputs content that
-//     was painted on screen (desktop/iOS re-lay-out for print, so only Android
-//     broke).
-//   - unmounting on afterprint prints blank too: Android fires `afterprint` as
-//     soon as print() RETURNS — not when the dialog closes like desktop/iOS —
-//     and its print service keeps re-rendering the live DOM while the dialog
-//     is open (e.g. on paper-size change). The sheet must stay mounted for the
-//     dialog's whole lifetime.
-// Closing therefore has to be platform-aware: desktop/iOS use afterprint
-// (accurate there), Android watches the page go hidden behind the system print
-// UI and come back. The toolbar's Close/Print buttons stay as the manual
-// fallback if neither signal arrives.
+// print dialog once the content is ready, and stays mounted until the USER
+// taps Close. Both halves are load-bearing — do not "simplify" either away:
+//   - hidden sheets (display:none / visibility:hidden / opacity:0 /
+//     left:-9999px) print blank: Android's print rasterizer only outputs
+//     content that was painted on screen.
+//   - AUTO-CLOSING prints blank on every platform. Print dialogs keep
+//     re-reading the LIVE page until they are truly gone (initial preview,
+//     paper-size changes, the final save/print render), and every "dialog
+//     closed" signal fires too early somewhere: Android fires `afterprint`
+//     the moment print() returns; modern desktop Chrome fires it right after
+//     generating the preview while the dialog is still open (print() no
+//     longer blocks) — so closing on afterprint blanked the SAVED output
+//     even when the preview looked fine. visibilitychange heuristics are
+//     just as unreliable. There is no trustworthy cross-platform signal, so
+//     the only safe unmount is the user's own Close tap.
 
 // How long to wait for lazy chunks / photos / chart paths before enabling the
 // Print button anyway — a single broken image must not block printing forever.
@@ -114,45 +113,16 @@ export default function PrintSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Callers pass inline onClose lambdas; keep a stable ref so the auto-print
-  // effect below runs exactly once.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const printedRef = useRef(false);
 
   // Auto-print as soon as the sheet is ready — one tap on the app's Print
-  // button opens the system dialog directly. Then auto-close when the dialog
-  // is dismissed, using the platform-appropriate signal (see header comment).
+  // button opens the system dialog directly. NO auto-close: see the header
+  // comment; unmounting before the user dismisses the dialog blanks the
+  // printout, so the overlay waits for the Close button.
   useEffect(() => {
     if (!ready || printedRef.current) return;
     printedRef.current = true;
-
-    const close = () => onCloseRef.current();
-    const cleanups: (() => void)[] = [];
-
-    if (/android/i.test(navigator.userAgent)) {
-      // afterprint lies on Android. The system print UI covers the page
-      // (visibility: hidden); when the page comes back, the dialog is gone —
-      // whether the user printed, saved or cancelled. The small delay lets
-      // any final render settle before the sheet unmounts.
-      let sawHidden = false;
-      const onVis = () => {
-        if (document.visibilityState === 'hidden') {
-          sawHidden = true;
-        } else if (sawHidden) {
-          window.setTimeout(close, 400);
-        }
-      };
-      document.addEventListener('visibilitychange', onVis);
-      cleanups.push(() => document.removeEventListener('visibilitychange', onVis));
-    } else {
-      // Desktop blocks inside print(); iOS fires afterprint on dismissal.
-      window.addEventListener('afterprint', close, { once: true });
-      cleanups.push(() => window.removeEventListener('afterprint', close));
-    }
-
     window.print();
-    return () => cleanups.forEach((fn) => fn());
   }, [ready]);
 
   return (
