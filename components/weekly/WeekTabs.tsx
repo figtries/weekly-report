@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useOptimistic, useTransition } from 'react';
 import { setCurrentWeekAction } from '@/lib/actions';
-import { requestPrint } from '@/components/print/printRequest';
+import SavePdfButton from '@/components/print/SavePdfButton';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -100,21 +100,11 @@ export default function WeekTabs({
           </button>
           )}
           {isPrintable && (
-          <button
-            onClick={requestPrint}
-            aria-label={`Print ${activeLabel}`}
-            title={`Print ${activeLabel}`}
-            className="inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:w-auto sm:px-4 sm:py-2"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path
-                fillRule="evenodd"
-                d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0118 8.653v4.097A2.25 2.25 0 0115.75 15h-.241l.305 1.984A1.75 1.75 0 0114.084 19H5.915a1.75 1.75 0 01-1.729-2.016L4.492 15H4.25A2.25 2.25 0 012 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.126-.153V2.75zm1.5 3.212c1.158-.083 2.325-.126 3.5-.126s2.342.043 3.5.126V2.75a.25.25 0 00-.25-.25h-6.5a.25.25 0 00-.25.25v3.212zM5.457 15l-.427 2.775a.25.25 0 00.247.225h9.446a.25.25 0 00.247-.225L14.543 15H5.457z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span className="hidden sm:inline">Print {activeLabel}</span>
-          </button>
+          <SavePdfButton
+            url={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}
+            filename={`Week ${selectedWeek} - ${activeLabel}.pdf`}
+            ariaLabel={`Save ${activeLabel} as PDF`}
+          />
           )}
         </div>
       </div>

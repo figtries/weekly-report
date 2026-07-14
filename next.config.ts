@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // Auto-memoizes every client component — keeps typing in the big forms
   // (DailyForm, DataOverallWorkbench) smooth without manual memo() work.
   reactCompiler: true,
+  // Chromium and puppeteer must stay outside the bundle — the binary is loaded
+  // from disk at runtime (see lib/pdf.ts).
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
   experimental: {
     viewTransition: true,
   },

@@ -22,7 +22,6 @@ export async function generateStaticParams() {
 async function DailyDetail({ date }: { date: string }) {
   const db = await getDb();
   let report = db.daily.find((d) => d.date === date);
-  let project = db.project;
 
   if (!report) {
     // Render this branch per request, never from cache: on Vercel a lambda
@@ -37,7 +36,6 @@ async function DailyDetail({ date }: { date: string }) {
     // empty "no report" state.
     const fresh = await readDb();
     report = fresh.daily.find((d) => d.date === date);
-    project = fresh.project;
   }
 
   if (!report) {
@@ -67,7 +65,7 @@ async function DailyDetail({ date }: { date: string }) {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 print:p-0">
-      <DailyForm report={report} project={project} />
+      <DailyForm report={report} />
       {/* Delay continues DailyForm's section cascade (its last card starts at 240ms). */}
       <section className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up print:hidden" style={{ animationDelay: '280ms' }}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Documentation</h2>

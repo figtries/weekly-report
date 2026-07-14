@@ -1,17 +1,16 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getCachedWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
-import PrintSummaryLazy from '@/components/print/PrintSummaryLazy';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function SummaryPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
+  const result = await getCachedWeekRollup(week);
   if (!result) notFound();
-  const { meta, roots, grandTotal } = result;
+  const { roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);
 
   return (
@@ -26,9 +25,6 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
 
         <SummaryCards roots={summaryRows} grandTotal={grandTotal} />
       </div>
-      {/* A4 report sheet, only visible on paper — lazy-loaded client-side so
-         it never blocks the server render of the on-screen view */}
-      <PrintSummaryLazy project={db.project} meta={meta} roots={summaryRows} grandTotal={grandTotal} />
     </>
   );
 }

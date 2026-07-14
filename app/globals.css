@@ -345,6 +345,23 @@ a:active {
   }
 }
 
+/* SavePdfButton: the arrow dips into the tray on a slow loop, so the button
+   reads as "downloads a file" at a glance */
+@keyframes pdf-arrow-dip {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+  }
+  82% {
+    transform: translateY(1.5px);
+  }
+}
+
+.animate-pdf-arrow {
+  animation: pdf-arrow-dip 2.6s var(--ease-ios) infinite;
+}
+
 .animate-bar-grow {
   animation: bar-grow 0.9s var(--ease-out-expo) both;
 }
