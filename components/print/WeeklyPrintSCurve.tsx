@@ -64,10 +64,7 @@ export default function WeeklyPrintSCurve({
   const dateAt = (idx: number) => formatDateShort(weekEndDate(project.weekAnchorEndDate, chartData[idx].weekNum));
 
   return (
-    <div
-      className="border-[3px] border-black bg-white text-black"
-      style={{ width: '210mm', height: '297mm', padding: '12mm', margin: '0 auto', boxSizing: 'border-box', pageBreakInside: 'avoid', pageBreakAfter: 'auto' }}
-    >
+    <div className="print-sheet-a4 border-[3px] border-black text-black" style={{ padding: '12mm' }}>
       <div className="mb-4 border-2 border-black p-4 text-center">
         <h1 className="mb-2 text-2xl font-bold">PROGRESS S-CURVE OVERALL</h1>
         <div className="flex justify-center gap-12 text-base">

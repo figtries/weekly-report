@@ -6,8 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 // event. Deliberately does NOT call window.print() and does NOT listen for
 // afterprint: on Android, afterprint fires the moment print() returns (not
 // when the dialog closes), so auto-unmounting here blanked the printout —
-// see PrintSheet.tsx for the full story. PrintSheet's own visible buttons
-// trigger printing and closing instead.
+// see PrintSheet.tsx, which owns printing and platform-aware closing.
 export function useDeferredPrint() {
   const [mounted, setMounted] = useState(false);
 

@@ -17,10 +17,7 @@ export default function WeeklyPrintSummary({
   grandTotal: GrandTotal;
 }) {
   return (
-    <div
-      className="bg-white text-black"
-      style={{ width: '210mm', minHeight: '297mm', padding: '15mm', margin: '0 auto', pageBreakAfter: 'always' }}
-    >
+    <div className="print-sheet-a4 text-black" style={{ padding: '15mm' }}>
       <PrintHeader
         title={`WEEKLY REPORT NO.${meta.week}`}
         subtitle={project.name.toUpperCase()}

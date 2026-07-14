@@ -406,6 +406,62 @@ a:active {
   }
 }
 
+/* ---------- A4 report sheets ---------- */
+/* Every printable report page uses this class instead of ad-hoc inline
+   width/height/page-break styles — those caused three real-device bugs:
+   1. height/min-height of exactly 297mm spilled a sliver onto a phantom
+      second page (iOS rounds A4's 297mm up during PDF generation);
+   2. pageBreakAfter:always on the LAST sheet always emitted a trailing
+      blank page;
+   3. sheets with no break rule at all (documentation) drifted across
+      paper boundaries and photos got sliced. */
+.print-sheet-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: #fff;
+  /* paper-on-a-desk look in the on-screen preview */
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+@media print {
+  .print-sheet-a4 {
+    /* 3mm shy of A4 so rounding can never overflow the paper */
+    min-height: 294mm;
+    box-shadow: none;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+  /* no forced break after the final sheet — kills the trailing blank page */
+  .print-sheet-a4:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
+
+/* ---------- Print preview scaler ---------- */
+/* PrintSheet scales the fixed-width A4 sheets down to fit phone/tablet
+   screens via an inline transform. Printing must always happen at natural
+   size: !important stylesheet rules are the one thing that beats inline
+   styles, so these undo the transform on paper. */
+.pv-scaler {
+  width: max-content;
+  transform-origin: top left;
+}
+@media print {
+  .pv-scale-box {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
+  .pv-scaler {
+    width: auto !important;
+    transform: none !important;
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {

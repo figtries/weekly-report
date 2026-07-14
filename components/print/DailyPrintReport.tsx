@@ -15,11 +15,9 @@ function weekdayLabel(date: string): string {
 const CELL = 'border border-black px-2 py-0.5 align-middle';
 const HEAD = 'border border-black px-2 py-0.5 text-center font-semibold';
 
+// Sizing/page-break rules live in the shared .print-sheet-a4 class.
 const sheetStyle: CSSProperties = {
-  width: '210mm',
-  height: '297mm',
   padding: '12mm',
-  margin: '0 auto',
 };
 
 function SheetHeader() {
@@ -57,7 +55,7 @@ export default function DailyPrintReport({ project, report }: { project: Project
   return (
     <>
       {/* ---------- Page 1 ---------- */}
-      <div className="flex flex-col bg-white text-black" style={{ ...sheetStyle, pageBreakAfter: 'always' }}>
+      <div className="print-sheet-a4 flex flex-col text-black" style={sheetStyle}>
         <SheetHeader />
         <h1 className="mb-3 text-center text-sm font-bold uppercase tracking-wide">{project.name}</h1>
 
@@ -229,7 +227,7 @@ export default function DailyPrintReport({ project, report }: { project: Project
       </div>
 
       {/* ---------- Page 2 ---------- */}
-      <div className="flex flex-col bg-white text-black" style={sheetStyle}>
+      <div className="print-sheet-a4 flex flex-col text-black" style={sheetStyle}>
         <SheetHeader />
 
         <h2 className="mb-1 text-sm font-bold">Daily Activities</h2>

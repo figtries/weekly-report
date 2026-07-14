@@ -1,20 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-// Visible print-preview overlay: the user sees the real A4 sheet(s), then taps
-// "Print / Save PDF" themselves. Do NOT "restore" any auto-print/hidden-sheet
-// variant — every one of them printed a BLANK page on Android:
-//   - display:none / visibility:hidden / opacity:0 / offscreen (left:-9999px):
-//     Android's print rasterizer only outputs content that was painted on
-//     screen (desktop/iOS re-lay-out for print, so only Android broke).
-//   - painted overlay + window.print() + unmount on afterprint: Android fires
-//     `afterprint` as soon as print() RETURNS — not when the dialog closes
-//     like desktop/iOS — and its print service keeps re-rendering the live
-//     DOM while the dialog is open (e.g. on paper-size change). The sheet
-//     unmounted mid-render and the system preview captured an empty page.
-// There is no reliable "print dialog closed" signal on Android, so the sheet
-// must stay mounted until the USER closes it. What you see is what prints.
+// Print overlay: mounts the real A4 sheet(s) on screen, auto-opens the system
+// print dialog once the content is ready, and closes itself when the dialog is
+// dismissed. The overlay is NOT cosmetic — it is the fix for Android printing
+// blank pages, so do not "simplify" it away:
+//   - display:none / visibility:hidden / opacity:0 / offscreen (left:-9999px)
+//     sheets print blank: Android's print rasterizer only outputs content that
+//     was painted on screen (desktop/iOS re-lay-out for print, so only Android
+//     broke).
+//   - unmounting on afterprint prints blank too: Android fires `afterprint` as
+//     soon as print() RETURNS — not when the dialog closes like desktop/iOS —
+//     and its print service keeps re-rendering the live DOM while the dialog
+//     is open (e.g. on paper-size change). The sheet must stay mounted for the
+//     dialog's whole lifetime.
+// Closing therefore has to be platform-aware: desktop/iOS use afterprint
+// (accurate there), Android watches the page go hidden behind the system print
+// UI and come back. The toolbar's Close/Print buttons stay as the manual
+// fallback if neither signal arrives.
 
 // How long to wait for lazy chunks / photos / chart paths before enabling the
 // Print button anyway — a single broken image must not block printing forever.
@@ -39,6 +43,11 @@ function contentReady(root: HTMLElement): boolean {
   return true;
 }
 
+// A4 sheet width at CSS 96dpi (210mm) — used to estimate the fit-to-screen
+// zoom before the first real measurement lands.
+const SHEET_PX = 794;
+const GUTTER_PX = 24;
+
 export default function PrintSheet({
   children,
   onClose,
@@ -47,7 +56,37 @@ export default function PrintSheet({
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const scalerRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+  // Scale the fixed-width A4 sheets down so the whole page width fits the
+  // screen (phones/tablets); desktop caps at 1:1. Print always happens at
+  // natural size — the .pv-* rules in globals.css undo the transform.
+  const [scale, setScale] = useState(() =>
+    typeof window === 'undefined' ? 1 : Math.min(1, (window.innerWidth - GUTTER_PX) / SHEET_PX)
+  );
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = scalerRef.current;
+    if (!el) return;
+    const measure = () => {
+      // transform doesn't affect layout size, so these are the natural dims
+      const w = el.scrollWidth;
+      const h = el.scrollHeight;
+      if (w === 0) return;
+      setSize({ w, h });
+      setScale(Math.min(1, (window.innerWidth - GUTTER_PX) / w));
+    };
+    measure();
+    // re-measure as lazy chunks, photos and charts stretch the content
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +113,47 @@ export default function PrintSheet({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Callers pass inline onClose lambdas; keep a stable ref so the auto-print
+  // effect below runs exactly once.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const printedRef = useRef(false);
+
+  // Auto-print as soon as the sheet is ready — one tap on the app's Print
+  // button opens the system dialog directly. Then auto-close when the dialog
+  // is dismissed, using the platform-appropriate signal (see header comment).
+  useEffect(() => {
+    if (!ready || printedRef.current) return;
+    printedRef.current = true;
+
+    const close = () => onCloseRef.current();
+    const cleanups: (() => void)[] = [];
+
+    if (/android/i.test(navigator.userAgent)) {
+      // afterprint lies on Android. The system print UI covers the page
+      // (visibility: hidden); when the page comes back, the dialog is gone —
+      // whether the user printed, saved or cancelled. The small delay lets
+      // any final render settle before the sheet unmounts.
+      let sawHidden = false;
+      const onVis = () => {
+        if (document.visibilityState === 'hidden') {
+          sawHidden = true;
+        } else if (sawHidden) {
+          window.setTimeout(close, 400);
+        }
+      };
+      document.addEventListener('visibilitychange', onVis);
+      cleanups.push(() => document.removeEventListener('visibilitychange', onVis));
+    } else {
+      // Desktop blocks inside print(); iOS fires afterprint on dismissal.
+      window.addEventListener('afterprint', close, { once: true });
+      cleanups.push(() => window.removeEventListener('afterprint', close));
+    }
+
+    window.print();
+    return () => cleanups.forEach((fn) => fn());
+  }, [ready]);
 
   return (
     <div
@@ -108,10 +188,23 @@ export default function PrintSheet({
           </button>
         </div>
       </div>
-      {/* w-max keeps the fixed-width A4 sheet scrollable (not left-clipped) on
-          small screens — same pattern as the /weekly/[week]/print page */}
-      <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:w-auto print:min-w-0 print:gap-0 print:p-0">
-        {children}
+      <div className="px-3 py-4 sm:px-6 sm:py-6 print:p-0">
+        {/* outer box reserves the SCALED footprint (transform doesn't affect
+            layout), inner scaler holds the sheets at natural size */}
+        <div
+          className="pv-scale-box mx-auto"
+          style={size ? { width: size.w * scale, height: size.h * scale } : undefined}
+        >
+          {/* print:block — WebKit drops/clips page fragments inside flex
+              containers, so paper must never paginate through a flexbox */}
+          <div
+            ref={scalerRef}
+            className="pv-scaler flex flex-col items-center gap-6 print:block print:gap-0"
+            style={{ transform: scale === 1 ? undefined : `scale(${scale})` }}
+          >
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   );

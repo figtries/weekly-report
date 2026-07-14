@@ -28,11 +28,7 @@ export default function WeeklyPrintDetail({
   return (
     <>
       {pages.map((rows, pageIdx) => (
-        <div
-          key={pageIdx}
-          className="bg-white text-black"
-          style={{ width: '210mm', minHeight: '297mm', padding: '12mm', margin: '0 auto', pageBreakAfter: 'always' }}
-        >
+        <div key={pageIdx} className="print-sheet-a4 text-black" style={{ padding: '12mm' }}>
           <PrintHeader
             title="DETAIL OVERALL PROGRESS"
             subtitle={project.name.toUpperCase()}

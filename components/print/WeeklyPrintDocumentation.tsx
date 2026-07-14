@@ -22,11 +22,7 @@ export default function WeeklyPrintDocumentation({
   return (
     <>
       {printPages.map((pagePhotos, pageIndex) => (
-        <div
-          key={pageIndex}
-          className="bg-white text-black"
-          style={{ width: '210mm', minHeight: '297mm', padding: '15mm', margin: '0 auto' }}
-        >
+        <div key={pageIndex} className="print-sheet-a4 text-black" style={{ padding: '15mm' }}>
           <div className="mb-4 flex items-start justify-between">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
