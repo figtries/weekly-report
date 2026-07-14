@@ -3,7 +3,6 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useOptimistic, useTransition } from 'react';
 import { setCurrentWeekAction } from '@/lib/actions';
-import { requestPrint } from '@/components/print/printRequest';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -100,8 +99,14 @@ export default function WeekTabs({
           </button>
           )}
           {isPrintable && (
-          <button
-            onClick={requestPrint}
+          /* A link to the PDF, not window.print(): the browser's print pipeline
+             stamps its own date/URL/page band onto every sheet and no CSS can
+             stop it (see lib/pdf.ts). The server renders the PDF instead, and
+             the user prints or shares that — same output on every device. */
+          <a
+            href={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}
+            target="_blank"
+            rel="noopener"
             aria-label={`Print ${activeLabel}`}
             title={`Print ${activeLabel}`}
             className="inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:w-auto sm:px-4 sm:py-2"
@@ -114,7 +119,7 @@ export default function WeekTabs({
               />
             </svg>
             <span className="hidden sm:inline">Print {activeLabel}</span>
-          </button>
+          </a>
           )}
         </div>
       </div>

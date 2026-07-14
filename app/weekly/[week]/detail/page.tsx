@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getCachedWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
-import PrintDetailLazy from '@/components/print/PrintDetailLazy';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -13,9 +12,9 @@ export const unstable_instant = {
 export default async function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
+  const result = await getCachedWeekRollup(week);
   if (!result) notFound();
-  const { meta, roots } = result;
+  const { roots } = result;
   const leafCount = flattenTree(roots).filter((n) => n.children.length === 0).length;
 
   return (
@@ -32,9 +31,6 @@ export default async function DetailProgressPage({ params }: { params: Promise<{
         </div>
         <WbsTreeVisual roots={roots} />
       </div>
-      {/* A4 report sheet, only visible on paper — lazy-loaded client-side to
-         avoid blocking the server render with ~3 000 table cells */}
-      <PrintDetailLazy project={db.project} meta={meta} roots={roots} />
     </>
   );
 }
