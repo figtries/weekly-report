@@ -19,12 +19,12 @@ export default function PrintSummaryLazy({
   roots: SummaryRow[];
   grandTotal: GrandTotal;
 }) {
-  const shouldRender = useDeferredPrint();
+  const { mounted, close } = useDeferredPrint();
 
-  if (!shouldRender) return null;
+  if (!mounted) return null;
 
   return (
-    <PrintSheet>
+    <PrintSheet onClose={close}>
       <WeeklyPrintSummary project={project} meta={meta} roots={roots} grandTotal={grandTotal} />
     </PrintSheet>
   );

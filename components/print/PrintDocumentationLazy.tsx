@@ -14,12 +14,12 @@ export default function PrintDocumentationLazy({
   project: ProjectInfo;
   meta: WeeklyMeta;
 }) {
-  const shouldRender = useDeferredPrint();
+  const { mounted, close } = useDeferredPrint();
 
-  if (!shouldRender) return null;
+  if (!mounted) return null;
 
   return (
-    <PrintSheet>
+    <PrintSheet onClose={close}>
       <WeeklyPrintDocumentation project={project} meta={meta} />
     </PrintSheet>
   );

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { saveDailyAction } from '@/lib/actions';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
+import PrintSheet from '@/components/print/PrintSheet';
 
 let rowIdCounter = 0;
 function newRowId(prefix: string) {
@@ -70,37 +71,6 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     window.addEventListener('photos-updated', onPhotosUpdated);
     return () => window.removeEventListener('photos-updated', onPhotosUpdated);
   }, [report.date]);
-
-  useEffect(() => {
-    if (!printData) return;
-    let cancelled = false;
-    // Unmount the sheet only after the print dialog closes: on iOS Safari
-    // window.print() returns before the preview is generated, so cleaning up
-    // right after the call unmounted the content mid-snapshot and printed a
-    // blank page. afterprint fires once the dialog is dismissed everywhere.
-    function done() {
-      if (!cancelled) setPrintData(null);
-    }
-    window.addEventListener('afterprint', done, { once: true });
-    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('[data-print-sheet] img'));
-    Promise.all(
-      imgs.map((img) =>
-        img.complete
-          ? Promise.resolve()
-          : new Promise<void>((resolve) => {
-              img.addEventListener('load', () => resolve(), { once: true });
-              img.addEventListener('error', () => resolve(), { once: true });
-            })
-      )
-    ).then(() => {
-      if (cancelled) return;
-      window.print();
-    });
-    return () => {
-      cancelled = true;
-      window.removeEventListener('afterprint', done);
-    };
-  }, [printData]);
 
   function update<K extends keyof DailyReport>(key: K, value: DailyReport[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -675,18 +645,13 @@ export default function DailyForm({ report, project }: { report: DailyReport; pr
     </div>
 
     {/* Mounted only while printing (snapshot of the current form) and
-       unmounted on afterprint, so it never weighs down editing. Rendered
-       on-screen (not off-screen / display:none) because Android Chrome prints
-       by rasterizing what was already painted — off-canvas content came out
-       blank. See PrintSheet.tsx for the full rationale. */}
+       closed by the user, so it never weighs down editing. PrintSheet is a
+       visible preview overlay with its own Print/Close buttons — the only
+       flow that prints non-blank on Android; see PrintSheet.tsx. */}
     {printData && (
-      <div
-        data-print-sheet
-        aria-hidden="true"
-        className="fixed inset-0 z-[9999] overflow-auto bg-white print:static print:z-auto print:overflow-visible"
-      >
+      <PrintSheet onClose={() => setPrintData(null)}>
         <DailyPrintReport project={project} report={printData} />
-      </div>
+      </PrintSheet>
     )}
     </>
   );

@@ -17,12 +17,12 @@ export default function PrintDetailLazy({
   meta: WeeklyMeta;
   roots: RollupNode[];
 }) {
-  const shouldRender = useDeferredPrint();
+  const { mounted, close } = useDeferredPrint();
 
-  if (!shouldRender) return null;
+  if (!mounted) return null;
 
   return (
-    <PrintSheet>
+    <PrintSheet onClose={close}>
       <WeeklyPrintDetail project={project} meta={meta} roots={roots} />
     </PrintSheet>
   );

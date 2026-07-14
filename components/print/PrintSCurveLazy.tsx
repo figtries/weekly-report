@@ -17,12 +17,12 @@ export default function PrintSCurveLazy({
   meta: WeeklyMeta;
   series: SCurveRow[];
 }) {
-  const shouldRender = useDeferredPrint();
+  const { mounted, close } = useDeferredPrint();
 
-  if (!shouldRender) return null;
+  if (!mounted) return null;
 
   return (
-    <PrintSheet>
+    <PrintSheet onClose={close}>
       <WeeklyPrintSCurve project={project} meta={meta} series={series} />
     </PrintSheet>
   );
