@@ -1,3 +1,5 @@
+// The masthead of every printed sheet: the two logos, a rule, then the title
+// block. Same on all five reports — a report never rolls its own header.
 export default function PrintHeader({
   title,
   subtitle,
@@ -8,26 +10,21 @@ export default function PrintHeader({
   period: string;
 }) {
   return (
-    <>
-      <div className="mb-4 flex items-start justify-between">
+    <header>
+      <div className="rpt-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/pertamina.png"
-          alt="Pertamina EP"
-          style={{ width: '160px', height: '48px', objectFit: 'contain', objectPosition: 'left' }}
-        />
+        <img src="/pertamina.png" alt="Pertamina EP" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/indoturbine.png"
-          alt="Indoturbine"
-          style={{ width: '140px', height: '48px', objectFit: 'contain', objectPosition: 'right' }}
-        />
+        <img src="/indoturbine.png" alt="Indoturbine" />
       </div>
-      <div className="mb-4 text-center">
-        <h1 className="mb-1 text-lg font-bold">{title}</h1>
-        <p className="mb-1 text-sm font-semibold">{subtitle}</p>
-        <p className="text-sm">{period}</p>
+      <hr className="rpt-rule" />
+      <div className="rpt-titleblock">
+        <h1 className="rpt-title">{title}</h1>
+        <p className="rpt-project">{subtitle}</p>
+        <p>
+          <span className="rpt-period">{period}</span>
+        </p>
       </div>
-    </>
+    </header>
   );
 }

@@ -1,11 +1,15 @@
 'use client';
 
 import PrintHeader from './PrintHeader';
+import PrintFooter from './PrintFooter';
 import { flattenTree, type RollupNode } from '@/lib/rollup';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { weekPeriodLabel } from '@/lib/weeks';
 
-const ROWS_PER_PAGE = 34;
+// Rows per printed page. Sized so a sheet stays well under the smallest
+// printable area on any device (see .print-sheet-a4) even when several
+// descriptions wrap to two lines — never raise it without re-measuring.
+const ROWS_PER_PAGE = 32;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -28,76 +32,56 @@ export default function WeeklyPrintDetail({
   return (
     <>
       {pages.map((rows, pageIdx) => (
-        <div key={pageIdx} className="print-sheet-a4 text-black" style={{ padding: '12mm' }}>
+        <div key={pageIdx} className="print-sheet-a4">
           <PrintHeader
-            title="DETAIL OVERALL PROGRESS"
-            subtitle={project.name.toUpperCase()}
+            title="Detail Overall Progress"
+            subtitle={project.name}
             period={weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
           />
-          <table className="w-full border-collapse border-2 border-black" style={{ fontSize: '7px' }}>
+          <table className="rpt-table rpt-table--dense">
             <thead>
-              <tr className="bg-gray-300">
-                <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold" style={{ width: '9%' }}>
+              <tr>
+                <th rowSpan={2} style={{ width: '9%' }}>
                   WBS
                 </th>
-                <th rowSpan={2} className="border border-black px-1 py-1 text-left font-bold" style={{ width: '29%' }}>
-                  DESCRIPTION
+                <th rowSpan={2} style={{ width: '29%', textAlign: 'left' }}>
+                  Description
                 </th>
-                <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  WEIGHT (%)
-                </th>
-                <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  LAST WEEK
-                </th>
-                <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  THIS WEEK
-                </th>
-                <th colSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  CUMM. THIS WEEK
-                </th>
-                <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  TARGET (%)
-                </th>
-                <th rowSpan={2} className="border border-black px-1 py-1 text-center font-bold">
-                  VARIANCE (%)
-                </th>
+                <th rowSpan={2}>Weight (%)</th>
+                <th colSpan={2}>Last Week</th>
+                <th colSpan={2}>This Week</th>
+                <th colSpan={2}>Cumm. This Week</th>
+                <th rowSpan={2}>Target (%)</th>
+                <th rowSpan={2}>Variance (%)</th>
               </tr>
-              <tr className="bg-gray-300">
-                <th className="border border-black px-1 py-0.5 text-center font-bold">Progress</th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">WF (%)</th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">Progress</th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">WF (%)</th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">Progress</th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">WF (%)</th>
+              <tr>
+                <th>Progress</th>
+                <th>WF (%)</th>
+                <th>Progress</th>
+                <th>WF (%)</th>
+                <th>Progress</th>
+                <th>WF (%)</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((node) => (
-                <tr key={node.id} className={node.children.length ? 'font-semibold' : ''}>
-                  <td className="border border-black px-1 py-0.5">{node.wbsCode}</td>
-                  <td className="border border-black px-1 py-0.5" style={{ paddingLeft: 2 + node.depth * 6 }}>
-                    {node.deskripsi}
-                  </td>
-                  <td className="border border-black px-1 py-0.5 text-center">
-                    {node.bobot ? node.bobot.toFixed(2) : ''}
-                  </td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.prevProgressPct.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.prevWF.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">
-                    {node.thisWeekProgressPct.toFixed(2)}%
-                  </td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.thisWeekWF.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.curProgressPct.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.curWF.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.targetWF.toFixed(2)}%</td>
-                  <td className="border border-black px-1 py-0.5 text-center">{node.variance.toFixed(2)}%</td>
+                <tr key={node.id} className={node.children.length ? 'rpt-group' : undefined}>
+                  <td>{node.wbsCode}</td>
+                  <td style={{ paddingLeft: `${1.1 + node.depth * 1.6}mm` }}>{node.deskripsi}</td>
+                  <td className="rpt-num">{node.bobot ? node.bobot.toFixed(2) : ''}</td>
+                  <td className="rpt-num">{node.prevProgressPct.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.prevWF.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.thisWeekProgressPct.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.thisWeekWF.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.curProgressPct.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.curWF.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.targetWF.toFixed(2)}%</td>
+                  <td className="rpt-num">{node.variance.toFixed(2)}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-right text-gray-500" style={{ fontSize: '9px' }}>
-            {pageIdx + 1} of {pages.length}
-          </p>
+          <PrintFooter docNo={project.documentNoWeekly} page={pageIdx + 1} total={pages.length} />
         </div>
       ))}
     </>

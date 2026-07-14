@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useOptimistic, useTransition } from 'react';
 import { setCurrentWeekAction } from '@/lib/actions';
+import { requestPrint } from '@/components/print/printRequest';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
@@ -100,7 +101,7 @@ export default function WeekTabs({
           )}
           {isPrintable && (
           <button
-            onClick={() => window.dispatchEvent(new Event('weekly-print-request'))}
+            onClick={requestPrint}
             aria-label={`Print ${activeLabel}`}
             title={`Print ${activeLabel}`}
             className="inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] sm:w-auto sm:px-4 sm:py-2"

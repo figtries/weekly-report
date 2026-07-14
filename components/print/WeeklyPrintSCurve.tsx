@@ -1,9 +1,25 @@
 'use client';
 
 import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
+import PrintHeader from './PrintHeader';
+import PrintFooter from './PrintFooter';
 import type { SCurveRow } from '@/lib/scurve';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { formatDateShort, weekEndDate, weekPeriodLabel } from '@/lib/weeks';
+
+// The chart is a fixed pixel size because Recharts needs one, so it must fit the
+// sheet's content box (180mm ≈ 680px) minus the card's padding.
+const CHART_W = 636;
+const CHART_H = 392;
+
+// Weeks per row of the figures table under the chart.
+const WEEKS_PER_BLOCK = 30;
+
+// A short last block gets empty cells so its columns line up with the block
+// above it instead of stretching to double width.
+function padding(used: number): number[] {
+  return Array.from({ length: WEEKS_PER_BLOCK - used }, (_, i) => i);
+}
 
 // Excel-style callout ("18-Jun-26; 65.90%") anchored to one point of a line.
 // Recharts calls this for every point; all but targetIndex render nothing.
@@ -29,10 +45,10 @@ function makeEndCallout(color: string, dateLabel: string, targetIndex: number, d
     return (
       <g>
         <path d={`M${px},${py} L${anchorX},${boxY + height / 2}`} stroke={color} strokeWidth={1} fill="none" />
-        <rect x={boxX} y={boxY} width={width} height={height} fill="#fff" stroke={color} strokeWidth={1.2} />
+        <rect x={boxX} y={boxY} width={width} height={height} fill="#fff" stroke={color} strokeWidth={1.2} rx={3} />
         {/* Manual vertical centering (y + ~1/3 font size) — iOS Safari and some
             print rasterizers ignore dominant-baseline on <text>. */}
-        <text x={boxX + width / 2} y={boxY + height / 2 + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={color}>
+        <text x={boxX + width / 2} y={boxY + height / 2 + 3.5} textAnchor="middle" fontSize={9} fontWeight={700} fill={color}>
           {text}
         </text>
       </g>
@@ -61,121 +77,136 @@ export default function WeeklyPrintSCurve({
   };
   const lastPlanIdx = lastIdxOf('plan');
   const lastActualIdx = lastIdxOf('actual');
+  const weekBlocks: SCurveRow[][] = [];
+  for (let i = 0; i < series.length; i += WEEKS_PER_BLOCK) {
+    weekBlocks.push(series.slice(i, i + WEEKS_PER_BLOCK));
+  }
   const dateAt = (idx: number) => formatDateShort(weekEndDate(project.weekAnchorEndDate, chartData[idx].weekNum));
 
   return (
-    <div className="print-sheet-a4 border-[3px] border-black text-black" style={{ padding: '12mm' }}>
-      <div className="mb-4 border-2 border-black p-4 text-center">
-        <h1 className="mb-2 text-2xl font-bold">PROGRESS S-CURVE OVERALL</h1>
-        <div className="flex justify-center gap-12 text-base">
-          <span>
-            <strong>Weeks:</strong> W{meta.week}
-          </span>
-          <span>
-            <strong>Period:</strong> {weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
-          </span>
-        </div>
-      </div>
+    <div className="print-sheet-a4">
+      <PrintHeader
+        title="Progress S-Curve Overall"
+        subtitle={project.name}
+        period={weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
+      />
 
-      <div data-print-chart className="mb-6 flex items-center justify-center border-2 border-black" style={{ width: '100%', height: '470px', padding: '16px' }}>
-        <LineChart width={650} height={432} data={chartData} margin={{ top: 30, right: 50, left: 15, bottom: 58 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#999" />
+      <div
+        data-print-chart
+        className="rpt-card flex items-center justify-center"
+        style={{ padding: '4mm 2mm' }}
+      >
+        <LineChart
+          width={CHART_W}
+          height={CHART_H}
+          data={chartData}
+          margin={{ top: 28, right: 44, left: 4, bottom: 46 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
           <XAxis
             dataKey="week"
-            tick={{ fontSize: 9, fill: '#000', fontWeight: 500 }}
+            tick={{ fontSize: 8, fill: '#475569', fontWeight: 500 }}
             interval={Math.ceil(chartData.length / 36)}
             angle={-45}
             textAnchor="end"
-            height={70}
-            stroke="#000"
-            strokeWidth={1.5}
+            height={60}
+            stroke="#475569"
+            strokeWidth={1}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: '#000', fontWeight: 500 }}
+            tick={{ fontSize: 9, fill: '#475569', fontWeight: 500 }}
             domain={[0, 100]}
             ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
-            stroke="#000"
-            strokeWidth={1.5}
+            stroke="#475569"
+            strokeWidth={1}
+            unit="%"
+            width={44}
           />
-          <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10, fontWeight: 600, textAlign: 'center', width: '100%' }} iconType="line" />
+          <Legend
+            wrapperStyle={{ fontSize: 11, paddingTop: 8, fontWeight: 600, textAlign: 'center', width: '100%' }}
+            iconType="line"
+          />
           <Line
             type="monotone"
             dataKey="plan"
-            stroke="#ef4444"
-            strokeWidth={2.5}
-            dot={{ fill: '#ef4444', r: 2 }}
+            stroke="#dc2626"
+            strokeWidth={2}
+            dot={{ fill: '#dc2626', r: 1.8 }}
             name="CUM. PLAN"
             isAnimationActive={false}
             connectNulls
-            label={lastPlanIdx > 0 ? makeEndCallout('#ef4444', dateAt(lastPlanIdx), lastPlanIdx, -30) : undefined}
+            label={lastPlanIdx > 0 ? makeEndCallout('#dc2626', dateAt(lastPlanIdx), lastPlanIdx, -30) : undefined}
           />
           <Line
             type="monotone"
             dataKey="actual"
-            stroke="#3b82f6"
-            strokeWidth={2.5}
-            dot={{ fill: '#3b82f6', r: 2 }}
+            stroke="#1d4ed8"
+            strokeWidth={2}
+            dot={{ fill: '#1d4ed8', r: 1.8 }}
             name="CUM. ACTUAL"
             isAnimationActive={false}
             connectNulls
-            label={lastActualIdx > 0 ? makeEndCallout('#3b82f6', dateAt(lastActualIdx), lastActualIdx, 30) : undefined}
+            label={lastActualIdx > 0 ? makeEndCallout('#1d4ed8', dateAt(lastActualIdx), lastActualIdx, 30) : undefined}
           />
         </LineChart>
       </div>
 
-      <div className="mb-4 overflow-hidden border-2 border-black">
-        <table className="w-full border-collapse" style={{ fontSize: '6.5px', tableLayout: 'fixed' }}>
-          <thead>
-            <tr>
-              <th className="border border-black bg-gray-200 px-1 py-1 text-left font-bold" style={{ width: '40px' }}>
-                Week
-              </th>
-              {series.map((r) => (
-                <th key={r.week} className="border border-black bg-gray-200 px-0.5 py-1 text-center font-semibold">
-                  {r.week}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="border border-black px-1 py-1 text-left font-bold" style={{ color: '#3b82f6' }}>
-                ACTUAL
-              </td>
-              {series.map((r) => (
-                <td key={r.week} className="border border-black px-0.5 py-1 text-center font-medium">
-                  {r.actualPct !== null ? r.actualPct.toFixed(1) : ''}
-                </td>
-              ))}
-            </tr>
-            <tr>
-              <td className="border border-black px-1 py-1 text-left font-bold" style={{ color: '#ef4444' }}>
-                PLAN
-              </td>
-              {series.map((r) => (
-                <td key={r.week} className="border border-black px-0.5 py-1 text-center font-medium">
-                  {r.planPct !== null ? r.planPct.toFixed(1) : ''}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
+      {/* Past ~30 weeks the figures stop fitting their columns and the row turns
+          into a grey smear. Wrap onto stacked tables instead of shrinking. */}
+      {weekBlocks.map((block, i) => (
+        <div key={i} style={{ marginTop: i === 0 ? '4mm' : '2mm' }}>
+          <table className="rpt-table rpt-table--micro" style={{ tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '13mm', textAlign: 'left' }}>Week</th>
+                {block.map((r) => (
+                  <th key={r.week}>{r.week}</th>
+                ))}
+                {padding(block.length).map((k) => (
+                  <th key={k} />
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ fontWeight: 700, color: '#1d4ed8' }}>ACTUAL</td>
+                {block.map((r) => (
+                  <td key={r.week} className="rpt-num">
+                    {r.actualPct !== null ? r.actualPct.toFixed(1) : ''}
+                  </td>
+                ))}
+                {padding(block.length).map((k) => (
+                  <td key={k} />
+                ))}
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 700, color: '#dc2626' }}>PLAN</td>
+                {block.map((r) => (
+                  <td key={r.week} className="rpt-num">
+                    {r.planPct !== null ? r.planPct.toFixed(1) : ''}
+                  </td>
+                ))}
+                {padding(block.length).map((k) => (
+                  <td key={k} />
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      <div className="grid grid-cols-2" style={{ marginTop: '6mm', columnGap: '20mm' }}>
+        <div className="rpt-sign">
+          <p className="rpt-sign-company">{project.signatureLeft.company}</p>
+          <div className="rpt-sign-line">{project.signatureLeft.name}</div>
+        </div>
+        <div className="rpt-sign">
+          <p className="rpt-sign-company">{project.signatureRight.company}</p>
+          <div className="rpt-sign-line">{project.signatureRight.name}</div>
+        </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-12">
-        <div className="text-center">
-          <p className="mb-32 text-base font-bold">{project.signatureLeft.company}</p>
-          <div className="border-t-2 border-black pt-2">
-            <p className="text-base font-medium">{project.signatureLeft.name}</p>
-          </div>
-        </div>
-        <div className="text-center">
-          <p className="mb-32 text-base font-bold">{project.signatureRight.company}</p>
-          <div className="border-t-2 border-black pt-2">
-            <p className="text-base font-medium">{project.signatureRight.name}</p>
-          </div>
-        </div>
-      </div>
+      <PrintFooter docNo={project.documentNoWeekly} page={1} total={1} />
     </div>
   );
 }

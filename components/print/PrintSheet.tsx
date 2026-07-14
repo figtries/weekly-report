@@ -70,6 +70,10 @@ export default function PrintSheet({
   // dismisses the backdrop. Never armed before print — a premature unmount
   // is exactly what blanks the output.
   const [armed, setArmed] = useState(false);
+  // stalled = the report never became printable (a dynamic() chunk that never
+  // arrived on a flaky phone connection). Without this the overlay just sits
+  // there grey and the user is stuck staring at nothing.
+  const [stalled, setStalled] = useState(false);
   const printedRef = useRef(false);
 
   // Scale the fixed-width A4 sheets down so the whole page width fits the
@@ -140,9 +144,12 @@ export default function PrintSheet({
   }, [ready]);
 
   // Safety valve: if the report never becomes printable (chunk failed to
-  // load), let the user dismiss the backdrop anyway.
+  // load), say so and let the user dismiss the backdrop anyway.
   useEffect(() => {
-    const t = window.setTimeout(() => setArmed(true), MAX_WAIT_MS + 2000);
+    const t = window.setTimeout(() => {
+      if (!printedRef.current) setStalled(true);
+      setArmed(true);
+    }, MAX_WAIT_MS + 2000);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -178,11 +185,23 @@ export default function PrintSheet({
           </div>
         </div>
       </div>
-      {armed && (
-        <div className="pointer-events-none fixed bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-gray-900/80 px-4 py-2 text-xs font-medium text-white shadow-lg print:hidden">
-          Tap anywhere to close
-        </div>
-      )}
+      {/* The overlay always says what it is doing. A silent grey screen is
+          indistinguishable from a hang, and that is what "it just gets stuck"
+          reports were. */}
+      <div className="pointer-events-none fixed bottom-4 left-1/2 max-w-[92vw] -translate-x-1/2 rounded-full bg-gray-900/80 px-4 py-2 text-center text-xs font-medium text-white shadow-lg print:hidden">
+        {stalled ? (
+          "Couldn't prepare the report — tap anywhere to close and try again"
+        ) : !ready ? (
+          <span className="flex items-center gap-2">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            Preparing the printout…
+          </span>
+        ) : armed ? (
+          'Tap anywhere to close'
+        ) : (
+          'Opening the print dialog…'
+        )}
+      </div>
     </div>
   );
 }

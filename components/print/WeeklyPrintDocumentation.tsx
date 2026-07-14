@@ -1,5 +1,7 @@
 'use client';
 
+import PrintHeader from './PrintHeader';
+import PrintFooter from './PrintFooter';
 import type { ProjectInfo, WeeklyMeta } from '@/lib/types';
 import { weekPeriodLabel } from '@/lib/weeks';
 
@@ -22,44 +24,38 @@ export default function WeeklyPrintDocumentation({
   return (
     <>
       {printPages.map((pagePhotos, pageIndex) => (
-        <div key={pageIndex} className="print-sheet-a4 text-black" style={{ padding: '15mm' }}>
-          <div className="mb-4 flex items-start justify-between">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/pertamina.png"
-              alt="Pertamina EP"
-              style={{ width: '160px', height: '48px', objectFit: 'contain', objectPosition: 'left' }}
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/indoturbine.png"
-              alt="Indoturbine"
-              style={{ width: '140px', height: '48px', objectFit: 'contain', objectPosition: 'right' }}
-            />
+        <div key={pageIndex} className="print-sheet-a4">
+          <PrintHeader
+            title="Photograph"
+            subtitle={project.name}
+            period={weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
+          />
+          {/* capped width, not the full content box: 4:3 photos across the full
+              width make this the tallest sheet in the app, and a sheet must stay
+              well under the smallest printable area (see .print-sheet-a4) or it
+              splits onto a second page */}
+          <div
+            className="mx-auto grid grid-cols-2"
+            style={{ maxWidth: '152mm', columnGap: '7mm', rowGap: '4mm' }}
+          >
+            {pagePhotos.map((photo, i) => {
+              const no = pageIndex * PAGE_SIZE + i + 1;
+              return (
+                <figure key={i}>
+                  <div className="rpt-photo">
+                    {photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photo} alt={`Documentation ${no}`} />
+                    ) : (
+                      <div className="rpt-photo-empty">No photo</div>
+                    )}
+                  </div>
+                  <figcaption className="rpt-caption">Photo {no}</figcaption>
+                </figure>
+              );
+            })}
           </div>
-          <div className="mb-6 text-center">
-            <h1 className="text-xl font-bold">Photograph</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Week {meta.week} — {weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
-              {printPages.length > 1 ? ` (${pageIndex + 1}/${printPages.length})` : ''}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {pagePhotos.map((photo, i) => (
-              <div key={i} className="border border-black" style={{ aspectRatio: '4 / 3', overflow: 'hidden' }}>
-                {photo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photo}
-                    alt={`Documentation ${pageIndex * PAGE_SIZE + i + 1}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-gray-300">No photo</div>
-                )}
-              </div>
-            ))}
-          </div>
+          <PrintFooter docNo={project.documentNoWeekly} page={pageIndex + 1} total={printPages.length} />
         </div>
       ))}
     </>

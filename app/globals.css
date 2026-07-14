@@ -396,41 +396,86 @@ a:active {
     height: auto !important;
     overflow: visible !important;
   }
-  /* Zero page margin so each fixed A4 sheet maps 1:1 to a physical page
-     (the sheet's own padding provides the printable margin). Without this
-     the browser adds ~1cm margins and every sheet spills onto a second,
-     mostly-blank page. */
+  /* THE paper margin — declared once, here, and nowhere else. Sheets add no
+     margin of their own on paper (see .print-sheet-a4), so the printable box
+     is whatever the engine says it is and the sheet always fits it exactly.
+     Never `margin: 0`: iOS Safari reserves a strip for its own URL / "Page x
+     of y" footer no matter what @page asks for, so a zero margin does not
+     buy a 297mm-tall page — it just makes the browser invent margins the
+     layout doesn't know about, and every sheet spills past the paper.
+     Deeper at the bottom than at the top: that bottom strip is where Safari
+     and Android print their own footer, and the report's own footer must not
+     end up sitting on top of it. */
   @page {
     size: A4;
-    margin: 0;
+    margin: 14mm 15mm 17mm;
   }
 }
 
 /* ---------- A4 report sheets ---------- */
-/* Every printable report page uses this class instead of ad-hoc inline
-   width/height/page-break styles — those caused three real-device bugs:
-   1. height/min-height of exactly 297mm spilled a sliver onto a phantom
-      second page (iOS rounds A4's 297mm up during PDF generation);
-   2. pageBreakAfter:always on the LAST sheet always emitted a trailing
-      blank page;
-   3. sheets with no break rule at all (documentation) drifted across
-      paper boundaries and photos got sliced. */
+/* THE ONLY place a printable page may declare its geometry. Report
+   components render content; this class owns width, height, padding and page
+   breaks. Every rule below is a real-device regression, so keep the
+   invariants when editing:
+   1. ON PAPER A SHEET NEVER ASSERTS A SIZE. width/min-height in mm assume the
+      printable area equals A4 — it doesn't. iOS Safari keeps ~12mm top and
+      bottom for its own header/footer, and printers have hard margins, so a
+      294mm-tall sheet overflowed onto a second, blank page: 9 sheets printed
+      as 18 pages, blank-content-blank-content (iPhone, July 2026). On paper
+      the sheet is a plain block: full width of the page box, exactly as tall
+      as its content. The A4 look is a SCREEN-ONLY affordance.
+   2. No break-inside: avoid on the sheet. A page-sized unbreakable box that
+      doesn't fit gets shunted to a fresh page, blanking the one before it.
+      Atomicity belongs on rows / images / charts, not on the page itself.
+   3. No page-break-after on the LAST sheet — that always emitted a trailing
+      blank page.
+   4. Paper must never paginate through a flex container (WebKit drops the
+      fragments): sheets and their wrappers are display: block on paper.
+   Keep each sheet's content under ~250mm tall. Beyond that it splits across
+   two pages on devices with a smaller printable area — pages with content,
+   not blanks, but still ugly. */
 .print-sheet-a4 {
   width: 210mm;
   min-height: 297mm;
+  /* matches the @page margin, so the on-screen preview and the paper have the
+     same content width (180mm) and nothing reflows between them */
+  padding: 14mm 15mm 17mm;
   margin: 0 auto;
   box-sizing: border-box;
   background: #fff;
   /* paper-on-a-desk look in the on-screen preview */
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+
+  /* --- one look on every device --- */
+  /* Inter, the app's embedded webfont — NOT a system stack. Windows, macOS and
+     Android each resolve a system stack to a different face, which changes line
+     breaks, column widths and therefore where the report ends up splitting. */
+  font-family: var(--font-sans);
+  color: var(--rpt-ink);
+  /* figures line up in columns instead of dancing */
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+  /* Without this, browsers strip "background graphics" when printing and the
+     header bands and zebra rows come out plain white on some devices and
+     shaded on others — the single biggest source of "it looks different on my
+     phone". Chrome, Safari and Firefox all honour it. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 @media print {
   .print-sheet-a4 {
-    /* 3mm shy of A4 so rounding can never overflow the paper */
-    min-height: 294mm;
+    display: block;
+    width: auto;
+    max-width: 100%;
+    min-height: 0;
+    height: auto;
+    /* the @page margin is the paper margin — a second one here would double it */
+    padding: 0;
+    margin: 0;
     box-shadow: none;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    overflow: visible;
+    break-inside: auto;
+    page-break-inside: auto;
     break-after: page;
     page-break-after: always;
   }
@@ -439,6 +484,227 @@ a:active {
     break-after: auto;
     page-break-after: auto;
   }
+  /* atomicity lives on the small things, never on the sheet */
+  .print-sheet-a4 tr,
+  .print-sheet-a4 img,
+  .print-sheet-a4 [data-print-chart] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* if a table ever does outgrow one page, repeat its header instead of
+     orphaning the rows */
+  .print-sheet-a4 thead {
+    display: table-header-group;
+  }
+}
+
+/* ---------- Report design system ---------- */
+/* Every printed report is built from these pieces and nothing else. A report
+   component picks classes; it does not invent borders, greys or font sizes —
+   that is how the five reports drifted into five different looks.
+   Sizes are in pt and mm (print units), so a millimetre on screen is the same
+   millimetre on paper. */
+:root {
+  --rpt-ink: #0f172a;
+  --rpt-muted: #64748b;
+  --rpt-rule: #cbd5e1; /* hairline between cells */
+  --rpt-rule-strong: #475569; /* table outline, header underline */
+  --rpt-head: #e8edf4; /* header band */
+  --rpt-group: #eef2f7; /* summary / parent rows */
+  --rpt-total: #dbe3ee; /* grand total row */
+  --rpt-zebra: #f8fafc; /* every other body row */
+  --rpt-accent: #1e3a8a;
+}
+
+/* --- sheet header: logos, hairline, title block --- */
+.rpt-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10mm;
+}
+.rpt-brand img {
+  height: 9.5mm;
+  width: auto;
+  max-width: 45mm;
+  object-fit: contain;
+}
+.rpt-rule {
+  border: 0;
+  border-top: 0.4mm solid var(--rpt-accent);
+  margin: 2.5mm 0 0;
+}
+.rpt-titleblock {
+  text-align: center;
+  margin: 3mm 0 4mm;
+}
+.rpt-title {
+  font-size: 11pt;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rpt-accent);
+  line-height: 1.25;
+}
+.rpt-project {
+  margin-top: 1.2mm;
+  font-size: 7.5pt;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.rpt-period {
+  display: inline-block;
+  margin-top: 1.5mm;
+  padding: 0.6mm 2.6mm;
+  border: 0.2mm solid var(--rpt-rule);
+  border-radius: 999px;
+  background: var(--rpt-zebra);
+  font-size: 7pt;
+  color: var(--rpt-muted);
+}
+
+/* --- sheet footer --- */
+.rpt-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6mm;
+  margin-top: 4mm;
+  padding-top: 1.5mm;
+  border-top: 0.2mm solid var(--rpt-rule);
+  font-size: 7pt;
+  color: var(--rpt-muted);
+}
+
+/* --- tables --- */
+.rpt-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 0.35mm solid var(--rpt-rule-strong);
+  font-size: 8pt;
+  line-height: 1.3;
+}
+.rpt-table th,
+.rpt-table td {
+  border: 0.15mm solid var(--rpt-rule);
+  padding: 1.4mm 1.6mm;
+  vertical-align: middle;
+}
+.rpt-table thead th {
+  background: var(--rpt-head);
+  color: var(--rpt-ink);
+  font-weight: 700;
+  text-align: center;
+  border-color: #a9b6c6;
+}
+.rpt-table thead tr:last-child th {
+  border-bottom: 0.35mm solid var(--rpt-rule-strong);
+}
+.rpt-table tbody tr:nth-child(even) td {
+  background: var(--rpt-zebra);
+}
+.rpt-num {
+  text-align: center;
+  white-space: nowrap;
+}
+/* after the zebra rule, so a highlighted row always wins */
+.rpt-table tr.rpt-group td {
+  background: var(--rpt-group);
+  font-weight: 700;
+}
+.rpt-table tr.rpt-total td {
+  background: var(--rpt-total);
+  font-weight: 800;
+  border-top: 0.35mm solid var(--rpt-rule-strong);
+}
+/* the daily sheet stacks six tables and six photos across two pages */
+.rpt-table--compact {
+  font-size: 6.8pt;
+  line-height: 1.25;
+}
+.rpt-table--compact th,
+.rpt-table--compact td {
+  padding: 0.65mm 1mm;
+}
+/* the detail sheet packs 32 WBS rows onto a page */
+.rpt-table--dense {
+  font-size: 6.6pt;
+  line-height: 1.25;
+}
+.rpt-table--dense th,
+.rpt-table--dense td {
+  padding: 0.8mm 1.1mm;
+}
+.rpt-table--micro {
+  font-size: 5.6pt;
+  line-height: 1.2;
+}
+.rpt-table--micro th,
+.rpt-table--micro td {
+  padding: 0.6mm 0.4mm;
+}
+
+/* --- framed block (chart, photo, signature) --- */
+.rpt-card {
+  border: 0.25mm solid var(--rpt-rule-strong);
+  background: #fff;
+}
+.rpt-caption {
+  margin-top: 0.8mm;
+  text-align: center;
+  font-size: 6pt;
+  color: var(--rpt-muted);
+}
+.rpt-photo {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 0.25mm solid var(--rpt-rule-strong);
+  background: var(--rpt-zebra);
+}
+/* the daily sheet fits six photos AND four tables on one page — 16:9 keeps it
+   inside the height budget where 4:3 would not */
+.rpt-photo--wide {
+  aspect-ratio: 16 / 9;
+}
+.rpt-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rpt-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 7pt;
+  color: #b6c0cd;
+}
+.rpt-sign {
+  text-align: center;
+  font-size: 8pt;
+}
+.rpt-sign-company {
+  font-weight: 700;
+}
+.rpt-sign-line {
+  margin-top: 22mm;
+  padding-top: 1.5mm;
+  border-top: 0.3mm solid var(--rpt-ink);
+  font-weight: 600;
+}
+.rpt-sign-role {
+  margin-top: 0.5mm;
+  font-size: 7pt;
+  color: var(--rpt-muted);
+}
+.rpt-section {
+  margin: 3mm 0 1.2mm;
+  font-size: 8pt;
+  font-weight: 700;
+  color: var(--rpt-accent);
+}
+.rpt-section:first-of-type {
+  margin-top: 0;
 }
 
 /* ---------- Print preview scaler ---------- */
