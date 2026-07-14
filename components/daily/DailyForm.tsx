@@ -3,7 +3,9 @@
 import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { saveDailyAction } from '@/lib/actions';
-import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow } from '@/lib/types';
+import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow, ProjectInfo } from '@/lib/types';
+import DailyPrintReport from '@/components/print/DailyPrintReport';
+import PrintSheet from '@/components/print/PrintSheet';
 
 let rowIdCounter = 0;
 function newRowId(prefix: string) {
@@ -36,15 +38,19 @@ function normalizeLeadingZero(e: FormEvent<HTMLInputElement>) {
   }
 }
 
-export default function DailyForm({ report }: { report: DailyReport }) {
+export default function DailyForm({ report, project }: { report: DailyReport; project: ProjectInfo }) {
   const [form, setForm] = useState<DailyReport>(report);
   const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  // The A4 print sheet is heavy (two full pages of tables). We only mount it
+  // while actually printing — a snapshot of the current form — so it never
+  // re-renders on every keystroke during editing.
+  const [printData, setPrintData] = useState<DailyReport | null>(null);
 
   // Photos are managed by PhotoUploadGrid (rendered outside this form), so the
-  // form's own copy goes stale the moment a photo is uploaded. Mirror the saved
-  // list from the server-refreshed prop…
+  // form's own copy — the one the print snapshot uses — goes stale the moment
+  // a photo is uploaded. Mirror the saved list from the server-refreshed prop…
   useEffect(() => {
     setForm((prev) => ({ ...prev, photos: report.photos }));
   }, [report.photos]);
@@ -119,47 +125,27 @@ export default function DailyForm({ report }: { report: DailyReport }) {
     update('ptw', form.ptw.filter((r) => r.id !== id));
   }
 
-  async function persist() {
-    const res = await saveDailyAction(form.date, {
-      hariKe: form.hariKe,
-      weather: form.weather,
-      manHours: form.manHours,
-      nonEffective: form.nonEffective,
-      ptw: form.ptw,
-      hseInput: form.hseInput,
-      activitiesToday: form.activitiesToday,
-      activitiesTomorrow: form.activitiesTomorrow,
-      planPct: form.planPct,
-      actualPct: form.actualPct,
-    });
-    if (!res.ok) {
-      alert(res.error);
-      return false;
-    }
-    setDirty(false);
-    return true;
-  }
-
   function save() {
     startSaveTransition(async () => {
-      if (!(await persist())) return;
+      const res = await saveDailyAction(form.date, {
+        hariKe: form.hariKe,
+        weather: form.weather,
+        manHours: form.manHours,
+        nonEffective: form.nonEffective,
+        ptw: form.ptw,
+        hseInput: form.hseInput,
+        activitiesToday: form.activitiesToday,
+        activitiesTomorrow: form.activitiesTomorrow,
+        planPct: form.planPct,
+        actualPct: form.actualPct,
+      });
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      setDirty(false);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 1800);
-    });
-  }
-
-  // The PDF is rendered on the server from what's stored (see lib/pdf.ts), so
-  // unsaved edits would silently print as the old numbers. Save first, then go.
-  function printPdf() {
-    const url = `/api/pdf/daily/${form.date}`;
-    if (!dirty) {
-      window.open(url, '_blank', 'noopener');
-      return;
-    }
-    startSaveTransition(async () => {
-      // same tab, not window.open: after an await this is no longer inside the
-      // tap, and Safari blocks pop-ups that aren't
-      if (await persist()) window.location.href = url;
     });
   }
 
@@ -221,11 +207,10 @@ export default function DailyForm({ report }: { report: DailyReport }) {
             )}
           </button>
           <button
-            onClick={printPdf}
-            disabled={saving}
-            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-blue-600 sm:px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-70"
+            onClick={() => setPrintData(form)}
+            className="inline-flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-blue-600 sm:px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96]"
             aria-label="Print Daily Report"
-            title={dirty ? 'Saves your changes, then opens the PDF' : 'Print Daily Report'}
+            title="Print Daily Report"
           >
             <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path
@@ -658,6 +643,16 @@ export default function DailyForm({ report }: { report: DailyReport }) {
         </div>
       </section>
     </div>
+
+    {/* Mounted only while printing (snapshot of the current form) and
+       closed by the user, so it never weighs down editing. PrintSheet is a
+       visible preview overlay with its own Print/Close buttons — the only
+       flow that prints non-blank on Android; see PrintSheet.tsx. */}
+    {printData && (
+      <PrintSheet onClose={() => setPrintData(null)}>
+        <DailyPrintReport project={project} report={printData} />
+      </PrintSheet>
+    )}
     </>
   );
 }

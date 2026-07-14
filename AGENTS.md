@@ -8,27 +8,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 Every printed page in this app is one `.print-sheet-a4` element. Printing is the
 feature users trust least, because every bug in it costs them paper — and it has
-regressed on a real phone repeatedly. The rules below are the scar tissue; each
+regressed on a real phone four times. The rules below are the scar tissue; each
 one is there because breaking it produced a blank, sliced, or duplicated page on
 someone's device. Read `app/globals.css` (the `.print-sheet-a4` block) and
-`lib/pdf.ts` before touching any of it.
-
-**The app does NOT use `window.print()`.** It renders the report to a PDF on the
-server and hands the user that file (`lib/pdf.ts` → the `/api/pdf/...` routes →
-the `.../print` pages). This is deliberate and must not be "simplified" back to a
-browser print: browsers stamp their own band into the page margins — date + page
-title on top, URL + "1/9" on the bottom — and it is a client print setting no CSS
-can turn off. `@page { margin: 0 }` does not remove it (Chrome then draws the band
-ON TOP of the content), and iOS Safari does not even offer the toggle. Rendering
-our own PDF is the only way the printout is just the report, identical on Windows,
-Android and iPhone. The Print button is a plain link/anchor to the PDF route; the
-daily editor saves first (the PDF is built from stored data, so unsaved edits
-would print stale) then navigates to it.
+`components/print/PrintSheet.tsx` before touching any of it.
 
 **Geometry lives in CSS, never in a component.** `.print-sheet-a4` owns width,
 height, padding, margins and page breaks. A report component renders content and
 nothing else — no inline `width`/`height`/`padding`/`page-break`, no `mm` values.
-The paper margin is declared exactly once, in `@page`.
+
+**`@page` margin is ZERO, on purpose — never give it a real margin.** The
+browser prints its own header/footer band (date + title, URL + "1/9") INTO the
+page margin; with no margin there is no room and the band vanishes on Chrome
+desktop/Android. No CSS disables the band directly — zero margin is the only
+page-side lever, and giving `@page` a 14-17mm margin (July 2026) put the band on
+every printout. The visible paper margin is the sheet's own print padding
+(10mm 15mm 12mm). iOS Safari is the exception either way: it reserves its own
+strip and prints its band regardless; only its share-sheet/print UI controls it.
 
 **So does the look.** All five reports are built from the report design system in
 `globals.css` (`.rpt-*`) plus `PrintHeader` / `PrintFooter` — nobody invents their
@@ -51,28 +47,35 @@ screen-only affordance.
 doesn't fit gets shunted to a fresh page and blanks the one before it. Atomicity
 belongs on rows, images and charts.
 
-**Keep each sheet under ~250mm of content.** The page box is 180×266mm; anything
-taller splits onto a second page. Chunk instead of growing: `ROWS_PER_PAGE`
-(detail), `PAGE_SIZE` (photos), `WEEKS_PER_BLOCK` (S-curve figures). After ANY
-change to type size, padding or the header, re-measure every sheet — lay the page
-out at 680px (= the real 180mm content width) under `media: print`, because a
-wide viewport makes every sheet look shorter than it prints.
+**Keep each sheet under ~240mm of content (~262mm with its print padding).** iOS
+reserves ~12mm strips top and bottom out of the 297mm page no matter what `@page`
+says, leaving ~272mm; a taller sheet spills a blank page after every real one.
+Chunk instead of growing: `ROWS_PER_PAGE` (detail), `PAGE_SIZE` (photos),
+`WEEKS_PER_BLOCK` (S-curve figures). After ANY change to type size, padding or
+the header, re-measure every sheet — lay the page out at 794px (= the 210mm page
+box at margin 0) under `media: print`, because a wide viewport makes every sheet
+look shorter than it prints.
 
 **Paper must never paginate through a flexbox** — WebKit drops the fragments.
 Sheets and their wrappers are `display: block` on paper.
 
-**No shadows or blurs on paper.** `@media print` zeroes `box-shadow`,
-`text-shadow`, `filter` and `backdrop-filter` on everything. `print-color-adjust:
-exact` (above) makes the browser render them faithfully rather than dropping them,
-so without the reset any stray shadow prints as a grey smear — the closed mobile
-drawer, portalled to `<body>` where the toolbar's `print:hidden` can't reach it,
-did exactly that in the top-left of every page.
+**A tap on Print must never be lost.** The button lives in the week toolbar
+(layout, hydrated early); the sheet that answers it is a `dynamic()` chunk in the
+page and shows up later. A fire-and-forget `window` event dispatched in that gap
+lands on nobody — the user taps, nothing happens, and they tap again. Requests go
+through `components/print/printRequest.ts`, which latches a request that has no
+listener yet and replays it (with a TTL, so a stale request can't ambush someone
+who has since navigated away).
 
-**Verifying:** the artifact is the PDF, so test the PDF, not the page. Hit the
-`/api/pdf/...` route, and assert the number of `/Type /Page` objects in the bytes
-equals the number of `.print-sheet-a4` sheets the report renders — that is the
-blank/duplicate-page check, and it holds because the server's own Chromium made
-the file (no per-device print pipeline to differ). Screenshot the PDF in a viewer
-to eyeball the layout. When measuring sheet *heights* to keep them under the
-266mm page box, lay the page out at 680px (the real 180mm content width) under
-`media: print` — a wide viewport makes every sheet look shorter than it prints.
+**The overlay always states what it is doing** — preparing / opening the dialog /
+tap to close / couldn't prepare. A silent grey backdrop is indistinguishable from
+a hang, and it is dismissible even when the report never loads.
+
+**Verifying:** headless Chrome cannot reproduce these bugs (it *clips* an
+over-tall sheet where Safari emits an extra page, and it shrink-to-fits a
+too-wide one). Test with `Page.printToPDF` at `preferCSSPageSize: false`,
+full paper width and ~12.7mm forced top/bottom margins — that reproduces
+Safari's page box — and assert **printed pages == rendered sheets**. Drive it by
+clicking the real Print button ONCE, as soon as React has hydrated it, and assert
+`window.print` was called exactly once. Anything else only proves it works on
+your laptop.

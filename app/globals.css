@@ -411,19 +411,19 @@ a:active {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  /* THE paper margin — declared once, here, and nowhere else. Sheets add no
-     margin of their own on paper (see .print-sheet-a4), so the printable box
-     is whatever the engine says it is and the sheet always fits it exactly.
-     Never `margin: 0`: iOS Safari reserves a strip for its own URL / "Page x
-     of y" footer no matter what @page asks for, so a zero margin does not
-     buy a 297mm-tall page — it just makes the browser invent margins the
-     layout doesn't know about, and every sheet spills past the paper.
-     Deeper at the bottom than at the top: that bottom strip is where Safari
-     and Android print their own footer, and the report's own footer must not
-     end up sitting on top of it. */
+  /* Margin ZERO, deliberately — this is what keeps the browser's own
+     header/footer band (date + title on top, URL + "1/9" on the bottom) off
+     the printout. Chrome and Android draw that band INTO the page margin; with
+     no margin there is no room and it vanishes. Giving @page a real margin
+     (14-17mm, July 2026) brought the band back on every desktop/Android
+     printout. No CSS can disable the band directly — zero margin is the only
+     page-side lever, so the visual margin lives INSIDE the sheet as padding
+     (see .print-sheet-a4 below). iOS Safari is the exception: it reserves its
+     own strip and prints its band regardless; nothing page-side can change
+     that. */
   @page {
     size: A4;
-    margin: 14mm 15mm 17mm;
+    margin: 0;
   }
 }
 
@@ -446,14 +446,15 @@ a:active {
       blank page.
    4. Paper must never paginate through a flex container (WebKit drops the
       fragments): sheets and their wrappers are display: block on paper.
-   Keep each sheet's content under ~250mm tall. Beyond that it splits across
-   two pages on devices with a smaller printable area — pages with content,
-   not blanks, but still ugly. */
+   Keep each sheet's CONTENT under ~240mm tall (≈262mm with the print padding).
+   Beyond that it splits across two pages on devices with a smaller printable
+   area — pages with content, not blanks, but still ugly. */
 .print-sheet-a4 {
   width: 210mm;
   min-height: 297mm;
-  /* matches the @page margin, so the on-screen preview and the paper have the
-     same content width (180mm) and nothing reflows between them */
+  /* sides match the print padding, so the on-screen preview and the paper have
+     the same content width (180mm) and nothing reflows between them; the
+     roomier top/bottom is preview-only */
   padding: 14mm 15mm 17mm;
   margin: 0 auto;
   box-sizing: border-box;
@@ -484,8 +485,15 @@ a:active {
     max-width: 100%;
     min-height: 0;
     height: auto;
-    /* the @page margin is the paper margin — a second one here would double it */
-    padding: 0;
+    /* @page margin is 0 (the only thing that suppresses the browser's own
+       header/footer band), so the visible margin is the sheet's padding.
+       Sides stay 15mm — the same content width (180mm) as the on-screen
+       preview, so nothing reflows between screen and paper. Top/bottom are
+       SLIMMER than the preview on purpose: total sheet height must stay
+       under ~262mm, because iOS reserves ~12mm strips top and bottom out of
+       the 297mm page no matter what @page says, and a sheet taller than
+       what's left spills a blank page after every real one. */
+    padding: 10mm 15mm 12mm;
     margin: 0;
     box-shadow: none;
     overflow: visible;
@@ -722,6 +730,26 @@ a:active {
   margin-top: 0;
 }
 
+/* ---------- Print preview scaler ---------- */
+/* PrintSheet scales the fixed-width A4 sheets down to fit phone/tablet
+   screens via an inline transform. Printing must always happen at natural
+   size: !important stylesheet rules are the one thing that beats inline
+   styles, so these undo the transform on paper. */
+.pv-scaler {
+  width: max-content;
+  transform-origin: top left;
+}
+@media print {
+  .pv-scale-box {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
+  .pv-scaler {
+    width: auto !important;
+    transform: none !important;
+  }
+}
 
 /* ---------- Reduced motion ---------- */
 

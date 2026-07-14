@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getDb, getWeekMeta, getCachedSCurveSeries } from '@/lib/data';
+import PrintSCurveLazy from '@/components/print/PrintSCurveLazy';
 import SCurveClient from '@/components/weekly/SCurveClient';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
@@ -30,6 +31,9 @@ export default async function SCurvePage({ params }: { params: Promise<{ week: s
           project={db.project}
         />
       </div>
+      {/* A4 report sheet, only visible on paper — lazy-loaded client-side so
+          it never blocks the server render of the on-screen view */}
+      <PrintSCurveLazy project={db.project} meta={meta} series={series} />
     </>
   );
 }
