@@ -15,7 +15,48 @@ function weekdayLabel(date: string): string {
 // Left-hand label cells in the key/value blocks.
 const KEY = { fontWeight: 600, background: 'var(--rpt-zebra)' } as const;
 
+// Six 16:9 photos (three rows) is what the second sheet's height budget holds
+// next to its tables (see .rpt-photo--wide); a report with more slots than
+// that must chunk onto continuation sheets, exactly like the weekly
+// documentation pack — a 12-slot day once printed a 401mm sheet.
+const PHOTOS_PER_PAGE = 6;
+
+function PhotoGrid({ photos, startAt }: { photos: (string | null)[]; startAt: number }) {
+  return (
+    <div
+      className="mx-auto grid grid-cols-2"
+      style={{ maxWidth: '150mm', columnGap: '6mm', rowGap: '3mm' }}
+    >
+      {photos.map((photo, i) => (
+        <figure key={i}>
+          <div className="rpt-photo rpt-photo--wide">
+            {photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photo} alt={`Documentation ${startAt + i + 1}`} />
+            ) : (
+              <div className="rpt-photo-empty">No photo</div>
+            )}
+          </div>
+          <figcaption className="rpt-caption">Photo {startAt + i + 1}</figcaption>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
 export default function DailyPrintReport({ project, report }: { project: ProjectInfo; report: DailyReport }) {
+  const photoPages: (string | null)[][] = [];
+  for (let i = 0; i < report.photos.length; i += PHOTOS_PER_PAGE) {
+    photoPages.push(report.photos.slice(i, i + PHOTOS_PER_PAGE));
+  }
+  // The first chunk always prints (empty boxes are part of the form); later
+  // chunks earn a sheet only when they actually hold a photo.
+  const extras = photoPages
+    .map((photos, chunk) => ({ photos, startAt: chunk * PHOTOS_PER_PAGE }))
+    .slice(1)
+    .filter(({ photos }) => photos.some((p) => p !== null));
+  const totalPages = 2 + extras.length;
+
   return (
     <>
       {/* ---------- Page 1 ---------- */}
@@ -184,7 +225,7 @@ export default function DailyPrintReport({ project, report }: { project: Project
           </tbody>
         </table>
 
-        <PrintFooter docNo={project.documentNoDaily} page={1} total={2} />
+        <PrintFooter docNo={project.documentNoDaily} page={1} total={totalPages} />
       </div>
 
       {/* ---------- Page 2 ---------- */}
@@ -228,27 +269,22 @@ export default function DailyPrintReport({ project, report }: { project: Project
         </table>
 
         <h2 className="rpt-section">6. Photograph</h2>
-        <div
-          className="mx-auto grid grid-cols-2"
-          style={{ maxWidth: '150mm', columnGap: '6mm', rowGap: '3mm' }}
-        >
-          {report.photos.map((photo, i) => (
-            <figure key={i}>
-              <div className="rpt-photo rpt-photo--wide">
-                {photo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={photo} alt={`Documentation ${i + 1}`} />
-                ) : (
-                  <div className="rpt-photo-empty">No photo</div>
-                )}
-              </div>
-              <figcaption className="rpt-caption">Photo {i + 1}</figcaption>
-            </figure>
-          ))}
-        </div>
+        <PhotoGrid photos={photoPages[0] ?? []} startAt={0} />
 
-        <PrintFooter docNo={project.documentNoDaily} page={2} total={2} />
+        <PrintFooter docNo={project.documentNoDaily} page={2} total={totalPages} />
       </div>
+
+      {/* ---------- Continuation sheets: photos 7+ ---------- */}
+      {extras.map(({ photos, startAt }, i) => (
+        <div key={startAt} className="print-sheet-a4">
+          <PrintHeader title="Daily Progress Report" subtitle={project.name} period={weekdayLabel(report.date)} />
+
+          <h2 className="rpt-section">6. Photograph (cont.)</h2>
+          <PhotoGrid photos={photos} startAt={startAt} />
+
+          <PrintFooter docNo={project.documentNoDaily} page={3 + i} total={totalPages} />
+        </div>
+      ))}
     </>
   );
 }

@@ -73,7 +73,14 @@ export async function renderReportPdf(url: string): Promise<Uint8Array> {
     // idle-watching charges ≥500ms after the last response no matter how ready
     // the page already is, and everything the PDF needs is waited on by name.
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await page.waitForSelector('.print-sheet-a4', { timeout: 20_000 });
+    // visible, not merely present: a partially prerendered page streams late
+    // Suspense content into a <div hidden> and only then relocates it with an
+    // inline script. Plain existence resolves while the sheet is still inside
+    // that hidden container, and a report with nothing else to wait for (no
+    // charts, no photos) then snapshots as one blank page — the deployed
+    // daily PDF did exactly that. A visible wait needs a real box, which only
+    // happens after React moves the sheet into place.
+    await page.waitForSelector('.print-sheet-a4', { visible: true, timeout: 20_000 });
     // Recharts draws its curves a frame after the markup mounts, and a webfont
     // that lands late reflows every table. Printing before either is done is
     // how the S-curve came out empty.

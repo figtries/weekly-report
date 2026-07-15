@@ -14,10 +14,10 @@ const nextConfig: NextConfig = {
   // Chromium and puppeteer must stay outside the bundle — the binary is loaded
   // from disk at runtime (see lib/pdf.ts).
   serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
-  // externalizing keeps the JS out of the bundle, but the tracer still doesn't
-  // see the brotli-packed Chromium under bin/ (it's read with fs at runtime) —
-  // without this the deployed lambda has no browser and every PDF 500s with
-  // "input directory .../bin does not exist".
+  // Externalizing alone isn't enough on Vercel: the brotli-packed Chromium in
+  // bin/ is opened with computed fs paths the tracer can't follow, so without
+  // this the lambda ships the JS but not the browser and the PDF routes 500
+  // ("input directory .../bin does not exist").
   outputFileTracingIncludes: {
     '/api/pdf/**': ['node_modules/@sparticuz/chromium/bin/**/*'],
   },
