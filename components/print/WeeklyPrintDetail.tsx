@@ -26,7 +26,9 @@ export default function WeeklyPrintDetail({
   meta: WeeklyMeta;
   roots: RollupNode[];
 }) {
-  const flat = flattenTree(roots);
+  const flat = flattenTree(roots).filter(
+    (n) => !(n.children.length === 0 && n.bobot === 0),
+  );
   const pages = chunk(flat, ROWS_PER_PAGE);
 
   return (
@@ -34,7 +36,7 @@ export default function WeeklyPrintDetail({
       {pages.map((rows, pageIdx) => (
         <div key={pageIdx} className="print-sheet-a4">
           <PrintHeader
-            title="Detail Overall Progress"
+            title={`Detail Overall Progress — Week ${meta.week}`}
             subtitle={project.name}
             period={weekPeriodLabel(project.weekAnchorEndDate, meta.week)}
           />
