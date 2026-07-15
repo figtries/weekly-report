@@ -30,6 +30,9 @@ async function launch(): Promise<Browser> {
   // unpacks a ~60MB binary and has no business loading during local dev.
   if (process.env.VERCEL) {
     const chromium = (await import('@sparticuz/chromium')).default;
+    // No WebGL on these pages (charts are plain SVG) — skipping the graphics
+    // stack means the lambda doesn't unpack swiftshader on cold boot.
+    chromium.setGraphicsMode = false;
     return puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
@@ -41,16 +44,42 @@ async function launch(): Promise<Browser> {
   return puppeteer.launch({ executablePath: exe, headless: true });
 }
 
-export async function renderReportPdf(url: string): Promise<Uint8Array> {
-  const browser = await launch();
+// Booting Chromium costs seconds — the bulk of every "Preparing PDF…" wait —
+// so one browser is kept alive and each request only opens a page in it. The
+// module-level promise survives warm lambda invocations on Vercel too. If the
+// browser died since last use (frozen lambda, crash), relaunch.
+let browserPromise: Promise<Browser> | null = null;
+
+async function getBrowser(): Promise<Browser> {
+  const cached = browserPromise ? await browserPromise.catch(() => null) : null;
+  if (cached?.connected) return cached;
+  browserPromise = launch();
   try {
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 45_000 });
+    return await browserPromise;
+  } catch (error) {
+    browserPromise = null;
+    throw error;
+  }
+}
+
+export async function renderReportPdf(url: string): Promise<Uint8Array> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    // domcontentloaded + the explicit readiness checks below, not networkidle0:
+    // idle-watching charges ≥500ms after the last response no matter how ready
+    // the page already is, and everything the PDF needs is waited on by name.
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.waitForSelector('.print-sheet-a4', { timeout: 20_000 });
     // Recharts draws its curves a frame after the markup mounts, and a webfont
     // that lands late reflows every table. Printing before either is done is
     // how the S-curve came out empty.
     await page.evaluate(async () => {
+      // Kick every image into loading NOW: the app chrome renders next/image
+      // logos with loading=lazy, and in headless (nothing ever scrolls) a lazy
+      // image below the fold never starts — the complete-poll below would sit
+      // out its full cap waiting for it.
+      for (const img of document.images) img.loading = 'eager';
       const charts = [...document.querySelectorAll('[data-print-chart]')];
       const drawn = () =>
         charts.every((chart) => {
@@ -60,7 +89,39 @@ export async function renderReportPdf(url: string): Promise<Uint8Array> {
       for (let i = 0; i < 100 && !drawn(); i++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      // Wait on img.complete, NOT img.decode(): in headless Chromium decode()
+      // promises never settle (no frames are produced until page.pdf), which
+      // hung this evaluate until the protocol timeout.
+      const imagesLoaded = async () => {
+        const loaded = () => [...document.images].every((img) => img.complete);
+        for (let i = 0; i < 200 && !loaded(); i++) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      };
+      await imagesLoaded();
       await document.fonts.ready;
+      // Photos are stored at up to 1600px but print at ~7cm wide; Chromium
+      // embeds them into the PDF at stored resolution, which made every
+      // documentation pack a multi-MB download. Redraw each one at twice its
+      // laid-out size (~190dpi on paper) before printing — the on-screen sheet
+      // is already A4-wide, so the laid-out size IS the printed size.
+      for (const img of document.querySelectorAll<HTMLImageElement>('.rpt-photo img')) {
+        try {
+          const targetW = Math.round(img.getBoundingClientRect().width * 2);
+          if (targetW <= 0 || targetW >= img.naturalWidth) continue;
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = Math.round(img.naturalHeight * (targetW / img.naturalWidth));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          img.src = canvas.toDataURL('image/jpeg', 0.8);
+        } catch {
+          // A photo that can't be redrawn (still fine to print) keeps its
+          // original bytes rather than failing the whole report.
+        }
+      }
+      await imagesLoaded();
     });
     // preferCSSPageSize honours @page (A4 + our margins); displayHeaderFooter
     // is off — that band is the whole reason this file exists.
@@ -70,6 +131,6 @@ export async function renderReportPdf(url: string): Promise<Uint8Array> {
       displayHeaderFooter: false,
     });
   } finally {
-    await browser.close();
+    await page.close().catch(() => undefined);
   }
 }
