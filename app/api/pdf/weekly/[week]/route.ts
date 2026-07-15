@@ -26,7 +26,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ week
   const target = new URL(`/print/weekly/${week}`, req.nextUrl.origin);
   if (key) target.searchParams.set('only', key);
 
-  const pdf = await renderReportPdf(target.toString());
+  let pdf: Uint8Array;
+  try {
+    pdf = await renderReportPdf(target.toString());
+  } catch (error) {
+    // Surface the real failure: it lands in the Vercel function log AND in the
+    // response body, so a "Failed — retry" can be diagnosed with one curl.
+    console.error('PDF render failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(`PDF render failed: ${message}`, { status: 500 });
+  }
   const name = `Week ${week} - ${key ? LABELS[key] : 'Weekly Report'}.pdf`;
 
   return new Response(pdf as BodyInit, {

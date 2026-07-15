@@ -36,7 +36,10 @@ async function launch(): Promise<Browser> {
     return puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
-      headless: true,
+      // 'shell', NOT true: the binary is chrome-headless-shell, and true makes
+      // puppeteer pass --headless=new, which headless-shell doesn't speak —
+      // the process exits on boot and the route 500s instantly.
+      headless: 'shell',
     });
   }
   const exe = LOCAL_CHROME.find((path) => path && existsSync(path));
