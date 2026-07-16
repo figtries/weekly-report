@@ -92,12 +92,12 @@ function shortName(s: string): string {
 }
 
 const STATUS_ORDER = ['done', 'ontrack', 'slight', 'behind', 'idle'] as const;
-const STATUS_LEGEND: Record<string, { label: string; bar: string; dot: string; text: string }> = {
-  done: { label: 'Done', bar: 'bg-emerald-500', dot: 'bg-emerald-500', text: 'text-emerald-700' },
-  ontrack: { label: 'On track', bar: 'bg-blue-500', dot: 'bg-blue-500', text: 'text-blue-700' },
-  slight: { label: 'Slightly behind', bar: 'bg-amber-400', dot: 'bg-amber-400', text: 'text-amber-700' },
-  behind: { label: 'Needs attention', bar: 'bg-red-400', dot: 'bg-red-500', text: 'text-red-600' },
-  idle: { label: 'Not started', bar: 'bg-gray-300', dot: 'bg-gray-300', text: 'text-gray-500' },
+const STATUS_LEGEND: Record<string, { label: string; bar: string; dot: string; text: string; chip: string }> = {
+  done: { label: 'Done', bar: 'bg-emerald-500', dot: 'bg-emerald-500', text: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-700' },
+  ontrack: { label: 'On track', bar: 'bg-blue-500', dot: 'bg-blue-500', text: 'text-blue-700', chip: 'bg-blue-50 text-blue-700' },
+  slight: { label: 'Slightly behind', bar: 'bg-amber-400', dot: 'bg-amber-400', text: 'text-amber-700', chip: 'bg-amber-50 text-amber-700' },
+  behind: { label: 'Needs attention', bar: 'bg-red-400', dot: 'bg-red-500', text: 'text-red-600', chip: 'bg-red-50 text-red-600' },
+  idle: { label: 'Not started', bar: 'bg-gray-300', dot: 'bg-gray-300', text: 'text-gray-500', chip: 'bg-gray-100 text-gray-500' },
 };
 
 // ============================================================================
@@ -363,7 +363,13 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
 }
 
 // ============================================================================
-// Overview hero — the "big picture first" the whole page opens on.
+// Overview hero — the "big picture first" the whole page opens on. Each figure
+// is stated exactly once, and every zone of the card carries weight: a header
+// line with the verdict chip, a ring gauge that owns the headline number (its
+// grey under-arc marks the target position), the status distribution as a
+// segmented meter with tinted count pills, and a divided Target/Deviation/
+// This week rail. On phones the gauge and rail pair up side by side; on
+// desktop they bookend the meter so the card fills its full width.
 
 function OverviewHero({
   grand,
@@ -380,94 +386,115 @@ function OverviewHero({
   const devCls = Math.abs(dev) < 0.05 ? 'text-gray-700' : dev < 0 ? 'text-red-500' : 'text-emerald-600';
   const devText = Math.abs(dev) < 0.05 ? '0%' : `${dev < 0 ? '−' : '+'}${Math.abs(dev).toFixed(1)}%`;
 
+  const legendKeys = STATUS_ORDER.filter((k) => dist.counts[k] > 0);
+
   return (
     <section className="animate-fade-in-up overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-white to-gray-50/60 p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
-        <BigRing actual={actual} plan={plan} color={st.ring} textColor={st.ringText} />
-        <div className="min-w-0 flex-1 text-center sm:text-left">
+      {/* Header line — what this card is, and the project's verdict */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-400">Overall project progress</p>
-          <div className="mt-1 flex flex-wrap items-end justify-center gap-x-3 gap-y-1 sm:justify-start">
-            <span className="text-4xl font-semibold tabular-nums text-gray-900 sm:text-5xl">
-              <AnimatedNumber value={actual} decimals={1} suffix="%" />
-            </span>
-            <span className={`mb-1 rounded-full px-3 py-1 text-[13px] font-semibold ${st.chip}`}>{st.label}</span>
-          </div>
-
-          <div className="mt-3 flex flex-wrap justify-center gap-x-7 gap-y-2 sm:justify-start">
-            <HeroStat label="Target" value={`${plan.toFixed(1)}%`} />
-            <HeroStat label="Deviation" value={devText} valueCls={devCls} />
-            {thisWeek > 0.05 && <HeroStat label="This week" value={`+${thisWeek.toFixed(1)}%`} valueCls="text-emerald-600" />}
-          </div>
-
-          {/* Distribution strip: proportion of activities by status */}
-          {dist.total > 0 && (
-            <>
-              <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                {STATUS_ORDER.map((k) => {
-                  const n = dist.counts[k];
-                  if (!n) return null;
-                  return (
-                    <div
-                      key={k}
-                      className={`${STATUS_LEGEND[k].bar} h-full transition-[width] duration-700 ease-out-expo`}
-                      style={{ width: `${(n / dist.total) * 100}%` }}
-                      title={`${STATUS_LEGEND[k].label}: ${n}`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="mt-2.5 flex flex-wrap justify-center gap-x-4 gap-y-1.5 sm:justify-start">
-                {STATUS_ORDER.filter((k) => dist.counts[k] > 0).map((k) => (
-                  <span key={k} className="flex items-center gap-1.5 text-[12px]">
-                    <span className={`h-2 w-2 rounded-full ${STATUS_LEGEND[k].dot}`} />
-                    <span className="text-gray-500">{STATUS_LEGEND[k].label}</span>
-                    <span className={`font-semibold tabular-nums ${STATUS_LEGEND[k].text}`}>{dist.counts[k]}</span>
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
+          <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${st.chip}`}>{st.label}</span>
         </div>
+        {dist.total > 0 && (
+          <p className="shrink-0 text-[12px] font-medium tabular-nums text-gray-400">{dist.total} activities</p>
+        )}
+      </div>
+
+      {/* Body — gauge · distribution meter · plan rail */}
+      <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
+        {/* On phones the gauge and rail share a row; on desktop they bookend the meter */}
+        <div className="flex items-center gap-6 lg:contents">
+          <HeroGauge actual={actual} plan={plan} color={st.ring} textColor={st.ringText} />
+
+          <div className="min-w-0 flex-1 divide-y divide-gray-200 lg:order-3 lg:w-56 lg:flex-none">
+            <RailStat label="Target" value={`${plan.toFixed(1)}%`} />
+            <RailStat label="Deviation" value={devText} valueCls={devCls} />
+            {thisWeek > 0.05 && <RailStat label="This week" value={`+${thisWeek.toFixed(1)}%`} valueCls="text-emerald-600" />}
+          </div>
+        </div>
+
+        {dist.total > 0 && (
+          <div className="min-w-0 flex-1 lg:order-2">
+            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Activity status</p>
+            <div className="flex h-3 w-full gap-[3px]">
+              {legendKeys.map((k, i) => (
+                <div
+                  key={k}
+                  className={`${STATUS_LEGEND[k].bar} animate-bar-grow h-full rounded-full`}
+                  style={{
+                    width: `${Math.max(0.8, (dist.counts[k] / dist.total) * 100)}%`,
+                    animationDelay: `${200 + i * 110}ms`,
+                  }}
+                  title={`${STATUS_LEGEND[k].label}: ${dist.counts[k]}`}
+                />
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 lg:justify-between">
+              {legendKeys.map((k, i) => (
+                <span
+                  key={k}
+                  className={`animate-fade-in-up flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ${STATUS_LEGEND[k].chip}`}
+                  style={{ animationDelay: `${350 + i * 70}ms` }}
+                >
+                  <span className={`h-2 w-2 rounded-full ${STATUS_LEGEND[k].dot}`} />
+                  {STATUS_LEGEND[k].label}
+                  <span className="font-semibold tabular-nums">{dist.counts[k]}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-function HeroStat({ label, value, valueCls = 'text-gray-900' }: { label: string; value: string; valueCls?: string }) {
-  return (
-    <div className="flex flex-col items-center sm:items-start">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
-      <span className={`mt-0.5 text-[17px] font-semibold tabular-nums ${valueCls}`}>{value}</span>
-    </div>
-  );
-}
-
-function BigRing({ actual, plan, color, textColor }: { actual: number; plan: number; color: string; textColor: string }) {
-  const size = 132;
+/** The headline number's one home: a ring gauge whose grey under-arc ends at
+ *  the target, so actual-vs-plan is visible as a shortfall in the sweep. */
+function HeroGauge({ actual, plan, color, textColor }: { actual: number; plan: number; color: string; textColor: string }) {
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const size = 128;
   const stroke = 11;
-  const r = size / 2 - stroke - 1;
+  const r = size / 2 - stroke / 2 - 1;
   const c = 2 * Math.PI * r;
+  const arc = (v: number) => `${(clamp(v) / 100) * c} ${c}`;
   const done = actual >= 99.95;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+    <div className="relative h-28 w-28 shrink-0 sm:h-32 sm:w-32">
+      <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f3f4f6" strokeWidth={stroke} />
         {!done && plan > 0.5 && (
           <circle
             cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#d1d5db" strokeWidth={stroke} strokeLinecap="round"
-            strokeDasharray={`${(clamp(plan) / 100) * c} ${c}`}
+            strokeDasharray={arc(drawn ? plan : 0)}
+            style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.16, 1, 0.3, 1)' }}
           />
         )}
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={`${(clamp(actual) / 100) * c} ${c}`}
-          style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.16,1,0.3,1), stroke 0.4s' }}
+          strokeDasharray={arc(drawn ? actual : 0)}
+          style={{ transition: 'stroke-dasharray 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s, stroke 0.4s' }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-semibold tabular-nums" style={{ color: textColor }}>{pct(actual)}</span>
-        <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">actual</span>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[24px] font-semibold tracking-tight tabular-nums sm:text-[26px]" style={{ color: textColor }}>
+          <AnimatedNumber value={actual} decimals={1} suffix="%" />
+        </span>
       </div>
+    </div>
+  );
+}
+
+function RailStat({ label, value, valueCls = 'text-gray-900' }: { label: string; value: string; valueCls?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className={`text-[15px] font-semibold tabular-nums lg:text-base ${valueCls}`}>{value}</span>
     </div>
   );
 }
