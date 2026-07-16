@@ -41,7 +41,7 @@ function ProgressBar({
       <div
         className="absolute -top-1 h-5 w-0.5 rounded-full bg-gray-900/60"
         style={{ left: `calc(${targetClamped}% - 1px)` }}
-        title={`Target ${targetClamped.toFixed(2)}%`}
+        title={`Plan ${targetClamped.toFixed(2)}%`}
       />
     </div>
   );
@@ -71,7 +71,7 @@ export default function SummaryCards({ roots, grandTotal }: { roots: SummaryRow[
                 <AnimatedNumber value={grandTotal.curProgressPct} suffix="%" />
               </span>
               <span className="text-sm text-gray-500">
-                of target <span className="font-semibold text-gray-700 tabular-nums">{grandTotal.targetWF.toFixed(2)}%</span>
+                of plan <span className="font-semibold text-gray-700 tabular-nums">{grandTotal.targetWF.toFixed(2)}%</span>
               </span>
             </div>
           </div>

@@ -68,8 +68,8 @@ function statusOf(cum: number, plan: number) {
 
 function gapText(cum: number, plan: number): { text: string; cls: string } {
   const gap = round2(cum - plan);
-  if (Math.abs(gap) < 0.05) return { text: 'on target', cls: 'text-gray-500' };
-  if (gap >= -1 && gap < 0) return { text: 'nearly on target', cls: 'text-gray-500' };
+  if (Math.abs(gap) < 0.05) return { text: 'on plan', cls: 'text-gray-500' };
+  if (gap >= -1 && gap < 0) return { text: 'nearly on plan', cls: 'text-gray-500' };
   if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-red-500' };
   return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
 }
@@ -82,7 +82,7 @@ function storyOf(cum: number, plan: number, thisWeek: number): string {
   const gap = round2(cum - plan);
   const moved = thisWeek > 0.05 ? ` Up ${thisWeek.toFixed(1)}% this week.` : ' No progress this week.';
   if (gap >= 0) return `Ahead of plan — all good.${moved}`;
-  if (gap >= -1) return `Almost at target.${moved}`;
+  if (gap >= -1) return `Almost at plan.${moved}`;
   if (gap >= -7.5) return `${Math.abs(gap).toFixed(1)}% behind plan — needs a push.${moved}`;
   return `${Math.abs(gap).toFixed(1)}% behind plan — needs attention.${moved}`;
 }
@@ -96,7 +96,7 @@ const STATUS_LEGEND: Record<string, { label: string; bar: string; dot: string; t
   done: { label: 'Done', bar: 'bg-emerald-500', dot: 'bg-emerald-500', text: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-700' },
   ontrack: { label: 'On track', bar: 'bg-blue-500', dot: 'bg-blue-500', text: 'text-blue-700', chip: 'bg-blue-50 text-blue-700' },
   slight: { label: 'Slightly behind', bar: 'bg-amber-400', dot: 'bg-amber-400', text: 'text-amber-700', chip: 'bg-amber-50 text-amber-700' },
-  behind: { label: 'Needs attention', bar: 'bg-red-400', dot: 'bg-red-500', text: 'text-red-600', chip: 'bg-red-50 text-red-600' },
+  behind: { label: 'Warning', bar: 'bg-red-400', dot: 'bg-red-500', text: 'text-red-600', chip: 'bg-red-50 text-red-600' },
   idle: { label: 'Not started', bar: 'bg-gray-300', dot: 'bg-gray-300', text: 'text-gray-500', chip: 'bg-gray-100 text-gray-500' },
 };
 
@@ -322,7 +322,7 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
                   <p className="mt-0.5 text-[13px] text-gray-500">
-                    {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% · Target{' '}
+                    {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% · Plan{' '}
                     {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
                     <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
                       {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
@@ -366,10 +366,11 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
 // Overview hero — the "big picture first" the whole page opens on. Each figure
 // is stated exactly once, and every zone of the card carries weight: a header
 // line with the verdict chip, a ring gauge that owns the headline number (its
-// grey under-arc marks the target position), the status distribution as a
-// segmented meter with tinted count pills, and a divided Target/Deviation/
-// This week rail. On phones the gauge and rail pair up side by side; on
-// desktop they bookend the meter so the card fills its full width.
+// grey under-arc marks the plan position), the status distribution as a thick
+// Storage-style meter (macOS) with a plain left-aligned dot legend, and a
+// divided Actual/Plan/Deviation/This week rail. On phones the gauge and rail
+// pair up side by side; on desktop they bookend the meter so the card fills
+// its full width.
 
 function OverviewHero({
   grand,
@@ -402,26 +403,32 @@ function OverviewHero({
       </div>
 
       {/* Body — gauge · distribution meter · plan rail */}
-      <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
-        {/* On phones the gauge and rail share a row; on desktop they bookend the meter */}
-        <div className="flex items-center gap-6 lg:contents">
+      <div className="mt-5 flex flex-col gap-6 md:flex-row md:items-center md:gap-8 lg:gap-10">
+        {/* On phones the gauge and rail share a row; from tablet (md) up they
+           bookend the meter — a full-width rail spreads label and value too
+           far apart to scan */}
+        <div className="flex items-center gap-6 md:contents">
           <HeroGauge actual={actual} plan={plan} color={st.ring} textColor={st.ringText} />
 
-          <div className="min-w-0 flex-1 divide-y divide-gray-200 lg:order-3 lg:w-56 lg:flex-none">
-            <RailStat label="Target" value={`${plan.toFixed(1)}%`} />
+          <div className="min-w-0 flex-1 divide-y divide-gray-200 md:order-3 md:w-56 md:flex-none">
+            <RailStat label="Actual" value={`${actual.toFixed(1)}%`} />
+            <RailStat label="Plan" value={`${plan.toFixed(1)}%`} />
             <RailStat label="Deviation" value={devText} valueCls={devCls} />
             {thisWeek > 0.05 && <RailStat label="This week" value={`+${thisWeek.toFixed(1)}%`} valueCls="text-emerald-600" />}
           </div>
         </div>
 
         {dist.total > 0 && (
-          <div className="min-w-0 flex-1 lg:order-2">
+          <div className="min-w-0 flex-1 md:order-2">
             <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Activity status</p>
-            <div className="flex h-3 w-full gap-[3px]">
+            {/* Storage-style meter: one thick clipped track, segments packed
+               edge to edge with hairline seams — the container owns the
+               (slightly rounder-than-macOS) corners */}
+            <div className="flex h-8 w-full gap-[2px] overflow-hidden rounded-[10px] sm:h-9">
               {legendKeys.map((k, i) => (
                 <div
                   key={k}
-                  className={`${STATUS_LEGEND[k].bar} animate-bar-grow h-full rounded-full`}
+                  className={`${STATUS_LEGEND[k].bar} animate-bar-grow h-full`}
                   style={{
                     width: `${Math.max(0.8, (dist.counts[k] / dist.total) * 100)}%`,
                     animationDelay: `${200 + i * 110}ms`,
@@ -430,16 +437,24 @@ function OverviewHero({
                 />
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 lg:justify-between">
+            {/* Legend is a fixed 2-column grid at EVERY size — flex-wrap left
+               ragged rows on phones and a lone wrapped item on tablets. The
+               right column is content-sized and hugs the bar's right end; its
+               items spread dot+label left / count right inside it, so the dots
+               stack in a straight line AND the counts stay flush with the bar.
+               Items never wrap internally. */}
+            <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2">
               {legendKeys.map((k, i) => (
                 <span
                   key={k}
-                  className={`animate-fade-in-up flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ${STATUS_LEGEND[k].chip}`}
+                  className="animate-fade-in-up flex items-center gap-1.5 whitespace-nowrap text-[12px] font-medium text-gray-600 even:justify-between"
                   style={{ animationDelay: `${350 + i * 70}ms` }}
                 >
-                  <span className={`h-2 w-2 rounded-full ${STATUS_LEGEND[k].dot}`} />
-                  {STATUS_LEGEND[k].label}
-                  <span className="font-semibold tabular-nums">{dist.counts[k]}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_LEGEND[k].dot}`} />
+                    {STATUS_LEGEND[k].label}
+                  </span>
+                  <span className="font-semibold tabular-nums text-gray-900">{dist.counts[k]}</span>
                 </span>
               ))}
             </div>
@@ -537,7 +552,7 @@ function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; 
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
         <div className="mt-1 text-[13px] text-gray-500">
-          {leafCount(node)} activities · Target {plan.toFixed(1)}% · <span className={gap.cls}>{gap.text}</span>
+          {leafCount(node)} activities · Plan {plan.toFixed(1)}% · <span className={gap.cls}>{gap.text}</span>
         </div>
       </div>
       <span className={`hidden shrink-0 rounded-full px-3 py-1 text-[12px] font-medium sm:inline ${st.chip}`}>{st.label}</span>
@@ -588,7 +603,7 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
           <div className="relative mt-3.5 h-2.5 rounded-full bg-gray-100">
             <div className={`h-full rounded-full transition-all duration-700 ease-out ${st.bar}`} style={{ width: `${clamp(cum)}%` }} />
             {plan > 0.5 && plan < 99.5 && (
-              <div className="absolute -top-[3px] h-4 w-0.5 rounded-full bg-gray-600/70" style={{ left: `calc(${clamp(plan)}% - 1px)` }} title={`Target ${plan.toFixed(1)}%`} />
+              <div className="absolute -top-[3px] h-4 w-0.5 rounded-full bg-gray-600/70" style={{ left: `calc(${clamp(plan)}% - 1px)` }} title={`Plan ${plan.toFixed(1)}%`} />
             )}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-gray-500">
@@ -601,7 +616,7 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
               )}
             </span>
             <span className="ml-auto flex flex-wrap items-center gap-2">
-              Target <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
+              Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
               <span className={gap.cls}>· {gap.text}</span>
               <DetailToggle open={open} onClick={onToggle} />
             </span>
@@ -624,9 +639,9 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
             <Field label="Volume" value={node.vol && node.satuan ? `${node.vol} ${node.satuan}` : '—'} />
             <Field label="Last week" value={`${node.prevProgressPct.toFixed(2)}%`} />
             <Field
-              label="Deviation vs target"
+              label="Deviation vs plan"
               value={`${variance >= 0 ? '+' : ''}${variance.toFixed(3)}%`}
-              sub={variance < 0 ? 'below target' : 'on / above target'}
+              sub={variance < 0 ? 'below plan' : 'on / above plan'}
               valueCls={variance < -0.005 ? 'text-red-600' : 'text-emerald-600'}
             />
           </div>

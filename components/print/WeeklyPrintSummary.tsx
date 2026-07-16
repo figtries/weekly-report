@@ -45,7 +45,7 @@ export default function WeeklyPrintSummary({
             <th colSpan={2}>This Week</th>
             <th colSpan={2}>Cumm. This Week</th>
             <th rowSpan={2}>
-              Target
+              Plan
               <br />
               (%)
             </th>

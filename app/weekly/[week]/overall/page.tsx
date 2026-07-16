@@ -23,7 +23,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
   const recentChanges = (db.changeLog ?? []).filter((c) => c.week === week);
 
   const stats = [
-    { label: 'Plan / Target', value: grandTotal.targetWF, tone: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Plan', value: grandTotal.targetWF, tone: 'text-red-600', bg: 'bg-red-50' },
     { label: 'Actual', value: grandTotal.curProgressPct, tone: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'This Week', value: grandTotal.thisWeekProgressPct, tone: 'text-purple-600', bg: 'bg-purple-50' },
     {

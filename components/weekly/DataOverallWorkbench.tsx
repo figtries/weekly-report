@@ -102,8 +102,8 @@ function statusOf(cum: number, plan: number) {
 
 function gapText(cum: number, plan: number): { text: string; cls: string } {
   const gap = round2(cum - plan);
-  if (Math.abs(gap) < 0.05) return { text: 'on target', cls: 'text-gray-500' };
-  if (gap >= -1 && gap < 0) return { text: 'nearly on target', cls: 'text-gray-500' };
+  if (Math.abs(gap) < 0.05) return { text: 'on plan', cls: 'text-gray-500' };
+  if (gap >= -1 && gap < 0) return { text: 'nearly on plan', cls: 'text-gray-500' };
   if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-red-500' };
   return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
 }
@@ -503,7 +503,7 @@ export default function DataOverallWorkbench({
                           <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
                             c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
                           }`}>
-                            {c.field === 'cumProgressPct' ? 'Actual' : 'Target'}
+                            {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
                           </span>
                           <span className="font-medium tabular-nums text-gray-700">{c.oldValue.toFixed(1)}%</span>
                           <span className="text-gray-400">→</span>
@@ -598,7 +598,7 @@ export default function DataOverallWorkbench({
                     <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
                     <p className="mt-0.5 text-[13px] text-gray-500">
                       {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% ·{' '}
-                      Target {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
+                      Plan {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
                       <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
                         {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
                       </span>
@@ -769,7 +769,7 @@ const FolderCard = memo(function FolderCard({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
         <div className="mt-1 text-[13px] text-gray-500">
-          {leafCount(node)} activities · Target {plan.toFixed(1)}% ·{' '}
+          {leafCount(node)} activities · Plan {plan.toFixed(1)}% ·{' '}
           <span className={gap.cls}>{gap.text}</span>
         </div>
       </div>
@@ -906,7 +906,7 @@ const LeafCard = memo(function LeafCard({
               <div
                 className="absolute -top-[3px] h-4 w-0.5 rounded-full bg-gray-600/70"
                 style={{ left: `calc(${clamp(plan)}% - 1px)` }}
-                title={`Target ${plan.toFixed(1)}%`}
+                title={`Plan ${plan.toFixed(1)}%`}
               />
             )}
           </div>
@@ -920,7 +920,7 @@ const LeafCard = memo(function LeafCard({
               )}
             </span>
             <span className="ml-auto flex flex-wrap items-center gap-2">
-              Target <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
+              Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
               <span className={gap.cls}>· {gap.text}</span>
               <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
             </span>

@@ -53,7 +53,7 @@ export default function WeeklyPrintDetail({
                 <th colSpan={2}>Last Week</th>
                 <th colSpan={2}>This Week</th>
                 <th colSpan={2}>Cumm. This Week</th>
-                <th rowSpan={2}>Target (%)</th>
+                <th rowSpan={2}>Plan (%)</th>
                 <th rowSpan={2}>Variance (%)</th>
               </tr>
               <tr>
