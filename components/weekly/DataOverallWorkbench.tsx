@@ -108,6 +108,19 @@ function gapText(cum: number, plan: number): { text: string; cls: string } {
   return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
 }
 
+/* The behind/ahead verdict, always uppercase in its status colour. From sm up
+ * it stays inline at the end of the meta line; on phones it moves to its own
+ * bottom row instead of wrapping mid-sentence. Mirrors Detail Progress. */
+function GapInline({ cum, plan }: { cum: number; plan: number }) {
+  const gap = gapText(cum, plan);
+  return <span className={`hidden font-semibold uppercase sm:inline ${gap.cls}`}> · {gap.text}</span>;
+}
+
+function GapBottomRow({ cum, plan, className = 'mt-1' }: { cum: number; plan: number; className?: string }) {
+  const gap = gapText(cum, plan);
+  return <div className={`text-[12px] font-bold uppercase tracking-wide sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
+}
+
 export default function DataOverallWorkbench({
   roots,
   week,
@@ -598,11 +611,10 @@ export default function DataOverallWorkbench({
                     <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
                     <p className="mt-0.5 text-[13px] text-gray-500">
                       {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% ·{' '}
-                      Plan {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
-                      <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
-                        {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
-                      </span>
+                      Plan {round2(planPctOf(currentNode)).toFixed(1)}%
+                      <GapInline cum={round2(currentNode.curProgressPct)} plan={round2(planPctOf(currentNode))} />
                     </p>
+                    <GapBottomRow cum={round2(currentNode.curProgressPct)} plan={round2(planPctOf(currentNode))} />
                   </div>
                 </div>
               )}
@@ -758,7 +770,6 @@ const FolderCard = memo(function FolderCard({
   plan: number;
 }) {
   const st = statusOf(cum, plan);
-  const gap = gapText(cum, plan);
   return (
     <button
       onClick={onOpen}
@@ -769,9 +780,10 @@ const FolderCard = memo(function FolderCard({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
         <div className="mt-1 text-[13px] text-gray-500">
-          {leafCount(node)} activities · Plan {plan.toFixed(1)}% ·{' '}
-          <span className={gap.cls}>{gap.text}</span>
+          {leafCount(node)} activities · Plan {plan.toFixed(1)}%
+          <GapInline cum={cum} plan={plan} />
         </div>
+        <GapBottomRow cum={cum} plan={plan} />
       </div>
       <span className={`hidden shrink-0 rounded-full px-3 py-1 text-[12px] font-medium sm:inline ${st.chip}`}>
         {st.label}
@@ -814,7 +826,6 @@ const LeafCard = memo(function LeafCard({
   const isRecent = recentIds.has(node.id);
   const isDone = cum >= 99.95 && !isDirty;
   const showDetail = detailOpen.has(node.id);
-  const gap = gapText(cum, plan);
   const st = statusOf(cum, plan);
   const thisWeek = round2(cum - node.prevProgressPct);
 
@@ -921,10 +932,11 @@ const LeafCard = memo(function LeafCard({
             </span>
             <span className="ml-auto flex flex-wrap items-center gap-2">
               Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
-              <span className={gap.cls}>· {gap.text}</span>
+              <GapInline cum={cum} plan={plan} />
               <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
             </span>
           </div>
+          <GapBottomRow cum={cum} plan={plan} className="mt-1.5" />
         </>
       )}
       {isDone && (

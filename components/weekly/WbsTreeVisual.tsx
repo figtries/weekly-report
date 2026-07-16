@@ -74,6 +74,19 @@ function gapText(cum: number, plan: number): { text: string; cls: string } {
   return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
 }
 
+/* The behind/ahead verdict, always uppercase in its status colour. From sm up
+ * it stays inline at the end of the meta line; on phones it moves to its own
+ * bottom row instead of wrapping mid-sentence. */
+function GapInline({ cum, plan }: { cum: number; plan: number }) {
+  const gap = gapText(cum, plan);
+  return <span className={`hidden font-semibold uppercase sm:inline ${gap.cls}`}> · {gap.text}</span>;
+}
+
+function GapBottomRow({ cum, plan, className = 'mt-1' }: { cum: number; plan: number; className?: string }) {
+  const gap = gapText(cum, plan);
+  return <div className={`text-[12px] font-bold uppercase tracking-wide sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
+}
+
 /** One plain-language sentence describing where an activity stands. */
 function storyOf(cum: number, plan: number, thisWeek: number): string {
   const st = statusOf(cum, plan);
@@ -323,11 +336,10 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
                   <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
                   <p className="mt-0.5 text-[13px] text-gray-500">
                     {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% · Plan{' '}
-                    {round2(planPctOf(currentNode)).toFixed(1)}% ·{' '}
-                    <span className={gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).cls}>
-                      {gapText(round2(currentNode.curProgressPct), round2(planPctOf(currentNode))).text}
-                    </span>
+                    {round2(planPctOf(currentNode)).toFixed(1)}%
+                    <GapInline cum={round2(currentNode.curProgressPct)} plan={round2(planPctOf(currentNode))} />
                   </p>
+                  <GapBottomRow cum={round2(currentNode.curProgressPct)} plan={round2(planPctOf(currentNode))} />
                 </div>
               </div>
             )}
@@ -541,7 +553,6 @@ function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; 
   const cum = round2(node.curProgressPct);
   const plan = round2(planPctOf(node));
   const st = statusOf(cum, plan);
-  const gap = gapText(cum, plan);
   return (
     <button
       onClick={onOpen}
@@ -552,8 +563,10 @@ function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; 
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
         <div className="mt-1 text-[13px] text-gray-500">
-          {leafCount(node)} activities · Plan {plan.toFixed(1)}% · <span className={gap.cls}>{gap.text}</span>
+          {leafCount(node)} activities · Plan {plan.toFixed(1)}%
+          <GapInline cum={cum} plan={plan} />
         </div>
+        <GapBottomRow cum={cum} plan={plan} />
       </div>
       <span className={`hidden shrink-0 rounded-full px-3 py-1 text-[12px] font-medium sm:inline ${st.chip}`}>{st.label}</span>
       <svg className="h-5 w-5 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -569,7 +582,6 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
   const cum = round2(node.curProgressPct);
   const plan = round2(planPctOf(node));
   const st = statusOf(cum, plan);
-  const gap = gapText(cum, plan);
   const thisWeek = round2(cum - node.prevProgressPct);
   const isDone = cum >= 99.95;
   const curWF = round2((node.bobot * cum) / 100);
@@ -617,10 +629,11 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
             </span>
             <span className="ml-auto flex flex-wrap items-center gap-2">
               Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
-              <span className={gap.cls}>· {gap.text}</span>
+              <GapInline cum={cum} plan={plan} />
               <DetailToggle open={open} onClick={onToggle} />
             </span>
           </div>
+          <GapBottomRow cum={cum} plan={plan} className="mt-1.5" />
         </>
       )}
       {isDone && (
