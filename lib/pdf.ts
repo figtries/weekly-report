@@ -65,6 +65,14 @@ async function getBrowser(): Promise<Browser> {
   }
 }
 
+// The warmup route calls this when a save button appears on screen: booting
+// Chromium is the dominant cost of a cold save (seconds on Vercel while the
+// lambda unpacks the binary), and paying it while the user is still reading
+// means the actual tap only pays render + transfer.
+export async function warmPdfRenderer(): Promise<void> {
+  await getBrowser();
+}
+
 export async function renderReportPdf(url: string): Promise<Uint8Array> {
   const browser = await getBrowser();
   const page = await browser.newPage();

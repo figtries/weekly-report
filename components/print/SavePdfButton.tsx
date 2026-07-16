@@ -9,11 +9,55 @@ import { useEffect, useRef, useState } from 'react';
 // route, because a navigation gives no feedback: the tab just sits there while
 // Chromium renders (seconds — longer on a cold serverless start), and users
 // pressed the button again. Fetching keeps the user on the page and lets the
-// button narrate the whole trip: Preparing → Saved!, or a tap-to-retry failure.
+// button narrate the whole trip: Preparing → Downloading N% → Saved!, or a
+// tap-to-retry failure.
 type Phase = 'idle' | 'busy' | 'done' | 'error';
 
 const RESET_DONE_MS = 2600;
 const RESET_ERROR_MS = 4000;
+
+// Booting Chromium is the dominant cost of a cold save — seconds on Vercel
+// while the lambda unpacks the binary, all spent AFTER the tap. Ping the
+// warmup route as soon as a save button is on screen (and again when the user
+// returns to the tab — phones background this app for long stretches, long
+// enough for the lambda to go cold) so the boot happens while they're still
+// reading and the tap itself only pays render + transfer. The timestamp is
+// module-level: several buttons, one ping.
+const REWARM_MS = 4 * 60_000;
+let lastWarmAt = -Infinity;
+
+function warmPdfRenderer() {
+  if (Date.now() - lastWarmAt < REWARM_MS) return;
+  lastWarmAt = Date.now();
+  fetch('/api/pdf/warmup').catch(() => undefined);
+}
+
+// Read the body chunk by chunk so the button can count the transfer up: on a
+// phone the download is most of the wait, and a spinner that sits still for
+// the whole of it reads as a hang. Falls back to a plain blob when the length
+// isn't known (a proxy stripped it) — the spinner then just keeps spinning.
+async function readWithProgress(res: Response, onProgress: (pct: number) => void): Promise<Blob> {
+  const total = Number(res.headers.get('Content-Length'));
+  if (!res.body || !Number.isFinite(total) || total <= 0) return res.blob();
+  const reader = res.body.getReader();
+  const chunks: BlobPart[] = [];
+  let received = 0;
+  let lastPct = -1;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    // cap at 99 — 100% is the Saved! state's job, a lingering "100%" reads
+    // as stuck
+    const pct = Math.min(99, Math.floor((received / total) * 100));
+    if (pct > lastPct) {
+      lastPct = pct;
+      onProgress(pct);
+    }
+  }
+  return new Blob(chunks, { type: res.headers.get('Content-Type') ?? '' });
+}
 
 export default function SavePdfButton({
   url,
@@ -28,6 +72,9 @@ export default function SavePdfButton({
   beforeDownload?: () => Promise<boolean>;
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
+  // null while the server is still rendering (nothing to count yet); a number
+  // once bytes are flowing.
+  const [progress, setProgress] = useState<number | null>(null);
   const resetTimer = useRef<number | undefined>(undefined);
   const mountedRef = useRef(true);
 
@@ -37,6 +84,15 @@ export default function SavePdfButton({
       mountedRef.current = false;
       window.clearTimeout(resetTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    warmPdfRenderer();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') warmPdfRenderer();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   function settle(next: Phase, after: number) {
@@ -51,6 +107,7 @@ export default function SavePdfButton({
   async function save() {
     if (phase === 'busy' || phase === 'done') return;
     setPhase('busy');
+    setProgress(null);
     try {
       if (beforeDownload && !(await beforeDownload())) {
         if (mountedRef.current) setPhase('idle');
@@ -58,7 +115,9 @@ export default function SavePdfButton({
       }
       const res = await fetch(url);
       if (!res.ok) throw new Error(`PDF route answered ${res.status}`);
-      const blob = await res.blob();
+      const blob = await readWithProgress(res, (pct) => {
+        if (mountedRef.current) setProgress(pct);
+      });
       // A server error page still arrives as a blob — never save one as .pdf.
       if (!blob.type.includes('pdf')) throw new Error(`Not a PDF: ${blob.type}`);
       const href = URL.createObjectURL(blob);
@@ -90,11 +149,22 @@ export default function SavePdfButton({
       disabled={phase === 'busy'}
       aria-label={ariaLabel}
       title={ariaLabel}
-      aria-live="polite"
       className={`inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg text-sm font-medium shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] disabled:cursor-progress sm:w-auto sm:px-4 sm:py-2 ${palette}`}
     >
       {phase === 'busy' ? (
-        <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+        <>
+          {/* on the icon-only (mobile) button the counting percent replaces
+              the spinner once bytes flow — that count is the whole feedback */}
+          <span
+            className={`h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white ${progress !== null ? 'hidden sm:inline-block' : ''}`}
+            aria-hidden="true"
+          />
+          {progress !== null && (
+            <span className="text-[11px] font-bold leading-none tabular-nums sm:hidden" aria-hidden="true">
+              {progress}%
+            </span>
+          )}
+        </>
       ) : phase === 'done' ? (
         <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path
@@ -118,7 +188,20 @@ export default function SavePdfButton({
         </svg>
       )}
       <span className="hidden sm:inline">
-        {phase === 'busy' ? 'Preparing PDF…' : phase === 'done' ? 'Saved!' : phase === 'error' ? 'Failed — retry' : 'Save as PDF'}
+        {phase === 'busy'
+          ? progress !== null
+            ? `Downloading… ${progress}%`
+            : 'Preparing PDF…'
+          : phase === 'done'
+            ? 'Saved!'
+            : phase === 'error'
+              ? 'Failed — retry'
+              : 'Save as PDF'}
+      </span>
+      {/* phase-only announcements: a per-percent aria-live region would spam
+          screen readers through the whole download */}
+      <span className="sr-only" aria-live="polite">
+        {phase === 'busy' ? 'Preparing PDF' : phase === 'done' ? 'Saved' : phase === 'error' ? 'Failed, tap to retry' : ''}
       </span>
     </button>
   );

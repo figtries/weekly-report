@@ -21,10 +21,14 @@ toggle for it at all. `lib/pdf.ts` renders `/print/weekly/[week]?only=KEY` or
 `@sparticuz/chromium` on Vercel, system Chrome locally) with
 `displayHeaderFooter: false`, so the file is just the report and identical on
 every device. `SavePdfButton` fetches the bytes and saves them via a blob anchor,
-narrating the whole trip (Save as PDF → Preparing PDF… → Saved! / tap-to-retry) —
-a bare navigation gave no feedback for the seconds Chromium needs, and users
-pressed the button twice. The daily button persists unsaved edits first: the PDF
-is built from stored data.
+narrating the whole trip (Save as PDF → Preparing PDF… → Downloading… N% →
+Saved! / tap-to-retry) — a bare navigation gave no feedback for the seconds
+Chromium needs, and users pressed the button twice. The percent needs the PDF
+routes' explicit `Content-Length`; the button also pings `/api/pdf/warmup` when
+it appears (and when the tab becomes visible again) so the Chromium boot —
+seconds on a cold Vercel lambda, the bulk of the mobile wait — happens before
+the tap, not after. The daily button persists unsaved edits first: the PDF is
+built from stored data.
 
 **The `/print/*` render targets live OUTSIDE the app segments, on purpose.** The
 weekly layout's `unstable_instant` validation covers every page beneath it and

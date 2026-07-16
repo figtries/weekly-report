@@ -23,6 +23,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ date
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="Daily Report ${date}.pdf"`,
+      // Explicit length so SavePdfButton can count the transfer up — on a
+      // phone the download is most of the wait.
+      'Content-Length': String(pdf.byteLength),
       'Cache-Control': 'no-store',
     },
   });

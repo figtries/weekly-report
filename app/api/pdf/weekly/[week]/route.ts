@@ -44,6 +44,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ week
       // attachment: the button downloads the file (SavePdfButton fetches the
       // bytes itself, but a direct visit should save, not navigate away)
       'Content-Disposition': `attachment; filename="${name}"`,
+      // Explicit length so SavePdfButton can count the transfer up — on a
+      // phone the download is most of the wait.
+      'Content-Length': String(pdf.byteLength),
       'Cache-Control': 'no-store',
     },
   });
