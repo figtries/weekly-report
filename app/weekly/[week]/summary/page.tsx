@@ -19,7 +19,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
         <div className="mb-5 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Overall Summary</h1>
           <p className="text-sm sm:text-base text-gray-600">
-            Progress per SPK contract — Week {week}.
+            <span className="font-medium text-gray-900">Week {week}</span> · Progress per SPK contract.
           </p>
         </div>
 

@@ -38,9 +38,7 @@ export default async function DataOverallPage({ params }: { params: Promise<{ we
     <div className="px-3 py-4 sm:p-6 lg:p-8 animate-fade-in-up space-y-5 sm:space-y-6">
       <div className="mb-5 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Data Overall</h1>
-        <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-          The single source of truth for <span className="font-medium text-gray-900">Week {week}</span> · {period}.{' '}
-          <span className="hidden sm:inline">Click an activity to edit — Summary, Detail Progress, and S-Curve auto-update after saving.</span>
+        <p className="text-sm sm:text-base text-gray-600 leading-relaxed"> <span className="font-medium text-gray-900">Week {week}</span> · {period}.{' '}
         </p>
       </div>
 
