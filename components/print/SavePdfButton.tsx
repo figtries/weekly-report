@@ -21,15 +21,18 @@ const RESET_ERROR_MS = 4000;
 // warmup route as soon as a save button is on screen (and again when the user
 // returns to the tab — phones background this app for long stretches, long
 // enough for the lambda to go cold) so the boot happens while they're still
-// reading and the tap itself only pays render + transfer. The timestamp is
-// module-level: several buttons, one ping.
+// reading and the tap itself only pays render + transfer. The ping carries
+// this button's PDF url so the server can pre-load the matching print page
+// into the warmed browser too (see warmPdfRenderer in lib/pdf.ts). Timestamps
+// are module-level and per target: several buttons, one ping each.
 const REWARM_MS = 4 * 60_000;
-let lastWarmAt = -Infinity;
+const lastWarmAt = new Map<string, number>();
 
-function warmPdfRenderer() {
-  if (Date.now() - lastWarmAt < REWARM_MS) return;
-  lastWarmAt = Date.now();
-  fetch('/api/pdf/warmup').catch(() => undefined);
+function warmPdfRenderer(url: string) {
+  const last = lastWarmAt.get(url) ?? -Infinity;
+  if (Date.now() - last < REWARM_MS) return;
+  lastWarmAt.set(url, Date.now());
+  fetch(`/api/pdf/warmup?for=${encodeURIComponent(url)}`).catch(() => undefined);
 }
 
 // Read the body chunk by chunk so the button can count the transfer up: on a
@@ -87,13 +90,13 @@ export default function SavePdfButton({
   }, []);
 
   useEffect(() => {
-    warmPdfRenderer();
+    warmPdfRenderer(url);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') warmPdfRenderer();
+      if (document.visibilityState === 'visible') warmPdfRenderer(url);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, []);
+  }, [url]);
 
   function settle(next: Phase, after: number) {
     if (!mountedRef.current) return;

@@ -69,8 +69,28 @@ async function getBrowser(): Promise<Browser> {
 // Chromium is the dominant cost of a cold save (seconds on Vercel while the
 // lambda unpacks the binary), and paying it while the user is still reading
 // means the actual tap only pays render + transfer.
-export async function warmPdfRenderer(): Promise<void> {
-  await getBrowser();
+//
+// Given a target, it goes one layer deeper and loads the print page once in
+// the warmed browser: that primes the page function and its 'use cache'
+// entries AND pulls the client chunks, fonts and logos into Chromium's own
+// HTTP cache — all things the tap-time goto would otherwise fetch cold.
+// domcontentloaded is enough for that; nothing waits on charts here. A warm
+// visit is throttled per target so visibility flaps don't re-render the page.
+const WARM_TTL_MS = 3 * 60_000;
+const warmedAt = new Map<string, number>();
+
+export async function warmPdfRenderer(target?: string): Promise<void> {
+  const browser = await getBrowser();
+  if (!target) return;
+  const last = warmedAt.get(target) ?? -Infinity;
+  if (Date.now() - last < WARM_TTL_MS) return;
+  warmedAt.set(target, Date.now());
+  const page = await browser.newPage();
+  try {
+    await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  } finally {
+    await page.close().catch(() => undefined);
+  }
 }
 
 export async function renderReportPdf(url: string): Promise<Uint8Array> {
@@ -104,16 +124,19 @@ export async function renderReportPdf(url: string): Promise<Uint8Array> {
           const curves = [...chart.querySelectorAll('path.recharts-curve')];
           return curves.length > 0 && curves.every((c) => (c.getAttribute('d') ?? '').length > 2);
         });
-      for (let i = 0; i < 100 && !drawn(); i++) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      // 25ms ticks, same overall cap as the old 100ms polls: the charts are
+      // usually ready within a frame or two of hydration, and a coarse poll
+      // billed up to 100ms of pure waiting to every report.
+      for (let i = 0; i < 400 && !drawn(); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
       }
       // Wait on img.complete, NOT img.decode(): in headless Chromium decode()
       // promises never settle (no frames are produced until page.pdf), which
       // hung this evaluate until the protocol timeout.
       const imagesLoaded = async () => {
         const loaded = () => [...document.images].every((img) => img.complete);
-        for (let i = 0; i < 200 && !loaded(); i++) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+        for (let i = 0; i < 800 && !loaded(); i++) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
         }
       };
       await imagesLoaded();
@@ -147,6 +170,11 @@ export async function renderReportPdf(url: string): Promise<Uint8Array> {
       printBackground: true,
       preferCSSPageSize: true,
       displayHeaderFooter: false,
+      // Untagged: puppeteer defaults tagged (accessible) PDFs ON, which writes
+      // a structure-tree node for every table cell — on these table-heavy
+      // reports that's most of the file and of page.pdf()'s runtime, and the
+      // phone pays for it twice (wait + transfer).
+      tagged: false,
     });
   } finally {
     await page.close().catch(() => undefined);
