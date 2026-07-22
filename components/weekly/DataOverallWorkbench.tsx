@@ -160,13 +160,28 @@ export default function DataOverallWorkbench({
   useEffect(() => {
     if (!showLog) return;
     if (window.matchMedia('(min-width: 640px)').matches) return;
+    // The dismissing tap must not also activate whatever sits under the panel —
+    // tapping an activity card to close would otherwise navigate into it, which
+    // looks like the panel glitching away. Swallow that one click.
+    let swallowNextClick = false;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
       if (logPanelRef.current?.contains(target) || logToggleRef.current?.contains(target)) return;
+      swallowNextClick = true;
       setShowLog(false);
     };
+    const onClickCapture = (e: MouseEvent) => {
+      if (!swallowNextClick) return;
+      swallowNextClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    };
     document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
+    document.addEventListener('click', onClickCapture, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('click', onClickCapture, true);
+    };
   }, [showLog]);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
@@ -493,10 +508,14 @@ export default function DataOverallWorkbench({
       <div className="relative sm:static">
         <div
           ref={logPanelRef}
-          className={`absolute inset-x-0 top-0 z-40 origin-top transition-[opacity,transform] duration-300 [transition-timing-function:var(--ease-out-expo)] sm:static sm:z-auto sm:grid sm:translate-y-0 sm:scale-100 sm:opacity-100 sm:transition-[grid-template-rows] sm:duration-[280ms] ${
+          // Fade + lift only, no scale: scaling a 650px panel resamples every
+          // glyph inside it for the whole animation, which reads as the text
+          // going soft and snapping back — exactly the kind of "glitch" this
+          // panel is not allowed to have.
+          className={`absolute inset-x-0 top-0 z-40 transition-[opacity,transform] duration-300 [transition-timing-function:var(--ease-out-expo)] sm:static sm:z-auto sm:grid sm:translate-y-0 sm:opacity-100 sm:transition-[grid-template-rows] sm:duration-[280ms] ${
             showLog
-              ? 'translate-y-0 scale-100 opacity-100 sm:[grid-template-rows:1fr]'
-              : 'pointer-events-none -translate-y-2 scale-[0.97] opacity-0 sm:pointer-events-auto sm:[grid-template-rows:0fr]'
+              ? 'translate-y-0 opacity-100 sm:[grid-template-rows:1fr]'
+              : 'pointer-events-none -translate-y-2 opacity-0 sm:pointer-events-auto sm:[grid-template-rows:0fr]'
           }`}
           aria-hidden={!showLog}
         >
@@ -530,10 +549,12 @@ export default function DataOverallWorkbench({
                         }
                       }}
                       disabled={!leaf}
-                      // Rows outside the scroll viewport skip layout and paint —
-                      // a full week's log is dozens of rows, and laying all of
-                      // them out on every frame is what the open felt like.
-                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_76px] hover:bg-blue-50/40 disabled:pointer-events-none"
+                      // NO content-visibility here. Rows measure 104px but the
+                      // intrinsic-size placeholder was 76px, so every row that
+                      // skipped rendering shrank the list by 28px — the list
+                      // resized under the fade and that was the close "glitch".
+                      // The overlay already removed the need for it.
+                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-blue-50/40 disabled:pointer-events-none"
                     >
                       <span
                         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
