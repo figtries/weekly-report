@@ -426,7 +426,7 @@ export default function DataOverallWorkbench({
         <button
           onClick={() => setShowLog((v) => !v)}
           disabled={recentChanges.length === 0}
-          className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all lg:col-span-1 ${
+          className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-[border-color,box-shadow,transform] duration-200 [transition-timing-function:var(--ease-out-expo)] lg:col-span-1 ${
             recentChanges.length > 0
               ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
               : 'cursor-default'
@@ -461,13 +461,23 @@ export default function DataOverallWorkbench({
         </button>
       </div>
 
-      {/* Change log panel */}
+      {/* Change log panel.
+         The top margin lives INSIDE the animated area (pt-3 below): toggling
+         mt-3/mt-0 outside it snapped 12px into place while the height was still
+         easing, which is the jolt this panel used to open with.
+         `contain: layout paint` keeps each frame's reflow inside the panel —
+         without it the whole page relaid out on every frame of the grid-row
+         animation, which is what made it crawl on phones. */}
       <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out ${showLog ? 'mt-3' : 'mt-0'}`}
+        className="grid transition-[grid-template-rows] duration-[280ms] [transition-timing-function:var(--ease-out-expo)]"
         style={{ gridTemplateRows: showLog ? '1fr' : '0fr' }}
       >
-        <div className="overflow-hidden">
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden [contain:layout_paint]">
+          <div
+            className={`mt-3 rounded-2xl border border-gray-200 bg-white shadow-sm transition-[opacity,transform] duration-200 ease-out ${
+              showLog ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0'
+            }`}
+          >
             <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
               <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
               <div suppressHydrationWarning className="text-[12px] text-gray-500">
@@ -496,7 +506,10 @@ export default function DataOverallWorkbench({
                         }
                       }}
                       disabled={!leaf}
-                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-blue-50/40 disabled:pointer-events-none"
+                      // Rows outside the scroll viewport skip layout and paint —
+                      // a full week's log is dozens of rows, and laying all of
+                      // them out on every frame is what the open felt like.
+                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_76px] hover:bg-blue-50/40 disabled:pointer-events-none"
                     >
                       <span
                         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
