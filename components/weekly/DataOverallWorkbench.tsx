@@ -308,11 +308,11 @@ export default function DataOverallWorkbench({
   // play the slide-out before unmounting — so the bar never blinks away.
   useEffect(() => {
     if (!justSaved) return;
-    const leave = setTimeout(() => setBarLeaving(true), 1400);
+    const leave = setTimeout(() => setBarLeaving(true), 900);
     const done = setTimeout(() => {
       setJustSaved(false);
       setBarLeaving(false);
-    }, 1700);
+    }, 1140);
     return () => {
       clearTimeout(leave);
       clearTimeout(done);
@@ -684,25 +684,48 @@ export default function DataOverallWorkbench({
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-2">
+                  {/* Cancel keeps its box while saving and only fades — collapsing
+                      or dimming it mid-save shoved the row sideways on phones. */}
                   <button
                     onClick={discardAll}
                     disabled={saving}
-                    className="rounded-lg px-2 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40 min-[380px]:px-2.5 min-[380px]:text-[14px] sm:px-3.5"
+                    aria-hidden={saving}
+                    className={`rounded-lg px-2 py-2 text-[13px] font-medium text-gray-500 transition-opacity duration-200 hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none min-[380px]:px-2.5 min-[380px]:text-[14px] sm:px-3.5 ${
+                      saving ? 'opacity-0' : 'opacity-100'
+                    }`}
                   >
                     Cancel
                   </button>
+                  {/* Both labels sit in one grid cell so the button is always as
+                      wide as "Saving…" — swapping text in place used to resize it
+                      mid-save and push Cancel across the bar. */}
                   <button
                     onClick={save}
                     disabled={saving}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70 min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
+                    aria-label={saving ? 'Saving' : 'Save'}
+                    className="grid place-items-center rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
                   >
-                    {saving && (
+                    <span
+                      className={`col-start-1 row-start-1 transition-opacity duration-150 ${
+                        saving ? 'opacity-0' : 'opacity-100'
+                      }`}
+                    >
+                      Save
+                    </span>
+                    <span
+                      className={`col-start-1 row-start-1 flex items-center gap-2 transition-opacity duration-150 ${
+                        saving ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
                       <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                    )}
-                    {saving ? 'Saving…' : 'Save'}
+                      {/* Phones get the spinner alone: the word would make the
+                          button permanently as wide as "Saving…" and squeeze the
+                          one-line row that narrow screens barely fit. */}
+                      <span className="hidden sm:inline">Saving…</span>
+                    </span>
                   </button>
                 </div>
               </>
@@ -851,7 +874,10 @@ const LeafCard = memo(function LeafCard({
         isDirty ? 'border-amber-300 ring-2 ring-amber-100' : 'border-gray-200'
       } ${isDone ? 'opacity-70 hover:opacity-100' : ''}`}
     >
-      {/* Title row — stepper wraps below the name on narrow screens */}
+      {/* Title row — the stepper wraps below the name on narrow screens, and
+          everything that wraps starts at the card's left edge. Right-aligning
+          the wrapped pieces (ml-auto/justify-between) zig-zagged the card on
+          phones; the split only reads as a split once both halves share a row. */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-[55%] flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -872,7 +898,7 @@ const LeafCard = memo(function LeafCard({
 
         {/* Stepper */}
         {isDone ? (
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">100%</span>
             <button
               onClick={() => adjustCum(node, -5)}
@@ -886,8 +912,9 @@ const LeafCard = memo(function LeafCard({
             </button>
           </div>
         ) : (
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="flex w-full items-center justify-between gap-1.5 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
             <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
+            <span className="flex items-center gap-1.5">
             <input
               type="text"
               inputMode="decimal"
@@ -902,6 +929,7 @@ const LeafCard = memo(function LeafCard({
               className="h-10 w-[72px] rounded-xl border border-gray-300 bg-white text-center text-[15px] font-semibold tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
             <span className="text-[13px] font-medium text-gray-400">%</span>
+            </span>
             <StepBtn onClick={() => adjustCum(node, 5)} label="Increase 5%">+</StepBtn>
           </div>
         )}
@@ -925,7 +953,10 @@ const LeafCard = memo(function LeafCard({
               />
             )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-gray-500">
+          {/* Every row spans the full card: one item anchored left, one right.
+              Left-aligning everything instead left a dead column down the right
+              side of the card on phones. */}
+          <div className="mt-2 flex items-center justify-between gap-x-3 text-[12px] text-gray-500">
             <span>
               Last week <span className="font-medium text-gray-700">{node.prevProgressPct.toFixed(1)}%</span>
               {thisWeek !== 0 && (
@@ -934,13 +965,20 @@ const LeafCard = memo(function LeafCard({
                 </span>
               )}
             </span>
-            <span className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="flex shrink-0 items-center gap-2">
               Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
               <GapInline cum={cum} plan={plan} />
-              <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+              <span className="hidden sm:contents">
+                <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+              </span>
             </span>
           </div>
-          <GapBottomRow cum={cum} plan={plan} className="mt-1.5" />
+          {/* Phones get the status and the toggle as their own full-width row —
+              on desktop the toggle rides along in the row above. */}
+          <div className="mt-1.5 flex items-center justify-between gap-x-3 sm:hidden">
+            <GapBottomRow cum={cum} plan={plan} className="" />
+            <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+          </div>
         </>
       )}
       {isDone && (
