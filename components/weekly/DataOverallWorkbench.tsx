@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useState, useTransition } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { saveWeekUpdatesAction } from '@/lib/actions';
 import type { RollupNode } from '@/lib/rollup';
 import type { ChangeLogEntry } from '@/lib/types';
@@ -150,6 +150,24 @@ export default function DataOverallWorkbench({
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
+  const logPanelRef = useRef<HTMLDivElement>(null);
+  const logToggleRef = useRef<HTMLButtonElement>(null);
+
+  // On phones the log floats over the page, so a tap outside has to dismiss it —
+  // an overlay you can only close from the control that opened it feels stuck.
+  // Desktop keeps the inline accordion, where tapping away closing it would be
+  // surprising.
+  useEffect(() => {
+    if (!showLog) return;
+    if (window.matchMedia('(min-width: 640px)').matches) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (logPanelRef.current?.contains(target) || logToggleRef.current?.contains(target)) return;
+      setShowLog(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [showLog]);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
   // stale node objects would otherwise keep showing pre-save numbers. Each
@@ -424,6 +442,7 @@ export default function DataOverallWorkbench({
           )}
         </div>
         <button
+          ref={logToggleRef}
           onClick={() => setShowLog((v) => !v)}
           disabled={recentChanges.length === 0}
           className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-[border-color,box-shadow,transform] duration-200 [transition-timing-function:var(--ease-out-expo)] lg:col-span-1 ${
@@ -462,22 +481,27 @@ export default function DataOverallWorkbench({
       </div>
 
       {/* Change log panel.
-         The top margin lives INSIDE the animated area (pt-3 below): toggling
-         mt-3/mt-0 outside it snapped 12px into place while the height was still
-         easing, which is the jolt this panel used to open with.
-         `contain: layout paint` keeps each frame's reflow inside the panel —
-         without it the whole page relaid out on every frame of the grid-row
-         animation, which is what made it crawl on phones. */}
-      <div
-        className="grid transition-[grid-template-rows] duration-[280ms] [transition-timing-function:var(--ease-out-expo)]"
-        style={{ gridTemplateRows: showLog ? '1fr' : '0fr' }}
-      >
-        <div className="overflow-hidden [contain:layout_paint]">
-          <div
-            className={`mt-3 rounded-2xl border border-gray-200 bg-white shadow-sm transition-[opacity,transform] duration-200 ease-out ${
-              showLog ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0'
-            }`}
-          >
+         PHONES GET AN OVERLAY, DESKTOP KEEPS THE INLINE ACCORDION. The height
+         animation (grid-template-rows 0fr→1fr) has to relayout everything below
+         the panel on every frame; a phone can't hold 60fps doing that with a
+         week of log rows, which is why this opened smoothly on desktop and
+         crawled on mobile no matter how the easing was tuned. On mobile the
+         panel is absolutely positioned in a zero-height slot, so opening moves
+         NOTHING — only opacity and transform change, both composited.
+         The top margin stays inside the animated box: toggling it outside
+         snapped 12px into place while the height was still easing. */}
+      <div className="relative sm:static">
+        <div
+          ref={logPanelRef}
+          className={`absolute inset-x-0 top-0 z-40 origin-top transition-[opacity,transform] duration-300 [transition-timing-function:var(--ease-out-expo)] sm:static sm:z-auto sm:grid sm:translate-y-0 sm:scale-100 sm:opacity-100 sm:transition-[grid-template-rows] sm:duration-[280ms] ${
+            showLog
+              ? 'translate-y-0 scale-100 opacity-100 sm:[grid-template-rows:1fr]'
+              : 'pointer-events-none -translate-y-2 scale-[0.97] opacity-0 sm:pointer-events-auto sm:[grid-template-rows:0fr]'
+          }`}
+          aria-hidden={!showLog}
+        >
+          <div className="overflow-hidden sm:[contain:layout_paint]">
+            <div className="mt-3 rounded-2xl border border-gray-200 bg-white shadow-xl sm:shadow-sm">
             <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
               <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
               <div suppressHydrationWarning className="text-[12px] text-gray-500">
@@ -551,6 +575,7 @@ export default function DataOverallWorkbench({
               {sortedLog.length === 0 && (
                 <div className="px-5 py-8 text-center text-[13px] text-gray-500">No updates recorded this week yet.</div>
               )}
+            </div>
             </div>
           </div>
         </div>
