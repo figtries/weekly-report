@@ -53,6 +53,15 @@ function parseInput(raw: string, current: number): number | null {
   return clamp(round2(n));
 }
 
+/** Width of a value in `ch`, so the stepper's input can shrink-wrap it. Tabular
+ *  figures are all exactly 1ch, but the decimal separator is not — counting it
+ *  as a full digit left the number sitting off-centre next to its "%". */
+function chWidth(s: string): number {
+  let w = 0;
+  for (const c of s) w += c === '.' || c === ',' ? 0.45 : 1;
+  return Math.max(1, w);
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60_000);
@@ -152,6 +161,18 @@ export default function DataOverallWorkbench({
   const [showLog, setShowLog] = useState(false);
   const logPanelRef = useRef<HTMLDivElement>(null);
   const logToggleRef = useRef<HTMLButtonElement>(null);
+  const logListRef = useRef<HTMLDivElement>(null);
+  // True while the log list still has rows below the fold. Drives the bottom
+  // fade: a hard edge slices the next row in half and reads as the panel being
+  // cut off rather than scrollable.
+  const [logMore, setLogMore] = useState(false);
+  // Whether the list can scroll at all. `overscroll-contain` on a list whose
+  // rows already fit swallows the swipe and refuses to pass it to the page, so
+  // the floating panel felt frozen — every drag on it did nothing. Containment
+  // is only worth it once there is something inside to scroll.
+  const [logScrollable, setLogScrollable] = useState(false);
+  // Phone-only cap on the whole panel, measured against the live viewport.
+  const [logMaxH, setLogMaxH] = useState<string | undefined>(undefined);
 
   // On phones the log floats over the page, so a tap outside has to dismiss it —
   // an overlay you can only close from the control that opened it feels stuck.
@@ -182,6 +203,47 @@ export default function DataOverallWorkbench({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('click', onClickCapture, true);
     };
+  }, [showLog]);
+
+  // Re-measure the log list whenever it opens: the fade only belongs there when
+  // rows actually continue past the bottom edge.
+  useEffect(() => {
+    if (!showLog) return;
+    const el = logListRef.current;
+    if (!el) return;
+    const measure = () => {
+      setLogMore(el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+      // 32px, not a hair over zero: a list hiding half a row can barely move,
+      // so containing the swipe there still reads as a dead panel.
+      setLogScrollable(el.scrollHeight - el.clientHeight > 32);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showLog]);
+
+  // Bound the floating panel to what's actually on screen. The panel opens
+  // partway down the page, so a height measured in viewport units alone ran its
+  // last rows off the bottom — and because the overlay sits in a zero-height
+  // slot the page can't scroll down to them, so those rows were unreachable and
+  // the panel read as "won't scroll". Measure from the toggle it hangs off
+  // (stable — the panel itself is mid-transition at this point) and leave the
+  // rest of the screen to the list. Desktop keeps its static max-height.
+  useEffect(() => {
+    if (!showLog) return;
+    const measure = () => {
+      if (window.matchMedia('(min-width: 640px)').matches) {
+        setLogMaxH(undefined);
+        return;
+      }
+      const anchor = logToggleRef.current?.getBoundingClientRect().bottom ?? 0;
+      // 12px is the panel's own top margin, 16px the breathing room below it.
+      setLogMaxH(`${Math.max(200, window.innerHeight - anchor - 12 - 16)}px`);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [showLog]);
 
   // Re-resolve path nodes after router.refresh() delivers fresh rollups —
@@ -519,16 +581,54 @@ export default function DataOverallWorkbench({
           }`}
           aria-hidden={!showLog}
         >
-          <div className="overflow-hidden sm:[contain:layout_paint]">
-            <div className="mt-3 rounded-2xl border border-gray-200 bg-white shadow-xl sm:shadow-sm">
-            <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
+          {/* On phones the overlay carries the page colour and a 12px shelf below
+             the card, so the activity cards it floats over don't butt straight
+             against its bottom edge — desktop gets that gap for free from the
+             next block's own top margin. `overflow-hidden` is only the desktop
+             accordion's clip; keeping it on mobile also chopped off the panel's
+             drop shadow, which is what made the edge look severed. */}
+          <div className="bg-gray-50 pb-3 sm:bg-transparent sm:overflow-hidden sm:pb-0 sm:[contain:layout_paint]">
+            {/* The card clips its own corners: without this the scrolling list
+               paints square over the bottom rounding. */}
+            <div
+              className="mt-3 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl sm:shadow-sm"
+              style={logMaxH ? { maxHeight: logMaxH } : undefined}
+            >
+            <div className="flex shrink-0 flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
               <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
               <div suppressHydrationWarning className="text-[12px] text-gray-500">
                 {todayCount > 0 && <span className="font-medium text-emerald-600">{todayCount} today · </span>}
                 {sortedLog.length} {sortedLog.length === 1 ? 'update' : 'updates'} recorded
               </div>
             </div>
-            <div className="max-h-[70vh] sm:max-h-96 overflow-y-auto overscroll-contain divide-y divide-gray-100">
+            <div
+              ref={logListRef}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                setLogMore(el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+                setLogScrollable(el.scrollHeight - el.clientHeight > 32);
+              }}
+              // `touch-action: pan-y` claims the vertical drag for this list up
+              // front; without it the first swipe on the floating panel could be
+              // interpreted as a page gesture and the list felt locked.
+              // The list takes whatever the capped card has left over — hence
+              // min-h-0, without which a flex child refuses to shrink below its
+              // content and the cap does nothing.
+              className={`min-h-0 flex-1 touch-pan-y overflow-y-auto divide-y divide-gray-100 sm:max-h-96 sm:flex-none ${
+                logScrollable ? 'overscroll-contain' : 'overscroll-auto'
+              }`}
+              // Fade the last few pixels only while there is more to reach, so a
+              // half-row reads as "keep scrolling" instead of a cut. At the
+              // bottom the mask lifts and the final row sits flush on the corner.
+              style={
+                logMore
+                  ? {
+                      maskImage: 'linear-gradient(to bottom, #000 calc(100% - 40px), transparent)',
+                      WebkitMaskImage: 'linear-gradient(to bottom, #000 calc(100% - 40px), transparent)',
+                    }
+                  : undefined
+              }
+            >
               {sortedLog.map((c, i) => {
                 const leaf = flatAll.find((n) => n.id === c.leafId);
                 const delta = round2(c.newValue - c.oldValue);
@@ -564,14 +664,26 @@ export default function DataOverallWorkbench({
                         {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-[13px] font-medium text-gray-900">
-                            {leaf?.deskripsi ?? 'Activity not found'}
+                        {/* Phones put the Actual/Plan tag beside the activity
+                           name and leave the second line to the numbers alone —
+                           at phone width the tag, both values and the delta
+                           crowded onto one line. Desktop has the room, so there
+                           the tag stays where it was, leading the numbers. */}
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[13px] font-medium text-gray-900">
+                              {leaf?.deskripsi ?? 'Activity not found'}
+                            </span>
+                            <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:hidden ${
+                              c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                            }`}>
+                              {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
+                            </span>
                           </span>
                           <span suppressHydrationWarning className="shrink-0 text-[11px] text-gray-400">{timeAgo(c.at)}</span>
                         </span>
                         <span className="mt-1 flex items-center gap-1.5 text-[12px] text-gray-500">
-                          <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                          <span className={`hidden items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:inline-flex ${
                             c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
                           }`}>
                             {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
@@ -908,6 +1020,9 @@ const LeafCard = memo(function LeafCard({
 }: LeafCardProps) {
   const cum = currentCum(node);
   const plan = currentPlan(node);
+  // The stepper sizes its input from this string, so it has to be the exact
+  // text the input renders — typing buffer first, formatted value otherwise.
+  const cumShown = rawInputs[node.id]?.cum ?? cum.toFixed(cum % 1 === 0 ? 0 : 1);
   const isDirty = !!edits[node.id];
   const isRecent = recentIds.has(node.id);
   const isDone = cum >= 99.95 && !isDirty;
@@ -971,24 +1086,33 @@ const LeafCard = memo(function LeafCard({
             </button>
           </div>
         ) : (
-          <div className="flex w-full items-center justify-between gap-1.5 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
+          <div className="flex w-full items-center justify-end gap-2.5 sm:ml-auto sm:w-auto sm:shrink-0 sm:gap-1.5">
             <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
-            <span className="flex items-center gap-1.5">
-            <input
-              type="text"
-              inputMode="decimal"
-              value={rawInputs[node.id]?.cum ?? cum.toFixed(cum % 1 === 0 ? 0 : 1)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: raw } }));
-                const parsed = parseInput(raw, round2(node.curProgressPct));
-                if (parsed !== null) setEdit(node.id, { cumProgressPct: parsed });
-              }}
-              onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: undefined } }))}
-              className="h-10 w-[72px] rounded-xl border border-gray-300 bg-white text-center text-[15px] font-semibold tabular-nums text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
-            />
-            <span className="text-[13px] font-medium text-gray-400">%</span>
-            </span>
+            {/* The BOX is drawn by this label and keeps a fixed width, so the row
+                never jitters as digits come and go; the input inside shrink-wraps
+                its value so the number and its "%" read as one pair centred in
+                the box. A fixed-width input instead parked the number against the
+                % and pushed the pair visibly off-centre. It has to be a label,
+                not a span: once the input is only as wide as one digit, the box
+                must take the tap and hand focus over, or most of this 88px
+                control is dead to a thumb. */}
+            <label className="flex h-11 w-[88px] cursor-text items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white px-1 shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 sm:h-10 sm:w-[84px]">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cumShown}
+                style={{ width: `${chWidth(cumShown)}ch` }}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: raw } }));
+                  const parsed = parseInput(raw, round2(node.curProgressPct));
+                  if (parsed !== null) setEdit(node.id, { cumProgressPct: parsed });
+                }}
+                onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: undefined } }))}
+                className="max-w-full shrink border-none bg-transparent p-0 text-center text-[17px] font-bold tabular-nums text-gray-900 outline-none focus:ring-0 sm:text-[15px] sm:font-semibold"
+              />
+              <span className="shrink-0 text-[15px] font-medium text-gray-400 sm:text-[13px]">%</span>
+            </label>
             <StepBtn onClick={() => adjustCum(node, 5)} label="Increase 5%">+</StepBtn>
           </div>
         )}
@@ -1107,7 +1231,11 @@ function StepBtn({ children, onClick, label }: { children: React.ReactNode; onCl
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-medium text-gray-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-90"
+      // Same border and shadow as the value box next to it — a borderless button
+      // carried by shadow alone simply did not read as a button. It also sits a
+      // touch shorter than that box, which is what keeps the box the anchor of
+      // the group rather than three equal slabs.
+      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-semibold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-90"
     >
       {children}
     </button>
