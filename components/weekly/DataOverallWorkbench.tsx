@@ -654,7 +654,7 @@ export default function DataOverallWorkbench({
       {(dirtyCount > 0 || justSaved) && (
         <div
           className={`sticky bottom-3 z-30 px-1 sm:bottom-4 sm:px-0 ${
-            barLeaving ? 'animate-save-out' : 'animate-fade-in-up'
+            barLeaving ? 'animate-save-out' : 'animate-save-bar-in'
           }`}
         >
           <div
@@ -663,34 +663,38 @@ export default function DataOverallWorkbench({
             }`}
           >
             {justSaved ? (
-              <div className="flex items-center gap-2.5 text-[14px] font-semibold text-emerald-700">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white animate-pop-in">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <div className="flex items-center gap-3 text-[15px] font-semibold text-emerald-700">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white animate-pop-in">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                     <path className="animate-check-draw" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </span>
-                Changes saved
+                <span className="animate-label-in">Changes saved</span>
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2.5 text-[14px] text-gray-700">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[12px] font-bold text-amber-800">
-                    {dirtyCount}
+                <div className="flex items-center gap-3 text-[15px] font-semibold text-gray-900">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white animate-badge-pending">
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.86 4.49l2.65 2.65a1.5 1.5 0 010 2.12l-9.2 9.2-4.24.71.71-4.24 9.2-9.2a1.5 1.5 0 012.12 0z" />
+                    </svg>
                   </span>
-                  {dirtyCount === 1 ? 'unsaved change' : 'unsaved changes'}
+                  <span className="animate-label-in">
+                    {dirtyCount === 1 ? 'Unsaved change' : 'Unsaved changes'}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={discardAll}
                     disabled={saving}
-                    className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
+                    className="rounded-lg px-3.5 py-2 text-[14px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={save}
                     disabled={saving}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70"
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70"
                   >
                     {saving && (
                       <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">

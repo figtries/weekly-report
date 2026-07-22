@@ -221,6 +221,66 @@ a:active {
   animation: save-out 0.3s var(--ease-ios) both;
 }
 
+/* Save bar entrance: rises with a touch of overshoot, no bounce on the text. */
+@keyframes save-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-save-bar-in {
+  animation: save-bar-in 0.34s var(--ease-spring) both;
+}
+
+/* Pending badge: springs in, then breathes so the amber reads as "still waiting".
+   It owns box-shadow outright — never combine with a Tailwind `ring-*`. */
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-14deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes badge-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgb(245 158 11 / 0.16);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(245 158 11 / 0.06);
+  }
+}
+
+.animate-badge-pending {
+  animation:
+    badge-in 0.42s var(--ease-spring) both,
+    badge-breathe 2.6s var(--ease-ios) 0.45s infinite;
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-label-in {
+  animation: label-in 0.32s var(--ease-out-expo) 0.07s both;
+}
+
 @keyframes dropdown-in {
   from {
     opacity: 0;
