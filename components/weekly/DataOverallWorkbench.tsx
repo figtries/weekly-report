@@ -664,25 +664,28 @@ export default function DataOverallWorkbench({
                         {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'}
                       </span>
                       <span className="min-w-0 flex-1">
-                        {/* Phones put the Actual/Plan tag beside the activity
-                           name and leave the second line to the numbers alone —
-                           at phone width the tag, both values and the delta
-                           crowded onto one line. Desktop has the room, so there
-                           the tag stays where it was, leading the numbers. */}
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-[13px] font-medium text-gray-900">
-                              {leaf?.deskripsi ?? 'Activity not found'}
-                            </span>
-                            <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:hidden ${
-                              c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
-                            }`}>
-                              {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
-                            </span>
+                        {/* The two lines carry different things on each width.
+                           Phones: the Actual/Plan tag ends the name line and the
+                           timestamp drops to the numbers line, so the right edge
+                           reads tag-then-time down the column. Desktop keeps the
+                           timestamp up top and the tag leading the numbers —
+                           there is room for it there and that layout was fine.
+                           Each right-hand item is `h-5 items-center`, which is
+                           the tag's own height: without a shared box the tag and
+                           the time sat on their own text baselines and the
+                           column looked a pixel or two out. */}
+                        <span className="flex h-5 items-center justify-between gap-2">
+                          <span className="truncate text-[13px] font-medium text-gray-900">
+                            {leaf?.deskripsi ?? 'Activity not found'}
                           </span>
-                          <span suppressHydrationWarning className="shrink-0 text-[11px] text-gray-400">{timeAgo(c.at)}</span>
+                          <span suppressHydrationWarning className="hidden shrink-0 text-[11px] text-gray-400 sm:inline">{timeAgo(c.at)}</span>
+                          <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:hidden ${
+                            c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                          }`}>
+                            {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
+                          </span>
                         </span>
-                        <span className="mt-1 flex items-center gap-1.5 text-[12px] text-gray-500">
+                        <span className="mt-1 flex h-5 items-center gap-1.5 text-[12px] text-gray-500">
                           <span className={`hidden items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:inline-flex ${
                             c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
                           }`}>
@@ -694,10 +697,21 @@ export default function DataOverallWorkbench({
                           <span className={`font-semibold tabular-nums ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
                             ({delta > 0 ? '+' : ''}{delta.toFixed(1)}%)
                           </span>
+                          <span suppressHydrationWarning className="ml-auto shrink-0 pl-2 text-[11px] text-gray-400 sm:hidden">{timeAgo(c.at)}</span>
+                          {/* On phones the chevron rides the timestamp's line
+                             rather than sitting in a column of its own. That is
+                             what puts the tag above it flush to the same right
+                             edge — give the chevron its own column and it pushes
+                             both lines left of itself, and the tag stops short. */}
+                          {leaf && (
+                            <svg className="h-4 w-4 shrink-0 text-gray-300 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
                         </span>
                       </span>
                       {leaf && (
-                        <svg className="mt-1 h-4 w-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <svg className="mt-1 hidden h-4 w-4 shrink-0 text-gray-300 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       )}
