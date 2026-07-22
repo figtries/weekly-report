@@ -658,7 +658,7 @@ export default function DataOverallWorkbench({
           }`}
         >
           <div
-            className={`mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur transition-colors duration-300 sm:px-5 sm:py-3.5 ${
+            className={`mx-auto flex max-w-xl items-center justify-between gap-2 rounded-2xl border px-2.5 py-3 shadow-xl backdrop-blur transition-colors duration-300 min-[360px]:px-3 sm:gap-4 sm:px-5 sm:py-3.5 ${
               justSaved ? 'border-emerald-200 bg-emerald-50/95' : 'border-gray-200 bg-white/95'
             }`}
           >
@@ -673,28 +673,28 @@ export default function DataOverallWorkbench({
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 text-[15px] font-semibold text-gray-900">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white animate-badge-pending">
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] font-semibold text-gray-900 min-[360px]:text-[14px] min-[380px]:gap-2.5 min-[380px]:text-[15px] sm:gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white animate-badge-pending min-[360px]:h-7 min-[360px]:w-7">
+                    <svg className="h-3 w-3 min-[360px]:h-3.5 min-[360px]:w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.86 4.49l2.65 2.65a1.5 1.5 0 010 2.12l-9.2 9.2-4.24.71.71-4.24 9.2-9.2a1.5 1.5 0 012.12 0z" />
                     </svg>
                   </span>
-                  <span className="animate-label-in">
+                  <span className="animate-label-in whitespace-nowrap">
                     {dirtyCount === 1 ? 'Unsaved change' : 'Unsaved changes'}
                   </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2">
                   <button
                     onClick={discardAll}
                     disabled={saving}
-                    className="rounded-lg px-3.5 py-2 text-[14px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
+                    className="rounded-lg px-2 py-2 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40 min-[380px]:px-2.5 min-[380px]:text-[14px] sm:px-3.5"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={save}
                     disabled={saving}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none disabled:opacity-70 min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
                   >
                     {saving && (
                       <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
