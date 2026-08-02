@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
+import DateField from '@/components/ui/DateField';
 
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
   const router = useRouter();
@@ -86,20 +87,15 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
             <label htmlFor="new-daily-date" className="mt-5 block text-xs font-medium text-gray-600">
               Date
             </label>
-            {/* text-base (16px) on phones: anything smaller makes iOS Safari
-                zoom the whole page when the field is focused.
-                .date-field (globals.css) centres the value and parks the
-                calendar button at the right edge of the field. */}
-            <input
+            <DateField
               id="new-daily-date"
-              type="date"
               value={date}
               disabled={creating}
-              onChange={(e) => {
-                setDate(e.target.value);
+              onChange={(v) => {
+                setDate(v);
                 setError(null);
               }}
-              className="date-field mt-1 h-11 w-full min-w-0 appearance-none rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm"
+              className="mt-1 h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm"
             />
             {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-gray-700">{weekdayPreview}</p>}
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}

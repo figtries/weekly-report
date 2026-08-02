@@ -4,6 +4,7 @@ import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useStat
 import Link from 'next/link';
 import { saveDailyAction } from '@/lib/actions';
 import SavePdfButton from '@/components/print/SavePdfButton';
+import DateField from '@/components/ui/DateField';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow, PtwRow } from '@/lib/types';
 
 let rowIdCounter = 0;
@@ -503,17 +504,19 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 placeholder="Status"
                 className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <input
-                type="date"
+              <DateField
                 value={row.issued}
-                onChange={(e) => updatePtw(row.id, { issued: e.target.value })}
-                className="date-field min-w-0 appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(v) => updatePtw(row.id, { issued: v })}
+                placeholder="Issued"
+                clearable
+                className="min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 transition-colors hover:border-gray-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
               />
-              <input
-                type="date"
+              <DateField
                 value={row.validity}
-                onChange={(e) => updatePtw(row.id, { validity: e.target.value })}
-                className="date-field min-w-0 appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(v) => updatePtw(row.id, { validity: v })}
+                placeholder="Validity"
+                clearable
+                className="min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 transition-colors hover:border-gray-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
               />
               <button
                 onClick={() => removePtw(row.id)}

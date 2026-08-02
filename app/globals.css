@@ -90,37 +90,6 @@ a:active {
   display: none;
 }
 
-/* Date fields.
-   Chrome/Edge lay the value and the calendar button out side by side and
-   shrink-wrap them, so the button ends up floating right behind the digits
-   instead of sitting at the edge of the field. Letting the value take the
-   leftover width pushes the button to the end. The flex box also fixes iOS
-   Safari, which draws the value in ::-webkit-date-and-time-value — a
-   pseudo-element that ignores the input's height and otherwise sticks the
-   text to the top of the field. */
-.date-field {
-  display: flex;
-  align-items: center;
-}
-.date-field::-webkit-datetime-edit,
-.date-field::-webkit-date-and-time-value {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  text-align: left;
-}
-.date-field::-webkit-calendar-picker-indicator {
-  flex: none;
-  margin: 0 0 0 auto;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 150ms ease;
-}
-.date-field::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.9;
-}
-
 /* ---------- Entrance animations ---------- */
 
 @keyframes fade-in {
