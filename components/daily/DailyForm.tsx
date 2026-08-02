@@ -507,13 +507,13 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 type="date"
                 value={row.issued}
                 onChange={(e) => updatePtw(row.id, { issued: e.target.value })}
-                className="appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
+                className="date-field min-w-0 appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
                 type="date"
                 value={row.validity}
                 onChange={(e) => updatePtw(row.id, { validity: e.target.value })}
-                className="appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
+                className="date-field min-w-0 appearance-none rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <button
                 onClick={() => removePtw(row.id)}
