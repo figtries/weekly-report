@@ -18,6 +18,7 @@
 # Preview build dirs (NEXT_DIST_DIR=.next-preview, .next-preview2, …) — one per
 # concurrent dev/preview server. Pure build cache, regenerated on demand.
 /.next-preview*/
+/.next-buildcheck/
 /out/
 
 # production

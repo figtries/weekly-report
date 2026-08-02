@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState, useTransition } from 'react
 import { saveWeekUpdatesAction } from '@/lib/actions';
 import type { RollupNode } from '@/lib/rollup';
 import type { ChangeLogEntry } from '@/lib/types';
+import TruncatedName from '@/components/ui/TruncatedName';
 
 interface EditState {
   cumProgressPct?: number;
@@ -793,7 +794,12 @@ export default function DataOverallWorkbench({
                     size={48}
                   />
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-lg font-semibold text-gray-900">{currentNode.deskripsi}</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      <TruncatedName
+                        text={currentNode.deskripsi}
+                        accent={statusOf(currentCumOf(currentNode, edits), round2(planPctOf(currentNode))).ring}
+                      />
+                    </h2>
                     <p className="mt-0.5 text-[13px] text-gray-500">
                       {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% ·{' '}
                       Plan {round2(planPctOf(currentNode)).toFixed(1)}%
@@ -990,7 +996,7 @@ const FolderCard = memo(function FolderCard({
     >
       <Ring pct={cum} color={st.ring} textColor={st.ringText} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold text-gray-900">{node.deskripsi}</div>
+        <TruncatedName text={node.deskripsi} className="text-[15px] font-semibold text-gray-900" accent={st.ring} />
         <div className="mt-1 text-[13px] text-gray-500">
           {leafCount(node)} activities · Plan {plan.toFixed(1)}%
           <GapInline cum={cum} plan={plan} />
