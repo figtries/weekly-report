@@ -86,3 +86,143 @@ walks Save as PDF → Preparing PDF… → Saved! and the file lands (CDP
 `Browser.setDownloadBehavior { behavior: 'allow' }` — `allowAndName` cancels blob
 downloads). And run `next build` before pushing: both build failures in this
 feature's history were build-time-only.
+
+# UI components (shadcn / Radix)
+
+shadcn is initialised here as `radix-nova` — Radix primitives, not Base UI. Radix
+was chosen over the lighter Base UI because this app is tested on iPhone first
+and Radix carries years of iOS Safari fixes; Base UI is newer and its edge cases
+are thinly documented. Components live in `components/ui/` and are OURS — edit
+them freely, there is no upstream to fight.
+
+**NEVER re-run `shadcn init`.** It is not additive. On an already-initialised
+project it rewrites theme files: in Aug 2026 it silently added Geist and pointed
+`--font-sans` at it, and overwrote `--background`/`--foreground` with its own
+oklch values. The font swap is the dangerous one — this repo's reports depend on
+Inter resolving identically everywhere, because a different face shifts line
+breaks and column widths and therefore where a report splits pages. Use
+`shadcn add <component>` to pull components (verified safe — it touches nothing
+but `components/ui/`), or `shadcn apply --only theme|font` for deliberate,
+scoped theme changes.
+
+**Radix per screen, never per row.** The cost is in mounted instances, not in
+the library. `WbsTreeTable` expands every parent by default and can render all
+285 leaves at once; a Radix Select / Popover / Tooltip inside that loop means
+285 contexts, refs, effects and portals. Inside any `.map()` that can exceed
+~20 rows, use native `<input>` / `<select>` and style them with shadcn classes.
+For a per-row action, mount ONE DropdownMenu and drive it with the active row's
+id. `DataOverallWorkbench` already sidesteps this by drilling one level at a
+time — keep that pattern.
+
+**Not every shadcn component costs anything.** Button, Input, Textarea, Table,
+Card, Badge, Skeleton, Alert and InputGroup are pure Tailwind — use them
+anywhere. Only Select, Dialog, Popover, DropdownMenu, Tooltip, Command, Sheet
+and Tabs pull Radix in.
+
+**`/print/*` stays Radix-free.** Print pages are plain HTML + the `.rpt-*`
+system. Puppeteer does not wait for animations, and a Radix portal renders
+outside `.print-sheet-a4` where the geometry rules do not reach.
+
+**Lazy-load the overlays.** Dialog, Command, Sheet and Popover load through
+`next/dynamic` so they stay out of the initial bundle — this is what the field
+crew's connection actually feels.
+
+**Do not replace the hand-rolled primitives.** `DateField`, `ConfirmDialog`,
+`AnimatedNumber` and `TruncatedName` have already absorbed rounds of mobile
+fixes (the calendar button is drawn by hand for a reason). shadcn is for what
+does not exist yet, not for re-doing what works.
+
+**One token source.** shadcn reads its colours from the existing `@theme inline`
+block in `app/globals.css` — never let it introduce a second palette. Its
+overlay animations are pinned to `--ease-ios` at the bottom of that file so a
+dialog opens on the same curve as everything else; keep that pin if the motion
+tokens ever change.
+
+# Setup, weights and the plan curve
+
+**Weight is derived, never typed.** `bobot = line value / contract value × 100`,
+computed in `lib/setup.ts` from priced BOQ lines. A BOQ exists on every EPC
+contract — it is what the bid was priced from — so asking for prices asks for a
+document people already have, the weights close at 100 by construction instead
+of by luck, and `contractValue` (and therefore earned value) falls out for free
+rather than needing its own field. Never accept a weight from a client payload:
+`applySetup` in `lib/mutations.ts` is the only door into the database, and it
+recomputes. Projects without a priced BOQ get `evenWeights()` and must be
+labelled as not value-based — a rough number shown honestly beats a project that
+never gets set up.
+
+**The plan curve is generated, never imported.** `generatePlanCurve` turns
+start/finish/pattern into each leaf's weekly `targetWF`, which is exactly the
+shape `LeafSnapshot` already stores — so a schedule revision regenerates the
+curve instead of sending someone back to Excel. `scurve` is a smoothstep, not a
+logistic, so an item lands on exactly 1.0 at its finish week; a curve that
+asymptotes leaves every item at 99.x% forever and leaks a permanent phantom
+deviation into the project total.
+
+**Adding a weekly tab means setting `printable`.** `TABS` in
+`components/weekly/WeekTabs.tsx` carries an explicit flag that must match the
+`ReportKey` union in `app/print/weekly/[week]/page.tsx`. It used to be inferred
+by excluding `overall`; adding Panel Kendali under that rule pointed the PDF
+button at `?only=control`, which renders no sheet — and `lib/pdf.ts` waits for
+`.print-sheet-a4`, so the request hangs rather than failing. Set the flag
+deliberately.
+
+# Progress has one origin
+
+**`lib/progress.ts` decides every leaf percentage, and `lib/rollup.ts` calls it
+instead of reading `cumProgressPct`.** For `qty` and `milestone` items the
+stored percent is only a cache; trusting it over the quantity it came from is
+how a report ends up disagreeing with the site. `applyFieldProgress` in
+`lib/mutations.ts` is the only writer for those methods, and it writes through
+`syncLeafSnapshot` — the evidence decides the percentage, never the reverse.
+`lumpsum` still reads the typed value, unchanged, so every seeded project
+behaves exactly as before.
+
+**Switching an item's method clears the other method's evidence** — a stale
+quantity sitting behind a milestone item is a number nobody can explain later.
+
+**Catalogs are per project.** Delay causes, HSE rows and crew groups live in
+`db.catalogs` (see `lib/catalogs.ts`), not in `lib/defaults.ts`. The first daily
+report of a project seeds its rows from them; later reports carry their
+predecessor's rows forward, so editing a catalog mid-project never rewrites the
+shape of a report that is already signed. Weather is the deliberate exception:
+`WeatherInfo` is a fixed-shape record rather than a list, so making it
+configurable means changing the type and the daily form together.
+
+**`claimable` on a delay cause is load-bearing.** It is what lets
+`buildDelayRegister` assemble extension-of-time material without anyone
+re-classifying by hand. Photos carry no capture metadata yet, so `/klaim` states
+plainly that the evidence is contestable — keep that admission until timestamps
+and GPS are actually stored.
+
+# Changing how you measure must not change what was measured
+
+**`applyProgressMethod` carries progress ACROSS a method change, never through
+it.** An August 2026 bug proved why: switching "Project Management" to quantity
+mode recomputed all 60 weeks from a `qtyDone` that did not exist yet, silently
+rewriting a leaf that had sat at 100% for 27 weeks down to zero and dropping
+the project total from 68.80% to 67.83%. The percentage is now re-expressed in
+the new method's own terms — a quantity is seeded from it, milestones are
+awarded in order and never past it.
+
+**`vol: 1, satuan: 'Ls'` is not a quantity.** It is how every seeded item is
+stored, and it passes a naive `vol > 0` check, which is how the above happened.
+Use `hasRealQuantity()`; switching such an item to quantity mode must ask for a
+real total first rather than inventing one.
+
+# Multi-project
+
+**`readDb()` still returns one `Database` — the active project.** The store now
+holds a `Workspace` (see `lib/workspace.ts`), but roughly forty call sites read
+a single project and rewriting them would have bought nothing. Only code that
+genuinely spans projects calls `readWorkspace()`. Legacy single-project files
+are wrapped on read and never rewritten until something is actually saved.
+
+**Anything the root layout reads must be cached.** `getProjects()` and
+`getWorkspace()` in `lib/data.ts` exist because an uncached read in
+`app/layout.tsx` blocks every route in the app and fails the build on
+`/_not-found` with "Uncached data was accessed outside of `<Suspense>`".
+
+**Approvals snapshot the figure approved.** A signature that silently follows
+the number it signed is worth nothing in a dispute, so the panel shows drift
+when the week is edited afterwards.
