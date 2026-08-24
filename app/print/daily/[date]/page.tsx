@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { weatherLabels } from '@/lib/catalogs';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { getDb } from '@/lib/data';
@@ -21,6 +22,7 @@ export default function DailyPrintPage({ params }: { params: Promise<{ date: str
 async function DailyPrintBody({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
   const db = await getDb();
+  const labels = weatherLabels(db);
   let report = db.daily.find((d) => d.date === date);
   let project = db.project;
 
@@ -39,7 +41,7 @@ async function DailyPrintBody({ params }: { params: Promise<{ date: string }> })
   return (
     <div className="bg-gray-100 min-h-full overflow-x-auto print:overflow-visible">
       <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:block print:w-auto print:min-w-0 print:gap-0 print:p-0">
-        <DailyPrintReport project={project} report={report} />
+        <DailyPrintReport project={project} report={report} weatherLabels={labels} />
       </div>
     </div>
   );

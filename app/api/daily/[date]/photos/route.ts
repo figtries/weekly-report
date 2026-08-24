@@ -19,7 +19,7 @@ export async function POST(
   }
 
   try {
-    const { relPath, persist } = await preparePhotoUpload(file, 'daily', date, slot);
+    const { relPath, meta, persist } = await preparePhotoUpload(file, 'daily', date, slot);
     let previousPath: string | null = null;
     // Photo write and db mutation run concurrently — neither needs the
     // other's result, only the precomputed path.
@@ -29,6 +29,18 @@ export async function POST(
         if (!report) throw new Error(`Daily report for ${date} not found`);
         if (slot >= report.photos.length) throw new Error(`Slot ${slot} out of range`);
         previousPath = report.photos[slot] ?? null;
+
+        db.photoMeta ??= {};
+        db.photoMeta[relPath] = {
+          path: relPath,
+          takenAt: meta.takenAt,
+          lat: meta.lat,
+          lon: meta.lon,
+          device: [meta.make, meta.model].filter(Boolean).join(' ') || undefined,
+          uploadedAt: new Date().toISOString(),
+          verified: !!meta.takenAt,
+        };
+        if (previousPath && db.photoMeta[previousPath]) delete db.photoMeta[previousPath];
         report.photos[slot] = relPath;
         return report;
       }),

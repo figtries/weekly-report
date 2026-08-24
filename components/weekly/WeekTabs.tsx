@@ -7,11 +7,17 @@ import SavePdfButton from '@/components/print/SavePdfButton';
 import WeekSelect from './WeekSelect';
 
 const TABS = [
-  { key: 'overall', label: 'Data Overall' },
-  { key: 'summary', label: 'Overall Summary' },
-  { key: 'detail', label: 'Detail Progress' },
-  { key: 'scurve', label: 'S-Curve' },
-  { key: 'documentation', label: 'Documentation' },
+  // `printable` must match the ReportKey union in app/print/weekly/[week]/page.tsx.
+  // A tab that claims printable without a sheet there makes lib/pdf.ts wait for
+  // a '.print-sheet-a4' that never renders, so the PDF request hangs rather
+  // than erroring — always set this deliberately when adding a tab.
+  { key: 'control', label: 'Panel Kendali', printable: false },
+  { key: 'input', label: 'Input Lapangan', printable: false },
+  { key: 'overall', label: 'Data Overall', printable: false },
+  { key: 'summary', label: 'Overall Summary', printable: true },
+  { key: 'detail', label: 'Detail Progress', printable: true },
+  { key: 'scurve', label: 'S-Curve', printable: true },
+  { key: 'documentation', label: 'Documentation', printable: true },
 ];
 
 export default function WeekTabs({
@@ -61,8 +67,7 @@ export default function WeekTabs({
   }
 
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'Page';
-  // Data Overall is the editing page — it has no A4 report sheet to print.
-  const isPrintable = activeTab !== 'overall';
+  const isPrintable = TABS.find((t) => t.key === activeTab)?.printable ?? false;
 
   return (
     <div className="px-3 sm:px-6 lg:px-8 pt-2 pb-1 sm:pt-4 sm:pb-2 print:hidden">

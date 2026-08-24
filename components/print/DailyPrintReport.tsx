@@ -44,7 +44,16 @@ function PhotoGrid({ photos, startAt }: { photos: (string | null)[]; startAt: nu
   );
 }
 
-export default function DailyPrintReport({ project, report }: { project: ProjectInfo; report: DailyReport }) {
+export default function DailyPrintReport({
+  project,
+  report,
+  weatherLabels,
+}: {
+  project: ProjectInfo;
+  report: DailyReport;
+  /** Keyed by WeatherInfo field name; the slots are fixed, the wording is per project. */
+  weatherLabels: Record<string, string>;
+}) {
   const photoPages: (string | null)[][] = [];
   for (let i = 0; i < report.photos.length; i += PHOTOS_PER_PAGE) {
     photoPages.push(report.photos.slice(i, i + PHOTOS_PER_PAGE));
@@ -98,10 +107,10 @@ export default function DailyPrintReport({ project, report }: { project: Project
             <tr>
               {(
                 [
-                  ['Heavy Rain', report.weather.hujanDeras, report.weather.hujanDerasJam],
-                  ['Moderate Rain', report.weather.hujanSedang, report.weather.hujanSedangJam],
-                  ['Cloudy / Overcast', report.weather.berawanMendung, report.weather.berawanMendungJam],
-                  ['Clear / Sunny', report.weather.cerahTerang, report.weather.cerahTerangJam],
+                  [weatherLabels.hujanDeras ?? 'Hujan Deras', report.weather.hujanDeras, report.weather.hujanDerasJam],
+                  [weatherLabels.hujanSedang ?? 'Hujan Sedang', report.weather.hujanSedang, report.weather.hujanSedangJam],
+                  [weatherLabels.berawanMendung ?? 'Berawan / Mendung', report.weather.berawanMendung, report.weather.berawanMendungJam],
+                  [weatherLabels.cerahTerang ?? 'Cerah / Terang', report.weather.cerahTerang, report.weather.cerahTerangJam],
                 ] as [string, boolean, string][]
               ).map(([label, checked, jam]) => (
                 <td key={label} className="rpt-num" style={{ width: '25%' }}>

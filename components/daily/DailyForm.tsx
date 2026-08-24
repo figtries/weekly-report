@@ -38,7 +38,14 @@ function normalizeLeadingZero(e: FormEvent<HTMLInputElement>) {
   }
 }
 
-export default function DailyForm({ report }: { report: DailyReport }) {
+export default function DailyForm({
+  report,
+  weatherLabels,
+}: {
+  report: DailyReport;
+  /** Keyed by WeatherInfo field name — see lib/catalogs.ts. */
+  weatherLabels: Record<string, string>;
+}) {
   const [form, setForm] = useState<DailyReport>(report);
   const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
@@ -261,12 +268,13 @@ export default function DailyForm({ report }: { report: DailyReport }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
-              ['hujanDeras', 'hujanDerasJam', 'Heavy Rain'],
-              ['hujanSedang', 'hujanSedangJam', 'Moderate Rain'],
-              ['berawanMendung', 'berawanMendungJam', 'Cloudy / Overcast'],
-              ['cerahTerang', 'cerahTerangJam', 'Clear / Sunny'],
+              ['hujanDeras', 'hujanDerasJam'],
+              ['hujanSedang', 'hujanSedangJam'],
+              ['berawanMendung', 'berawanMendungJam'],
+              ['cerahTerang', 'cerahTerangJam'],
             ] as const
-          ).map(([checkKey, jamKey, label]) => (
+          ).map(([checkKey, jamKey]) => (
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             <label
               key={checkKey}
               className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 transition-colors hover:border-blue-300"
@@ -277,7 +285,7 @@ export default function DailyForm({ report }: { report: DailyReport }) {
                 onChange={(e) => updateWeather(checkKey, e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="flex-1 text-sm text-gray-700">{label}</span>
+              <span className="flex-1 text-sm text-gray-700">{weatherLabels[checkKey] ?? checkKey}</span>
               <input
                 type="text"
                 inputMode="decimal"

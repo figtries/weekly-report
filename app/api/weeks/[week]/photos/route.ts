@@ -20,7 +20,14 @@ export async function POST(
   }
 
   try {
-    const { relPath, persist } = await preparePhotoUpload(file, 'weekly', String(week), slot);
+    // Named photoExif, not meta: the mutation below already binds `meta` to the
+    // WeeklyMeta record, and the inner scope would silently shadow this one.
+    const { relPath, meta: photoExif, persist } = await preparePhotoUpload(
+      file,
+      'weekly',
+      String(week),
+      slot
+    );
     let previousPath: string | null = null;
     // Photo write and db mutation run concurrently — neither needs the
     // other's result, only the precomputed path.
@@ -30,6 +37,18 @@ export async function POST(
         if (!meta) throw new Error(`Week ${week} not found`);
         if (slot >= meta.documentation.length) throw new Error(`Slot ${slot} out of range`);
         previousPath = meta.documentation[slot] ?? null;
+
+        db.photoMeta ??= {};
+        db.photoMeta[relPath] = {
+          path: relPath,
+          takenAt: photoExif.takenAt,
+          lat: photoExif.lat,
+          lon: photoExif.lon,
+          device: [photoExif.make, photoExif.model].filter(Boolean).join(' ') || undefined,
+          uploadedAt: new Date().toISOString(),
+          verified: !!photoExif.takenAt,
+        };
+        if (previousPath && db.photoMeta[previousPath]) delete db.photoMeta[previousPath];
         meta.documentation[slot] = relPath;
         return meta;
       }),

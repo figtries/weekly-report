@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
+import type { ProjectSummary } from '@/lib/workspace';
 
 const weeklyIcon = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,7 +30,80 @@ const dailyIcon = (
   </svg>
 );
 
+const settingsIcon = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 6h16M4 12h16M4 18h10"
+    />
+  </svg>
+);
+
+const portfolioIcon = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+    />
+  </svg>
+);
+
+const klaimIcon = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    />
+  </svg>
+);
+
+const setupIcon = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
 const weeklyPages = [
+  {
+    key: 'control',
+    label: 'Panel Kendali',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+        />
+      </svg>
+    ),
+  },
+  {
+    key: 'input',
+    label: 'Input Lapangan',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+        />
+      </svg>
+    ),
+  },
   {
     key: 'overall',
     label: 'Data Overall',
@@ -105,6 +180,10 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
   const router = useRouter();
   const onWeekly = pathname?.startsWith('/weekly') ?? false;
   const onDaily = pathname?.startsWith('/daily') ?? false;
+  const onSetup = pathname?.startsWith('/setup') ?? false;
+  const onKlaim = pathname?.startsWith('/klaim') ?? false;
+  const onPortfolio = pathname?.startsWith('/portfolio') ?? false;
+  const onSettings = pathname?.startsWith('/settings') ?? false;
   // Manual toggle wins until the next navigation, then the route decides again.
   const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   useEffect(() => {
@@ -200,6 +279,62 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
         </span>
         <span>Daily Report</span>
       </Link>
+
+      <Link
+        href="/setup"
+        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
+          onSetup
+            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
+          {setupIcon}
+        </span>
+        <span>Setup Proyek</span>
+      </Link>
+
+      <Link
+        href="/portfolio"
+        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
+          onPortfolio
+            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
+          {portfolioIcon}
+        </span>
+        <span>Portfolio</span>
+      </Link>
+
+      <Link
+        href="/klaim"
+        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
+          onKlaim
+            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
+          {klaimIcon}
+        </span>
+        <span>Delay Register</span>
+      </Link>
+
+      <Link
+        href="/settings"
+        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
+          onSettings
+            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
+          {settingsIcon}
+        </span>
+        <span>Pengaturan</span>
+      </Link>
     </nav>
   );
 }
@@ -208,7 +343,7 @@ function ActiveNavList({ currentWeek }: { currentWeek: number }) {
   return <NavList pathname={usePathname()} currentWeek={currentWeek} />;
 }
 
-function MobileDrawer({ currentWeek }: { currentWeek: number }) {
+function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects: ProjectSummary[] }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -272,6 +407,11 @@ function MobileDrawer({ currentWeek }: { currentWeek: number }) {
                 </button>
               </div>
 
+              {projects.length > 0 && (
+                <div className="mb-3">
+                  <ProjectSwitcher projects={projects} />
+                </div>
+              )}
               <NavList pathname={pathname} currentWeek={currentWeek} />
             </div>
           </div>
@@ -296,13 +436,19 @@ function MobileDrawer({ currentWeek }: { currentWeek: number }) {
   );
 }
 
-export default function Sidebar({ currentWeek }: { currentWeek: number }) {
+export default function Sidebar({
+  currentWeek,
+  projects,
+}: {
+  currentWeek: number;
+  projects: ProjectSummary[];
+}) {
   return (
     <>
       {/* Mobile / tablet: slim top bar with hamburger */}
       <header className="lg:hidden print:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
         <Suspense>
-          <MobileDrawer currentWeek={currentWeek} />
+          <MobileDrawer currentWeek={currentWeek} projects={projects} />
         </Suspense>
         <span className="text-sm font-semibold text-gray-900">Progress Report</span>
       </header>
@@ -325,6 +471,12 @@ export default function Sidebar({ currentWeek }: { currentWeek: number }) {
               </div>
             </div>
           </div>
+
+          {projects.length > 0 && (
+            <div className="px-4 pt-3">
+              <ProjectSwitcher projects={projects} />
+            </div>
+          )}
 
           <Suspense fallback={<NavList pathname={null} currentWeek={currentWeek} />}>
             <ActiveNavList currentWeek={currentWeek} />
