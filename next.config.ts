@@ -13,7 +13,9 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   // Chromium and puppeteer must stay outside the bundle — the binary is loaded
   // from disk at runtime (see lib/pdf.ts).
-  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
+  // better-sqlite3 is a native addon and its synchronous API is the point (see
+  // lib/sqlite.ts) — bundling it would break both.
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium', 'better-sqlite3'],
   // Externalizing alone isn't enough on Vercel: the brotli-packed Chromium in
   // bin/ is opened with computed fs paths the tracer can't follow, so without
   // this the lambda ships the JS but not the browser and the PDF routes 500

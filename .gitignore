@@ -40,6 +40,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# the prototype database — a file you can copy, but never one to commit.
+# Recreate it with: npm run db:migrate
+/data/report.db
+/data/report.db-shm
+/data/report.db-wal
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

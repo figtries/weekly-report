@@ -11,6 +11,10 @@
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
+    // Scripts under scripts/ are run straight by node, whose type stripping
+    // requires the explicit .ts extension on relative imports. Safe here
+    // because noEmit is on — nothing is resolved by these paths at runtime.
+    "allowImportingTsExtensions": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
