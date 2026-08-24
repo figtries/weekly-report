@@ -5,203 +5,125 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  Activity,
+  CalendarDays,
+  FileText,
+  LayoutDashboard,
+  Menu,
+  Scale,
+  Settings,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
+import { cn } from '@/lib/utils';
 import type { ProjectSummary } from '@/lib/workspace';
 
-const weeklyIcon = (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M7 12l3-3 3 3 4-4M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z"
-    />
-  </svg>
-);
+/**
+ * Six destinations, not twelve.
+ *
+ * The old list mirrored the Excel workbook: four of its entries were report
+ * SHEETS, which are output, not places to go. They belong to one Laporan
+ * destination with tabs, exactly as they appear in the PDF. Everything used to
+ * put numbers in sits under Progress; everything used once a project starts
+ * sits under Pengaturan, at the bottom, where it stops competing for attention
+ * every day.
+ *
+ * `match` decides highlighting, so a destination stays lit while the user moves
+ * between its own tabs.
+ */
+interface Destination {
+  label: string;
+  icon: LucideIcon;
+  href: (week: number) => string;
+  match: (pathname: string) => boolean;
+  /** Routes to warm during idle time — the tabs reachable from this entry. */
+  warm?: (week: number) => string[];
+}
 
-const dailyIcon = (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-    />
-  </svg>
-);
+const WEEKLY_PROGRESS = ['input', 'overall', 'control'];
+const WEEKLY_REPORT = ['summary', 'detail', 'scurve', 'documentation', 'print'];
 
-const settingsIcon = (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M4 6h16M4 12h16M4 18h10"
-    />
-  </svg>
-);
-
-const portfolioIcon = (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-    />
-  </svg>
-);
-
-const klaimIcon = (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-    />
-  </svg>
-);
-
-const setupIcon = (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-    />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
-
-const weeklyPages = [
+const DESTINATIONS: Destination[] = [
   {
-    key: 'control',
-    label: 'Panel Kendali',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-        />
-      </svg>
-    ),
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    href: () => '/',
+    match: (p) => p === '/',
   },
   {
-    key: 'input',
-    label: 'Input Lapangan',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-        />
-      </svg>
-    ),
+    label: 'Progress',
+    icon: Activity,
+    href: (w) => `/weekly/${w}/input`,
+    match: (p) => WEEKLY_PROGRESS.some((k) => p.endsWith(`/${k}`)),
+    warm: (w) => WEEKLY_PROGRESS.map((k) => `/weekly/${w}/${k}`),
   },
   {
-    key: 'overall',
-    label: 'Data Overall',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 10h18M9 10v10M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z"
-        />
-      </svg>
-    ),
+    label: 'Harian',
+    icon: CalendarDays,
+    href: () => '/daily',
+    match: (p) => p.startsWith('/daily'),
+    warm: () => ['/daily'],
   },
   {
-    key: 'summary',
-    label: 'Overall Summary',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055zM20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
-        />
-      </svg>
-    ),
+    label: 'Laporan',
+    icon: FileText,
+    href: (w) => `/weekly/${w}/summary`,
+    match: (p) => WEEKLY_REPORT.some((k) => p.endsWith(`/${k}`)),
+    warm: (w) => WEEKLY_REPORT.map((k) => `/weekly/${w}/${k}`),
   },
   {
-    key: 'detail',
-    label: 'Detail Progress',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-        />
-      </svg>
-    ),
-  },
-  {
-    key: 'scurve',
-    label: 'S-Curve',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-        />
-      </svg>
-    ),
-  },
-  {
-    key: 'documentation',
-    label: 'Documentation',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM15 13a3 3 0 11-6 0 3 3 0 016 0z"
-        />
-      </svg>
-    ),
+    label: 'Klaim',
+    icon: Scale,
+    href: () => '/klaim',
+    match: (p) => p.startsWith('/klaim'),
   },
 ];
 
+const SETTINGS: Destination = {
+  label: 'Pengaturan',
+  icon: Settings,
+  // Setup and Portfolio live as tabs inside Pengaturan — a project is configured
+  // a handful of times, and until now they cost two permanent menu slots.
+  href: () => '/settings',
+  match: (p) => p.startsWith('/settings') || p.startsWith('/setup') || p.startsWith('/portfolio'),
+};
+
+const itemClass = (active: boolean) =>
+  cn(
+    'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
+    'transition-all duration-300 ease-ios active:scale-[0.97]',
+    active
+      ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+  );
+
+function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pathname: string | null }) {
+  const Icon = dest.icon;
+  const active = pathname ? dest.match(pathname) : false;
+  return (
+    <Link href={dest.href(week)} className={itemClass(active)}>
+      <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
+      <span>{dest.label}</span>
+    </Link>
+  );
+}
+
 function NavList({ pathname, currentWeek }: { pathname: string | null; currentWeek: number }) {
   const router = useRouter();
-  const onWeekly = pathname?.startsWith('/weekly') ?? false;
-  const onDaily = pathname?.startsWith('/daily') ?? false;
-  const onSetup = pathname?.startsWith('/setup') ?? false;
-  const onKlaim = pathname?.startsWith('/klaim') ?? false;
-  const onPortfolio = pathname?.startsWith('/portfolio') ?? false;
-  const onSettings = pathname?.startsWith('/settings') ?? false;
-  // Manual toggle wins until the next navigation, then the route decides again.
-  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
-  useEffect(() => {
-    setManualOpen(null);
-  }, [pathname]);
-  const open = manualOpen ?? onWeekly;
 
-  // Keep sub-links on the week being viewed; fall back to the reporting week.
+  // Keep links on the week being viewed; fall back to the reporting week.
   const week = Number(pathname?.match(/^\/weekly\/(\d+)/)?.[1] ?? currentWeek);
 
-  // After every navigation, warm the sidebar's own targets during idle time:
-  // the five weekly tabs of the viewed week plus the daily list. This is what
-  // keeps daily ↔ weekly jumps instant, even right after a mutation cleared
-  // the prefetch cache (router.prefetch dedupes anything already warm).
+  // After every navigation, warm this sidebar's own targets during idle time.
+  // It is what keeps daily ↔ weekly jumps instant even right after a mutation
+  // cleared the prefetch cache (router.prefetch dedupes anything already warm).
   useEffect(() => {
     const warm = () => {
-      for (const page of weeklyPages) router.prefetch(`/weekly/${week}/${page.key}`);
-      router.prefetch('/daily');
+      for (const dest of DESTINATIONS) {
+        for (const href of dest.warm?.(week) ?? [dest.href(week)]) router.prefetch(href);
+      }
     };
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(warm, { timeout: 2000 });
@@ -212,135 +134,40 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
   }, [pathname, week, router]);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
-      <button
-        onClick={() => setManualOpen(!open)}
-        className={`group flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onWeekly
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {weeklyIcon}
-        </span>
-        <span className="flex-1 text-left">Weekly Report</span>
-        <svg
-          className={`w-4 h-4 text-gray-400 transition-transform duration-300 ease-ios ${
-            open ? 'rotate-180' : ''
-          }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+    <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-6">
+      <div className="space-y-1">
+        {DESTINATIONS.map((dest) => (
+          <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
+        ))}
+      </div>
 
-      {open && (
-        <div className="animate-fade-in pb-2">
-          <p className="px-3 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-gray-400">
-            Report Pages
-          </p>
-          <div className="space-y-0.5">
-            {weeklyPages.map((page) => {
-              const isActive = onWeekly && (pathname?.endsWith(`/${page.key}`) ?? false);
-              return (
-                <Link
-                  key={page.key}
-                  href={`/weekly/${week}/${page.key}`}
-                  className={`group flex items-center gap-3 rounded-lg py-2 pl-6 pr-3 text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-                    {page.icon}
-                  </span>
-                  <span>{page.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <Link
-        href="/daily"
-        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onDaily
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {dailyIcon}
-        </span>
-        <span>Daily Report</span>
-      </Link>
-
-      <Link
-        href="/setup"
-        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onSetup
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {setupIcon}
-        </span>
-        <span>Setup Proyek</span>
-      </Link>
-
-      <Link
-        href="/portfolio"
-        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onPortfolio
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {portfolioIcon}
-        </span>
-        <span>Portfolio</span>
-      </Link>
-
-      <Link
-        href="/klaim"
-        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onKlaim
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {klaimIcon}
-        </span>
-        <span>Delay Register</span>
-      </Link>
-
-      <Link
-        href="/settings"
-        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 ease-ios active:scale-[0.97] ${
-          onSettings
-            ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
-      >
-        <span className="transition-transform duration-300 ease-spring group-hover:scale-110">
-          {settingsIcon}
-        </span>
-        <span>Pengaturan</span>
-      </Link>
+      <div className="mt-auto border-t border-gray-100 pt-3">
+        <NavItem dest={SETTINGS} week={week} pathname={pathname} />
+      </div>
     </nav>
   );
 }
 
 function ActiveNavList({ currentWeek }: { currentWeek: number }) {
   return <NavList pathname={usePathname()} currentWeek={currentWeek} />;
+}
+
+function Brand({ compact }: { compact?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <Image
+        src="/figtries-logo (1).png"
+        alt="Figtries"
+        width={compact ? 28 : 32}
+        height={compact ? 28 : 32}
+        className={compact ? 'h-7 w-7 object-contain' : 'h-8 w-8 object-contain'}
+      />
+      <div>
+        <h1 className={cn('font-semibold text-gray-900', compact ? 'text-sm' : 'text-base')}>Figtries</h1>
+        <p className={cn('text-gray-500', compact ? 'text-[10px]' : 'text-xs')}>Progress Report</p>
+      </div>
+    </div>
+  );
 }
 
 function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects: ProjectSummary[] }) {
@@ -367,43 +194,30 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
   const overlay = mounted
     ? createPortal(
         <>
-          {/* Backdrop */}
           <div
-            className={`fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 print:hidden ${
-              open ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
+            className={cn(
+              'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 print:hidden',
+              open ? 'opacity-100' : 'pointer-events-none opacity-0'
+            )}
             onClick={() => setOpen(false)}
           />
 
-          {/* Drawer */}
           <div
-            className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] print:hidden ${
+            className={cn(
+              'fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 print:hidden',
+              'ease-[cubic-bezier(0.32,0.72,0,1)]',
               open ? 'translate-x-0' : '-translate-x-full'
-            }`}
+            )}
           >
-            <div className="flex flex-col h-full">
-              <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
-                <div className="flex items-center gap-2.5">
-                  <Image
-                    src="/figtries-logo (1).png"
-                    alt="Figtries"
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 object-contain"
-                  />
-                  <div>
-                    <h1 className="text-sm font-semibold text-gray-900">Figtries</h1>
-                    <p className="text-[10px] text-gray-500">Progress Report</p>
-                  </div>
-                </div>
+            <div className="flex h-full flex-col">
+              <div className="flex h-14 items-center justify-between border-b border-gray-100 px-4">
+                <Brand compact />
                 <button
                   onClick={() => setOpen(false)}
-                  aria-label="Close menu"
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  aria-label="Tutup menu"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
@@ -424,12 +238,10 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label="Open menu"
-        className="-ml-2 flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors active:scale-95"
+        aria-label="Buka menu"
+        className="-ml-2 flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <Menu className="h-5 w-5" />
       </button>
       {overlay}
     </>
@@ -446,7 +258,7 @@ export default function Sidebar({
   return (
     <>
       {/* Mobile / tablet: slim top bar with hamburger */}
-      <header className="lg:hidden print:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
+      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:hidden print:hidden">
         <Suspense>
           <MobileDrawer currentWeek={currentWeek} projects={projects} />
         </Suspense>
@@ -454,22 +266,10 @@ export default function Sidebar({
       </header>
 
       {/* Desktop: full sidebar */}
-      <aside className="hidden lg:block w-56 h-screen bg-white border-r border-gray-200 print:hidden flex-shrink-0">
-        <div className="flex flex-col h-full">
-          <div className="h-16 flex items-center px-5 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/figtries-logo (1).png"
-                alt="Figtries"
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
-              />
-              <div>
-                <h1 className="text-base font-semibold text-gray-900">Figtries</h1>
-                <p className="text-xs text-gray-500">Progress Report</p>
-              </div>
-            </div>
+      <aside className="hidden h-screen w-56 flex-shrink-0 border-r border-gray-200 bg-white lg:block print:hidden">
+        <div className="flex h-full flex-col">
+          <div className="flex h-16 items-center border-b border-gray-100 px-5">
+            <Brand />
           </div>
 
           {projects.length > 0 && (

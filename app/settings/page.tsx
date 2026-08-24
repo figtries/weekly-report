@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/data';
 import { getCatalogs } from '@/lib/catalogs';
 import CatalogEditor from '@/components/settings/CatalogEditor';
+import SectionTabs, { PROJECT_TABS } from '@/components/layout/SectionTabs';
 
 export const metadata = { title: 'Pengaturan Proyek' };
 
@@ -10,6 +11,8 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl animate-fade-in-up px-3 py-5 sm:p-6 lg:p-8">
+      <SectionTabs tabs={PROJECT_TABS} className="mb-5" />
+
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pengaturan Proyek</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">

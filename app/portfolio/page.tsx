@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SectionTabs, { PROJECT_TABS } from '@/components/layout/SectionTabs';
 import { getWorkspace } from '@/lib/data';
 import {
   STATUS_LABEL,
@@ -52,6 +53,8 @@ export default async function PortfolioPage() {
 
   return (
     <div className="mx-auto max-w-6xl animate-fade-in-up px-3 py-5 sm:p-6 lg:p-8">
+      <SectionTabs tabs={PROJECT_TABS} className="mb-5" />
+
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Portfolio</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
