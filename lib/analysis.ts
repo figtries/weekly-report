@@ -286,7 +286,37 @@ export function validateWeek(db: Database, week: number): ValidationResult {
  * from this week's numbers. Deliberately plain — it is meant to be pasted into
  * a report and defended in a meeting, not admired.
  */
+export interface NarrativeParts {
+  /** Where the project stands. */
+  status: string;
+  /** What is holding it back. Null when nothing is behind. */
+  laggards: string | null;
+  /** Where the current pace lands it. */
+  forecast: string;
+}
+
+/**
+ * The narrative, in three pieces.
+ *
+ * A screen that already shows the headline figures must not repeat them in
+ * prose underneath — the dashboard hero states actual, plan, deviation and SPI,
+ * so it renders `laggards` and `forecast` only. A printed report has no hero
+ * and takes all three through `buildNarrative`.
+ */
+export function narrativeParts(health: ProjectHealth, laggards: Laggard[]): NarrativeParts {
+  return {
+    status: statusSentence(health),
+    laggards: laggardSentence(laggards),
+    forecast: forecastSentence(health),
+  };
+}
+
 export function buildNarrative(health: ProjectHealth, laggards: Laggard[]): string {
+  const p = narrativeParts(health, laggards);
+  return [p.status, p.laggards, p.forecast].filter(Boolean).join(' ');
+}
+
+function statusSentence(health: ProjectHealth): string {
   const behind = health.deviationPct < 0;
   const parts: string[] = [];
 
@@ -305,22 +335,29 @@ export function buildNarrative(health: ProjectHealth, laggards: Laggard[]): stri
       }`
     );
   }
-  parts.push('. ');
+  parts.push('.');
+  return parts.join('');
+}
 
-  if (laggards.length) {
-    const top = laggards[0];
-    parts.push(
-      `Penyeret terbesar adalah ${top.deskripsi} (bobot ${fmtPct(top.bobot)}) yang baru mencapai ${fmtPct(
-        top.actualPct
-      )} dari rencana ${fmtPct(top.planPct)}`
-    );
-    if (laggards.length > 1) {
-      const sum = laggards.reduce((s, l) => s + Math.abs(l.varianceWF), 0);
-      parts.push(`; ${laggards.length} item teratas menahan total ${fmtPct(sum)} progress proyek`);
-    }
-    parts.push('. ');
+function laggardSentence(laggards: Laggard[]): string | null {
+  if (!laggards.length) return null;
+  const top = laggards[0];
+  const parts: string[] = [];
+  parts.push(
+    `Penyeret terbesar adalah ${top.deskripsi} (bobot ${fmtPct(top.bobot)}) yang baru mencapai ${fmtPct(
+      top.actualPct
+    )} dari rencana ${fmtPct(top.planPct)}`
+  );
+  if (laggards.length > 1) {
+    const sum = laggards.reduce((s, l) => s + Math.abs(l.varianceWF), 0);
+    parts.push(`; ${laggards.length} item teratas menahan total ${fmtPct(sum)} progress proyek`);
   }
+  parts.push('.');
+  return parts.join('');
+}
 
+function forecastSentence(health: ProjectHealth): string {
+  const parts: string[] = [];
   if (health.forecastFinishWeek !== null && health.weeksAgainstContract !== null) {
     const early = health.weeksAgainstContract > 0;
     const gap = Math.abs(Math.round(health.weeksAgainstContract));

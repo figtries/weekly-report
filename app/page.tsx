@@ -2,15 +2,16 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowRight, CircleAlert, TrendingDown, TrendingUp } from 'lucide-react';
 import {
   buildLookAhead,
-  buildNarrative,
   computeHealth,
   findLaggards,
   fmtNum,
   fmtPct,
   formatRupiah,
+  narrativeParts,
   validateWeek,
 } from '@/lib/analysis';
-import { getCachedWeekRollup, getDb, getLatestWeek } from '@/lib/data';
+import { getCachedSCurveSeries, getCachedWeekRollup, getDb, getLatestWeek } from '@/lib/data';
+import ProgressCurve from '@/components/dashboard/ProgressCurve';
 import { cn } from '@/lib/utils';
 
 export const metadata = { title: 'Dashboard' };
@@ -19,10 +20,11 @@ export const metadata = { title: 'Dashboard' };
  * The dashboard is the product's main advantage, so it does not stop at the
  * number — it states the cause.
  *
- * Every piece of this already existed in lib/analysis.ts and had nowhere to
- * live: buildNarrative was written and never rendered anywhere, and the health
- * figures were buried behind a tab called Panel Kendali while `/` redirected
- * past them to a spreadsheet. A number board is something Excel already does.
+ * Two rules hold this page together. The hero owns actual, plan, deviation and
+ * SPI, and nothing below repeats them; the prose picks up where the hero stops,
+ * at what is holding the project back. And the curve is here because it is the
+ * one shape this trade reads instinctively — the gap between two lines lands
+ * before any percentage does.
  */
 export default async function DashboardPage() {
   const db = await getDb();
@@ -50,145 +52,172 @@ export default async function DashboardPage() {
   const laggards = findLaggards(rollup.roots, health.contractValue);
   const validation = validateWeek(db, week);
   const lookAhead = buildLookAhead(db, health);
-  const narrative = buildNarrative(health, laggards);
+  const story = narrativeParts(health, laggards);
+  const curve = await getCachedSCurveSeries(week);
 
   const behind = health.deviationPct < 0;
   const urgent = validation.findings.filter((f) => f.level !== 'ok');
-  const pct = Math.max(0, Math.min(100, health.actualPct));
-  const planMark = Math.max(0, Math.min(100, health.planPct));
+  const errors = urgent.filter((f) => f.level === 'error');
+  const weeksLeft = Math.max(0, health.lastWeek - health.week);
 
   return (
     <div className="mx-auto max-w-5xl animate-fade-in-up space-y-4 px-3 py-5 sm:space-y-5 sm:p-6 lg:p-8">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
-        {/* health.lastWeek is the last week materialised in the PLAN, not the last
-            one reported — health.week is that. Saying it the other way round
-            told the user their latest report was 24 weeks newer than it is. */}
-        <p className="text-sm text-muted-foreground">
-          Minggu <span className="font-medium text-foreground">{health.week}</span>
-          {health.lastWeek > health.week && ` dari ${health.lastWeek} minggu rencana`}
-        </p>
-      </header>
-
-      {/* Hero — the state of the project, each number said exactly once. */}
-      <section
-        className={cn(
-          'relative overflow-hidden rounded-2xl border p-5 shadow-sm sm:p-7',
-          behind ? 'border-destructive/20 bg-destructive/[0.04]' : 'border-emerald-500/20 bg-emerald-500/[0.04]'
-        )}
-      >
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Hero — dark on purpose. It is the one element that should feel like an
+          instrument panel rather than a card, and the curve needs a ground dark
+          enough for two thin lines to read against. */}
+      <section className="relative overflow-hidden rounded-3xl bg-[#0B1220] text-white shadow-[0_1px_2px_rgba(0,0,0,.06),0_24px_48px_-24px_rgba(11,18,32,.55)] ring-1 ring-white/10">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-6 pb-2 sm:p-8 sm:pb-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Progress aktual
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+              Minggu {health.week} dari {health.lastWeek} · sisa {weeksLeft} minggu
             </p>
-            <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl">
+            <p className="mt-2 text-[3.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-6xl">
               {fmtPct(health.actualPct)}
             </p>
+            <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/55">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-4 rounded bg-current" />
+                aktual
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-4 border-t border-dashed border-current" />
+                rencana {fmtPct(health.planPct)}
+              </span>
+              <span>SPI {fmtNum(health.spi, 3)}</span>
+            </p>
           </div>
+
           <div className="text-right">
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold',
-                behind ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1',
+                behind
+                  ? 'bg-rose-500/15 text-rose-300 ring-rose-400/25'
+                  : 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/25'
               )}
             >
               {behind ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
               {fmtPct(Math.abs(health.deviationPct))} {behind ? 'di belakang' : 'di depan'}
             </span>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              rencana {fmtPct(health.planPct)} · SPI {fmtNum(health.spi, 3)}
-            </p>
+            {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
+              <p className="mt-2 text-sm text-white/55">
+                ≈ {formatRupiah(Math.abs(health.scheduleVarianceRp))}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* The plan sits as a mark on the bar, so the gap is a distance, not a second number. */}
-        <div className="relative mt-5 h-2.5 w-full overflow-hidden rounded-full bg-foreground/10">
-          <div
-            className={cn('h-full rounded-full', behind ? 'bg-destructive' : 'bg-emerald-500')}
-            style={{ width: `${pct}%` }}
-          />
-          <div
-            className="absolute inset-y-0 w-0.5 bg-foreground/50"
-            style={{ left: `${planMark}%` }}
-            aria-hidden
-          />
+        {/* Bleeds to both edges: the curve is the floor of the panel, not a chart
+            sitting inside a box inside a box. */}
+        <div className={cn('h-28 w-full sm:h-36', behind ? 'text-rose-400' : 'text-emerald-400')}>
+          <ProgressCurve rows={curve} className="block h-full w-full" />
         </div>
-
-        {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Setara{' '}
-            <span className="font-medium text-foreground">
-              {formatRupiah(Math.abs(health.scheduleVarianceRp))}
-            </span>{' '}
-            pekerjaan yang {behind ? 'belum terealisasi' : 'terealisasi lebih awal'}.
-          </p>
-        )}
       </section>
 
-      {/* The sentence — what a number board can never give you. */}
+      {/* Picks up exactly where the hero stops — no figure is said twice. */}
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Yang sebenarnya terjadi
         </h2>
-        <p className="mt-2.5 text-[15px] leading-relaxed">{narrative}</p>
+        <p className="mt-2.5 text-[15px] leading-relaxed">
+          {story.laggards} {story.forecast}
+        </p>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Urgent first: these block issuing the report. */}
-        <section className="rounded-2xl border bg-card p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Yang genting minggu ini
-          </h2>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <section
+          className={cn(
+            'rounded-2xl border bg-card p-5 shadow-sm lg:col-span-2',
+            errors.length && 'border-destructive/25'
+          )}
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Yang genting
+            </h2>
+            {urgent.length > 0 && (
+              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                {urgent.length} temuan
+              </span>
+            )}
+          </div>
+
           {urgent.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
               Tidak ada temuan. Minggu ini aman untuk diterbitkan.
             </p>
           ) : (
-            <ul className="mt-3 space-y-3">
-              {urgent.slice(0, 5).map((f, i) => (
+            <ul className="mt-3 space-y-2.5">
+              {urgent.slice(0, 4).map((f, i) => (
                 <li key={i} className="flex gap-2.5">
                   {f.level === 'error' ? (
-                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                    <CircleAlert className="mt-[3px] h-4 w-4 shrink-0 text-destructive" />
                   ) : (
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <AlertTriangle className="mt-[3px] h-4 w-4 shrink-0 text-amber-500" />
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{f.title}</p>
-                    <p className="text-sm text-muted-foreground">{f.detail}</p>
-                  </div>
+                  <p className="text-sm font-medium leading-snug">{f.title}</p>
                 </li>
               ))}
+              {urgent.length > 4 && (
+                <li className="pl-[26px] text-sm text-muted-foreground">
+                  dan {urgent.length - 4} lainnya
+                </li>
+              )}
             </ul>
           )}
+
           {!validation.canIssue && (
-            <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-              Laporan minggu ini belum layak diterbitkan.
-            </p>
+            <Link
+              href={`/weekly/${week}/control`}
+              className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/15"
+            >
+              Belum layak diterbitkan
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           )}
         </section>
 
-        {/* Ranked by weight-factor variance — the item that costs the project most. */}
-        <section className="rounded-2xl border bg-card p-5 shadow-sm">
-          <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {/* Ranked by weight-factor variance: an item at 0% of a 3.3% weight costs
+            ten times what an item at 0% of a 0.3% weight does, though both read
+            as "100% behind". The bar makes that difference visible. */}
+        <section className="rounded-2xl border bg-card p-5 shadow-sm lg:col-span-3">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Penyeret terbesar
           </h2>
           {laggards.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">Tidak ada item yang tertinggal.</p>
           ) : (
-            <ul className="mt-3 space-y-2.5">
+            <ul className="mt-3 space-y-3">
               {laggards.slice(0, 5).map((l) => (
-                <li key={l.id} className="flex items-baseline justify-between gap-3">
-                  <div className="min-w-0">
+                <li key={l.id}>
+                  <div className="flex items-baseline justify-between gap-3">
                     <p className="truncate text-sm font-medium">{l.deskripsi}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {l.wbsCode} · bobot {fmtPct(l.bobot)} · baru {fmtPct(l.actualPct)} dari{' '}
-                      {fmtPct(l.planPct)}
-                    </p>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-destructive">
+                      {fmtPct(l.varianceWF)}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums text-destructive">
-                    {fmtPct(l.varianceWF)}
-                  </span>
+                  {/* Fill is what the item HAS reached; the tick is where it was
+                      meant to be. A bar sized by variance instead read as "nearly
+                      done" on precisely the worst offender. */}
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/[0.07]">
+                      <div
+                        className="h-full rounded-full bg-destructive/60"
+                        style={{ width: `${Math.max(0, Math.min(100, l.actualPct))}%` }}
+                      />
+                      {/* Clamped short of the end: the track is overflow-hidden,
+                          so a tick at exactly 100% — the commonest case here —
+                          is clipped away entirely. */}
+                      <div
+                        className="absolute inset-y-0 w-0.5 bg-foreground/45"
+                        style={{ left: `${Math.max(0, Math.min(99.2, l.planPct))}%` }}
+                        aria-hidden
+                      />
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {l.wbsCode} · {fmtPct(l.actualPct)} dari {fmtPct(l.planPct)}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -198,71 +227,81 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border bg-card p-5 shadow-sm">
-          <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Proyeksi
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Laju
           </h2>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">Laju sekarang</dt>
-              <dd className="font-medium tabular-nums">{fmtPct(health.velocityPerWeek)} / minggu</dd>
+          <div className="mt-3 flex items-end gap-6">
+            <div>
+              <p className="text-2xl font-semibold tabular-nums">{fmtPct(health.velocityPerWeek)}</p>
+              <p className="text-xs text-muted-foreground">sekarang, per minggu</p>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">Dituntut rencana</dt>
-              <dd className="font-medium tabular-nums">{fmtPct(health.requiredVelocity)} / minggu</dd>
+            <div className="pb-0.5">
+              <p className="text-lg font-medium tabular-nums text-muted-foreground">
+                {fmtPct(health.requiredVelocity)}
+              </p>
+              <p className="text-xs text-muted-foreground">dituntut rencana</p>
             </div>
-            <div className="flex justify-between gap-3 border-t pt-2">
-              <dt className="text-muted-foreground">Perkiraan selesai</dt>
-              <dd className="font-medium tabular-nums">
-                {health.forecastFinishWeek === null
-                  ? 'belum bisa diproyeksikan'
-                  : `minggu ${Math.round(health.forecastFinishWeek)}`}
-              </dd>
-            </div>
-            {health.weeksAgainstContract !== null && (
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Terhadap kontrak</dt>
-                <dd
-                  className={cn(
-                    'font-medium tabular-nums',
-                    health.weeksAgainstContract >= 0 ? 'text-emerald-600' : 'text-destructive'
-                  )}
-                >
-                  {Math.abs(Math.round(health.weeksAgainstContract))} minggu{' '}
-                  {health.weeksAgainstContract >= 0 ? 'lebih cepat' : 'lebih lambat'}
-                </dd>
-              </div>
+          </div>
+          <p className="mt-3 border-t pt-3 text-sm">
+            {health.forecastFinishWeek === null ? (
+              <span className="text-muted-foreground">Belum bisa diproyeksikan.</span>
+            ) : (
+              <>
+                Selesai di{' '}
+                <span className="font-medium">minggu {Math.round(health.forecastFinishWeek)}</span>
+                {health.weeksAgainstContract !== null && (
+                  <span
+                    className={cn(
+                      'font-medium',
+                      health.weeksAgainstContract >= 0 ? 'text-emerald-600' : 'text-destructive'
+                    )}
+                  >
+                    {' — '}
+                    {Math.abs(Math.round(health.weeksAgainstContract))} minggu{' '}
+                    {health.weeksAgainstContract >= 0 ? 'lebih cepat' : 'lebih lambat'}
+                  </span>
+                )}
+              </>
             )}
-          </dl>
+          </p>
         </section>
 
         <section className="rounded-2xl border bg-card p-5 shadow-sm">
-          <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Yang harus terjadi
-          </h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Yang harus terjadi
+            </h2>
+            <Link
+              href={`/weekly/${week}/input`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+            >
+              Perbarui <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
           {lookAhead.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">Tidak ada minggu berikutnya di rencana.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Tidak ada minggu berikutnya.</p>
           ) : (
             <ul className="mt-3 space-y-2.5">
               {lookAhead.map((w) => (
                 <li key={w.week} className="flex items-baseline justify-between gap-3 text-sm">
                   <span className="text-muted-foreground">Minggu {w.week}</span>
                   <span className="text-right">
-                    <span className="font-medium tabular-nums">{fmtPct(w.targetPct)}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      +{fmtPct(w.gapFromNow)}
-                      {w.paceMultiple !== null && ` · ${fmtNum(w.paceMultiple, 1)}× laju sekarang`}
-                    </span>
+                    <span className="font-medium tabular-nums">+{fmtPct(w.gapFromNow)}</span>
+                    {w.paceMultiple !== null && (
+                      <span
+                        className={cn(
+                          'ml-2 text-xs',
+                          w.paceMultiple > 1.5 ? 'font-medium text-amber-600' : 'text-muted-foreground'
+                        )}
+                      >
+                        {fmtNum(w.paceMultiple, 1)}× laju sekarang
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-          <Link
-            href={`/weekly/${week}/input`}
-            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
-          >
-            Perbarui progress <ArrowRight className="h-4 w-4" />
-          </Link>
         </section>
       </div>
     </div>
