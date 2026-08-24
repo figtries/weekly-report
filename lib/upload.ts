@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { readPhotoMeta, type PhotoMeta } from './exif';
 import { redisConfigured, redisSet, redisDel } from './storage';
 
 const IS_VERCEL = !!process.env.VERCEL;
@@ -23,8 +24,13 @@ export async function preparePhotoUpload(
   subdir: string,
   key: string,
   slot: number
-): Promise<{ relPath: string; persist: () => Promise<void> }> {
+): Promise<{ relPath: string; meta: PhotoMeta; persist: () => Promise<void> }> {
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Read capture metadata here, from the original bytes: storage may re-encode
+  // (Redis base64 round-trips fine, but resizing elsewhere would not) and the
+  // EXIF block is the first thing a pipeline drops. Losing it turns a photo
+  // from evidence into an assertion — see lib/exif.ts.
+  const meta = readPhotoMeta(buffer);
   const ext = path.extname(file.name) || '.jpg';
   const filename = `slot-${slot}-${Date.now()}${ext}`;
   const relPath = `/uploads/${subdir}/${key}/${filename}`;
@@ -35,6 +41,7 @@ export async function preparePhotoUpload(
     }
     return {
       relPath,
+      meta,
       persist: async () => {
         await redisSet(
           photoRedisKey(relPath),
@@ -46,6 +53,7 @@ export async function preparePhotoUpload(
 
   return {
     relPath,
+    meta,
     persist: async () => {
       const dir = path.join(UPLOAD_ROOT, subdir, key);
       await fs.mkdir(dir, { recursive: true });

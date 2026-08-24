@@ -1,5 +1,5 @@
 import { cacheLife, cacheTag } from 'next/cache';
-import { readDb } from './db';
+import { readDb, readWorkspace } from './db';
 import {
   computeGrandTotal,
   computeRollup,
@@ -8,6 +8,7 @@ import {
   type RollupNode,
 } from './rollup';
 import { buildSCurveSeries, type SCurveRow } from './scurve';
+import { listProjects, type ProjectSummary, type Workspace } from './workspace';
 import type { Database, WeeklyMeta } from './types';
 
 // Cached so every page renders into an instant static shell (see
@@ -66,4 +67,29 @@ export async function getCachedSCurveSeries(upToWeek: number): Promise<SCurveRow
 
   const db = await readDb();
   return buildSCurveSeries(db, upToWeek);
+}
+
+/**
+ * The project list for the sidebar.
+ *
+ * Cached like `getDb()` and for the same reason: this is read in the root
+ * layout, so an uncached call here blocks every route in the app — including
+ * `/_not-found`, which fails the build with "Uncached data was accessed
+ * outside of <Suspense>". See AGENTS.md.
+ */
+export async function getProjects(): Promise<ProjectSummary[]> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
+
+  return listProjects(await readWorkspace());
+}
+
+/** Cached workspace, for the portfolio view. Same reason as `getProjects()`. */
+export async function getWorkspace(): Promise<Workspace> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
+
+  return readWorkspace();
 }

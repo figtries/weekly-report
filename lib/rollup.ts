@@ -1,3 +1,4 @@
+import { resolveLeafProgress } from './progress';
 import type { WbsItem, WeeklyLeafData } from './types';
 
 export interface RollupNode extends WbsItem {
@@ -67,8 +68,16 @@ export function computeRollup(
     if (node.isLeaf) {
       const cur = current[node.id];
       const prev = previous?.[node.id];
-      node.curProgressPct = cur?.cumProgressPct ?? prev?.cumProgressPct ?? 0;
-      node.prevProgressPct = prev?.cumProgressPct ?? 0;
+      // resolveLeafProgress, not cumProgressPct: for quantity- and
+      // milestone-based items the stored percent is only a cache, and reading
+      // it here would let a stale cache outrank the evidence it was derived
+      // from. Lumpsum items fall through to the stored value unchanged.
+      node.curProgressPct = cur
+        ? resolveLeafProgress(node, cur)
+        : prev
+          ? resolveLeafProgress(node, prev)
+          : 0;
+      node.prevProgressPct = prev ? resolveLeafProgress(node, prev) : 0;
       node.curWF = (node.bobot * node.curProgressPct) / 100;
       node.prevWF = (node.bobot * node.prevProgressPct) / 100;
       node.targetWF = cur?.targetWF ?? prev?.targetWF ?? 0;

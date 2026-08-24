@@ -2,10 +2,25 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { after } from 'next/server';
-import { mutateDb } from './db';
-import { applyCreateDaily, applyDeleteDaily, applyPatchDaily, applyWeekUpdates } from './mutations';
+import { mutateDb, mutateWorkspace } from './db';
+import type { CatalogKey } from './catalogs';
+import { emptyDatabase, newProjectId } from './workspace';
+import {
+  applyApproval,
+  applyCatalog,
+  applyCreateDaily,
+  applyDeleteDaily,
+  applyFieldProgress,
+  applyPatchDaily,
+  applyProgressMethod,
+  applyRevokeApproval,
+  applySetup,
+  applyWeekUpdates,
+  type FieldProgressUpdate,
+} from './mutations';
+import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
-import type { DailyReport, LeafSnapshot } from './types';
+import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
 // one round trip that mutates, expires the 'db' cache tag (updateTag = read
@@ -105,6 +120,156 @@ export async function saveWeekUpdatesAction(
 ): Promise<ActionResult> {
   try {
     await mutateDb((db) => applyWeekUpdates(db, week, updates));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// --- Setup & baseline ------------------------------------------------------
+
+export async function setContractValueAction(value: number): Promise<ActionResult> {
+  try {
+    if (!Number.isFinite(value) || value < 0) throw new Error('Nilai kontrak tidak valid');
+    await mutateDb((db) => {
+      // 0 clears it — a project that never had a BOQ should be able to go back
+      // to percent-only rather than carry a made-up number forward.
+      db.project.contractValue = value > 0 ? value : undefined;
+    });
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function commitSetupAction(draft: SetupDraft): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applySetup(db, draft));
+    updateTag('db');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function saveFieldProgressAction(
+  week: number,
+  updates: FieldProgressUpdate[]
+): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applyFieldProgress(db, week, updates));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function setProgressMethodAction(
+  leafId: string,
+  method: ProgressMethod,
+  opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
+): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applyProgressMethod(db, leafId, method, opts));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function saveCatalogAction(
+  key: CatalogKey,
+  entries: CatalogEntry[]
+): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applyCatalog(db, key, entries));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// --- Workspace (multi-proyek) ----------------------------------------------
+
+export async function switchProjectAction(projectId: string): Promise<ActionResult> {
+  try {
+    await mutateWorkspace((ws) => {
+      if (!ws.projects[projectId]) throw new Error('Proyek tidak ditemukan');
+      ws.activeProjectId = projectId;
+    });
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function createProjectAction(name: string): Promise<ActionResult & { id?: string }> {
+  try {
+    const id = await mutateWorkspace((ws) => {
+      const newId = newProjectId();
+      ws.projects[newId] = emptyDatabase(name.trim() || 'Proyek baru');
+      ws.order.push(newId);
+      // Switch immediately: creating a project and then having to select it is
+      // a step that exists only because the data model made it convenient.
+      ws.activeProjectId = newId;
+      return newId;
+    });
+    updateTag('db');
+    return { ok: true, id };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function deleteProjectAction(projectId: string): Promise<ActionResult> {
+  try {
+    await mutateWorkspace((ws) => {
+      if (!ws.projects[projectId]) throw new Error('Proyek tidak ditemukan');
+      if (ws.order.length <= 1) throw new Error('Proyek terakhir tidak bisa dihapus');
+      delete ws.projects[projectId];
+      ws.order = ws.order.filter((id) => id !== projectId);
+      if (ws.activeProjectId === projectId) ws.activeProjectId = ws.order[0];
+    });
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function approveWeekAction(
+  week: number,
+  by: string,
+  role: string,
+  approvedPct: number,
+  note?: string
+): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applyApproval(db, week, by, role, approvedPct, note));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function revokeApprovalAction(week: number): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => applyRevokeApproval(db, week));
     updateTag('db');
     refresh();
     return { ok: true };
