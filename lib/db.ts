@@ -4,6 +4,7 @@ import path from 'path';
 import { gzipSync, gunzipSync } from 'zlib';
 import { revalidateTag } from 'next/cache';
 import { redisConfigured, redisGet, redisSet } from './storage';
+import { activeProject, migrate, type StoredShape, type Workspace } from './workspace';
 import type { Database } from './types';
 
 const SOURCE_PATH = path.join(process.cwd(), 'data', 'db.json');
@@ -26,23 +27,42 @@ async function ensureWritable(): Promise<void> {
 
 let queue: Promise<unknown> = Promise.resolve();
 
-export async function readDb(): Promise<Database> {
+async function readStored(): Promise<StoredShape> {
   if (redisConfigured) {
     const raw = await redisGet(DB_KEY);
     if (raw !== null) {
-      return JSON.parse(gunzipSync(Buffer.from(raw, 'base64')).toString('utf-8')) as Database;
+      return JSON.parse(gunzipSync(Buffer.from(raw, 'base64')).toString('utf-8')) as StoredShape;
     }
     // First run against an empty store — serve the bundled seed data. It
-    // becomes durable on the first write (writeDb persists to Redis).
-    return JSON.parse(await fs.readFile(SOURCE_PATH, 'utf-8')) as Database;
+    // becomes durable on the first write (writeWorkspace persists to Redis).
+    return JSON.parse(await fs.readFile(SOURCE_PATH, 'utf-8')) as StoredShape;
   }
   await ensureWritable();
   const raw = await fs.readFile(WRITABLE_PATH, 'utf-8');
-  return JSON.parse(raw) as Database;
+  return JSON.parse(raw) as StoredShape;
 }
 
-async function writeDb(db: Database): Promise<void> {
-  const json = JSON.stringify(db);
+/**
+ * The whole workspace. Legacy single-project files are wrapped on the way out,
+ * never rewritten on read — a file only changes shape once something is saved.
+ */
+export async function readWorkspace(): Promise<Workspace> {
+  return migrate(await readStored());
+}
+
+/**
+ * The active project.
+ *
+ * Kept returning `Database` on purpose: roughly forty call sites read it, and
+ * multi-project support would have meant touching all of them for no gain. Only
+ * code that genuinely needs to see across projects calls `readWorkspace()`.
+ */
+export async function readDb(): Promise<Database> {
+  return activeProject(await readWorkspace());
+}
+
+async function writeWorkspace(ws: Workspace): Promise<void> {
+  const json = JSON.stringify(ws);
   if (redisConfigured) {
     await redisSet(DB_KEY, gzipSync(Buffer.from(json, 'utf-8')).toString('base64'));
     return;
@@ -51,11 +71,17 @@ async function writeDb(db: Database): Promise<void> {
   await fs.writeFile(WRITABLE_PATH, json, 'utf-8');
 }
 
+/** Mutate the active project. Every existing caller keeps working unchanged. */
 export function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
+  return mutateWorkspace(async (ws) => mutator(activeProject(ws)));
+}
+
+/** Mutate across projects — switching, creating, deleting, portfolio-wide edits. */
+export function mutateWorkspace<T>(mutator: (ws: Workspace) => T | Promise<T>): Promise<T> {
   const run = queue.then(async () => {
-    const db = await readDb();
-    const result = await mutator(db);
-    await writeDb(db);
+    const ws = migrate(await readStored());
+    const result = await mutator(ws);
+    await writeWorkspace(ws);
     // Expire immediately (not stale-while-revalidate) so the re-render that
     // follows every mutation sees the fresh data.
     revalidateTag('db', { expire: 0 });
