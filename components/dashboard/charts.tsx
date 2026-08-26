@@ -31,6 +31,9 @@ export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
         const actual = r.bobot > 0 ? (r.curWF / r.bobot) * 100 : 0;
         const plan = r.bobot > 0 ? (r.targetWF / r.bobot) * 100 : 0;
         const behind = r.variance < 0;
+        // A finished contract has nothing to be ahead or behind of, and "+0,00%"
+        // reads as a measurement rather than as done.
+        const done = actual >= 99.995;
         // Strip the "(SPK-###)" tag out of the label and show it as its own chip.
         const tag = r.deskripsi.match(/\(SPK-\d+\)/)?.[0]?.replace(/[()]/g, '') ?? null;
         const name = r.deskripsi.replace(/\s*\(SPK-\d+\)\s*/, '').trim();
@@ -45,16 +48,23 @@ export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
                   </span>
                 )}
                 <p className="truncate text-sm font-medium">{name}</p>
+                <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                  bobot {fmtPct(r.bobot)}
+                </span>
               </div>
-              <span
-                className={cn(
-                  'shrink-0 text-sm font-semibold tabular-nums',
-                  behind ? 'text-destructive' : 'text-emerald-600'
-                )}
-              >
-                {behind ? '' : '+'}
-                {fmtPct(r.variance)}
-              </span>
+              {done ? (
+                <span className="shrink-0 text-sm font-semibold text-emerald-600">selesai</span>
+              ) : (
+                <span
+                  className={cn(
+                    'shrink-0 text-sm font-semibold tabular-nums',
+                    behind ? 'text-destructive' : 'text-emerald-600'
+                  )}
+                >
+                  {behind ? '' : '+'}
+                  {fmtPct(r.variance)}
+                </span>
+              )}
             </div>
 
             <div className="mt-1.5 flex items-center gap-2.5">
@@ -63,14 +73,18 @@ export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
                   className={cn('h-full rounded-full', behind ? 'bg-destructive/65' : 'bg-emerald-500/70')}
                   style={{ width: `${clamp(actual)}%` }}
                 />
-                <div
-                  className="absolute inset-y-0 w-0.5 bg-foreground/45"
-                  style={{ left: `${Math.min(99.2, clamp(plan))}%` }}
-                  aria-hidden
-                />
+                {/* Hidden once complete: at 100% the tick sits under the very end
+                    of a full bar and reads as a notch cut out of it. */}
+                {!done && (
+                  <div
+                    className="absolute inset-y-0 w-0.5 bg-foreground/45"
+                    style={{ left: `${Math.min(99.2, clamp(plan))}%` }}
+                    aria-hidden
+                  />
+                )}
               </div>
-              <span className="w-[8.5rem] shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                {fmtPct(actual)} · bobot {fmtPct(r.bobot)}
+              <span className="w-14 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                {fmtPct(actual)}
               </span>
             </div>
           </li>

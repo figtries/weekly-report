@@ -20,7 +20,7 @@ import {
   type LeafSpread,
 } from '@/components/dashboard/charts';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export const metadata = { title: 'Dashboard' };
@@ -218,14 +218,16 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className={cn('lg:col-span-2', errors.length && 'border-destructive/25')}>
-          <CardHeader className="flex-row items-baseline justify-between gap-2 space-y-0">
+          {/* CardAction, not a flex-row override: shadcn's CardHeader is a grid
+              that only splits into two columns when a card-action slot is present. */}
+          <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Yang genting
             </CardTitle>
             {urgent.length > 0 && (
-              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              <CardAction className="text-[11px] font-medium tabular-nums text-muted-foreground">
                 {urgent.length} temuan
-              </span>
+              </CardAction>
             )}
           </CardHeader>
           <CardContent>
@@ -315,16 +317,18 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader className="flex-row items-baseline justify-between gap-2 space-y-0">
+          <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Yang harus terjadi
             </CardTitle>
-            <Link
-              href={`/weekly/${week}/input`}
-              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
-            >
-              Perbarui <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <CardAction>
+              <Link
+                href={`/weekly/${week}/input`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+              >
+                Perbarui <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </CardAction>
           </CardHeader>
           <CardContent>
             {lookAhead.length === 0 ? (
