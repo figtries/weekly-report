@@ -226,3 +226,68 @@ are wrapped on read and never rewritten until something is actually saved.
 **Approvals snapshot the figure approved.** A signature that silently follows
 the number it signed is worth nothing in a dispute, so the panel shows drift
 when the week is edited afterwards.
+
+# The v2 rebuild — read this before starting new work
+
+The app is being rebuilt from fundamentals against the CPP Gundih data
+(3 workbooks, 4 SPK, 285 WBS rows, 142 documents, 415 days). Fourteen decisions
+are locked and there is a numbered work board. **The blueprint is the plan of
+record:**
+
+> https://claude.ai/code/artifact/d3dfeed6-8a05-4ba8-87f5-2affe3da7c47
+
+Work happens on branch `v2-foundation`; `main` is untouched until it is
+deliberately fast-forwarded. To update the blueprint from any session, publish
+with that URL as `url` — publishing without it creates a duplicate artifact
+instead.
+
+**The user briefs by number.** Do one item, finish it, stop. Do not roam into
+neighbouring items; the scattering that produced this board is the thing it
+exists to prevent.
+
+```
+01 Fondasi database          selesai   17 tabel · Drizzle · SQLite
+02 Kurva rencana diturunkan  selesai   30/30 cocok Gundih
+03 Navigasi 12 → 6           selesai   Sidebar 488→268
+04 Dashboard halaman depan   selesai
+05 Visual dashboard          selesai   per kontrak · sebaran · laju
+06 Panel Kendali dipisah perannya      (isinya dobel dengan Dashboard)
+07 Importer Gundih
+08 Halaman Ringkasan
+09 Halaman Detail
+10 Halaman Kurva S
+11 Halaman Foto
+12 Form Harian
+13 Data Overall workbench
+14 Modul Document Control
+15 Baseline berversi
+16 Penyusun blok laporan
+17 Login dan peran
+18 Impor dan ekspor Excel
+```
+
+**The four decisions that constrain code the most.** A reporting unit is a
+FLAGGED WBS NODE, never a hierarchy level — and units nest, so a unit's weight
+is its subtree minus any unit inside it (SPK-007 sits at `1.4.4` inside
+SPK-004's `1.4`, yet both are reported separately; without the subtraction the
+total reaches 114%). The plan curve is DERIVED, never stored: only weight,
+start and finish live in the database, and each leaf spreads linearly across
+its own duration. Deviation is measured against two baselines that live side by
+side — Kontraktual, locked, for claims; Aktif, the latest agreed revision, for
+managing the work. And a leaf's percentage comes from one of four methods:
+kuantitas, milestone, lumpsum, or **tertaut**, where an engineering leaf reads
+its figure straight from the document register instead of being measured twice.
+
+**Two traps that have already cost a day each.** The SQLite driver must be
+SYNCHRONOUS (`better-sqlite3`, not libsql): with `cacheComponents: true` a sync
+embedded-database query counts as deterministic and prerenders, while an async
+driver forces `<Suspense>` around every read in the app. And exceljs must be
+driven through `ExcelJS.stream.xlsx.WorkbookReader` — plain `readFile` died at a
+2 GB heap on the 11.8 MB weekly workbook.
+
+**Verifying UI work.** The Browser pane never composites in this environment, so
+`computer{action:"screenshot"}` always fails. Use `scripts/shoot.mjs <url>
+<out.png> [w] [h]`, which drives the Chrome already here for PDFs, and actually
+look at the image — desktop and 390px. Extracted text shows content, never
+composition. Never verify a build through a pipe either: `next build | grep`
+reports grep's exit code, so write to a file and echo `$?`.
