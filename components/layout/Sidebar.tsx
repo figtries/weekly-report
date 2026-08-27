@@ -9,6 +9,7 @@ import {
   Activity,
   CalendarDays,
   FileText,
+  Files,
   LayoutDashboard,
   Menu,
   Scale,
@@ -72,6 +73,12 @@ const DESTINATIONS: Destination[] = [
     href: (w) => `/weekly/${w}/summary`,
     match: (p) => WEEKLY_REPORT.some((k) => p.endsWith(`/${k}`)),
     warm: (w) => WEEKLY_REPORT.map((k) => `/weekly/${w}/${k}`),
+  },
+  {
+    label: 'Dokumen',
+    icon: Files,
+    href: () => '/dokumen',
+    match: (p) => p.startsWith('/dokumen'),
   },
   {
     label: 'Klaim',

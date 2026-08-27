@@ -2,8 +2,7 @@
  * Reads for the v2 database.
  *
  * Separate from `lib/data.ts`, which serves the old JSON store and still feeds
- * every existing screen. This module is the one that will eventually replace
- * it; for now only `/v2` reads from here.
+ * every other screen. Only `/dokumen` reads from here for now.
  *
  * Every query is synchronous on purpose. better-sqlite3 under Cache Components
  * counts as a deterministic operation, so these complete during prerendering
@@ -12,210 +11,171 @@
  *
  * Percentages are 0..100 throughout, matching the schema.
  */
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { leafPlanFraction } from './plan-curve';
-
-export type WbsNode = typeof schema.wbsNodes.$inferSelect;
-
-export interface UnitSummary {
-  code: string;
-  label: string;
-  name: string;
-  /** Share of the whole project, 0..100. */
-  bobot: number;
-  /** How far this unit has got in its own terms, 0..100. */
-  progress: number;
-  /** That progress expressed against the project, 0..100. */
-  contribution: number;
-  /** Where it was meant to be, against each baseline. */
-  targetContractual: number;
-  targetActive: number;
-  /** contribution − targetContractual. */
-  deviation: number;
-}
-
-export interface WeekSummary {
-  weekNo: number;
-  startDate: string;
-  endDate: string;
-  status: string;
-  units: UnitSummary[];
-  totals: {
-    bobot: number;
-    actual: number;
-    targetContractual: number;
-    targetActive: number;
-    deviation: number;
-  };
-}
 
 export interface RegisterSummary {
   documents: number;
   categories: number;
   transmittals: number;
   stages: Array<{ stage: string; weight: number; reached: number }>;
+  /** Share of the whole register that is done, 0..100. */
   progress: number;
-  /** Documents whose latest return code is anything other than approved. */
-  awaitingComment: number;
 }
 
-/* ------------------------------------------------------------------ project */
+export interface CategoryProgress {
+  code: string;
+  name: string;
+  documents: number;
+  /** How many have reached each weighted stage. */
+  reached: Array<{ stage: string; count: number }>;
+}
+
+export interface OutstandingDocument {
+  docNo: string;
+  title: string;
+  categoryName: string;
+  /** The furthest stage it has reached. */
+  stage: string;
+  returnCode: string;
+  returnedAt: string | null;
+  pic: string | null;
+}
+
+/** Return codes that mean the document is genuinely through. */
+const APPROVED = new Set(['APP', 'APPROVED', 'FINISH']);
 
 export function getProject(projectId: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0] ?? null;
 }
 
-export function listWeeks(projectId: string) {
-  return db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId)).all()
-    .sort((a, b) => a.weekNo - b.weekNo);
-}
+/* -------------------------------------------------------------- internals */
 
-/** The last week that actually carries progress, which is the one worth showing. */
-export function getReportedWeek(projectId: string) {
-  const weeks = listWeeks(projectId);
-  for (let i = weeks.length - 1; i >= 0; i--) {
-    const rows = db.select().from(schema.leafProgress)
-      .where(eq(schema.leafProgress.weekId, weeks[i].id)).all();
-    if (rows.length > 0) return weeks[i];
-  }
-  return weeks[weeks.length - 1] ?? null;
-}
-
-/* --------------------------------------------------------------------- WBS */
-
-/**
- * A reporting unit owns its subtree MINUS any reporting unit nested inside it.
- * SPK-007 sits at 1.4.4 inside SPK-004's 1.4 and both are reported; without the
- * subtraction SPK-007 is counted twice and the project total reaches 114%.
- */
-function leavesOfUnit(nodes: WbsNode[], unitCode: string, allUnitCodes: string[]) {
-  const nested = allUnitCodes.filter((c) => c !== unitCode && c.startsWith(`${unitCode}.`));
-  return nodes
-    .filter((n) => n.bobot !== null && n.bobot > 0)
-    .filter((n) => n.wbsCode === unitCode || n.wbsCode.startsWith(`${unitCode}.`))
-    .filter((n) => !nested.some((c) => n.wbsCode === c || n.wbsCode.startsWith(`${c}.`)));
-}
-
-export function getWeekSummary(projectId: string, weekNo: number): WeekSummary | null {
-  const week = db.select().from(schema.weeks)
-    .where(and(eq(schema.weeks.projectId, projectId), eq(schema.weeks.weekNo, weekNo))).all()[0];
-  if (!week) return null;
-
-  const nodes = db.select().from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, projectId)).all();
-  const progress = db.select().from(schema.leafProgress)
-    .where(eq(schema.leafProgress.weekId, week.id)).all();
-  const pct = new Map(progress.map((p) => [p.nodeId, p.cumProgressPct]));
-
-  const scheduleFor = (kind: 'contractual' | 'active') => new Map(
-    db.select().from(schema.nodeSchedules)
-      .where(eq(schema.nodeSchedules.baselineId, `${projectId}:${kind}`)).all()
-      .map((s) => [s.nodeId, s]),
-  );
-  const contractual = scheduleFor('contractual');
-  const active = scheduleFor('active');
-
-  const planned = (leaves: WbsNode[], sched: ReturnType<typeof scheduleFor>) =>
-    leaves.reduce((a, n) => {
-      const s = sched.get(n.id);
-      return a + (s ? n.bobot! * leafPlanFraction(s.startDate, s.finishDate, week.endDate) : 0);
-    }, 0);
-
-  const unitNodes = nodes.filter((n) => n.isReportingUnit).sort((a, b) => a.order - b.order);
-  const unitCodes = unitNodes.map((n) => n.wbsCode);
-
-  const units: UnitSummary[] = unitNodes.map((unit) => {
-    const leaves = leavesOfUnit(nodes, unit.wbsCode, unitCodes);
-    const bobot = leaves.reduce((a, n) => a + n.bobot!, 0);
-    const contribution = leaves.reduce((a, n) => a + (n.bobot! * (pct.get(n.id) ?? 0)) / 100, 0);
-    const targetContractual = planned(leaves, contractual);
-    return {
-      code: unit.wbsCode,
-      label: unit.unitLabel ?? unit.wbsCode,
-      name: unit.deskripsi.trim(),
-      bobot,
-      progress: bobot === 0 ? 0 : (contribution / bobot) * 100,
-      contribution,
-      targetContractual,
-      targetActive: planned(leaves, active),
-      deviation: contribution - targetContractual,
-    };
-  });
-
-  const totals = units.reduce(
-    (a, u) => ({
-      bobot: a.bobot + u.bobot,
-      actual: a.actual + u.contribution,
-      targetContractual: a.targetContractual + u.targetContractual,
-      targetActive: a.targetActive + u.targetActive,
-      deviation: 0,
-    }),
-    { bobot: 0, actual: 0, targetContractual: 0, targetActive: 0, deviation: 0 },
-  );
-  totals.deviation = totals.actual - totals.targetContractual;
-
-  return {
-    weekNo: week.weekNo,
-    startDate: week.startDate,
-    endDate: week.endDate,
-    status: week.status,
-    units,
-    totals,
-  };
-}
-
-/* -------------------------------------------------------- document control */
-
-/** Return codes that mean the document is genuinely through. */
-const APPROVED = new Set(['APP', 'APPROVED', 'FINISH']);
-
-export function getRegisterSummary(projectId: string): RegisterSummary | null {
+function loadRegister(projectId: string) {
   const documents = db.select().from(schema.documents)
     .where(eq(schema.documents.projectId, projectId)).all();
   if (documents.length === 0) return null;
+
+  const docIds = new Set(documents.map((d) => d.id));
+  // A stage record exists only where something actually happened — a
+  // submission, a transmittal, a return — never for a plan date alone. Its
+  // presence IS the evidence that the document reached that stage, which is
+  // what lets the register count submissions whose date nobody wrote down.
+  const stages = db.select().from(schema.docStages).all().filter((s) => docIds.has(s.documentId));
+
+  const reachedByDoc = new Map<string, Set<string>>();
+  for (const s of stages) {
+    const set = reachedByDoc.get(s.documentId) ?? new Set<string>();
+    set.add(s.stage);
+    reachedByDoc.set(s.documentId, set);
+  }
+
+  const weights = db.select().from(schema.docStageWeights)
+    .where(eq(schema.docStageWeights.projectId, projectId)).all()
+    .filter((w) => w.weight > 0)
+    .sort((a, b) => a.order - b.order);
+
+  return { documents, stages, reachedByDoc, weights };
+}
+
+/* ----------------------------------------------------------------- public */
+
+export function getRegisterSummary(projectId: string): RegisterSummary | null {
+  const loaded = loadRegister(projectId);
+  if (!loaded) return null;
+  const { documents, reachedByDoc, weights } = loaded;
 
   const categories = db.select().from(schema.docCategories)
     .where(eq(schema.docCategories.projectId, projectId)).all();
   const transmittals = db.select().from(schema.transmittals)
     .where(eq(schema.transmittals.projectId, projectId)).all();
-  const weights = db.select().from(schema.docStageWeights)
-    .where(eq(schema.docStageWeights.projectId, projectId)).all()
-    .sort((a, b) => a.order - b.order);
-
-  const docIds = new Set(documents.map((d) => d.id));
-  const allStages = db.select().from(schema.docStages).all().filter((s) => docIds.has(s.documentId));
-
-  // A stage record exists only where something actually happened, so its
-  // presence IS the evidence — see the note in scripts/verify-edl.ts.
-  const reachedBy = new Map<string, Set<string>>();
-  for (const s of allStages) {
-    const set = reachedBy.get(s.stage) ?? new Set<string>();
-    set.add(s.documentId);
-    reachedBy.set(s.stage, set);
-  }
 
   const total = documents.length;
-  const stages = weights
-    .filter((w) => w.weight > 0)
-    .map((w) => ({ stage: w.stage, weight: w.weight, reached: reachedBy.get(w.stage)?.size ?? 0 }));
-
-  const progress = stages.reduce((a, s) => a + (s.reached / total) * s.weight, 0);
-
-  const awaitingComment = documents.filter((d) => {
-    const codes = allStages
-      .filter((s) => s.documentId === d.id && s.returnCode)
-      .map((s) => s.returnCode!.toUpperCase());
-    return codes.length > 0 && !codes.some((c) => APPROVED.has(c));
-  }).length;
+  const stages = weights.map((w) => ({
+    stage: w.stage,
+    weight: w.weight,
+    reached: documents.filter((d) => reachedByDoc.get(d.id)?.has(w.stage)).length,
+  }));
 
   return {
     documents: total,
-    categories: categories.length,
+    categories: categories.filter((c) => !categories.some((o) => o.code.startsWith(`${c.code}.`))).length,
     transmittals: transmittals.length,
     stages,
-    progress,
-    awaitingComment,
+    progress: stages.reduce((a, s) => a + (s.reached / total) * s.weight, 0),
   };
+}
+
+/**
+ * One row per category rather than 143 documents. A document controller works
+ * category by category — "where is Electrical" — and a wall of rows is exactly
+ * what this product exists to replace.
+ */
+export function getCategoryProgress(projectId: string): CategoryProgress[] {
+  const loaded = loadRegister(projectId);
+  if (!loaded) return [];
+  const { documents, reachedByDoc, weights } = loaded;
+
+  const categories = db.select().from(schema.docCategories)
+    .where(eq(schema.docCategories.projectId, projectId)).all();
+  const idToCode = new Map(categories.map((c) => [c.id, c.code]));
+  // Only leaf categories hold documents; the rest are subtotal headings.
+  const leaves = categories.filter((c) => !categories.some((o) => o.code.startsWith(`${c.code}.`)));
+
+  return leaves
+    .map((cat) => {
+      const docs = documents.filter((d) => idToCode.get(d.categoryId) === cat.code);
+      return {
+        code: cat.code,
+        name: cat.name,
+        documents: docs.length,
+        reached: weights.map((w) => ({
+          stage: w.stage,
+          count: docs.filter((d) => reachedByDoc.get(d.id)?.has(w.stage)).length,
+        })),
+      };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
+}
+
+/**
+ * Documents that came back with a comment and have not been approved since.
+ *
+ * This is the list that actually holds construction up, and the reason the
+ * module earns its place even though every engineering leaf in the WBS together
+ * carries under one percent of project weight.
+ */
+export function getOutstandingDocuments(projectId: string): OutstandingDocument[] {
+  const loaded = loadRegister(projectId);
+  if (!loaded) return [];
+  const { documents, stages } = loaded;
+
+  const categoryName = new Map(
+    db.select().from(schema.docCategories)
+      .where(eq(schema.docCategories.projectId, projectId)).all()
+      .map((c) => [c.id, c.name]),
+  );
+
+  const returned = stages.filter((s) => s.returnCode).sort((a, b) => a.order - b.order);
+
+  const out: OutstandingDocument[] = [];
+  for (const doc of documents) {
+    const history = returned.filter((s) => s.documentId === doc.id);
+    if (history.length === 0) continue;
+    const last = history[history.length - 1];
+    if (APPROVED.has(last.returnCode!.toUpperCase())) continue;
+    out.push({
+      docNo: doc.docNo,
+      title: doc.title,
+      categoryName: categoryName.get(doc.categoryId) ?? '—',
+      stage: last.stage,
+      returnCode: last.returnCode!,
+      returnedAt: last.returnedAt,
+      pic: doc.pic,
+    });
+  }
+
+  // Most recently returned first: that is the order a controller works in.
+  return out.sort((a, b) => (b.returnedAt ?? '').localeCompare(a.returnedAt ?? ''));
 }
