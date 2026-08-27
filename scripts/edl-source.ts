@@ -109,7 +109,7 @@ export interface EdlSource {
 
 /* ----------------------------------------------------------------- cells */
 
-function raw(cell: ExcelJS.Cell): unknown {
+export function raw(cell: ExcelJS.Cell): unknown {
   const v = cell?.value as unknown;
   if (v === null || v === undefined) return null;
   if (typeof v === 'object') {
@@ -121,14 +121,14 @@ function raw(cell: ExcelJS.Cell): unknown {
   return v;
 }
 
-function text(cell: ExcelJS.Cell): string | null {
+export function text(cell: ExcelJS.Cell): string | null {
   const v = raw(cell);
   if (v === null) return null;
   const s = String(v).trim();
   return s === '' || s === '#REF!' ? null : s;
 }
 
-function number(cell: ExcelJS.Cell): number | null {
+export function number(cell: ExcelJS.Cell): number | null {
   const v = raw(cell);
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
@@ -138,7 +138,7 @@ function number(cell: ExcelJS.Cell): number | null {
  * one column holds the literal `1` — is not a date and is dropped rather than
  * turned into 1900.
  */
-function date(cell: ExcelJS.Cell | null): string | null {
+export function date(cell: ExcelJS.Cell | null): string | null {
   if (!cell) return null;
   const v = number(cell);
   if (v === null || v < 40000 || v > 60000) return null;
@@ -216,11 +216,12 @@ export async function readEdlWorkbook(file: string): Promise<EdlSource> {
               returnTransmittal: text(row.getCell(c.inTr)),
               returnCode: text(row.getCell(c.code)),
             };
-            // A stage is recorded once something ACTUALLY happened. A plan date
-            // on its own is a date in the future, not evidence of a submission,
-            // and counting it would inflate every category.
+            // A stage is kept if anything is known about it — what was promised
+            // as well as what happened. `submitted` is what separates the two,
+            // and it is the only thing that counts as progress.
           }).filter((s) =>
-            s.submitted || s.submitTransmittal || s.returnedAt || s.returnTransmittal || s.returnCode,
+            s.submitted || s.submitTransmittal || s.returnedAt || s.returnTransmittal ||
+            s.returnCode || s.planSubmitDate,
           ),
         });
       }

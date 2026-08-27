@@ -266,7 +266,7 @@ FASE 3 — laporan mingguan
 13 PDF format Pertamina
 FASE 4 — yang mengisi laporan
 14 Form Harian → draft ringkasan mingguan
-15 Modul Document Control              ALAT KERJA: catat submit · log · progress naik sendiri
+15 Modul Document Control  selesai   EDL + VDRL · 5 layar · jalur menulis · sakelar tautan
 FASE 5 — membuat proyek dari nol
 16 Project management
 17 Planner (WBS · bobot dari BOQ · Gantt lihat-saja)
@@ -280,7 +280,7 @@ FASE 7 — setelah isinya terbukti
 ```
 
 Papan ini disusun ulang 27 Agustus 2026 setelah data sumber dibaca baris demi
-baris. Rencana lengkapnya — alasan tiap urutan, sembilan temuan pada workbook
+baris. Rencana lengkapnya — alasan tiap urutan, tujuh belas temuan pada workbook
 asli, dan struktur ketiga berkas sebagai rujukan importer — ada di
 `docs/superpowers/specs/2026-08-27-project-control-v2-design.md`. Baca itu
 sebelum mengambil nomor mana pun.
@@ -325,6 +325,27 @@ embedded-database query counts as deterministic and prerenders, while an async
 driver forces `<Suspense>` around every read in the app. And exceljs must be
 driven through `ExcelJS.stream.xlsx.WorkbookReader` — plain `readFile` died at a
 2 GB heap on the 11.8 MB weekly workbook.
+
+**A drizzle migration that recreates a table DELETES ITS CHILDREN.** SQLite
+cannot add a column to an existing unique index, so `drizzle-kit generate` falls
+back to build-new-table / copy / `DROP TABLE` / rename, wrapped in
+`PRAGMA foreign_keys=OFF … PRAGMA foreign_keys=ON`. That pragma is a NO-OP
+inside a transaction, and drizzle runs migrations in one — so the DROP cascaded
+and took all 357 `doc_stages` rows with it (August 2026, `documents` gained
+`register`). Two habits: copy `data/report.db` before `drizzle-kit migrate`, and
+COUNT THE CHILD ROWS afterwards. The generated SQL also copies columns by name
+including the one being added, so the `SELECT` must be hand-edited to a literal
+for the new column or the migration fails outright.
+
+**Three smaller ones, each an hour.** shadcn's `Card` carries its own
+`py-(--card-spacing)`, so a `CardContent` with its own padding doubles it — pass
+`py-0` on the Card. framer-motion's `pathLength` is implemented with
+stroke-dasharray, so it silently shreds a line that already has
+`strokeDasharray` and any path on a stretched viewBox with
+`vector-effect: non-scaling-stroke`; wipe with `clipPath` instead. And an SVG
+scaled to fit its container scales its `<text>` too — at 390px the axis labels
+came out about five pixels tall, so chart labels are HTML positioned over the
+plot, never `<text>`.
 
 **Verifying UI work.** The Browser pane never composites in this environment, so
 `computer{action:"screenshot"}` always fails. Use `scripts/shoot.mjs <url>

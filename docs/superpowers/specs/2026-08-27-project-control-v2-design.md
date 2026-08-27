@@ -141,7 +141,7 @@ membaca database.
 | | | |
 |---|---|---|
 | 14 | Form Harian + peran barunya | daily menyusun draft ringkasan mingguan |
-| 15 | **Modul Document Control** | EDL/VDRL · transmittal · return code → menggerakkan leaf engineering |
+| 15 | **Modul Document Control** — selesai | EDL + VDRL · lima layar · jalur menulis · sakelar tautan per disiplin |
 
 ### Fase 5 — membuat proyek dari nol
 
@@ -210,6 +210,51 @@ membangun ulang, bahas dulu bentuknya dengan penggunanya — jangan menebak sepe
 dua kali sebelumnya. Yang sudah pasti: tetap tidak boleh berupa hamparan sel, dan
 target sentuh tetap ≥44px karena ini diisi sambil berdiri di lapangan.
 
+### Yang akhirnya dibangun (27 Agustus 2026)
+
+Lima layar di bawah `/dokumen`, masing-masing punya alamat sendiri: **Ringkasan
+EDL · Data EDL · Ringkasan VDRL · Data VDRL · Log**. Dua register berjalan di
+atas satu mesin — `documents`, `doc_categories`, `doc_stage_weights` dan
+`transmittals` dapat kolom `register: 'edl' | 'vdrl'`, dan `lib/register.ts`
+melayani keduanya dengan argumen.
+
+**VDRL ikut masuk** (`scripts/vdrl-source.ts`, `scripts/import-vdrl.ts`): 15
+paket vendor, 76 kelompok, **311 dokumen**, 67 catatan tahap. Sheet-nya jauh
+lebih berantakan daripada EDL — judul kelompok berpindah-pindah antara kolom C,
+D dan F, kodenya bukan hierarki (`A.2.3` ada di dalam `A.1`, `II.2.2` ada di
+seksi B), dan penomorannya patah di `=#REF!+1` sehingga 115 dari 311 baris tidak
+punya nomor dokumen sama sekali. Parsernya karena itu menggolongkan baris dari
+apa yang mengikutinya, bukan dari kolom mana teksnya berada, dan menomori paket
+serta kelompoknya sendiri.
+
+**Kurva rencana dan aktual dua-duanya diturunkan dari tanggal.** Blok W1–W13
+yang tersembunyi di kolom W–AJ "EDL Summary" tidak dipakai: W1 sampai W12 di
+sana adalah angka ketikan hasil salin tiap minggu dan hanya W13 yang rumus.
+Supaya kurva rencana bisa ada, importer sekarang menulis baris tahap untuk tahap
+yang **baru dijanjikan** juga, dan kolom baru `doc_stages.submitted` yang
+memisahkan janji dari kenyataan — keberadaan baris tidak lagi jadi bukti apa pun.
+
+**Semuanya diukur per tanggal register itu sendiri**, bukan per hari ini. Berkas
+ini `R2, 15 Januari 2026`; menilainya dengan kalender Agustus akan melaporkan
+semua dokumen terlambat berbulan-bulan dan tidak mengatakan apa pun tentang
+pekerjaannya.
+
+**Jalur menulisnya** ada di `lib/doc-actions.ts`: catat pengiriman (satu
+transmittal, banyak dokumen sekaligus — `T.001` di Gundih memuat 34 dokumen),
+catat balikan dengan return code, tambah dokumen, dan sakelar tautan. Tidak ada
+satu pun persentase yang ditulis ke database; semua angka dihitung ulang dari
+bukti oleh `lib/register.ts`. Diuji lewat layarnya sendiri: mencentang dua
+dokumen `B.3.2` dan mencatat satu transmittal IFA menaikkan kategori itu dari
+25,0% ke 55,0% seketika.
+
+**Tautan ke WBS bisa dinyalakan per disiplin dan sifatnya cuma penunjuk.**
+Sakelarnya hanya mengubah `progress_method`, `linked_category_id` dan
+`linked_stage` pada tiga leaf disiplin itu — tidak ada angka mingguan yang
+ditimpa, jadi mematikannya mengembalikan keadaan persis seperti semula
+(dibuktikan: W43 tetap 100/100/100 setelah dinyalakan lalu dimatikan). Bawaannya
+mati, karena register ini tiga puluh minggu lebih tua daripada laporan yang akan
+dibacanya.
+
 ## Temuan pada data sumber (27 Agustus 2026)
 
 Diperiksa langsung terhadap `W43 (Overall).xlsx`, PDF-nya, daily 4 Juni 2026, dan
@@ -231,6 +276,10 @@ membuatnya mustahil terulang.
 | 11 | **Pengiriman tanpa tanggal ditandai `1`** | `QAQC-004/-008/-009/-010/-011` berstatus "APPROVED FOR CONSTRUCTION" dengan `1` di semua kolom tanggal. Membaca tanggal saja membuat A.2.2 terhitung 5 dari 10, bukan 10 | 15 |
 | 12 | **Jangkauan `COUNTIF` di EDL Summary basi** | A.2.1 berisi 11 dokumen tetapi ringkasannya menghitung `EDL!$O19:$O28` saja — `PRGG-00-G0-PR-011` di baris 29 tidak pernah ikut terhitung | 15 |
 | 13 | **Register 30 minggu lebih tua dari laporannya** | EDL `R2` bertanggal 15 Jan 2026 (~W13); laporan mingguan W43 bertanggal 20 Agu 2026 | 15 |
+| 14 | **Blok mingguan EDL Summary diketik tangan** | Kolom W–AJ, lima disiplin × tiga tahap × W1–W13. W1–W12 angka literal hasil salin tiap minggu, hanya W13 yang rumus. Kolom "MINGGU INI" (`=R−P`) keluar 0,70% di baris total padahal selisih sebenarnya 15,99% | 15 |
+| 15 | **VDRL: 115 dari 311 dokumen tanpa nomor** | Penomorannya patah di `=#REF!+1` dan tidak pernah diperbaiki; barisnya tetap deliverable yang ditagih | 15 |
+| 16 | **VDRL: satu nomor dipakai dua dokumen** | `PRGG-VDR-KMI-IN-PSV-DOC-003` dipakai untuk Organization Chart dan Calculation Sheet | 15 |
+| 17 | **VDRL tidak punya satu pun tanggal rencana** | 0 dari 67 catatan tahap. Tidak ada kurva rencana yang bisa diturunkan; 266 dari 311 belum pernah dikirim sama sekali | 15 |
 
 ## Ketika tanggal dan kurva bertentangan, tanggal yang menang
 

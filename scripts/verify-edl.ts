@@ -18,7 +18,7 @@
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import * as schema from '../lib/schema.ts';
 import { readEdlWorkbook, isLeafCategory } from './edl-source.ts';
@@ -67,13 +67,15 @@ const mark = (ok: boolean) => (ok ? '✓' : '✗');
 
 /* ------------------------------------------------------------------ load */
 
+// Scoped to the engineering register: the same tables also hold the vendor one.
 const categories = db.select().from(schema.docCategories)
-  .where(eq(schema.docCategories.projectId, PROJECT_ID)).all();
+  .where(and(eq(schema.docCategories.projectId, PROJECT_ID), eq(schema.docCategories.register, 'edl'))).all();
 const documents = db.select().from(schema.documents)
-  .where(eq(schema.documents.projectId, PROJECT_ID)).all();
-const stages = db.select().from(schema.docStages).all();
+  .where(and(eq(schema.documents.projectId, PROJECT_ID), eq(schema.documents.register, 'edl'))).all();
+const stages = documents.length === 0 ? [] : db.select().from(schema.docStages)
+  .where(inArray(schema.docStages.documentId, documents.map((d) => d.id))).all();
 const stageWeights = db.select().from(schema.docStageWeights)
-  .where(eq(schema.docStageWeights.projectId, PROJECT_ID)).all();
+  .where(and(eq(schema.docStageWeights.projectId, PROJECT_ID), eq(schema.docStageWeights.register, 'edl'))).all();
 
 if (documents.length === 0) throw new Error('register kosong — jalankan scripts/import-edl.ts dulu');
 
@@ -92,14 +94,15 @@ for (const s of stages) {
 }
 
 /**
- * A document has reached a stage once a stage record exists for it. The record
- * itself is the evidence: the importer only writes one when something actually
- * happened — a submission, a transmittal, a return — never for a plan date
- * alone. Testing `submittedAt` instead would drop the submissions the register
- * marks with a bare `1` because nobody wrote the date down.
+ * A document has reached a stage once its stage row says it was submitted. A
+ * row on its own proves nothing any more — the importer writes one for a stage
+ * that was merely planned too, so the register can draw a plan curve — so the
+ * flag is the evidence. Testing `submittedAt` instead would drop the
+ * submissions the register marks with a bare `1` because nobody wrote the date
+ * down.
  */
 function reached(documentId: string, stage: WeightedStage): boolean {
-  return (stagesByDoc.get(documentId) ?? []).some((s) => s.stage === stage);
+  return (stagesByDoc.get(documentId) ?? []).some((s) => s.stage === stage && s.submitted);
 }
 
 const codeToId = new Map(categories.map((c) => [c.code, c.id]));

@@ -638,26 +638,26 @@ leaf di bawah 1.4.4 (SPK-007)              0,142352  →  14,24%
       </div>
 
       <div class="ph"><span class="ph-n">Fase 1</span><span class="ph-t">Data nyata masuk</span><span class="ph-l"></span></div>
-      <div class="wi is-now">
+      <div class="wi">
         <div class="wi-n">06</div>
         <div class="wi-b">
           <p class="wi-t">Importer Gundih</p>
-          <p class="wi-d">Baca tiga workbook lewat streaming, bentuk pohonnya, empat unit pelaporan termasuk yang bersarang, lalu buktikan bobotnya menutup di 100,00%. Satu langkah, tidak terlihat — dan sesudahnya tiap halaman dinilai terhadap laporan yang sudah ada di atas kertas, bukan terhadap data karangan.</p>
-          <p class="wi-m">scripts/import-gundih.ts · exceljs stream</p>
+          <p class="wi-d">Tiga workbook masuk lewat streaming: 285 baris WBS, empat unit pelaporan termasuk yang bersarang, 60 minggu, 143 dokumen EDL, 415 hari. Bobot menutup di 100,000000% dan W43 keluar cocok dengan PDF yang sudah ditandatangani. Register EDL ikut masuk — 20 dari 21 kategori cocok persis dengan ringkasan kliennya.</p>
+          <p class="wi-m">scripts/import-gundih.ts · import-edl.ts · verify-edl.ts</p>
         </div>
-        <span class="chip now">berikutnya</span>
+        <span class="chip done">selesai</span>
       </div>
-      <div class="gate">Lulus bila total bobot <b>100,00%</b> dan Ringkasan W43 keluar <b>75,15% · 80,04% · +4,89%</b> — persis PDF <span class="mono">PRGG-00-G0-RPT-002 W43</span>. Setelah ini dashboard yang sudah ada menjadi nyata dengan sendirinya; dia sudah membaca database.</div>
+      <div class="gate">Lulus. Bobot menutup di <b>100,000000%</b>; W43 keluar <b>75,37% · 80,04% · +4,67%</b>. Target rencananya berbeda 0,22 poin dari PDF <span class="mono">PRGG-00-G0-RPT-002 W43</span> dan itu memang seharusnya: kolom PLAN di workbook diketik tangan dan bertentangan dengan kolom tanggal di sebelahnya pada 126 dari 176 leaf. Tanggal yang menang. Progress dan bobot cocok sampai dua desimal, dan selisih itu menjadi nol di W60.</div>
 
       <div class="ph"><span class="ph-n">Fase 2</span><span class="ph-t">Bahasa visual</span><span class="ph-l"></span></div>
-      <div class="wi">
+      <div class="wi is-now">
         <div class="wi-n">07</div>
         <div class="wi-b">
           <p class="wi-t">Design system</p>
           <p class="wi-d">Token shadcn dan satu kurva gerak framer-motion, dikunci di satu berkas dan satu halaman contoh. Halaman sesudahnya tidak boleh mengarang gaya sendiri. Dipakai orang berumur 22 sampai 60: kontras tinggi, target sentuh ≥44px, dan tidak ada informasi yang hanya muncul saat hover.</p>
           <p class="wi-m">app/globals.css · components/ui · framer-motion</p>
         </div>
-        <span class="chip next">siap di-brief</span>
+        <span class="chip now">berikutnya</span>
       </div>
 
       <div class="ph"><span class="ph-n">Fase 3</span><span class="ph-t">Laporan mingguan</span><span class="ph-l"></span></div>
@@ -730,10 +730,10 @@ leaf di bawah 1.4.4 (SPK-007)              0,142352  →  14,24%
         <div class="wi-n">15</div>
         <div class="wi-b">
           <p class="wi-t">Modul Document Control</p>
-          <p class="wi-d">EDL dan VDRL, transmittal, return code, daftar tertahan, kurva dokumen. Lalu leaf engineering ditautkan ke sini supaya berhenti dihitung dua kali.</p>
-          <p class="wi-m">tabel doc_* sudah berdiri di skema</p>
+          <p class="wi-d">Lima layar: Ringkasan EDL, Data EDL, Ringkasan VDRL, Data VDRL, Log. Dua register di atas satu mesin hitung. VDRL ikut masuk — 15 paket vendor, 311 dokumen, 115 di antaranya belum diberi nomor oleh vendornya dan 266 belum pernah dikirim sama sekali. Kurva rencana dan aktual dua-duanya diturunkan dari tanggal, bukan dari blok W1–W13 yang diketik tangan di ringkasan klien. Jalur menulisnya ada: satu transmittal mencatat banyak dokumen sekaligus, dan persentasenya ikut berubah saat itu juga tanpa ada satu angka pun yang diketik. Tautan ke leaf engineering bisa dinyalakan per disiplin dan tidak menimpa apa pun — mematikannya mengembalikan keadaan persis semula.</p>
+          <p class="wi-m">lib/register.ts · lib/doc-actions.ts · app/dokumen/*</p>
         </div>
-        <span class="chip next">siap di-brief</span>
+        <span class="chip done">selesai</span>
       </div>
 
       <div class="ph"><span class="ph-n">Fase 5</span><span class="ph-t">Membuat proyek dari nol</span><span class="ph-l"></span></div>
@@ -848,7 +848,7 @@ leaf di bawah 1.4.4 (SPK-007)              0,142352  →  14,24%
 
     </div>
 
-    <div class="gate">Sembilan cacat yang ditemukan pada berkas sumber — sampul PDF salah periode, header basi sembilan minggu di sebelah header yang benar, <span class="mono">#REF!</span> di register dokumen yang masih dipakai, kurva yang <span class="mono">HLOOKUP</span> ke range mati — beserta nomor papan yang menutup masing-masing, tercatat lengkap di <span class="mono">docs/superpowers/specs/2026-08-27-project-control-v2-design.md</span>.</div>
+    <div class="gate">Tujuh belas cacat yang ditemukan pada berkas sumber — sampul PDF salah periode, header basi sembilan minggu di sebelah header yang benar, <span class="mono">#REF!</span> di register dokumen yang masih dipakai, kurva yang <span class="mono">HLOOKUP</span> ke range mati — beserta nomor papan yang menutup masing-masing, tercatat lengkap di <span class="mono">docs/superpowers/specs/2026-08-27-project-control-v2-design.md</span>.</div>
   </section>
 
   <section>
@@ -871,7 +871,6 @@ leaf di bawah 1.4.4 (SPK-007)              0,142352  →  14,24%
   </footer>
 
 </div>
-
 
 </body>
 </html>

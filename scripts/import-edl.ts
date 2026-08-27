@@ -17,7 +17,7 @@
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import * as schema from '../lib/schema.ts';
 import { readEdlWorkbook, parentCode, isLeafCategory, EDL_STAGES, type SourceDocument } from './edl-source.ts';
@@ -90,6 +90,8 @@ async function main() {
         stage: s.stage,
         order: EDL_STAGES.indexOf(s.stage),
         planSubmitDate: s.planSubmitDate,
+        submitted: s.submitted || s.submitTransmittal !== null || s.returnedAt !== null ||
+          s.returnTransmittal !== null || s.returnCode !== null,
         submittedAt: s.submittedAt,
         submitTransmittalId: noteTransmittal(s.submitTransmittal, 'out', s.submittedAt),
         returnedAt: s.returnedAt,
@@ -101,20 +103,29 @@ async function main() {
 
   /* --------------------------------------------------------------- write */
 
+  // Scoped to `edl` throughout: the same four tables also hold the vendor
+  // register, and an unscoped delete here would take the VDRL with it.
   db.transaction((tx) => {
     // Re-runnable. Order matters: stages reference transmittals.
-    for (const doc of db.select().from(schema.documents).where(eq(schema.documents.projectId, PROJECT_ID)).all()) {
+    const existing = db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, PROJECT_ID), eq(schema.documents.register, 'edl'))).all();
+    for (const doc of existing) {
       tx.delete(schema.docStages).where(eq(schema.docStages.documentId, doc.id)).run();
     }
-    tx.delete(schema.documents).where(eq(schema.documents.projectId, PROJECT_ID)).run();
-    tx.delete(schema.transmittals).where(eq(schema.transmittals.projectId, PROJECT_ID)).run();
-    tx.delete(schema.docCategories).where(eq(schema.docCategories.projectId, PROJECT_ID)).run();
-    tx.delete(schema.docStageWeights).where(eq(schema.docStageWeights.projectId, PROJECT_ID)).run();
+    tx.delete(schema.documents)
+      .where(and(eq(schema.documents.projectId, PROJECT_ID), eq(schema.documents.register, 'edl'))).run();
+    tx.delete(schema.transmittals)
+      .where(and(eq(schema.transmittals.projectId, PROJECT_ID), eq(schema.transmittals.register, 'edl'))).run();
+    tx.delete(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, PROJECT_ID), eq(schema.docCategories.register, 'edl'))).run();
+    tx.delete(schema.docStageWeights)
+      .where(and(eq(schema.docStageWeights.projectId, PROJECT_ID), eq(schema.docStageWeights.register, 'edl'))).run();
 
     tx.insert(schema.docStageWeights).values(
       EDL_STAGES.map((stage, order) => ({
         id: `${PROJECT_ID}:sw:${stage}`,
         projectId: PROJECT_ID,
+        register: 'edl' as const,
         stage,
         // Only the three agreed stages carry weight. A resubmission is evidence
         // of how many times a drawing went round, not extra progress.
@@ -130,6 +141,7 @@ async function main() {
       tx.insert(schema.docCategories).values(batch.map((c, i) => ({
         id: categoryIds.get(c.code)!,
         projectId: PROJECT_ID,
+        register: 'edl' as const,
         parentId: (() => { const p = parentCode(c.code); return p ? categoryIds.get(p) ?? null : null; })(),
         code: c.code,
         name: c.name,
@@ -140,7 +152,7 @@ async function main() {
 
     inChunks([...transmittals.values()], 200, (batch) => {
       tx.insert(schema.transmittals).values(batch.map((t) => ({
-        id: t.id, projectId: PROJECT_ID, no: t.no, direction: t.direction, date: t.date,
+        id: t.id, projectId: PROJECT_ID, register: 'edl' as const, no: t.no, direction: t.direction, date: t.date,
       }))).run();
     });
 
@@ -148,6 +160,7 @@ async function main() {
       tx.insert(schema.documents).values(batch.map((d, i) => ({
         id: `${PROJECT_ID}:doc:${d.docNo}`,
         projectId: PROJECT_ID,
+        register: 'edl' as const,
         categoryId: categoryIds.get(d.categoryCode)!,
         docNo: d.docNo,
         existingDwgNo: d.existingDwgNo,

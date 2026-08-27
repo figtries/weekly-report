@@ -119,6 +119,12 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
   qtyTotal: real('qty_total'),
   /** `linked` items only: the document category this leaf reads its percentage from. */
   linkedCategoryId: text('linked_category_id'),
+  /**
+   * `linked` items only. Gundih splits engineering into an IFR, an IFA and an
+   * AFC leaf per discipline, so a leaf reads ONE stage of its category rather
+   * than the category's whole weighted figure.
+   */
+  linkedStage: text('linked_stage').$type<DocStage>(),
 
   createdAt: now(),
 }, (t) => [
@@ -259,9 +265,18 @@ export const auditLog = sqliteTable('audit_log', {
  * WBS — weight, then stage weights, then a cumulative curve — which is why one
  * engine can serve both.
  */
+/**
+ * Two registers run on one engine. `edl` is what we owe the client; `vdrl` is
+ * what our vendors owe us. The chain, the arithmetic and the write path are
+ * identical, so they share these tables and differ only by this flag, their
+ * stage weights, and who is chasing whom.
+ */
+export type RegisterKind = 'edl' | 'vdrl';
+
 export const docCategories = sqliteTable('doc_categories', {
   id: id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register: text('register').$type<RegisterKind>().notNull().default('edl'),
   parentId: text('parent_id'),
   code: text('code').notNull(),
   name: text('name').notNull(),
@@ -273,15 +288,21 @@ export const docCategories = sqliteTable('doc_categories', {
    */
   plannedCount: integer('planned_count'),
 }, (t) => [
-  index('doc_categories_project_idx').on(t.projectId),
-  uniqueIndex('doc_categories_project_code_idx').on(t.projectId, t.code),
+  index('doc_categories_project_idx').on(t.projectId, t.register),
+  uniqueIndex('doc_categories_project_code_idx').on(t.projectId, t.register, t.code),
 ]);
 
 export const documents = sqliteTable('documents', {
   id: id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register: text('register').$type<RegisterKind>().notNull().default('edl'),
   categoryId: text('category_id').notNull().references(() => docCategories.id, { onDelete: 'cascade' }),
-  docNo: text('doc_no').notNull(),
+  /**
+   * Blank on 149 rows of Gundih's VDRL: the vendor owes the document but nobody
+   * has numbered it yet. It is still a deliverable and still counts against its
+   * package, so an empty number is allowed.
+   */
+  docNo: text('doc_no'),
   /** The client's own drawing number, when the document replaces an existing one. */
   existingDwgNo: text('existing_dwg_no'),
   revision: text('revision'),
@@ -297,7 +318,13 @@ export const documents = sqliteTable('documents', {
   order: integer('sort_order').notNull().default(0),
 }, (t) => [
   index('documents_category_idx').on(t.categoryId),
-  uniqueIndex('documents_project_no_idx').on(t.projectId, t.docNo),
+  index('documents_project_register_idx').on(t.projectId, t.register),
+  // Unique numbering is OUR discipline, so it is enforced on the EDL only. The
+  // vendor register already contains a number used twice
+  // (`PRGG-VDR-KMI-IN-PSV-DOC-003`, an organisation chart and a calculation
+  // sheet) and 115 rows with no number at all. Refusing them would mean
+  // refusing the register as it actually is.
+  uniqueIndex('documents_project_no_idx').on(t.projectId, t.register, t.docNo).where(sql`${t.register} = 'edl'`),
 ]);
 
 /**
@@ -314,6 +341,17 @@ export const docStages = sqliteTable('doc_stages', {
   stage: text('stage').$type<DocStage>().notNull(),
   order: integer('sort_order').notNull().default(0),
   planSubmitDate: text('plan_submit_date'),
+  /**
+   * Whether the document ACTUALLY went out at this stage. A row now exists for
+   * a stage that was merely promised too — that is what lets the register draw
+   * a plan curve beside the real one — so the presence of a row is no longer
+   * evidence of anything. This flag is.
+   *
+   * Separate from `submittedAt` because the register marks 42 submissions whose
+   * date nobody wrote down with a bare `1`; the client's own summary counts
+   * them, and reading dates alone would undercount every stage.
+   */
+  submitted: integer('submitted', { mode: 'boolean' }).notNull().default(false),
   submittedAt: text('submitted_at'),
   submitTransmittalId: text('submit_transmittal_id').references(() => transmittals.id),
   returnedAt: text('returned_at'),
@@ -326,18 +364,22 @@ export const docStages = sqliteTable('doc_stages', {
 export const docStageWeights = sqliteTable('doc_stage_weights', {
   id: id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register: text('register').$type<RegisterKind>().notNull().default('edl'),
   stage: text('stage').$type<DocStage>().notNull(),
   /** Share of a document, 0..100. The weighted stages should sum to 100. */
   weight: real('weight').notNull(),
   order: integer('sort_order').notNull().default(0),
-}, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.stage)]);
+}, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.register, t.stage)]);
 
 export const transmittals = sqliteTable('transmittals', {
   id: id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register: text('register').$type<RegisterKind>().notNull().default('edl'),
   no: text('no').notNull(),
   /** `out` is ours to them, `in` is theirs back to us. */
   direction: text('direction').$type<'out' | 'in'>().notNull(),
   date: text('date').notNull(),
   note: text('note'),
-}, (t) => [uniqueIndex('transmittals_project_no_dir_idx').on(t.projectId, t.no, t.direction)]);
+  // Both registers number their transmittals from T.001, and they are not the
+  // same letters: the EDL's go to Pertamina, the VDRL's come from vendors.
+}, (t) => [uniqueIndex('transmittals_project_no_dir_idx').on(t.projectId, t.register, t.no, t.direction)]);

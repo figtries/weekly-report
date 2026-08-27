@@ -8,6 +8,34 @@
       "when": 1787571013276,
       "tag": "0000_rapid_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787841360214,
+      "tag": "0001_wakeful_carlie_cooper",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787841644821,
+      "tag": "0002_tough_phalanx",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787841784549,
+      "tag": "0003_flaky_caretaker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787841926877,
+      "tag": "0004_wakeful_silver_surfer",
+      "breakpoints": true
     }
   ]
 }

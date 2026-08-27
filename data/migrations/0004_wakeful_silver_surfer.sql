@@ -1,0 +1,1 @@
+ALTER TABLE `doc_stages` ADD `submitted` integer DEFAULT false NOT NULL;
