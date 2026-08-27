@@ -92,6 +92,30 @@ Satu angka sengaja tidak sama: **target 75,37% terhadap 75,15% di PDF** — liha
 temuan 10. Deviasi karenanya +4,67%, bukan +4,89%. Bobot menutup di
 100,000000% dengan unit bersarang tidak terhitung dua kali.
 
+**Register EDL ikut masuk** (`scripts/import-edl.ts`, `scripts/verify-edl.ts`):
+28 kategori, 143 dokumen, 102 transmittal, 357 catatan tahap. **20 dari 21
+kategori daun cocok persis** dengan "EDL Summary" — jumlah per tahap maupun
+persennya. Yang satu lagi adalah cacat di berkas klien, tercatat sebagai temuan
+12.
+
+Leaf engineering di WBS **belum ditautkan** ke register itu. Registernya
+bertanggal 15 Januari 2026 (W13) sementara laporan mingguannya W43 di bulan
+Agustus — tiga puluh minggu terpaut. Menautkannya sekarang akan menarik mundur
+progress engineering ke Januari dan merusak total W43 yang barusan cocok.
+Penautan adalah pekerjaan 15, dengan register yang seumuran.
+
+Korelasi W13 antara register dan leaf engineering WBS, per disiplin dan tahap:
+sepuluh dari lima belas pasangan cocok sampai dua desimal. Yang tidak: General
++3,33 di ketiga tahap (tepat satu dokumen, yaitu `PR-011` dari temuan 12),
+Electrical IFR −1,75, dan **Instrument AFC −13,33** — WBS mengaku enam dokumen
+lebih banyak sudah AFC daripada yang tercatat di register. Selisih terakhir itu
+temuan 8 yang terlihat langsung angkanya.
+
+Satu fakta yang menentukan seberapa besar modul Document Control berpengaruh
+pada angka: seluruh leaf engineering di WBS ini bobotnya **0,5709% dari proyek**.
+Register menggerakkan angka sekecil itu — tapi dokumen yang tertahan menahan
+konstruksi yang bobotnya jauh lebih besar, dan itulah nilai sebenarnya.
+
 Setelah 06, dashboard yang sudah ada menjadi nyata dengan sendirinya; dia sudah
 membaca database.
 
@@ -162,6 +186,9 @@ membuatnya mustahil terulang.
 | 8 | Dua sumber kebenaran engineering sudah berbeda | WBS General/IFR W4 = 46,67% vs EDL Summary = 63,33% | 15 |
 | 9 | Baseline tidak lagi menggambarkan lapangan | SPK-004 target 14,83% vs aktual 20,93% (+6,10%) | 18 |
 | 10 | **Blok PLAN bertentangan dengan kolom tanggal di sebelahnya** | 126 dari 176 leaf, 88,38% bobot proyek. `1.4.3.2` naik rata 1/16 per minggu selama 16 minggu; tanggalnya 105 hari = 15 minggu. `1.4.4.2` melompat 0→100% dalam satu minggu padahal tanggalnya 165 hari | 06, 17 |
+| 11 | **Pengiriman tanpa tanggal ditandai `1`** | `QAQC-004/-008/-009/-010/-011` berstatus "APPROVED FOR CONSTRUCTION" dengan `1` di semua kolom tanggal. Membaca tanggal saja membuat A.2.2 terhitung 5 dari 10, bukan 10 | 15 |
+| 12 | **Jangkauan `COUNTIF` di EDL Summary basi** | A.2.1 berisi 11 dokumen tetapi ringkasannya menghitung `EDL!$O19:$O28` saja — `PRGG-00-G0-PR-011` di baris 29 tidak pernah ikut terhitung | 15 |
+| 13 | **Register 30 minggu lebih tua dari laporannya** | EDL `R2` bertanggal 15 Jan 2026 (~W13); laporan mingguan W43 bertanggal 20 Agu 2026 | 15 |
 
 ## Ketika tanggal dan kurva bertentangan, tanggal yang menang
 

@@ -254,6 +254,7 @@ FASE 0 — pondasi
 05 Visual dashboard          selesai   per kontrak · sebaran · laju
 FASE 1 — data nyata masuk
 06 Importer Gundih           selesai   W43 bobot/progress/WF cocok PDF · target 75,37
+   + register EDL           selesai   20/21 kategori cocok · leaf engineering belum ditautkan
 FASE 2 — bahasa visual
 07 Design system                       token shadcn + satu kurva framer-motion
 FASE 3 — laporan mingguan
