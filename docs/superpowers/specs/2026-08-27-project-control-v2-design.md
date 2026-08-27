@@ -78,8 +78,19 @@ dibahas saat gilirannya, tidak diputuskan di muka.
 |---|---|---|
 | 06 | **Importer Gundih** | 3 workbook → database: 285 WBS · 4 SPK · 60 minggu · 142 dokumen · 415 hari |
 
-Lulus bila total bobot = 100,00% dan Ringkasan W43 keluar `75,15% / 80,04% / +4,89%`
-— persis PDF `PRGG-00-G0-RPT-002 W43`.
+**Hasil (27 Agustus 2026): selesai.** `scripts/import-gundih.ts` +
+`scripts/verify-import.ts`. Yang dibandingkan dengan PDF `PRGG-00-G0-RPT-002 W43`
+halaman 8, semuanya cocok sampai dua desimal:
+
+| | SPK-002 | SPK-003 | SPK-004 | SPK-007 | total |
+|---|---|---|---|---|---|
+| bobot | 7,07 | 47,65 | 31,04 | 14,24 | **100,00** |
+| progress | 100,00 | 97,56 | 67,42 | 39,00 | |
+| WF kumulatif | 7,07 | 46,49 | 20,93 | 5,55 | **80,04** |
+
+Satu angka sengaja tidak sama: **target 75,37% terhadap 75,15% di PDF** — lihat
+temuan 10. Deviasi karenanya +4,67%, bukan +4,89%. Bobot menutup di
+100,000000% dengan unit bersarang tidak terhitung dua kali.
 
 Setelah 06, dashboard yang sudah ada menjadi nyata dengan sendirinya; dia sudah
 membaca database.
@@ -150,6 +161,32 @@ membuatnya mustahil terulang.
 | 7 | Seluruh kurva `HLOOKUP` ke range mati | `'Data Overall'!$P$7:$FO$299` — sisip satu baris, semua kurva bergeser diam-diam | 06, 09 |
 | 8 | Dua sumber kebenaran engineering sudah berbeda | WBS General/IFR W4 = 46,67% vs EDL Summary = 63,33% | 15 |
 | 9 | Baseline tidak lagi menggambarkan lapangan | SPK-004 target 14,83% vs aktual 20,93% (+6,10%) | 18 |
+| 10 | **Blok PLAN bertentangan dengan kolom tanggal di sebelahnya** | 126 dari 176 leaf, 88,38% bobot proyek. `1.4.3.2` naik rata 1/16 per minggu selama 16 minggu; tanggalnya 105 hari = 15 minggu. `1.4.4.2` melompat 0→100% dalam satu minggu padahal tanggalnya 165 hari | 06, 17 |
+
+## Ketika tanggal dan kurva bertentangan, tanggal yang menang
+
+Dikunci 27 Agustus 2026, dan ini keputusan yang paling menentukan bentuk angka
+di seluruh aplikasi.
+
+Workbook Gundih menyimpan dua model rencana sekaligus. Sebagian leaf memang
+tersebar linier per hari — `1.2.1.2.1.1` (IFR, 45 hari) naik 4/45, 11/45, 18/45
+di tiga minggu pertamanya, dan turunan kita cocok dengannya sampai 1e-9. Tapi
+126 leaf lain kolom PLAN-nya diketik tangan: `1.4.3.2` naik rata 0,0625 per
+minggu selama 16 minggu, sementara kolom tanggalnya menyebut 16 Jun → 28 Sep,
+yaitu 105 hari alias 15 minggu. Jendelanya meleset satu minggu di kedua ujung.
+`1.4.4.2` lebih parah: melompat 0→100% dalam satu minggu padahal tanggalnya
+membentang 165 hari.
+
+Bukan turunan kita yang salah — workbooknya yang bertentangan dengan dirinya
+sendiri, penyakit yang sama dengan `#REF!` di register dokumen dan `HLOOKUP` ke
+range mati. Karena itu **tanggal yang menang**, dan blok PLAN dibaca hanya
+sebagai alat uji. `import-gundih.ts` mencetak daftar leaf yang bertentangan
+supaya planner punya bahan untuk merapikan salah satunya.
+
+Harganya jujur: target W43 kita 75,37%, PDF yang sudah ditandatangani menulis
+75,15%. Selisihnya 0,22 poin, terbesar +4,49 poin di W16, dan **nol di W60** —
+kedua model mendarat tepat di 100%. Yang tidak bergeser sama sekali: bobot,
+progress, dan WF kumulatif, yang cocok sampai dua desimal.
 
 ## Struktur data sumber, sebagai rujukan importer
 

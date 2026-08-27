@@ -253,7 +253,7 @@ FASE 0 — pondasi
 04 Dashboard halaman depan   selesai
 05 Visual dashboard          selesai   per kontrak · sebaran · laju
 FASE 1 — data nyata masuk
-06 Importer Gundih                     lulus bila W43 = 75,15 / 80,04 / +4,89
+06 Importer Gundih           selesai   W43 bobot/progress/WF cocok PDF · target 75,37
 FASE 2 — bahasa visual
 07 Design system                       token shadcn + satu kurva framer-motion
 FASE 3 — laporan mingguan
@@ -283,6 +283,17 @@ baris. Rencana lengkapnya — alasan tiap urutan, sembilan temuan pada workbook
 asli, dan struktur ketiga berkas sebagai rujukan importer — ada di
 `docs/superpowers/specs/2026-08-27-project-control-v2-design.md`. Baca itu
 sebelum mengambil nomor mana pun.
+
+**Ketika tanggal dan kurva bertentangan, tanggal yang menang.** Dikunci 27
+Agustus 2026 setelah dibuktikan pada data Gundih: 126 dari 176 leaf (88,38%
+bobot proyek) punya kolom PLAN yang tidak cocok dengan kolom tanggal di
+sebelahnya — `1.4.3.2` naik rata 1/16 per minggu selama 16 minggu padahal
+tanggalnya 105 hari alias 15 minggu. Kolom PLAN itu diketik tangan dan tidak
+pernah diperbarui. Karena itu `scripts/import-gundih.ts` membaca blok PLAN tapi
+tidak pernah menyimpannya; dia memakainya sebagai alat uji dan mencetak daftar
+leaf yang bertentangan. Akibatnya target W43 keluar 75,37% sementara PDF yang
+sudah ditandatangani menulis 75,15% — selisih 0,22 poin yang di W60 menjadi nol.
+Bobot, progress dan WF kumulatif tetap cocok sampai dua desimal.
 
 **Empat keputusan tampilan, dikunci di sesi yang sama.** Semua elemen datang dari
 shadcn-ui; semua animasi dan transisi datang dari framer-motion, dengan satu
