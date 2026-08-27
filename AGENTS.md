@@ -230,8 +230,8 @@ when the week is edited afterwards.
 # The v2 rebuild — read this before starting new work
 
 The app is being rebuilt from fundamentals against the CPP Gundih data
-(3 workbooks, 4 SPK, 285 WBS rows, 142 documents, 415 days). Fourteen decisions
-are locked and there is a numbered work board. **The blueprint is the plan of
+(3 workbooks, 4 SPK, 285 WBS rows, 142 documents, 415 days). The decisions are
+locked and there is a numbered work board. **The blueprint is the plan of
 record:**
 
 > https://claude.ai/code/artifact/d3dfeed6-8a05-4ba8-87f5-2affe3da7c47
@@ -246,25 +246,54 @@ neighbouring items; the scattering that produced this board is the thing it
 exists to prevent.
 
 ```
+FASE 0 — pondasi
 01 Fondasi database          selesai   17 tabel · Drizzle · SQLite
 02 Kurva rencana diturunkan  selesai   30/30 cocok Gundih
 03 Navigasi 12 → 6           selesai   Sidebar 488→268
 04 Dashboard halaman depan   selesai
 05 Visual dashboard          selesai   per kontrak · sebaran · laju
-06 Panel Kendali dipisah perannya      (isinya dobel dengan Dashboard)
-07 Importer Gundih
+FASE 1 — data nyata masuk
+06 Importer Gundih                     lulus bila W43 = 75,15 / 80,04 / +4,89
+FASE 2 — bahasa visual
+07 Design system                       token shadcn + satu kurva framer-motion
+FASE 3 — laporan mingguan
 08 Halaman Ringkasan
-09 Halaman Detail
-10 Halaman Kurva S
-11 Halaman Foto
-12 Form Harian
-13 Data Overall workbench
-14 Modul Document Control
-15 Baseline berversi
-16 Penyusun blok laporan
-17 Login dan peran
-18 Impor dan ekspor Excel
+09 Halaman Kurva S
+10 Halaman Detail Progress
+11 Halaman Dokumentasi
+12 Data Overall workbench
+13 PDF format Pertamina
+FASE 4 — yang mengisi laporan
+14 Form Harian → draft ringkasan mingguan
+15 Modul Document Control              menggerakkan leaf engineering
+FASE 5 — membuat proyek dari nol
+16 Project management
+17 Planner (WBS · bobot dari BOQ · Gantt lihat-saja)
+18 Baseline berversi
+FASE 6 — dashboard yang berpikir
+19 Dashboard bulanan                   ahead · outstanding · warning · problem
+FASE 7 — setelah isinya terbukti
+20 Impor dan ekspor Excel
+21 Penyusun blok laporan
+22 Login dan peran
 ```
+
+Papan ini disusun ulang 27 Agustus 2026 setelah data sumber dibaca baris demi
+baris. Rencana lengkapnya — alasan tiap urutan, sembilan temuan pada workbook
+asli, dan struktur ketiga berkas sebagai rujukan importer — ada di
+`docs/superpowers/specs/2026-08-27-project-control-v2-design.md`. Baca itu
+sebelum mengambil nomor mana pun.
+
+**Empat keputusan tampilan, dikunci di sesi yang sama.** Semua elemen datang dari
+shadcn-ui; semua animasi dan transisi datang dari framer-motion, dengan satu
+kurva dan satu durasi untuk seluruh aplikasi; setiap halaman harus benar di
+iPhone, Android, Windows dan desktop, diverifikasi dengan gambar pada 390px dan
+desktop; dan aplikasi ini dipakai orang berumur 22 sampai 60, jadi kontras
+tinggi, target sentuh ≥44px, dan tidak ada informasi yang hanya muncul saat
+hover. Dua pengecualian sudah dijelaskan di tempat lain dalam berkas ini dan
+keduanya soal kebenaran, bukan selera: baris tabel yang bisa melebihi ~20 memakai
+kelas shadcn dengan elemen native di dalamnya, dan `/print/*` tidak memakai
+framer-motion karena Puppeteer memotret tanpa menunggu animasi.
 
 **The four decisions that constrain code the most.** A reporting unit is a
 FLAGGED WBS NODE, never a hierarchy level — and units nest, so a unit's weight
