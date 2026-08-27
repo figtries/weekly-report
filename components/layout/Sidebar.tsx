@@ -75,7 +75,7 @@ const DESTINATIONS: Destination[] = [
     warm: (w) => WEEKLY_REPORT.map((k) => `/weekly/${w}/${k}`),
   },
   {
-    label: 'Dokumen',
+    label: 'Document Control',
     icon: Files,
     href: () => '/dokumen',
     match: (p) => p.startsWith('/dokumen'),

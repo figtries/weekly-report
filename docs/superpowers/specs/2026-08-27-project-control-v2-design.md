@@ -168,6 +168,48 @@ lebih dulu, dia hanya hiasan yang nanti dibongkar.
 | 21 | Penyusun blok laporan | format klien lain |
 | 22 | Login dan peran | Project Control · Site · Doc Control · viewer klien |
 
+## Document Control adalah alat kerja, bukan halaman laporan
+
+Dikunci 27 Agustus 2026, setelah dua percobaan yang salah arah. Ini yang paling
+menentukan bentuk pekerjaan 15, jadi baca sebelum menyentuh `/dokumen`.
+
+**Yang salah pada percobaan pertama.** Halaman `/dokumen` yang ada sekarang hanya
+membaca: progress engineering, daftar dokumen tertahan, kartu per kategori. Bagus
+dilihat, tapi tidak ada satu pun yang bisa dikerjakan di sana. Kata penggunanya:
+"bukan cuma ngabarin". Halaman itu harus dibangun ulang, bukan ditambah-tambah.
+
+**Yang sebenarnya diminta — tiga hal, semuanya di dalam subpage Document Control:**
+
+1. **Pencatatan dokumen yang disubmit.** Document controller mencatat di sini,
+   bukan di Excel: dokumen mana, tahap apa (IFR/RE-IFR/IFA/RE-IFA/AFC/RE-AFC/
+   AS-BUILT), nomor transmittal ke luar, tanggal kirim. Lalu saat kembali:
+   tanggal terima, transmittal balik, dan return code (APP / AWC / RWC / …).
+   Menambah dokumen baru ke register juga di sini.
+2. **Log.** Riwayat lengkap tiap dokumen — sudah berapa kali bolak-balik, di
+   tahap mana tersangkut, berapa lama menunggu. Ini yang jadi bahan klaim
+   perpanjangan waktu, dan ini yang tidak pernah bisa dijawab oleh berkas Excel
+   yang kolomnya ditimpa tiap revisi.
+3. **Progress ikut naik sendiri.** Begitu satu submission dicatat, persentase
+   kategori dan progress engineering berubah saat itu juga. Tidak ada langkah
+   "hitung ulang", tidak ada angka yang diketik dua kali. Inilah keputusan 17
+   yang benar-benar berjalan.
+
+**Namanya "Document Control"**, bukan "Dokumen" — itu nama pekerjaannya, dan
+orang yang membukanya menyebutnya begitu.
+
+**Yang sudah ada dan masih terpakai:** tabel `doc_categories`, `documents`,
+`doc_stages`, `doc_stage_weights`, `transmittals` sudah berdiri dan terisi;
+`scripts/import-edl.ts` mengisinya dari EDL dan `scripts/verify-edl.ts`
+membuktikan 20 dari 21 kategori cocok dengan ringkasan klien. `lib/queries.ts`
+punya pembacaannya. Yang belum ada sama sekali: **jalur menulis**. Belum ada satu
+pun mutasi — mencatat submission, mencatat balikan, menambah dokumen — dan itulah
+inti pekerjaan 15.
+
+**Catatan bentuk, dari kesalahan kedua.** Tampilannya juga belum benar. Sebelum
+membangun ulang, bahas dulu bentuknya dengan penggunanya — jangan menebak seperti
+dua kali sebelumnya. Yang sudah pasti: tetap tidak boleh berupa hamparan sel, dan
+target sentuh tetap ≥44px karena ini diisi sambil berdiri di lapangan.
+
 ## Temuan pada data sumber (27 Agustus 2026)
 
 Diperiksa langsung terhadap `W43 (Overall).xlsx`, PDF-nya, daily 4 Juni 2026, dan

@@ -266,7 +266,7 @@ FASE 3 — laporan mingguan
 13 PDF format Pertamina
 FASE 4 — yang mengisi laporan
 14 Form Harian → draft ringkasan mingguan
-15 Modul Document Control              menggerakkan leaf engineering
+15 Modul Document Control              ALAT KERJA: catat submit · log · progress naik sendiri
 FASE 5 — membuat proyek dari nol
 16 Project management
 17 Planner (WBS · bobot dari BOQ · Gantt lihat-saja)
