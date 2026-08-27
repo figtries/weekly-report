@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cetak Biru Report v2</title>
+<style>:root{color-scheme:light dark}body{margin:0}</style>
+</head>
+<body>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper:      #F5F8F7;
+    --surface:    #FFFFFF;
+    --surface-2:  #EDF2F1;
+    --ink:        #0E1A1B;
+    --ink-2:      #3B4C4D;
+    --ink-3:      #6B7C7C;
+    --line:       #D3DEDC;
+    --line-soft:  #E3EBEA;
+    --accent:     #0B6B63;
+    --accent-2:   #E3F1EE;
+    --ok:         #2F7A4F;
+    --warn:       #97650F;
+    --crit:       #A63A2B;
+    --shadow:     0 1px 2px rgba(14,26,27,.05), 0 8px 24px -12px rgba(14,26,27,.14);
+
+    --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body:    "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #0B1314;
+      --surface:   #121E1F;
+      --surface-2: #182728;
+      --ink:       #E8F0EE;
+      --ink-2:     #B2C3C1;
+      --ink-3:     #7E9291;
+      --line:      #26393A;
+      --line-soft: #1C2C2D;
+      --accent:    #4FC3B4;
+      --accent-2:  #10312F;
+      --ok:        #5FBE85;
+      --warn:      #D9A745;
+      --crit:      #E0705E;
+      --shadow:    0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0B1314;
+    --surface:   #121E1F;
+    --surface-2: #182728;
+    --ink:       #E8F0EE;
+    --ink-2:     #B2C3C1;
+    --ink-3:     #7E9291;
+    --line:      #26393A;
+    --line-soft: #1C2C2D;
+    --accent:    #4FC3B4;
+    --accent-2:  #10312F;
+    --ok:        #5FBE85;
+    --warn:      #D9A745;
+    --crit:      #E0705E;
+    --shadow:    0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; }
+
+  /* ---------- type ---------- */
+  h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 6vw, 3.1rem); font-weight: 700; letter-spacing: -.025em; line-height: 1.05; }
+  h2 { font-size: clamp(1.35rem, 3.4vw, 1.7rem); font-weight: 600; letter-spacing: -.015em; }
+  h3 { font-size: 1.02rem; font-weight: 600; letter-spacing: -.005em; }
+  p  { margin: 0; }
+  a  { color: var(--accent); }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .lede  { font-size: 1.08rem; color: var(--ink-2); max-width: 62ch; }
+  .muted { color: var(--ink-3); }
+  .mono  { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- header ---------- */
+  header.doc {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: 72px 0 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  .metaline {
+    display: flex; flex-wrap: wrap; gap: 8px 18px;
+    font-family: var(--f-mono); font-size: .78rem; color: var(--ink-3);
+  }
+  .metaline span { white-space: nowrap; }
+
+  /* ---------- sections ---------- */
+  section { padding-top: 62px; display: flex; flex-direction: column; gap: 22px; }
+  .sec-head { display: flex; flex-direction: column; gap: 9px; }
+
+  /* ---------- premise ---------- */
+  .premise {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .premise-txt { padding: 30px 30px 26px; display: flex; flex-direction: column; gap: 14px; }
+  .premise-quote {
+    font-family: var(--f-display); font-size: 1.5rem; font-weight: 600;
+    letter-spacing: -.015em; line-height: 1.25;
+  }
+  .premise-fig { padding: 0 22px 24px; }
+  .premise-fig svg { width: 100%; height: auto; display: block; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--line);
+  }
+  .stat {
+    padding: 15px 16px; display: flex; flex-direction: column; gap: 2px;
+    border-right: 1px solid var(--line-soft);
+  }
+  .stat:nth-child(3n) { border-right: 0; }
+  .stat:nth-child(n+4) { border-top: 1px solid var(--line-soft); }
+  .stat b { font-family: var(--f-mono); font-size: 1.18rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* ---------- findings ---------- */
+  .findings { display: flex; flex-direction: column; gap: 12px; }
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 17px 20px;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .finding p { color: var(--ink-2); font-size: .95rem; }
+  .finding pre {
+    margin: 4px 0 0; padding: 12px 14px;
+    background: var(--surface-2); border-radius: 3px;
+    font-family: var(--f-mono); font-size: .78rem; line-height: 1.55;
+    color: var(--ink-2); overflow-x: auto;
+  }
+
+  /* ---------- decisions ---------- */
+  .decisions { display: flex; flex-direction: column; gap: 10px; }
+  .dec {
+    display: grid; grid-template-columns: 52px 1fr; gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .dec-n {
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 18px 0 0;
+    background: var(--surface-2);
+    border-right: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: .82rem; font-weight: 500;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .dec-b { padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 7px; }
+  .dec-q {
+    font-family: var(--f-mono); font-size: .71rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .dec-a { font-family: var(--f-display); font-size: 1.06rem; font-weight: 600; letter-spacing: -.01em; line-height: 1.35; }
+  .dec-w { font-size: .93rem; color: var(--ink-2); }
+
+  /* ---------- architecture ---------- */
+  .arch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .col {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    display: flex; flex-direction: column;
+  }
+  .col-h {
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: .71rem; letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .col-h.keep { color: var(--ok); }
+  .col-h.swap { color: var(--warn); }
+  .col-h.newx { color: var(--accent); }
+  .col ul { margin: 0; padding: 12px 16px 16px 16px; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .col li { font-size: .87rem; color: var(--ink-2); line-height: 1.45; }
+  .col li b { display: block; font-family: var(--f-mono); font-size: .78rem; font-weight: 500; color: var(--ink); }
+
+  /* ---------- steps ---------- */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: grid; grid-template-columns: 42px 1fr; gap: 0;
+    padding: 0 0 20px;
+    position: relative;
+  }
+  .step::before {
+    content: ""; position: absolute; left: 13px; top: 22px; bottom: 0;
+    width: 1px; background: var(--line);
+  }
+  .step:last-child { padding-bottom: 0; }
+  .step:last-child::before { display: none; }
+  .step-n {
+    width: 27px; height: 27px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--f-mono); font-size: .74rem; color: var(--accent);
+    position: relative; z-index: 1;
+  }
+  .step-b { padding-left: 4px; display: flex; flex-direction: column; gap: 3px; padding-top: 1px; }
+  .step-b p { font-size: .9rem; color: var(--ink-2); }
+
+  /* ---------- open ---------- */
+  .open { display: flex; flex-direction: column; gap: 10px; }
+  .q {
+    display: flex; gap: 13px; align-items: baseline;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 14px 18px;
+  }
+  .q .qm { font-family: var(--f-mono); color: var(--accent); font-size: .9rem; flex: none; }
+  .q p { font-size: .93rem; color: var(--ink-2); }
+  .q p b { color: var(--ink); font-weight: 600; }
+
+  footer.doc {
+    margin-top: 66px; padding-top: 22px; border-top: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: .76rem; color: var(--ink-3);
+    display: flex; flex-wrap: wrap; gap: 6px 16px;
+  }
+
+  /* ---------- work board ---------- */
+  .board { display: flex; flex-direction: column; gap: 8px; }
+  .wi {
+    display: grid; grid-template-columns: 26px 1fr auto; gap: 0 14px; align-items: start;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 13px 16px;
+  }
+  .wi.is-done { opacity: .58; }
+  .wi.is-now { border-left: 3px solid var(--accent); padding-left: 13px; }
+  .wi-n { font-family: var(--f-mono); font-size: .74rem; color: var(--ink-3); padding-top: 3px; font-variant-numeric: tabular-nums; }
+  .wi-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .wi-t { font-family: var(--f-display); font-weight: 600; font-size: .97rem; letter-spacing: -.005em; }
+  .wi-d { font-size: .88rem; color: var(--ink-2); }
+  .wi-m { font-family: var(--f-mono); font-size: .72rem; color: var(--ink-3); word-break: break-word; }
+  .chip {
+    font-family: var(--f-mono); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap; align-self: center;
+  }
+  .chip.done { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+  .chip.now { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .chip.next { background: var(--surface-2); color: var(--ink-3); }
+  @media (max-width: 640px) {
+    .wi { grid-template-columns: 22px 1fr; }
+    .chip { grid-column: 2; justify-self: start; margin-top: 5px; }
+  }
+
+  @media (max-width: 720px) {
+    .arch { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat:nth-child(3n) { border-right: 1px solid var(--line-soft); }
+    .stat:nth-child(2n) { border-right: 0; }
+    .stat:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+    body { padding: 0 16px 72px; }
+    header.doc { padding-top: 48px; }
+  }
+
+  /* ---------- phases ---------- */
+  .ph { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 4px; }
+  .ph:first-child { margin-top: 0; }
+  .ph-n { font-family: var(--f-mono); font-size: .7rem; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+  .ph-t { font-family: var(--f-display); font-size: .95rem; font-weight: 600; color: var(--ink-2); }
+  .ph-l { flex: 1; height: 1px; background: var(--line-soft); }
+  .gate {
+    border-left: 3px solid var(--accent); background: var(--accent-2);
+    border-radius: 3px; padding: 13px 17px; font-size: .9rem; color: var(--ink-2);
+  }
+  .gate b { color: var(--ink); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="doc">
+    <p class="eyebrow">Figtries · Report</p>
+    <h1>Cetak Biru Report v2</h1>
+    <p class="lede">Rancangan ulang dari fundamental, disusun dari pembacaan langsung atas data proyek CPP Gundih — relokasi 3 unit GTG ke Pertamina EP Zona 11.</p>
+    <div class="metaline">
+      <span>27 Agustus 2026</span>
+      <span>19 keputusan terkunci</span>
+      <span>3 sumber data dibedah</span>
+      <span>22 pekerjaan · 7 fase</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Premis</p>
+      <h2>Gundih itu ujian, bukan cetakan</h2>
+    </div>
+
+    <div class="premise">
+      <div class="premise-txt">
+        <p class="premise-quote">Kalau app ini sanggup menghasilkan laporan serumit Gundih, dia sanggup menghasilkan laporan klien mana pun.</p>
+        <p class="lede">Gundih dipakai sebagai batas atas kerumitan — bukan sebagai format yang ditiru. Tidak ada satu pun bentuk halamannya yang wajib kita salin. Yang kita ambil adalah ukuran bebannya.</p>
+      </div>
+
+      <div class="premise-fig">
+        <svg viewBox="0 0 600 200" role="img" aria-label="Tiga garis kurva S: baseline kontraktual, baseline aktif, dan progress aktual">
+          <g stroke="var(--line)" stroke-width="1">
+            <line x1="8" y1="190" x2="586" y2="190"></line>
+            <line x1="8" y1="126" x2="586" y2="126" stroke="var(--line-soft)"></line>
+            <line x1="8" y1="62" x2="586" y2="62" stroke="var(--line-soft)"></line>
+            <line x1="8" y1="14" x2="586" y2="14" stroke="var(--line-soft)"></line>
+          </g>
+          <path d="M8,188 C 120,186 182,150 262,104 C 342,58 442,26 586,16"
+                fill="none" stroke="var(--ink-3)" stroke-width="1.6" stroke-dasharray="5 4"></path>
+          <path d="M8,188 C 142,187 218,166 302,124 C 386,82 472,38 586,22"
+                fill="none" stroke="var(--accent)" stroke-width="2"></path>
+          <path d="M8,188 C 118,183 174,142 248,100 C 308,66 372,50 434,42"
+                fill="none" stroke="var(--ok)" stroke-width="2.4"></path>
+          <circle cx="434" cy="42" r="4.5" fill="var(--ok)"></circle>
+          <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-3)">
+            <text x="452" y="34">aktual</text>
+            <text x="500" y="60" fill="var(--accent)">aktif</text>
+            <text x="497" y="10">kontraktual</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>4</b><span>SPK</span></div>
+        <div class="stat"><b>305</b><span>baris WBS</span></div>
+        <div class="stat"><b>142</b><span>dokumen</span></div>
+        <div class="stat"><b>415</b><span>hari</span></div>
+        <div class="stat"><b>2</b><span>baseline</span></div>
+        <div class="stat"><b>42</b><span>halaman PDF</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Temuan</p>
+      <h2>Enam hal yang datanya ajarkan</h2>
+      <p class="lede">Semuanya dibaca langsung dari file, bukan diasumsikan.</p>
+    </div>
+
+    <div class="findings">
+
+      <div class="finding">
+        <h3>SPK itu node WBS, bukan level hierarki</h3>
+        <p>SPK-002 duduk di WBS <span class="mono">1.2</span>, sejajar dengan cabang mana pun. Yang membuatnya istimewa hanya satu: dia punya kolom bobot sendiri yang menutup 100% di dalam dirinya, di samping bobot terhadap keseluruhan. Jadi kita tidak perlu level baru — kita perlu cara <em>menandai</em> sebuah node.</p>
+      </div>
+
+      <div class="finding">
+        <h3>Kurva rencana itu linier — 450 kolom sebenarnya cuma 3 angka</h3>
+        <p>Tiap leaf dibagi rata sepanjang durasinya. Bentuk S muncul dari tumpang-tindih ratusan leaf yang start dan finish-nya berbeda, bukan dari kurva per item.</p>
+        <pre>WBS 1.2.1.2.1.1  IFR   45 hari   27 Okt → 10 Des 2025
+
+  W1   4 hari   0,0889  =  4/45
+  W2  11 hari   0,2444  = 11/45
+  W3  18 hari   0,4000  = 18/45
+  lalu harian  +0,0222  =  1/45
+
+→ data plan 415 hari = turunan dari bobot, start, finish</pre>
+      </div>
+
+      <div class="finding">
+        <h3>Kolom <span class="mono">Workstep</span> itu pembagi bobot, bukan progress</h3>
+        <pre>1.2.1.2.1  General            bobot 0,0011419
+├─ .1  IFR   workstep 0,5  →  0,00057095    50%
+├─ .2  IFA   workstep 0,3  →  0,00034257    30%
+└─ .3  AFC   workstep 0,2  →  0,00022838    20%
+                              ───────────
+                              0,0011419  ✓</pre>
+        <p>Artinya ratusan leaf engineering bisa dibentuk otomatis dari satu pola, bukan diketik satu per satu.</p>
+      </div>
+
+      <div class="finding">
+        <h3>Pekerjaan engineering dihitung dua kali, di dua file terpisah</h3>
+        <p>Rumus di EDL persis sama dengan yang dipakai di WBS fisik — dan hasilnya harus dicocokkan manual tiap minggu.</p>
+        <pre>EDL · A.1 EXECUTION PLAN · 5 dokumen
+     terkirim  IFR 4  ·  IFA 3  ·  AFC 3
+
+  (4/5 × 0,5) + (3/5 × 0,3) + (3/5 × 0,2)  =  0,70
+  0,70 × WF 0,035211                        =  0,024648
+                                               ↑ persis kolom P</pre>
+      </div>
+
+      <div class="finding">
+        <h3>Excel-nya sudah retak, dan tidak ada yang tahu</h3>
+        <p>Dua bukti dari file yang sedang dipakai hari ini:</p>
+        <pre>File EDL · sheet "EDL" · baris 8 kolom M
+  → #REF!        formula putus, di sebelah angka 96,3%
+
+File Weekly · satu workbook, dua jawaban
+  Summary Overall   W43 · 14–20 Agu    +4,89%   unggul
+  Data Overall      12 Jun             −4,05%   tertinggal</pre>
+        <p>Bukan salah orangnya. Itu memang nasib setiap file dengan 23 sheet yang saling menunjuk.</p>
+      </div>
+
+      <div class="finding">
+        <h3>Unit pelaporan bisa bersarang di dalam unit pelaporan lain</h3>
+        <p>SPK-007 tidak sejajar dengan SPK-004 — kodenya <span class="mono">1.4.4</span>, di dalam cabang <span class="mono">1.4</span>. Tapi di Summary Overall keduanya berdiri sendiri dan jumlah keempatnya tepat 100%.</p>
+        <pre>leaf di bawah 1.2   (SPK-002)              0,070676  →   7,07%
+leaf di bawah 1.3   (SPK-003)              0,476532  →  47,65%
+leaf di bawah 1.4                          0,452793
+  dikurangi 1.4.4                        − 0,142352
+  ────────────────────────────────────────────────
+              SPK-004                      0,310441  →  31,04%
+leaf di bawah 1.4.4 (SPK-007)              0,142352  →  14,24%
+                                          ─────────
+                                           1,000000  → 100,00%  ✓</pre>
+        <p>Jadi <b>bobot sebuah unit = subtree-nya dikurangi unit pelaporan mana pun di dalamnya.</b> Tanpa pengurangan itu, SPK-007 terhitung dua kali dan totalnya jadi 114%. Ini yang membuktikan keputusan 02 benar: hierarki dengan level tetap tidak akan pernah bisa menampung unit yang bersarang di dalam unit lain.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Keputusan</p>
+      <h2>Empat belas hal yang sudah dikunci</h2>
+      <p class="lede">Berurutan — tiap keputusan berdiri di atas yang sebelumnya.</p>
+    </div>
+
+    <div class="decisions">
+
+      <div class="dec"><div class="dec-n">01</div><div class="dec-b">
+        <p class="dec-q">Cakupan</p>
+        <p class="dec-a">Progress fisik + document control, satu engine</p>
+        <p class="dec-w">Matematikanya sama persis — bobot → kurva S → deviasi — jadi satu mesin melayani keduanya. Laporan harian tetap ada sebagai modul tersendiri.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">02</div><div class="dec-b">
+        <p class="dec-q">Model unit pelaporan</p>
+        <p class="dec-a">Node WBS mana pun bisa ditandai, istilahnya bebas</p>
+        <p class="dec-w">SPK, Paket, Lot, Area — sama saja. Begitu ditandai: bobot dinormalisasi 100% di dalamnya, dapat tab sendiri, dapat bagian sendiri di PDF. Proyek satu kontrak cukup tidak menandai apa pun.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">03</div><div class="dec-b">
+        <p class="dec-q">Pintu masuk data</p>
+        <p class="dec-a">Impor dan ekspor, dua arah, fleksibel</p>
+        <p class="dec-w">Excel hasil ekspor adalah produk kita, bukan saingan kita. Orang tetap menyimpannya untuk jaga-jaga — tapi yang mereka butuhkan adalah pabriknya.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">04</div><div class="dec-b">
+        <p class="dec-q">Jantung produk</p>
+        <p class="dec-a">Satu sumber angka, jejak perubahan, tanda tangan yang mengunci</p>
+        <p class="dec-w">Semua angka lahir dari satu tempat, jadi mustahil saling berbeda dan mustahil ada <span class="mono">#REF!</span>. Approval menyimpan angka yang ditandatangani; kalau minggunya diedit setelah itu, selisihnya ditampilkan.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">05</div><div class="dec-b">
+        <p class="dec-q">Pengguna</p>
+        <p class="dec-a">Tim berperan — di atas database dan login</p>
+        <p class="dec-w">Admin · Project Control · Lapangan · Approver · Klien. Anak magang diberi peran Lapangan: tidak bisa merusak apa pun, dan tiap isiannya tercatat namanya.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">06</div><div class="dec-b">
+        <p class="dec-q">Baseline</p>
+        <p class="dec-a">Dua garis hidup bersama — Kontraktual dan Aktif</p>
+        <p class="dec-w">Kontraktual terkunci sejak awal, dipakai untuk klaim dan EOT. Aktif adalah revisi terakhir yang disepakati, dipakai untuk mengelola pekerjaan. Tiap revisi menyimpan alasan dan penyetujunya.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">07</div><div class="dec-b">
+        <p class="dec-q">Cara mengukur</p>
+        <p class="dec-a">Kuantitas · Milestone · Lumpsum · Tertaut</p>
+        <p class="dec-w">Tiap leaf memilih caranya sendiri. Yang baru adalah <b>Tertaut</b>: leaf engineering mengambil angkanya langsung dari EDL, jadi begitu transmittal dicatat, progress fisiknya ikut naik. Rekonsiliasi mingguan hilang.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">08</div><div class="dec-b">
+        <p class="dec-q">Bentuk keluaran</p>
+        <p class="dec-a">Katalog blok, dengan opsi di tiap blok</p>
+        <p class="dec-w">Tiap proyek memilih blok mana yang ikut dan urutannya. Tiap blok punya pilihan sendiri — misalnya blok Kurva S bisa tampil sebagai kurva + tabel data mingguan, semua unit ditumpuk atau satu unit per halaman.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">09</div><div class="dec-b">
+        <p class="dec-q">Harian dan mingguan</p>
+        <p class="dec-a">Terpisah — harian menyuplai narasi, bukan persen</p>
+        <p class="dec-w">Progress mingguan adalah angka yang disepakati, bukan penjumlahan lapangan. Harian mengisi Detail Activity, Look Ahead, delay register, foto, manhours dan HSE — tanpa pernah menyentuh persentase.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">10</div><div class="dec-b">
+        <p class="dec-q">Beranda</p>
+        <p class="dec-a">Dashboard — dan dia yang jadi keunggulan utama</p>
+        <p class="dec-w">Begitu dibuka, orang langsung tahu apa yang sedang terjadi di proyeknya. Ini tempat kita menaruh hal yang Excel tidak punya jawabannya sama sekali.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">11</div><div class="dec-b">
+        <p class="dec-q">Kedalaman dashboard</p>
+        <p class="dec-a">Diagnostik — angka beserta sebabnya</p>
+        <p class="dec-w">Bukan papan angka. Dashboard merangkai kesimpulan: siapa yang menyeret, siapa yang menutupi, apakah lajunya cukup. Tiap kesimpulan bisa ditekan untuk melihat dasar hitungannya.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">12</div><div class="dec-b">
+        <p class="dec-q">Cara membangun</p>
+        <p class="dec-a">Repo ini — fondasi diganti, tampilan dirombak</p>
+        <p class="dec-w">Database dan identitas diganti; mesin hitung dan pipeline PDF dipertahankan. Seluruh tampilan app memakai shadcn, animasi dipatok ke <span class="mono">--ease-ios</span>. Halaman cetak tetap polos.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">13</div><div class="dec-b">
+        <p class="dec-q">Fondasi data</p>
+        <p class="dec-a">SQLite dulu untuk prototipe, Supabase saat produksi</p>
+        <p class="dec-w">Tahap prototipe: berkas SQLite di repo lewat Drizzle — pengganti langsung file JSON, tetap milik kita, tetap jalan offline, tapi sudah relasional dan sudah punya jejak. Saat dipakai orang beneran: pindah ke Supabase (Postgres + Auth + Storage, wilayah Singapura), karena izin per peran ditegakkan di lapisan database, bukan cuma disembunyikan di UI. Drizzle yang membuat perpindahan itu mekanis — syaratnya id berupa teks, waktu berupa ISO, dan tidak ada relasi yang ditumpuk ke dalam kolom JSON. Drivernya <b>wajib sinkron</b> (<span class="mono">better-sqlite3</span>, bukan libsql): dengan Cache Components menyala, kueri database tertanam yang sinkron dihitung sebagai operasi deterministik dan selesai saat prerender — driver asinkron akan memaksa <span class="mono">&lt;Suspense&gt;</span> mengelilingi tiap pembacaan, tembok yang sudah dua kali menghantam repo ini.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">14</div><div class="dec-b">
+        <p class="dec-q">Kurva rencana</p>
+        <p class="dec-a">Dihitung saat dibaca, tidak pernah disimpan</p>
+        <p class="dec-w">Database hanya menyimpan bobot, start, dan finish tiap leaf. Kurva mingguan diturunkan linier saat diperlukan — 305 leaf × 60 minggu selesai dalam hitungan milidetik. Revisi jadwal jadi cukup mengubah tanggal, dan kurva basi yang tidak cocok dengan jadwalnya menjadi mustahil. <b>Sudah diuji:</b> 30 titik hasil turunan cocok dengan angka Gundih dalam toleransi 1e-9, termasuk mendarat tepat di 1,0 di minggu selesai.</p>
+      </div></div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Arsitektur</p>
+      <h2>Dari 13.172 baris yang ada sekarang</h2>
+    </div>
+
+    <div class="arch">
+      <div class="col">
+        <div class="col-h keep">Dipertahankan</div>
+        <ul>
+          <li><b>lib/pdf.ts · print/*</b>Pipeline PDF dan geometri kertas — penuh luka lama, mahal untuk diulang</li>
+          <li><b>.print-sheet-a4 · .rpt-*</b>Sistem desain laporan</li>
+          <li><b>analysis · rollup · progress · setup</b>Mesin bobot dan hitungan</li>
+          <li><b>lib/exif.ts</b>Waktu dan GPS foto — sudah ada</li>
+          <li><b>DateField · TruncatedName</b>Primitif yang sudah kena iPhone</li>
+          <li><b>DataOverallWorkbench</b>Pola drill-down yang menghindari Radix per baris</li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <div class="col-h swap">Diganti</div>
+        <ul>
+          <li><b>lib/db.ts</b>File JSON → SQLite lewat Drizzle, skema siap pindah ke Postgres</li>
+          <li><b>lib/workspace.ts</b>Satu penulis → banyak orang dan peran</li>
+          <li><b>(belum ada auth)</b>→ login dan izin per peran</li>
+          <li><b>generatePlanCurve</b>Smoothstep → linier, sesuai MS Project</li>
+          <li><b>Seluruh tampilan app</b>→ shadcn, gerak dipatok --ease-ios</li>
+        </ul>
+      </div>
+
+      <div class="col">
+        <div class="col-h newx">Baru</div>
+        <ul>
+          <li><b>Document control</b>EDL · transmittal · return code · outstanding · kurva dokumen</li>
+          <li><b>Baseline berversi</b>Kontraktual terkunci + Aktif</li>
+          <li><b>Penyusun blok laporan</b>Katalog blok dengan opsi</li>
+          <li><b>Dashboard diagnostik</b>Kesimpulan, bukan papan angka</li>
+          <li><b>Impor cerdas</b>Pemetaan kolom dan pratinjau sebelum simpan</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Papan kerja</p>
+      <h2>Tujuh fase, dua puluh dua pekerjaan</h2>
+      <p class="lede">Disusun ulang 27 Agustus 2026, setelah ketiga workbook dan PDF W43 dibaca baris demi baris. Urutannya bukan menurut apa yang paling kurang, melainkan menurut apa yang harus benar lebih dulu supaya hal berikutnya bisa dinilai. Sebutkan nomornya, dan hanya itu yang dikerjakan.</p>
+    </div>
+
+    <div class="board">
+      <div class="ph"><span class="ph-n">Fase 0</span><span class="ph-t">Pondasi</span><span class="ph-l"></span></div>
+      <div class="wi is-done">
+        <div class="wi-n">01</div>
+        <div class="wi-b">
+          <p class="wi-t">Fondasi database</p>
+          <p class="wi-d">Tujuh belas tabel lewat Drizzle di atas SQLite, skema ditulis supaya bisa pindah ke Postgres tanpa ditulis ulang.</p>
+          <p class="wi-m">lib/schema.ts · lib/sqlite.ts · data/migrations</p>
+        </div>
+        <span class="chip done">selesai</span>
+      </div>
+      <div class="wi is-done">
+        <div class="wi-n">02</div>
+        <div class="wi-b">
+          <p class="wi-t">Kurva rencana diturunkan</p>
+          <p class="wi-d">Database hanya menyimpan bobot, start, dan finish. Tiga puluh titik hasil turunan cocok dengan workbook Gundih dalam toleransi 1e-9, dan tesnya permanen.</p>
+          <p class="wi-m">lib/plan-curve.ts · scripts/verify-plan-curve.ts</p>
+        </div>
+        <span class="chip done">selesai</span>
+      </div>
+      <div class="wi is-done">
+        <div class="wi-n">03</div>
+        <div class="wi-b">
+          <p class="wi-t">Navigasi dipotong dua belas jadi enam</p>
+          <p class="wi-d">Empat halaman laporan turun jadi tab, Setup dan Portfolio turun ke Pengaturan, ikon inline diganti lucide.</p>
+          <p class="wi-m">Sidebar.tsx 488→268 · SectionTabs.tsx</p>
+        </div>
+        <span class="chip done">selesai</span>
+      </div>
+      <div class="wi is-done">
+        <div class="wi-n">04</div>
+        <div class="wi-b">
+          <p class="wi-t">Dashboard jadi halaman depan</p>
+          <p class="wi-d">buildNarrative sudah ditulis lengkap dan tidak pernah dipanggil dari mana pun; sekarang punya rumah.</p>
+          <p class="wi-m">app/page.tsx · lib/analysis.ts</p>
+        </div>
+        <span class="chip done">selesai</span>
+      </div>
+      <div class="wi is-done">
+        <div class="wi-n">05</div>
+        <div class="wi-b">
+          <p class="wi-t">Visual dashboard</p>
+          <p class="wi-d">Rincian per kontrak, sebaran pekerjaan menurut bobot, dan tambahan tiap minggu — semuanya SVG server-rendered, bukan Recharts.</p>
+          <p class="wi-m">components/dashboard/charts.tsx · app/page.tsx</p>
+        </div>
+        <span class="chip done">selesai</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 1</span><span class="ph-t">Data nyata masuk</span><span class="ph-l"></span></div>
+      <div class="wi is-now">
+        <div class="wi-n">06</div>
+        <div class="wi-b">
+          <p class="wi-t">Importer Gundih</p>
+          <p class="wi-d">Baca tiga workbook lewat streaming, bentuk pohonnya, empat unit pelaporan termasuk yang bersarang, lalu buktikan bobotnya menutup di 100,00%. Satu langkah, tidak terlihat — dan sesudahnya tiap halaman dinilai terhadap laporan yang sudah ada di atas kertas, bukan terhadap data karangan.</p>
+          <p class="wi-m">scripts/import-gundih.ts · exceljs stream</p>
+        </div>
+        <span class="chip now">berikutnya</span>
+      </div>
+      <div class="gate">Lulus bila total bobot <b>100,00%</b> dan Ringkasan W43 keluar <b>75,15% · 80,04% · +4,89%</b> — persis PDF <span class="mono">PRGG-00-G0-RPT-002 W43</span>. Setelah ini dashboard yang sudah ada menjadi nyata dengan sendirinya; dia sudah membaca database.</div>
+
+      <div class="ph"><span class="ph-n">Fase 2</span><span class="ph-t">Bahasa visual</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">07</div>
+        <div class="wi-b">
+          <p class="wi-t">Design system</p>
+          <p class="wi-d">Token shadcn dan satu kurva gerak framer-motion, dikunci di satu berkas dan satu halaman contoh. Halaman sesudahnya tidak boleh mengarang gaya sendiri. Dipakai orang berumur 22 sampai 60: kontras tinggi, target sentuh ≥44px, dan tidak ada informasi yang hanya muncul saat hover.</p>
+          <p class="wi-m">app/globals.css · components/ui · framer-motion</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 3</span><span class="ph-t">Laporan mingguan</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">08</div>
+        <div class="wi-b">
+          <p class="wi-t">Halaman Ringkasan</p>
+          <p class="wi-d">Satu baris per unit pelaporan, ditambah baris total. Bentuk datanya sudah ada di getSummaryRows; yang belum, tampilannya.</p>
+          <p class="wi-m">app/weekly/[week]/summary</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">09</div>
+        <div class="wi-b">
+          <p class="wi-t">Halaman Kurva S</p>
+          <p class="wi-d">Rencana, aktual, dan deviasi — per unit dan keseluruhan. Menggantikan lima blok HLOOKUP ke range mati.</p>
+          <p class="wi-m">app/weekly/[week]/scurve · SCurveClient.tsx</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">10</div>
+        <div class="wi-b">
+          <p class="wi-t">Halaman Detail Progress</p>
+          <p class="wi-d">Pohon WBS ratusan baris sekaligus. Di dalam map sebesar ini, input dan select harus yang asli — bukan Radix per baris.</p>
+          <p class="wi-m">app/weekly/[week]/detail · WbsTreeTable.tsx</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">11</div>
+        <div class="wi-b">
+          <p class="wi-t">Halaman Dokumentasi</p>
+          <p class="wi-d">Foto berhalaman dengan waktu dan GPS. lib/exif.ts sudah membacanya; yang belum, menampilkannya sebagai bukti.</p>
+          <p class="wi-m">app/weekly/[week]/documentation · PhotoUploadGrid.tsx</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">12</div>
+        <div class="wi-b">
+          <p class="wi-t">Data Overall workbench</p>
+          <p class="wi-d">Pengganti sheet 305×454. Pola menelusuri satu tingkat sekaligus sudah benar — jangan diganti jadi pohon yang membuka semuanya.</p>
+          <p class="wi-m">DataOverallWorkbench.tsx · 1.295 baris</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">13</div>
+        <div class="wi-b">
+          <p class="wi-t">PDF format Pertamina</p>
+          <p class="wi-d">Sampul, revision table, dan seluruh isi di atas menjadi satu berkas. Format ini disempurnakan dulu; penyusun blok menyusul di 21.</p>
+          <p class="wi-m">lib/pdf.ts · app/print/*</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 4</span><span class="ph-t">Yang mengisi laporan</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">14</div>
+        <div class="wi-b">
+          <p class="wi-t">Form Harian, dan peran barunya</p>
+          <p class="wi-d">Enam blok bernomor: manhours, PTW, HSE, aktivitas, area of concern, ringkasan. Layar paling padat, paling sering dibuka dari HP — dan sekarang juga yang menyusun draft ringkasan mingguan.</p>
+          <p class="wi-m">components/daily/DailyForm.tsx · 658 baris</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">15</div>
+        <div class="wi-b">
+          <p class="wi-t">Modul Document Control</p>
+          <p class="wi-d">EDL dan VDRL, transmittal, return code, daftar tertahan, kurva dokumen. Lalu leaf engineering ditautkan ke sini supaya berhenti dihitung dua kali.</p>
+          <p class="wi-m">tabel doc_* sudah berdiri di skema</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 5</span><span class="ph-t">Membuat proyek dari nol</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">16</div>
+        <div class="wi-b">
+          <p class="wi-t">Project management</p>
+          <p class="wi-d">Membuat dan memilih proyek, wizard setup dari BOQ berharga.</p>
+          <p class="wi-m">app/portfolio · app/setup · lib/setup.ts</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">17</div>
+        <div class="wi-b">
+          <p class="wi-t">Planner</p>
+          <p class="wi-d">WBS editor, bobot dari harga BOQ, start dan finish, Gantt yang hanya untuk dilihat. Tanpa dependency: jadwal Gundih tidak memakai satu pun relasi FS/SS.</p>
+          <p class="wi-m">lib/setup.ts · lib/plan-curve.ts</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">18</div>
+        <div class="wi-b">
+          <p class="wi-t">Baseline berversi</p>
+          <p class="wi-d">Kontraktual terkunci di samping Aktif, lengkap dengan riwayat revisi dan penyetujunya. Kurva S menggambar dua garis rencana.</p>
+          <p class="wi-m">tabel baselines · node_schedules</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 6</span><span class="ph-t">Dashboard yang berpikir</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">19</div>
+        <div class="wi-b">
+          <p class="wi-t">Dashboard bulanan</p>
+          <p class="wi-d">Apa yang mendahului, apa yang tertinggal, apa yang jadi peringatan, apa yang jadi masalah — berikut dampaknya. Ada di belakang karena dia membaca dari laporan mingguan; dibangun lebih dulu, dia hanya hiasan yang nanti dibongkar.</p>
+          <p class="wi-m">lib/analysis.ts · app/page.tsx</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+
+      <div class="ph"><span class="ph-n">Fase 7</span><span class="ph-t">Setelah isinya terbukti</span><span class="ph-l"></span></div>
+      <div class="wi">
+        <div class="wi-n">20</div>
+        <div class="wi-b">
+          <p class="wi-t">Impor dan ekspor Excel</p>
+          <p class="wi-d">Pemetaan kolom dengan pratinjau sebelum disimpan, dan ekspor yang rapi. Excel hasil ekspor adalah produk kita, bukan saingan kita.</p>
+          <p class="wi-m">exceljs · streaming di kedua arah</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">21</div>
+        <div class="wi-b">
+          <p class="wi-t">Penyusun blok laporan</p>
+          <p class="wi-d">Katalog blok dengan opsi di tiap blok, di atas pipeline PDF yang sudah teruji. Ini yang membebaskan kita dari format satu klien.</p>
+          <p class="wi-m">lib/pdf.ts · app/print/*</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+      <div class="wi">
+        <div class="wi-n">22</div>
+        <div class="wi-b">
+          <p class="wi-t">Login dan peran</p>
+          <p class="wi-d">Admin, Project Control, Lapangan, Approver, Klien. Tanpa ini jejak perubahan dan tanda tangan tidak punya arti.</p>
+          <p class="wi-m">tabel users · memberships · audit_log</p>
+        </div>
+        <span class="chip next">siap di-brief</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Keputusan · 27 Agustus 2026</p>
+      <h2>Lima lagi, diambil setelah datanya dibaca</h2>
+      <p class="lede">Empat belas di atas disusun dari bentuk datanya. Lima ini disusun dari isinya — dan tiap satu memotong pekerjaan yang tadinya harus diputuskan berulang kali.</p>
+    </div>
+
+    <div class="decisions">
+
+      <div class="dec"><div class="dec-n">15</div><div class="dec-b">
+        <p class="dec-q">Kedalaman planner</p>
+        <p class="dec-a">Tanpa dependency — WBS, bobot, start, finish</p>
+        <p class="dec-w">Kurva rencana lahir dari empat angka itu, dan Gantt hanya untuk dilihat. Jadwal Gundih tidak memakai satu pun relasi FS/SS sepanjang 415 hari, jadi scheduling engine adalah biaya tanpa pembeli — sekaligus barang yang membuat anak magang berhenti di layar pertama.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">16</div><div class="dec-b">
+        <p class="dec-q">Urutan bentuk laporan</p>
+        <p class="dec-a">Satu format disempurnakan dulu, penyusun blok menyusul</p>
+        <p class="dec-w">Bentuk Pertamina/Indoturbine dikerjakan utuh lebih dulu — sampul, revision table, ringkasan, kurva S, detail, foto. Keputusan 08 tidak berubah; yang ditetapkan di sini hanya urutannya, karena katalog blok yang dibangun sebelum ada satu pun laporan jadi berarti tidak ada laporan yang pernah selesai.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">17</div><div class="dec-b">
+        <p class="dec-q">Sumber progress engineering</p>
+        <p class="dec-a">EDL satu-satunya — leaf engineering tidak bisa diketik</p>
+        <p class="dec-w">Penegasan keras atas keputusan 07. Di berkas asli kedua angkanya sudah berbeda: WBS General/IFR minggu 4 menunjukkan 46,67%, EDL Summary menunjukkan 63,33%. Selama masih ada dua tempat mengetik, selisih seperti itu akan selalu lolos ke laporan.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">18</div><div class="dec-b">
+        <p class="dec-q">Kapan login dipasang</p>
+        <p class="dec-a">Setelah isinya jadi, bukan sebelum</p>
+        <p class="dec-w">Peran tetap seperti keputusan 05 dan tidak ada yang ditulis ulang karenanya. Yang berubah cuma tempatnya di papan: dipindah ke belakang supaya sepuluh langkah pertama — termasuk seluruh laporan mingguan — tidak menunggu lapisan izin.</p>
+      </div></div>
+
+      <div class="dec"><div class="dec-n">19</div><div class="dec-b">
+        <p class="dec-q">Tampilan dan gerak</p>
+        <p class="dec-a">Semua elemen shadcn, semua transisi framer-motion</p>
+        <p class="dec-w">Satu kurva dan satu durasi untuk seluruh aplikasi — <span class="mono">--ease-ios</span> dari keputusan 12, sekarang dijalankan oleh framer-motion. Tiap halaman harus benar di iPhone, Android, Windows dan desktop, diverifikasi dengan gambar pada 390px dan desktop, bukan dengan teks. Dua pengecualian, keduanya soal kebenaran dan bukan selera: baris tabel yang bisa melebihi ~20 memakai kelas shadcn dengan elemen native di dalamnya, dan <span class="mono">/print/*</span> tidak memakai framer-motion karena Puppeteer memotret tanpa menunggu animasi.</p>
+      </div></div>
+
+    </div>
+
+    <div class="gate">Sembilan cacat yang ditemukan pada berkas sumber — sampul PDF salah periode, header basi sembilan minggu di sebelah header yang benar, <span class="mono">#REF!</span> di register dokumen yang masih dipakai, kurva yang <span class="mono">HLOOKUP</span> ke range mati — beserta nomor papan yang menutup masing-masing, tercatat lengkap di <span class="mono">docs/superpowers/specs/2026-08-27-project-control-v2-design.md</span>.</div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Belum diputuskan</p>
+      <h2>Tiga hal yang masih belum dipilih</h2>
+    </div>
+
+    <div class="open">
+      <div class="q"><span class="qm">?</span><p><b>Foto saat produksi disimpan di mana.</b> Selama prototipe tetap di disk lokal. Ratusan foto lapangan per proyek, dan PDF harus tetap ringan.</p></div>
+      <div class="q"><span class="qm">?</span><p><b>Klien boleh diundang atau tidak.</b> Memberi Pertamina akses lihat langsung adalah keunggulan besar — sekaligus keputusan politis.</p></div>
+      <div class="q"><span class="qm">?</span><p><b>Nama produknya.</b> Sampai sekarang masih "Report".</p></div>
+    </div>
+  </section>
+
+  <footer class="doc">
+    <span>Cetak Biru Report v2</span>
+    <span>27 Agustus 2026</span>
+    <span>Sumber: Weekly W43 · Daily 04 Juni 2026 · EDL R2</span>
+  </footer>
+
+</div>
+
+
+</body>
+</html>
