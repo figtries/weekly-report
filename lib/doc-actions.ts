@@ -38,9 +38,16 @@ function fail(err: unknown): { ok: false; error: string } {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function assertDate(value: string, what: string): string {
-  if (!ISO_DATE.test(value)) throw new Error(`${what} is required`);
-  return value;
+/** Empty is a real answer here: it means “clear this date”. */
+function optionalDate(value: string, what: string): string | null {
+  const v = value.trim();
+  if (v === '') return null;
+  if (!ISO_DATE.test(v)) throw new Error(`${what} is not a date`);
+  return v;
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function assertStage(value: string): DocStage {
@@ -99,109 +106,123 @@ function refreshRegister() {
   revalidatePath('/dokumen', 'layout');
 }
 
-/* ------------------------------------------------------------- submissions */
+/* ------------------------------------------------------------ one stage */
 
-export interface SubmissionInput {
+export interface StageInput {
   projectId: string;
   register: RegisterKind;
+  documentId: string;
   stage: string;
-  /** Our letter out. Optional: plenty of real submissions never got one. */
-  transmittalNo: string;
-  date: string;
-  documentIds: string[];
+  /** All four are free text. An empty string clears the field. */
+  sentAt: string;
+  sentTransmittal: string;
+  returnedAt: string;
+  returnTransmittal: string;
+  returnCode: string;
 }
 
-export async function recordSubmission(input: SubmissionInput): Promise<ActionResult> {
+/**
+ * Save one stage of one document, exactly as it was typed.
+ *
+ * This replaced a tick-the-boxes-then-fill-a-dialog flow that made people stop
+ * and think about which mode they were in before they could correct anything.
+ * A controller is not filing a transaction; they are fixing a row that is
+ * wrong. So every field is editable in place and this writes what is there —
+ * including clearing it again.
+ *
+ * `submitted` is DERIVED, never asked for: a stage counts as reached when
+ * anything at all is known about it going out. The percentage that follows is
+ * then ours to compute, which is the whole arrangement — they keep the facts
+ * right, the app keeps the arithmetic right.
+ */
+export async function saveStage(input: StageInput): Promise<ActionResult> {
   try {
     const stage = assertStage(input.stage);
-    const date = assertDate(input.date, 'Date sent');
-    const documents = ownedDocuments(input.projectId, input.register, input.documentIds);
+    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
 
-    const changed = db.transaction((tx) => {
-      const outId = transmittalId(input.projectId, input.register, input.transmittalNo, 'out', date);
-      let n = 0;
+    const sentAt = optionalDate(input.sentAt, 'Sent');
+    const returnedAt = optionalDate(input.returnedAt, 'Returned');
+    const code = input.returnCode.trim().toUpperCase() || null;
+    const sentNo = input.sentTransmittal.trim();
+    const returnNo = input.returnTransmittal.trim();
 
-      for (const doc of documents) {
-        const existing = tx.select().from(schema.docStages)
-          .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)))
-          .all()[0];
+    // Anything known about the outbound leg means it went out.
+    const submitted = Boolean(sentAt || sentNo || returnedAt || returnNo || code);
 
-        if (existing) {
-          // The row may already exist as a promise — a plan date and nothing
-          // else. Recording the submission turns the promise into a fact and
-          // leaves the promise beside it, which is what the plan curve reads.
-          tx.update(schema.docStages)
-            .set({ submitted: true, submittedAt: date, submitTransmittalId: outId ?? existing.submitTransmittalId })
-            .where(eq(schema.docStages.id, existing.id))
-            .run();
-        } else {
-          tx.insert(schema.docStages).values({
-            id: randomUUID(),
-            documentId: doc.id,
-            stage,
-            order: STAGE_ORDER.indexOf(stage),
-            submitted: true,
-            submittedAt: date,
-            submitTransmittalId: outId,
-          }).run();
-        }
-        n += 1;
+    db.transaction((tx) => {
+      const outId = sentNo
+        ? transmittalId(input.projectId, input.register, sentNo, 'out', sentAt ?? returnedAt ?? today())
+        : null;
+      const inId = returnNo
+        ? transmittalId(input.projectId, input.register, returnNo, 'in', returnedAt ?? sentAt ?? today())
+        : null;
+
+      const existing = tx.select().from(schema.docStages)
+        .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)))
+        .all()[0];
+
+      const values = {
+        submitted,
+        submittedAt: sentAt,
+        submitTransmittalId: outId,
+        returnedAt,
+        returnTransmittalId: inId,
+        returnCode: code,
+      };
+
+      if (existing) {
+        tx.update(schema.docStages).set(values).where(eq(schema.docStages.id, existing.id)).run();
+      } else {
+        tx.insert(schema.docStages).values({
+          id: randomUUID(),
+          documentId: doc.id,
+          stage,
+          order: STAGE_ORDER.indexOf(stage),
+          ...values,
+        }).run();
       }
-      return n;
     });
 
     refreshRegister();
-    return { ok: true, changed };
+    return { ok: true, changed: 1 };
   } catch (err) {
     return fail(err);
   }
 }
 
-/* ----------------------------------------------------------------- returns */
+/* --------------------------------------------------------- the document */
 
-export interface ReturnInput {
+export interface DocumentInput {
   projectId: string;
   register: RegisterKind;
-  stage: string;
-  transmittalNo: string;
-  date: string;
-  /** APP, AWC, RWC — the client's own vocabulary, kept as typed. */
-  returnCode: string;
-  documentIds: string[];
+  documentId: string;
+  docNo: string;
+  title: string;
 }
 
-export async function recordReturn(input: ReturnInput): Promise<ActionResult> {
+/** Fix the document itself — its number and its title. */
+export async function saveDocument(input: DocumentInput): Promise<ActionResult> {
   try {
-    const stage = assertStage(input.stage);
-    const date = assertDate(input.date, 'Date received');
-    const code = input.returnCode.trim().toUpperCase();
-    if (!code) throw new Error('Return code is required');
-    const documents = ownedDocuments(input.projectId, input.register, input.documentIds);
+    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
+    const title = input.title.trim();
+    if (!title) throw new Error('Title cannot be empty');
 
-    const changed = db.transaction((tx) => {
-      const inId = transmittalId(input.projectId, input.register, input.transmittalNo, 'in', date);
-      let n = 0;
+    const docNo = input.docNo.trim() || null;
+    if (docNo && docNo !== doc.docNo) {
+      const clash = db.select().from(schema.documents)
+        .where(and(
+          eq(schema.documents.projectId, input.projectId),
+          eq(schema.documents.register, input.register),
+          eq(schema.documents.docNo, docNo),
+        )).all()[0];
+      if (clash) throw new Error(`${docNo} is already used`);
+    }
 
-      for (const doc of documents) {
-        const existing = tx.select().from(schema.docStages)
-          .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)))
-          .all()[0];
-        // A return with no submission behind it is a data entry mistake, not a
-        // new fact: it would count as progress the document never made.
-        if (!existing || !existing.submitted) continue;
+    db.update(schema.documents).set({ docNo, title })
+      .where(eq(schema.documents.id, doc.id)).run();
 
-        tx.update(schema.docStages)
-          .set({ returnedAt: date, returnTransmittalId: inId ?? existing.returnTransmittalId, returnCode: code })
-          .where(eq(schema.docStages.id, existing.id))
-          .run();
-        n += 1;
-      }
-      return n;
-    });
-
-    if (changed === 0) throw new Error('None of those documents have been sent at that stage');
     refreshRegister();
-    return { ok: true, changed };
+    return { ok: true, changed: 1 };
   } catch (err) {
     return fail(err);
   }

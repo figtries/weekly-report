@@ -19,7 +19,6 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
       tree={getRegisterTree(PROJECT_ID, 'edl', week)}
       cards={getRegisterCards(PROJECT_ID, 'edl', week)}
       weekNo={summary.asOfWeek}
-      weekEndDate={summary.asOfDate}
     />
   );
 }

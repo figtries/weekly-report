@@ -19,7 +19,6 @@ export default async function VdrlDataPage({ params }: { params: Promise<{ week:
       tree={getRegisterTree(PROJECT_ID, 'vdrl', week)}
       cards={getRegisterCards(PROJECT_ID, 'vdrl', week)}
       weekNo={summary.asOfWeek}
-      weekEndDate={summary.asOfDate}
     />
   );
 }
