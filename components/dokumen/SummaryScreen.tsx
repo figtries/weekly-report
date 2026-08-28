@@ -74,35 +74,41 @@ const signed = (n: number, decimals = 2) =>
 const isFull = (n: number) => n >= 99.995;
 
 /**
- * The app's status palette, and nothing else.
+ * The verdict palette — what a chip says, never what a bar is painted.
+ *
+ * Two colour jobs run side by side on this screen and mixing them is what
+ * makes a chart unreadable. THE VERDICT (is this discipline all right?) is the
+ * weekly report's own tinted pairs, lifted from `SummaryCards` so green and red
+ * mean the same thing on both screens. THE MEASUREMENT (what happened against
+ * what was promised) is blue and red, lifted from the S-curve — see the note on
+ * `ACTUAL` below. A bar coloured by verdict cannot also say which line is the
+ * plan, so bars here are never coloured by trend.
  *
  * Written out rather than composed, because Tailwind reads these files as text
  * and a class built from a variable at runtime never reaches the stylesheet.
- * The pairs are lifted from `SummaryCards` on the weekly report so the two
- * screens agree on what green and red look like.
  */
-const TREND: Record<RegisterNode['trend'], { label: string; chip: string; bar: string }> = {
-  ahead: {
-    label: 'ahead of plan', chip: 'bg-emerald-100 text-emerald-700',
-    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
-  },
-  'on-track': {
-    label: 'on plan', chip: 'bg-emerald-100 text-emerald-700',
-    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
-  },
-  slipping: {
-    label: 'slipping', chip: 'bg-amber-100 text-amber-700',
-    bar: '[&_[data-slot=progress-indicator]]:bg-amber-500',
-  },
-  behind: {
-    label: 'behind plan', chip: 'bg-red-100 text-red-700',
-    bar: '[&_[data-slot=progress-indicator]]:bg-red-500',
-  },
-  unplanned: {
-    label: 'no promised dates', chip: 'bg-muted text-muted-foreground',
-    bar: '[&_[data-slot=progress-indicator]]:bg-primary',
-  },
+const TREND: Record<RegisterNode['trend'], { label: string; chip: string }> = {
+  ahead: { label: 'ahead of plan', chip: 'bg-emerald-100 text-emerald-700' },
+  'on-track': { label: 'on plan', chip: 'bg-emerald-100 text-emerald-700' },
+  slipping: { label: 'slipping', chip: 'bg-amber-100 text-amber-700' },
+  behind: { label: 'behind plan', chip: 'bg-red-100 text-red-700' },
+  unplanned: { label: 'no promised dates', chip: 'bg-muted text-muted-foreground' },
 };
+
+/*
+ * ACTUAL IS BLUE, PLAN IS RED. Everywhere on this screen, without exception —
+ * the ring's arc and its tick, every progress bar and its marker, both lines of
+ * the curve, and the two figures written next to them.
+ *
+ * This is the app's existing convention and it is not a taste call: it is set
+ * in `SCurveClient` — `#3b82f6` (blue-500) for the actual area, `#ef4444`
+ * (red-500) for the plan line, `text-blue-600` and `text-red-600` for the two
+ * figures beneath it — and a reader who learned it on the S-curve must not have
+ * to relearn it here. An earlier pass drew both in the theme's foreground,
+ * which was harmonious and useless: it removed the one distinction the chart
+ * exists to draw. The classes are written out at each use because Tailwind
+ * reads these files as text.
+ */
 
 const OBSTACLE: Record<Obstacle['kind'], {
   heading: string; blurb: string; chip: string; tone: string; icon: typeof AlertTriangle;
@@ -142,22 +148,36 @@ const NAMES_SHOWN = 12;
  * `pathLength` tween is implemented with stroke-dasharray and would fight the
  * dash offset this uses. It fades in with everything else instead.
  */
-function Ring({ value, caption }: { value: number; caption: string }) {
+function Ring({ value, plan, caption }: { value: number; plan: number | null; caption: string }) {
   const R = 52;
   const C = 2 * Math.PI * R;
+  const clamp = (n: number) => Math.min(100, Math.max(0, n));
+
+  // The plan tick, in the ring's own frame. The svg is rotated -90°, so an
+  // angle measured from 3 o'clock lands where the arc actually starts.
+  const a = plan === null ? 0 : (clamp(plan) / 100) * 2 * Math.PI;
+  const tick = { x1: 64 + (R - 9) * Math.cos(a), y1: 64 + (R - 9) * Math.sin(a),
+                 x2: 64 + (R + 9) * Math.cos(a), y2: 64 + (R + 9) * Math.sin(a) };
+
   return (
     <div className="relative flex shrink-0 items-center justify-center">
       <svg viewBox="0 0 128 128" className="h-36 w-36 -rotate-90" aria-hidden>
         <circle cx="64" cy="64" r={R} fill="none" strokeWidth="12" className="stroke-muted" />
         <circle
           cx="64" cy="64" r={R} fill="none" strokeWidth="12" strokeLinecap="round"
-          className="stroke-foreground"
+          className="stroke-blue-500"
           strokeDasharray={C}
-          strokeDashoffset={C * (1 - Math.min(100, Math.max(0, value)) / 100)}
+          strokeDashoffset={C * (1 - clamp(value) / 100)}
         />
+        {plan !== null && (
+          <line
+            {...tick}
+            strokeWidth="3" strokeLinecap="round" className="stroke-red-500"
+          />
+        )}
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-3xl font-semibold leading-none tracking-tight">
+        <span className="text-3xl font-semibold leading-none tracking-tight text-blue-600">
           <CountUp value={value} decimals={1} />
         </span>
         <span className="mt-1 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
@@ -295,8 +315,27 @@ export function SummaryScreen({
                     whenever the readings opposite ran long, and an empty half
                     is what the reader reads as unfinished. */}
                 <div className="flex flex-1 flex-col justify-center gap-5">
-                  <div className="flex justify-center">
-                    <Ring value={summary.actual} caption="done" />
+                  <div className="flex flex-col items-center gap-3">
+                    <Ring value={summary.actual} plan={summary.plan} caption="done" />
+                    {/* The legend is the whole point of the two colours: blue
+                        is what happened, red is what was promised, everywhere
+                        in this app. */}
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
+                      {/* A colour key, not a second readout. The actual figure
+                          is inside the ring and the plan figure is in the
+                          sentence opposite; stating either one twice on the
+                          same card is the complaint that started all of this. */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        <span className="font-medium text-blue-600">Actual</span>
+                      </span>
+                      {summary.plan !== null && (
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-red-500" />
+                          <span className="font-medium text-red-600">Plan</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex divide-x rounded-lg border bg-muted/40 py-3">
                     <Stat label="Documents" value={String(summary.documents)} />
@@ -339,19 +378,22 @@ export function SummaryScreen({
                       {planFullWeek !== null && isFull(summary.plan) ? (
                         <>finished by <span className="font-semibold">week {planFullWeek}</span></>
                       ) : (
-                        <>at <span className="font-semibold tabular-nums">
+                        <>at <span className="font-semibold tabular-nums text-red-600">
                           {summary.plan.toFixed(1)}%
                         </span> by week {summary.asOfWeek}</>
                       )}
-                      . It is{' '}
+                      {/* Layout-neutral on purpose: the ring is beside this on
+                          a desktop and above it on a phone. */}
+                      .{' '}
                       {(summary.deviation ?? 0) < -0.05 ? (
                         <>
+                          It came up{' '}
                           <span className="font-semibold tabular-nums text-red-600">
                             {Math.abs(summary.deviation ?? 0).toFixed(1)}%
                           </span> short of that.
                         </>
                       ) : (
-                        <>where it should be.</>
+                        <>It is exactly where it should be.</>
                       )}{' '}
                       <span className="text-muted-foreground">
                         {obstacles.length} of {summary.documents} documents are still open — the
@@ -403,7 +445,7 @@ export function SummaryScreen({
                       </div>
                       <Progress
                         value={(s.reached / summary.documents) * 100}
-                        className="h-2 [&_[data-slot=progress-indicator]]:bg-foreground"
+                        className="h-2 [&_[data-slot=progress-indicator]]:bg-blue-500"
                       />
                     </div>
                   ))}
@@ -814,19 +856,24 @@ function GroupCard({ group: g }: { group: RegisterNode }) {
 
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex items-baseline justify-between text-sm">
-            <span className="font-semibold tabular-nums">{g.actual.toFixed(1)}% done</span>
+            <span className="font-semibold tabular-nums text-blue-600">
+              {g.actual.toFixed(1)}% done
+            </span>
             {g.plan !== null && (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                promised {g.plan.toFixed(0)}% by now
+              <span className="text-xs tabular-nums text-red-600">
+                promised {g.plan.toFixed(0)}%
               </span>
             )}
           </div>
+          {/* Blue bar, red marker — the same pair as the S-curve, so the two
+              screens never disagree about which colour is which. The verdict
+              lives in the chip above; the bar only says how far it got. */}
           <div className="relative">
-            <Progress value={g.actual} className={cn('h-2', t.bar)} />
+            <Progress value={g.actual} className="h-2 [&_[data-slot=progress-indicator]]:bg-blue-500" />
             {g.plan !== null && (
               <span
                 aria-hidden
-                className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-foreground/60"
+                className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-red-500"
                 style={{ left: `calc(${Math.min(100, Math.max(0, g.plan))}% - 1px)` }}
               />
             )}

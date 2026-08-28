@@ -15,6 +15,12 @@ import type { WeekPoint } from '@/lib/register-shared';
  * formula; the numbers below cannot go stale in that way because nothing about
  * them is stored.
  *
+ * Actual is blue, plan is red — `#3b82f6` and `#ef4444`, the exact pair
+ * `SCurveClient` uses on the weekly report, down to the gradient under the
+ * actual area. A reader who learned the convention there must not have to
+ * relearn it here, so this is not a colour to restyle: it is the only thing
+ * telling the two lines apart.
+ *
  * The labels are HTML and only the two lines are SVG, on a `0 0 100 100`
  * viewBox stretched with `preserveAspectRatio="none"`. A single scaled SVG
  * would have shrunk its own text to about five pixels at 390px — the axis was
@@ -106,8 +112,8 @@ export function RegisterCurve({
           >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
               </linearGradient>
             </defs>
 
@@ -126,7 +132,7 @@ export function RegisterCurve({
                 strokeDasharray="6 5"
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
-                className="stroke-muted-foreground/70"
+                className="stroke-red-500"
               />
             )}
 
@@ -137,7 +143,7 @@ export function RegisterCurve({
               strokeLinecap="round"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
-              className="stroke-foreground"
+              className="stroke-blue-500"
             />
           </motion.svg>
 
@@ -145,7 +151,7 @@ export function RegisterCurve({
           {lastActual && (
             <motion.span
               aria-hidden
-              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground ring-2 ring-background"
+              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500 ring-2 ring-background"
               style={{ left: `${x(lastActual.weekNo)}%`, top: `${y(lastActual.actual)}%` }}
               initial={reduced ? false : { scale: 0 }}
               animate={{ scale: 1 }}
@@ -169,12 +175,13 @@ export function RegisterCurve({
 
       <figcaption className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-0.5 w-6 rounded-full bg-foreground" /> where it actually got to
+          <span className="h-0.5 w-6 rounded-full bg-blue-500" /> <span className="font-medium text-blue-600">Actual</span> — where it got to
         </span>
         {planPath && (
           <span className="flex items-center gap-2">
-            <span className="h-0 w-6 border-t-2 border-dashed border-muted-foreground/70" />
-            where the promised dates said it would be
+            <span className="h-0 w-6 border-t-2 border-dashed border-red-500" />
+            <span className="font-medium text-red-600">Plan</span> — where the promised dates said
+            it would be
           </span>
         )}
         <span>both counted from the dates in the register — neither is typed in</span>
