@@ -94,42 +94,50 @@ const NAMES_SHOWN = 10;
 /* ------------------------------------------------------------ primitives */
 
 /**
- * The ring: plan drawn full, actual painted over it.
+ * The ring: two concentric arcs, actual inside and plan outside.
  *
- * Hand-drawn rather than a charting library — it is two arcs, it has to take
- * the app's own blue and red, and its stroke must not be tweened, because
- * framer-motion implements `pathLength` with stroke-dasharray and would fight
- * the dash offset the arcs are made of.
+ * They were stacked on one radius at first — red to the plan, blue painted over
+ * it — which drew the shortfall beautifully and then vanished the moment the
+ * work ran ahead of plan, because blue simply covered every pixel of red. A
+ * baseline that disappears exactly when you are winning is not a baseline. On
+ * two radii both are always visible and the comparison is the arc lengths.
+ *
+ * Hand-drawn rather than a charting library: it is two arcs, it has to take the
+ * app's own blue and red, and its stroke must not be tweened — framer-motion
+ * implements `pathLength` with stroke-dasharray and would fight the dash offset
+ * the arcs are made of.
  */
 function Ring({ actual, plan }: { actual: number; plan: number | null }) {
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const arc = (pct: number) => C * (1 - clamp(pct) / 100);
+  const arc = (r: number, pct: number) => {
+    const c = 2 * Math.PI * r;
+    return { strokeDasharray: c, strokeDashoffset: c * (1 - clamp(pct) / 100) };
+  };
+  const ACTUAL_R = 44;
+  const PLAN_R = 58;
 
   return (
     <div className="relative flex shrink-0 items-center justify-center">
       <svg viewBox="0 0 128 128" className="h-40 w-40 -rotate-90" aria-hidden>
-        <circle cx="64" cy="64" r={R} fill="none" strokeWidth="14" className="stroke-muted" />
-        {/* The plan first and the actual over it: whatever red is still
-            visible is exactly how far short the work fell. */}
         {plan !== null && (
-          <circle
-            cx="64" cy="64" r={R} fill="none" strokeWidth="14" strokeLinecap="round"
-            className="stroke-red-500"
-            strokeDasharray={C} strokeDashoffset={arc(plan)}
-          />
+          <>
+            <circle cx="64" cy="64" r={PLAN_R} fill="none" strokeWidth="6" className="stroke-muted" />
+            <circle
+              cx="64" cy="64" r={PLAN_R} fill="none" strokeWidth="6" strokeLinecap="round"
+              className="stroke-red-500" {...arc(PLAN_R, plan)}
+            />
+          </>
         )}
+        <circle cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" className="stroke-muted" />
         <circle
-          cx="64" cy="64" r={R} fill="none" strokeWidth="14" strokeLinecap="round"
-          className="stroke-blue-500"
-          strokeDasharray={C} strokeDashoffset={arc(actual)}
+          cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" strokeLinecap="round"
+          className="stroke-blue-500" {...arc(ACTUAL_R, actual)}
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-3xl font-semibold leading-none tracking-tight text-blue-600">
+        <span className="text-2xl font-semibold leading-none tracking-tight text-blue-600">
           <CountUp value={actual} decimals={1} />
         </span>
-        <span className="mt-1 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="mt-1 text-[0.6rem] font-medium uppercase tracking-wider text-muted-foreground">
           done
         </span>
       </div>
@@ -137,20 +145,24 @@ function Ring({ actual, plan }: { actual: number; plan: number | null }) {
   );
 }
 
-/** The same stack as the ring, laid flat. Red runs to the plan, blue over it. */
+/**
+ * The ring laid flat: actual above, plan on its own track below.
+ *
+ * Two tracks for the same reason the ring has two radii — one track hides the
+ * plan completely whenever the work is ahead of it. Same left edge and same
+ * scale, so the two ends can be read against each other at a glance.
+ */
 function Meter({ actual, plan }: { actual: number; plan?: number | null }) {
   return (
-    <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+    <div className="flex w-full flex-col gap-1">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <span className="block h-full rounded-full bg-blue-500" style={{ width: `${clamp(actual)}%` }} />
+      </div>
       {plan != null && (
-        <span
-          className="absolute inset-y-0 left-0 rounded-full bg-red-500"
-          style={{ width: `${clamp(plan)}%` }}
-        />
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <span className="block h-full rounded-full bg-red-500" style={{ width: `${clamp(plan)}%` }} />
+        </div>
       )}
-      <span
-        className="absolute inset-y-0 left-0 rounded-full bg-blue-500"
-        style={{ width: `${clamp(actual)}%` }}
-      />
     </div>
   );
 }
