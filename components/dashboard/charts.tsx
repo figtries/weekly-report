@@ -49,11 +49,11 @@ export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
                 )}
                 <p className="truncate text-sm font-medium">{name}</p>
                 <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                  bobot {fmtPct(r.bobot)}
+                  weight {fmtPct(r.bobot)}
                 </span>
               </div>
               {done ? (
-                <span className="shrink-0 text-sm font-semibold text-emerald-600">selesai</span>
+                <span className="shrink-0 text-sm font-semibold text-emerald-600">done</span>
               ) : (
                 <span
                   className={cn(
@@ -138,13 +138,13 @@ export function VelocityBars({ rows, weeks = 14 }: { rows: SCurveRow[]; weeks?: 
                 b.plan !== null && b.actual < b.plan ? 'bg-destructive/55' : 'bg-emerald-500/65'
               )}
               style={{ height: `${Math.max(2, (b.actual / peak) * 100)}%` }}
-              title={`Minggu ${b.week}: ${fmtPct(b.actual)}`}
+              title={`Week ${b.week}: ${fmtPct(b.actual)}`}
             />
           </div>
         ))}
       </div>
       <div className="mt-1.5 flex justify-between text-[11px] tabular-nums text-muted-foreground">
-        <span>minggu {bars[0].week}</span>
+        <span>week {bars[0].week}</span>
         <span>{bars[bars.length - 1].week}</span>
       </div>
     </div>
@@ -171,11 +171,11 @@ export interface LeafSpread {
 export function ProgressSpread({ spread }: { spread: LeafSpread }) {
   const total = spread.notStartedWeight + spread.runningWeight + spread.doneWeight || 1;
   const seg = [
-    { key: 'done', label: 'Selesai', w: spread.doneWeight, n: spread.done, cls: 'bg-emerald-500/75' },
-    { key: 'running', label: 'Berjalan', w: spread.runningWeight, n: spread.running, cls: 'bg-blue-500/70' },
+    { key: 'done', label: 'Done', w: spread.doneWeight, n: spread.done, cls: 'bg-emerald-500/75' },
+    { key: 'running', label: 'Running', w: spread.runningWeight, n: spread.running, cls: 'bg-blue-500/70' },
     {
       key: 'notStarted',
-      label: 'Belum mulai',
+      label: 'Not started',
       w: spread.notStartedWeight,
       n: spread.notStarted,
       cls: 'bg-foreground/15',

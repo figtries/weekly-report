@@ -96,17 +96,17 @@ export function evenWeights(leafIds: string[]): Record<string, number> {
 // ---------------------------------------------------------------------------
 
 export const PATTERN_LABELS: Record<DistributionPattern, string> = {
-  linear: 'Rata',
-  scurve: 'Kurva-S',
-  front: 'Berat di depan',
-  back: 'Berat di belakang',
+  linear: 'Even',
+  scurve: 'S-curve',
+  front: 'Front-loaded',
+  back: 'Back-loaded',
 };
 
 export const PATTERN_HINTS: Record<DistributionPattern, string> = {
-  linear: 'Kemajuan sama tiap minggu. Cocok untuk pemasangan berulang.',
-  scurve: 'Lambat di awal, cepat di tengah, melandai di akhir. Pola paling umum.',
-  front: 'Sebagian besar selesai di awal. Cocok untuk mobilisasi dan pengadaan.',
-  back: 'Menumpuk di akhir. Cocok untuk commissioning dan penyelesaian.',
+  linear: 'The same progress every week. Suits repetitive installation.',
+  scurve: 'Slow to start, fast in the middle, easing off at the end. The commonest shape.',
+  front: 'Most of it finishes early. Suits mobilisation and procurement.',
+  back: 'Piles up at the end. Suits commissioning and close-out.',
 };
 
 /**

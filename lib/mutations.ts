@@ -174,8 +174,8 @@ export function applyWeekUpdates(
  * lets the rest of the app trust its own numbers.
  */
 export function applySetup(db: Database, draft: SetupDraft): void {
-  if (!draft.rows.length) throw new Error('WBS masih kosong');
-  if (draft.totalWeeks < 1) throw new Error('Durasi proyek minimal 1 minggu');
+  if (!draft.rows.length) throw new Error('The WBS is still empty');
+  if (draft.totalWeeks < 1) throw new Error('A project must run for at least 1 week');
 
   const items = rowsToWbsItems(
     draft.rows.map((r) => ({
@@ -258,7 +258,7 @@ export function applySetup(db: Database, draft: SetupDraft): void {
     {
       version: 1,
       lockedAt: new Date().toISOString(),
-      reason: 'Baseline awal dari wizard setup',
+      reason: 'Initial baseline from the setup wizard',
       points: curve.points,
     },
   ];
@@ -284,7 +284,7 @@ export function applyFieldProgress(
   updates: FieldProgressUpdate[]
 ): void {
   const meta = db.weeks.find((w) => w.week === week);
-  if (!meta) throw new Error(`Minggu ${week} tidak ditemukan`);
+  if (!meta) throw new Error(`Week ${week} not found`);
   const itemById = new Map(db.wbsItems.map((i) => [i.id, i]));
   const at = new Date().toISOString();
   db.changeLog ??= [];
@@ -336,14 +336,14 @@ export function applyProgressMethod(
   opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
 ): void {
   const item = db.wbsItems.find((i) => i.id === leafId);
-  if (!item) throw new Error('Item tidak ditemukan');
+  if (!item) throw new Error('Item not found');
 
   if (method === 'qty') {
     const vol = opts.vol ?? item.vol;
     const satuan = opts.satuan ?? item.satuan;
     if (!hasRealQuantity({ vol, satuan })) {
       throw new Error(
-        'Item ini belum punya kuantitas nyata. Isi volume dan satuannya dulu (mis. 340 m), bukan 1 Ls.'
+        'This item has no real quantity yet. Give it a volume and a unit first (e.g. 340 m), not 1 Ls.'
       );
     }
   }
@@ -416,15 +416,15 @@ export function applyCatalog(db: Database, key: CatalogKey, entries: CatalogEntr
     }))
     .filter((e) => e.label.length > 0);
 
-  if (!clean.length) throw new Error('Daftar tidak boleh kosong');
+  if (!clean.length) throw new Error('The list cannot be empty');
   // Weather slots are named fields on WeatherInfo, so the list can be reworded
   // but never resized — dropping one would remove a checkbox from every future
   // daily report and orphan the field it wrote to.
   if (key === 'weather' && clean.length !== 4) {
-    throw new Error('Istilah cuaca harus tepat empat baris');
+    throw new Error('Weather terms must be exactly four rows');
   }
   const ids = new Set(clean.map((e) => e.id));
-  if (ids.size !== clean.length) throw new Error('Ada id yang kembar');
+  if (ids.size !== clean.length) throw new Error('Duplicate id');
 
   db.catalogs = { ...getCatalogs(db), [key]: clean };
 }
@@ -447,8 +447,8 @@ export function applyApproval(
   note?: string
 ): void {
   const name = by.trim();
-  if (!name) throw new Error('Nama penyetuju wajib diisi');
-  if (!db.weeks.some((w) => w.week === week)) throw new Error(`Minggu ${week} tidak ditemukan`);
+  if (!name) throw new Error('An approver name is required');
+  if (!db.weeks.some((w) => w.week === week)) throw new Error(`Week ${week} not found`);
   db.approvals = [
     ...(db.approvals ?? []).filter((a) => a.week !== week),
     { week, by: name, role: role.trim() || 'Project Manager', at: new Date().toISOString(), approvedPct, note: note?.trim() || undefined },

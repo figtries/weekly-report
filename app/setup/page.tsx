@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/data';
 import SetupWizard from '@/components/setup/SetupWizard';
 
-export const metadata = { title: 'Setup Proyek' };
+export const metadata = { title: 'Project Setup' };
 
 export default async function SetupPage() {
   const db = await getDb();

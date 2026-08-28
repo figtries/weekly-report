@@ -30,9 +30,9 @@ import type { RegisterKind } from '@/lib/schema';
 export type RecordMode = 'submit' | 'return' | 'add';
 
 const RETURN_CODES = [
-  { value: 'APP', label: 'APP — disetujui' },
-  { value: 'AWC', label: 'AWC — disetujui dengan komentar' },
-  { value: 'RWC', label: 'RWC — revisi dengan komentar' },
+  { value: 'APP', label: 'APP — approved' },
+  { value: 'AWC', label: 'AWC — approved with comments' },
+  { value: 'RWC', label: 'RWC — revise with comments' },
 ];
 
 /** The chain as a controller says it, resubmissions included. */
@@ -54,6 +54,7 @@ export function RecordDialog({
   documentIds,
   documentLabels,
   defaultStage,
+  defaultDate,
   onDone,
 }: {
   mode: RecordMode;
@@ -66,6 +67,8 @@ export function RecordDialog({
   documentIds: string[];
   documentLabels: string[];
   defaultStage: string;
+  /** The end of the week being reported — where a new record starts. */
+  defaultDate: string;
   onDone: (message: string) => void;
 }) {
   const [pending, start] = useTransition();
@@ -73,15 +76,15 @@ export function RecordDialog({
 
   const [stage, setStage] = useState(defaultStage);
   const [transmittalNo, setTransmittalNo] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(defaultDate);
   const [returnCode, setReturnCode] = useState('AWC');
   const [docNo, setDocNo] = useState('');
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState('Doc');
 
-  const title_ = mode === 'submit' ? 'Catat pengiriman'
-    : mode === 'return' ? 'Catat balikan'
-    : 'Tambah dokumen';
+  const heading = mode === 'submit' ? 'Record submission'
+    : mode === 'return' ? 'Record return'
+    : 'Add document';
 
   const submit = () => {
     setError(null);
@@ -95,11 +98,11 @@ export function RecordDialog({
 
       if (!result.ok) { setError(result.error); return; }
       onOpenChange(false);
-      setTransmittalNo(''); setDate(''); setDocNo(''); setTitle('');
+      setTransmittalNo(''); setDate(defaultDate); setDocNo(''); setTitle('');
       onDone(
-        mode === 'submit' ? `${result.changed} dokumen tercatat keluar`
-          : mode === 'return' ? `${result.changed} dokumen tercatat kembali`
-          : 'Dokumen ditambahkan ke register',
+        mode === 'submit' ? `${result.changed} documents recorded as sent`
+          : mode === 'return' ? `${result.changed} documents recorded as returned`
+          : 'Document added to the register',
       );
     });
   };
@@ -108,11 +111,11 @@ export function RecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{title_}</DialogTitle>
+          <DialogTitle>{heading}</DialogTitle>
           <DialogDescription>
             {mode === 'add'
-              ? `Masuk ke ${categoryName}. Bobotnya ikut berubah — satu dokumen lagi berarti penyebutnya bertambah.`
-              : `${documentIds.length} dokumen terpilih di ${categoryName}.`}
+              ? `Goes into ${categoryName}. The weights move with it — one more document means a bigger denominator.`
+              : `${documentIds.length} documents selected in ${categoryName}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -126,7 +129,7 @@ export function RecordDialog({
           {mode === 'add' ? (
             <>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="doc-title">Judul dokumen</Label>
+                <Label htmlFor="doc-title">Document title</Label>
                 <Input
                   id="doc-title" value={title} onChange={(e) => setTitle(e.target.value)}
                   placeholder="Single Line Diagram MCC" className="h-11"
@@ -134,14 +137,14 @@ export function RecordDialog({
               </div>
               <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="doc-no">Nomor dokumen</Label>
+                  <Label htmlFor="doc-no">Document number</Label>
                   <Input
                     id="doc-no" value={docNo} onChange={(e) => setDocNo(e.target.value)}
-                    placeholder="boleh dikosongkan dulu" className="h-11 font-mono"
+                    placeholder="can be left blank" className="h-11 font-mono"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="doc-kind">Jenis</Label>
+                  <Label htmlFor="doc-kind">Kind</Label>
                   <select id="doc-kind" value={kind} onChange={(e) => setKind(e.target.value)} className={fieldClass}>
                     <option value="Doc">Doc</option>
                     <option value="Dwg">Dwg</option>
@@ -152,7 +155,7 @@ export function RecordDialog({
           ) : (
             <>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="stage">Tahap</Label>
+                <Label htmlFor="stage">Stage</Label>
                 <select id="stage" value={stage} onChange={(e) => setStage(e.target.value)} className={fieldClass}>
                   {SELECTABLE_STAGES.map((s) => (
                     <option key={s} value={s}>{STAGE_LABEL[s]}</option>
@@ -163,7 +166,7 @@ export function RecordDialog({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="transmittal">
-                    Nomor transmittal {mode === 'return' ? 'balik' : 'keluar'}
+                    {mode === 'return' ? 'Return' : 'Outgoing'} transmittal no.
                   </Label>
                   <Input
                     id="transmittal" value={transmittalNo} onChange={(e) => setTransmittalNo(e.target.value)}
@@ -171,7 +174,7 @@ export function RecordDialog({
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="date">{mode === 'return' ? 'Tanggal terima' : 'Tanggal kirim'}</Label>
+                  <Label htmlFor="date">{mode === 'return' ? 'Date received' : 'Date sent'}</Label>
                   <input
                     id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)}
                     className={fieldClass}
@@ -201,10 +204,10 @@ export function RecordDialog({
 
         <DialogFooter>
           <Button variant="ghost" className="h-11" onClick={() => onOpenChange(false)} disabled={pending}>
-            Batal
+            Cancel
           </Button>
           <Button className="h-11" onClick={submit} disabled={pending}>
-            {pending ? 'Menyimpan…' : 'Simpan'}
+            {pending ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

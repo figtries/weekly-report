@@ -21,9 +21,9 @@ import { cn } from '@/lib/utils';
  * which is exactly the material an extension-of-time claim is built from.
  */
 
-const tanggal = (iso: string | null) =>
+const asDate = (iso: string | null) =>
   iso
-    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', {
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
       })
     : null;
@@ -51,23 +51,23 @@ export function DocumentPanel({
           <DialogDescription className="flex flex-wrap items-center gap-2">
             {doc.docNo && <span className="font-mono text-xs">{doc.docNo}</span>}
             {doc.revision && <span className="text-xs">rev {doc.revision}</span>}
-            <span className="tabular-nums text-xs">{doc.percent.toFixed(0)}% dari bobot dokumen</span>
+            <span className="tabular-nums text-xs">{doc.percent.toFixed(0)}% of the document’s weight</span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center">
-          <Figure label="tahap tercatat" value={String(moved.length)} />
-          <Figure label="bolak-balik" value={`${doc.laps}×`} />
-          <Figure label="total menunggu" value={`${totalWaiting} hari`} />
+          <Figure label="stages recorded" value={String(moved.length)} />
+          <Figure label="round trips" value={`${doc.laps}×`} />
+          <Figure label="total waiting" value={`${totalWaiting} days`} />
         </div>
 
         <ol className="relative mt-2 flex flex-col gap-4 pl-6">
           <span aria-hidden className="absolute bottom-2 left-[7px] top-2 w-px bg-border" />
 
           {doc.stages.map((s, i) => {
-            const sent = tanggal(s.submittedAt);
-            const back = tanggal(s.returnedAt);
-            const planned = tanggal(s.planSubmitDate);
+            const sent = asDate(s.submittedAt);
+            const back = asDate(s.returnedAt);
+            const planned = asDate(s.planSubmitDate);
             const late = !s.submitted && s.planSubmitDate !== null && s.planSubmitDate < asOfDate;
 
             return (
@@ -101,7 +101,7 @@ export function DocumentPanel({
                   )}
                   {!s.submitted && (
                     <Badge variant="outline" className={cn('font-normal', late && 'border-amber-600 text-amber-700')}>
-                      {late ? 'lewat tanggal rencana' : 'belum dikirim'}
+                      {late ? 'past its promised date' : 'not sent'}
                     </Badge>
                   )}
                 </div>
@@ -110,26 +110,26 @@ export function DocumentPanel({
                   {planned && (
                     <span className="flex items-center gap-1.5">
                       <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-                      dijanjikan {planned}
+                      promised {planned}
                     </span>
                   )}
                   {s.submitted && (
                     <span className="flex items-center gap-1.5">
                       <Send className="h-3.5 w-3.5 shrink-0" />
-                      dikirim {sent ?? 'tanpa tanggal'}
+                      sent {sent ?? 'without a date'}
                       {s.submitTransmittal && <span className="font-mono">· {s.submitTransmittal}</span>}
                     </span>
                   )}
                   {(back || s.returnCode) && (
                     <span className="flex items-center gap-1.5">
                       <CornerDownLeft className="h-3.5 w-3.5 shrink-0" />
-                      kembali {back ?? 'tanpa tanggal'}
+                      returned {back ?? 'without a date'}
                       {s.returnTransmittal && <span className="font-mono">· {s.returnTransmittal}</span>}
-                      {s.waiting !== null && <span>· {s.waiting} hari</span>}
+                      {s.waiting !== null && <span>· {s.waiting} days</span>}
                     </span>
                   )}
                   {s.submitted && !back && s.waiting !== null && (
-                    <span className="text-amber-600">masih di tangan reviewer, {s.waiting} hari</span>
+                    <span className="text-amber-600">still with the reviewer, {s.waiting} days</span>
                   )}
                 </div>
               </motion.li>
@@ -138,7 +138,7 @@ export function DocumentPanel({
 
           {doc.stages.length === 0 && (
             <li className="text-sm text-muted-foreground">
-              Belum ada satu pun tahap yang tercatat untuk dokumen ini.
+              No stage has been recorded for this document yet.
             </li>
           )}
         </ol>

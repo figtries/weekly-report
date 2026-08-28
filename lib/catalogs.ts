@@ -106,19 +106,19 @@ export type CatalogKey = keyof ProjectCatalogs;
 
 export const CATALOG_TITLES: Record<CatalogKey, { title: string; hint: string }> = {
   weather: {
-    title: 'Istilah cuaca',
-    hint: 'Empat kondisi yang dicentang di laporan harian. Jumlahnya tetap empat — hanya sebutannya yang bisa disesuaikan.',
+    title: 'Weather terms',
+    hint: 'The four conditions ticked in the daily report. There are always four — only what they are called can change.',
   },
   delayCause: {
-    title: 'Sebab jam non-efektif',
-    hint: 'Yang ditandai bisa diklaim akan otomatis masuk ke Delay Register sebagai bahan klaim perpanjangan waktu.',
+    title: 'Causes of non-effective hours',
+    hint: 'Anything marked claimable flows into the Delay Register as material for an extension-of-time claim.',
   },
   hse: {
-    title: 'Kategori HSE',
-    hint: 'Baris yang dihitung di laporan harian dan direkap mingguan.',
+    title: 'HSE categories',
+    hint: 'The rows counted in the daily report and summarised weekly.',
   },
   crew: {
-    title: 'Kelompok manhour',
-    hint: 'Perusahaan atau regu yang jamnya dicatat terpisah.',
+    title: 'Manhour groups',
+    hint: 'The companies or crews whose hours are recorded separately.',
   },
 };

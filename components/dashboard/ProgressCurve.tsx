@@ -63,7 +63,7 @@ export default function ProgressCurve({
       preserveAspectRatio="none"
       className={className}
       role="img"
-      aria-label="Kurva progress rencana dan aktual"
+      aria-label="Planned and actual progress curve"
     >
       <defs>
         <linearGradient id="curve-fill" x1="0" y1="0" x2="0" y2="1">

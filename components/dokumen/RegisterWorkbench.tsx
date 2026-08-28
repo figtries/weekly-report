@@ -50,9 +50,9 @@ const TREND_BAR: Record<RegisterNode['trend'], string> = {
   unplanned: '[&_[data-slot=progress-indicator]]:bg-blue-600',
 };
 
-const pendek = (iso: string | null) =>
+const shortDate = (iso: string | null) =>
   iso
-    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', {
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC',
       })
     : '—';
@@ -62,13 +62,16 @@ export function RegisterWorkbench({
   register,
   tree,
   cards,
-  asOfDate,
+  weekNo,
+  weekEndDate,
 }: {
   projectId: string;
   register: RegisterKind;
   tree: RegisterNode[];
   cards: Record<string, DocumentCard[]>;
-  asOfDate: string;
+  /** The week being reported. Every figure below is as it stood at its end. */
+  weekNo: number;
+  weekEndDate: string;
 }) {
   const reduced = useReducedMotion();
 
@@ -141,9 +144,9 @@ export function RegisterWorkbench({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari nomor atau judul dokumen"
+            placeholder="Search by number or title"
             className="h-11 pl-9"
-            aria-label="Cari dokumen"
+            aria-label="Search documents"
           />
         </div>
 
@@ -173,7 +176,7 @@ export function RegisterWorkbench({
                         className={cn('h-1.5 flex-1', TREND_BAR[g.node.trend])}
                       />
                       <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
-                        {g.node.actual.toFixed(0)}% · {g.node.documents} dok
+                        {g.node.actual.toFixed(0)}% · {g.node.documents} {g.node.documents === 1 ? 'doc' : 'docs'}
                       </span>
                     </div>
                   </div>
@@ -185,7 +188,7 @@ export function RegisterWorkbench({
 
           {matchingGroups.length === 0 && (
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">
-              Tidak ada yang cocok dengan “{query}”.
+              Nothing matches “{query}”.
             </p>
           )}
         </div>
@@ -197,11 +200,11 @@ export function RegisterWorkbench({
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center lg:sticky lg:top-6">
             <Inbox className="h-6 w-6 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Pilih kelompok di sebelah kiri untuk mulai mencatat.
+              Pick a group on the left to start recording.
             </p>
             <p className="max-w-sm text-xs text-muted-foreground">
-              Centang dokumen yang berangkat bersama satu transmittal, lalu catat sekali untuk
-              semuanya. Warna batang di kiri menunjukkan posisi kelompok itu terhadap rencana.
+              Tick the documents that went out on one transmittal, then record it once for all of
+              them. The bar colour on the left shows where that group stands against plan.
             </p>
           </div>
         ) : (
@@ -211,20 +214,19 @@ export function RegisterWorkbench({
                 variant="ghost" size="icon"
                 className="h-11 w-11 shrink-0 lg:hidden"
                 onClick={() => { setSelectedId(null); setChecked(new Set()); }}
-                aria-label="Kembali ke daftar kelompok"
+                aria-label="Back to the group list"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0 flex-1">
                 <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                  {selected.packageName}
+                  {selected.packageName} · week {weekNo}
                 </p>
                 <h2 className="text-lg font-semibold leading-tight">{selected.name}</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {selected.node.documents} dokumen ·{' '}
-                  <span className="tabular-nums">{selected.node.actual.toFixed(1).replace('.', ',')}%</span>
-                  {selected.node.plan !== null &&
-                    ` · rencana ${selected.node.plan.toFixed(1).replace('.', ',')}%`}
+                  {selected.node.documents} documents ·{' '}
+                  <span className="tabular-nums">{selected.node.actual.toFixed(1)}%</span>
+                  {selected.node.plan !== null && ` · plan ${selected.node.plan.toFixed(1)}%`}
                 </p>
               </div>
             </div>
@@ -239,23 +241,23 @@ export function RegisterWorkbench({
                   onChange={() =>
                     setChecked(allChecked ? new Set() : new Set(shown.map((d) => d.id)))}
                 />
-                <span>{checked.size > 0 ? `${checked.size} dipilih` : 'Pilih semua'}</span>
+                <span>{checked.size > 0 ? `${checked.size} selected` : 'Select all'}</span>
               </label>
 
               <Button
                 className="h-11" disabled={checked.size === 0}
                 onClick={() => setMode('submit')}
               >
-                <Send className="mr-1.5 h-4 w-4" /> Catat pengiriman
+                <Send className="mr-1.5 h-4 w-4" /> Record submission
               </Button>
               <Button
                 variant="secondary" className="h-11" disabled={checked.size === 0}
                 onClick={() => setMode('return')}
               >
-                <Inbox className="mr-1.5 h-4 w-4" /> Catat balikan
+                <Inbox className="mr-1.5 h-4 w-4" /> Record return
               </Button>
               <Button variant="outline" className="h-11" onClick={() => setMode('add')}>
-                <FilePlus2 className="mr-1.5 h-4 w-4" /> Tambah dokumen
+                <FilePlus2 className="mr-1.5 h-4 w-4" /> Add document
               </Button>
             </div>
 
@@ -270,7 +272,7 @@ export function RegisterWorkbench({
                 >
                   <span className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
                     <Check className="h-4 w-4 shrink-0" />
-                    {done} — persentasenya sudah ikut berubah.
+                    {done} — the percentages have already moved.
                   </span>
                 </motion.p>
               )}
@@ -291,7 +293,7 @@ export function RegisterWorkbench({
                           className="size-4 accent-blue-600"
                           checked={checked.has(doc.id)}
                           onChange={() => toggle(doc.id)}
-                          aria-label={`Pilih ${doc.docNo ?? doc.title}`}
+                          aria-label={`Select ${doc.docNo ?? doc.title}`}
                         />
                       </label>
 
@@ -303,7 +305,7 @@ export function RegisterWorkbench({
                         <div className="flex flex-wrap items-center gap-2">
                           {doc.docNo
                             ? <span className="font-mono text-xs font-medium">{doc.docNo}</span>
-                            : <Badge variant="outline" className="font-normal">belum bernomor</Badge>}
+                            : <Badge variant="outline" className="font-normal">unnumbered</Badge>}
                           {doc.revision && (
                             <span className="text-[0.7rem] text-muted-foreground">rev {doc.revision}</span>
                           )}
@@ -314,7 +316,7 @@ export function RegisterWorkbench({
                             <Badge className="bg-rose-600 font-normal text-white">{doc.returnCode}</Badge>
                           )}
                           {doc.laps > 0 && (
-                            <span className="text-[0.7rem] text-muted-foreground">{doc.laps}× bolak-balik</span>
+                            <span className="text-[0.7rem] text-muted-foreground">{doc.laps}× round trips</span>
                           )}
                         </div>
 
@@ -333,16 +335,16 @@ export function RegisterWorkbench({
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-muted-foreground">
                           {doc.waiting !== null && (
                             <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> menunggu {doc.waiting} hari
+                              <Clock className="h-3 w-3" /> waiting {doc.waiting} days
                             </span>
                           )}
                           {doc.overdue && doc.nextStage && (
                             <span className="flex items-center gap-1 text-amber-600">
                               <CircleAlert className="h-3 w-3" />
-                              {STAGE_LABEL[doc.nextStage]} dijanjikan {pendek(doc.plannedAt)}
+                              {STAGE_LABEL[doc.nextStage]} promised {shortDate(doc.plannedAt)}
                             </span>
                           )}
-                          {!doc.stage && <span>belum pernah dikirim</span>}
+                          {!doc.stage && <span>never submitted</span>}
                         </div>
                       </button>
                     </CardContent>
@@ -352,7 +354,7 @@ export function RegisterWorkbench({
 
               {shown.length === 0 && (
                 <p className="py-10 text-center text-sm text-muted-foreground">
-                  Tidak ada dokumen yang cocok di kelompok ini.
+                  No documents match in this group.
                 </p>
               )}
             </div>
@@ -372,6 +374,9 @@ export function RegisterWorkbench({
           documentIds={checkedDocs.map((d) => d.id)}
           documentLabels={checkedDocs.map((d) => d.docNo ?? d.title)}
           defaultStage={defaultStage}
+          // A submission recorded while reporting week N belongs in week N,
+          // so the date starts there instead of empty.
+          defaultDate={weekEndDate}
           onDone={(message) => { setDone(message); setChecked(new Set()); }}
         />
       )}
@@ -379,7 +384,7 @@ export function RegisterWorkbench({
       {openDoc && (
         <DocumentPanel
           doc={openDoc}
-          asOfDate={asOfDate}
+          asOfDate={weekEndDate}
           open
           onOpenChange={(open) => !open && setOpenDoc(null)}
         />

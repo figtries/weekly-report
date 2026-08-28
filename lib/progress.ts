@@ -87,7 +87,7 @@ export function progressEvidence(
       const labels = (item.milestones ?? [])
         .filter((m) => done.includes(m.id))
         .map((m) => m.label);
-      return labels.length ? labels.join(' + ') : 'belum ada';
+      return labels.length ? labels.join(' + ') : 'none yet';
     }
     case 'lumpsum':
       return 'diketik manual';

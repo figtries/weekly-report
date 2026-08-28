@@ -60,7 +60,7 @@ export default function PlanCurvePreview({
         viewBox={`0 0 ${W} ${H}`}
         className="block w-full"
         role="img"
-        aria-label={`Kurva rencana ${totalWeeks} minggu`}
+        aria-label={`Plan curve over ${totalWeeks} weeks`}
       >
         {[0, 25, 50, 75, 100].map((t) => {
           const yy = PAD.t + (H - PAD.t - PAD.b) - (t / 100) * (H - PAD.t - PAD.b);

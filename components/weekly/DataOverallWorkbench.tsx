@@ -841,7 +841,7 @@ export default function DataOverallWorkbench({
         </>
       )}
 
-      {/* Floating save bar — morphs through belum disimpan → menyimpan → tersimpan */}
+      {/* Floating save bar — morphs through unsaved → saving → saved */}
       {(dirtyCount > 0 || justSaved) && (
         <div
           className={`sticky bottom-3 z-30 px-1 sm:bottom-4 sm:px-0 ${

@@ -17,14 +17,14 @@ import { cn } from '@/lib/utils';
  * which is how many deliverables have never moved at all.
  */
 
-const tanggal = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', {
+const longDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
     day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
   });
 
-const pendek = (iso: string | null) =>
+const shortDate = (iso: string | null) =>
   iso
-    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', {
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC',
       })
     : '—';
@@ -33,35 +33,35 @@ const pendek = (iso: string | null) =>
 // class built from a variable at runtime never reaches the stylesheet.
 const TREND: Record<RegisterNode['trend'], { label: string; chip: string; bar: string }> = {
   ahead: {
-    label: 'lebih cepat', chip: 'bg-emerald-600 text-white',
+    label: 'ahead of plan', chip: 'bg-emerald-600 text-white',
     bar: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
   },
   'on-track': {
-    label: 'sesuai rencana', chip: 'bg-emerald-600 text-white',
+    label: 'on plan', chip: 'bg-emerald-600 text-white',
     bar: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
   },
   slipping: {
-    label: 'mulai jauh', chip: 'bg-amber-600 text-white',
+    label: 'slipping', chip: 'bg-amber-600 text-white',
     bar: '[&_[data-slot=progress-indicator]]:bg-amber-600',
   },
   behind: {
-    label: 'jauh dari rencana', chip: 'bg-rose-600 text-white',
+    label: 'behind plan', chip: 'bg-rose-600 text-white',
     bar: '[&_[data-slot=progress-indicator]]:bg-rose-600',
   },
   unplanned: {
-    label: 'tanpa rencana', chip: 'bg-slate-600 text-white',
+    label: 'no plan dates', chip: 'bg-slate-600 text-white',
     bar: '[&_[data-slot=progress-indicator]]:bg-blue-600',
   },
 };
 
 const OBSTACLE: Record<Obstacle['kind'], { label: string; chip: string; icon: typeof AlertTriangle }> = {
-  returned: { label: 'kembali dengan komentar', chip: 'bg-rose-600 text-white', icon: AlertTriangle },
-  overdue: { label: 'lewat tanggal rencana', chip: 'bg-amber-600 text-white', icon: Clock },
-  untouched: { label: 'belum pernah dikirim', chip: 'bg-slate-600 text-white', icon: CircleSlash },
+  returned: { label: 'returned with comments', chip: 'bg-rose-600 text-white', icon: AlertTriangle },
+  overdue: { label: 'past its promised date', chip: 'bg-amber-600 text-white', icon: Clock },
+  untouched: { label: 'never submitted', chip: 'bg-slate-600 text-white', icon: CircleSlash },
 };
 
 const signed = (n: number, decimals = 2) =>
-  `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(decimals).replace('.', ',')}`;
+  `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(decimals)}`;
 
 const OBSTACLES_SHOWN = 8;
 
@@ -86,9 +86,9 @@ export function SummaryScreen({
     summary.deviation >= -10 ? 'slipping' : 'behind'];
 
   const counts = [
-    { label: 'kembali dengan komentar', value: summary.returnedOpen, tone: 'text-rose-600' },
-    { label: 'lewat tanggal rencana', value: summary.overdue, tone: 'text-amber-600' },
-    { label: 'belum pernah dikirim', value: summary.untouched, tone: 'text-slate-600' },
+    { label: 'returned with comments', value: summary.returnedOpen, tone: 'text-rose-600' },
+    { label: 'past their promised date', value: summary.overdue, tone: 'text-amber-600' },
+    { label: 'never submitted', value: summary.untouched, tone: 'text-slate-600' },
   ];
 
   return (
@@ -100,10 +100,10 @@ export function SummaryScreen({
             <CardContent className="flex h-full flex-col justify-between gap-6 p-6 sm:p-7">
               <div className="flex items-start justify-between gap-4">
                 <span className="text-xs font-medium uppercase tracking-widest text-white/70">
-                  {isEdl ? 'Progress engineering' : 'Progress dokumen vendor'}
+                  {isEdl ? 'Engineering progress' : 'Vendor document progress'}
                 </span>
                 <Badge className="shrink-0 bg-white/15 font-normal text-white hover:bg-white/15">
-                  minggu {summary.asOfWeek}
+                  week {summary.asOfWeek}
                 </Badge>
               </div>
 
@@ -113,15 +113,25 @@ export function SummaryScreen({
                 </p>
                 <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/80">
                   <ArrowUpRight className="h-4 w-4" />
-                  <span className="font-medium text-white">{signed(summary.thisWeek)} minggu ini</span>
+                  <span className="font-medium text-white">{signed(summary.thisWeek)} this week</span>
                   <span className="text-white/50">·</span>
-                  <span>per {tanggal(summary.asOfDate)}</span>
+                  <span>as of {longDate(summary.asOfDate)}</span>
                 </p>
               </div>
 
               <p className="text-xs leading-relaxed text-white/60">
-                {summary.documents} dokumen · {summary.categories} kelompok
-                {summary.numbered < summary.documents && ` · ${summary.documents - summary.numbered} belum bernomor`}
+                {summary.documents} documents · {summary.categories} groups
+                {summary.numbered < summary.documents && ` · ${summary.documents - summary.numbered} unnumbered`}
+                {/* Looking past the register's own last movement is allowed, and
+                    saying so is the difference between a flat week and a stale
+                    file. */}
+                {summary.evidenceWeek < summary.asOfWeek && (
+                  <>
+                    <br />
+                    Nothing has moved in this register since week {summary.evidenceWeek}
+                    {' '}({longDate(summary.evidenceDate)}).
+                  </>
+                )}
               </p>
             </CardContent>
           </Card>
@@ -136,21 +146,21 @@ export function SummaryScreen({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                          Terhadap rencana
+                          Against plan
                         </p>
                         <p className="mt-2 text-3xl font-semibold tracking-tight">
                           {signed(summary.deviation ?? 0)}
-                          <span className="ml-1 text-lg font-normal text-muted-foreground">poin</span>
+                          <span className="ml-1 text-lg font-normal text-muted-foreground">points</span>
                         </p>
                       </div>
                       <Badge className={cn('shrink-0', trend.chip)}>{trend.label}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Rencana sampai minggu {summary.asOfWeek} adalah{' '}
+                      Plan through week {summary.asOfWeek} is{' '}
                       <span className="font-medium text-foreground tabular-nums">
-                        {summary.plan.toFixed(2).replace('.', ',')}%
+                        {summary.plan.toFixed(2)}%
                       </span>{' '}
-                      — diturunkan dari tanggal rencana submit tiap dokumen.
+                      — derived from each document’s own promised submission date.
                     </p>
                   </>
                 ) : (
@@ -158,20 +168,20 @@ export function SummaryScreen({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                          Belum bergerak
+                          Never moved
                         </p>
                         <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
                           {summary.untouched}
                           <span className="ml-1 text-lg font-normal text-muted-foreground">
-                            dari {summary.documents}
+                            of {summary.documents}
                           </span>
                         </p>
                       </div>
-                      <Badge className="shrink-0 bg-slate-600 text-white">tanpa rencana</Badge>
+                      <Badge className="shrink-0 bg-slate-600 text-white">no plan dates</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Register vendor tidak memuat satu pun tanggal rencana, jadi tidak ada kurva rencana
-                      yang bisa diturunkan. Yang bisa dikatakan: sebanyak inilah yang belum pernah dikirim.
+                      The vendor register carries no promised dates at all, so there is no plan curve to
+                      derive. What it does say: this many have never been sent.
                     </p>
                   </>
                 )}
@@ -188,11 +198,11 @@ export function SummaryScreen({
                       <span className="font-medium">
                         {STAGE_LABEL[s.stage]}
                         <span className="ml-2 text-xs font-normal text-muted-foreground">
-                          bobot {s.weight.toFixed(0)}%
+                          weight {s.weight.toFixed(0)}%
                         </span>
                       </span>
                       <span className="tabular-nums text-muted-foreground">
-                        {s.reached} dari {summary.documents}
+                        {s.reached} of {summary.documents}
                       </span>
                     </div>
                     <Progress
@@ -213,10 +223,10 @@ export function SummaryScreen({
           <CardContent className="p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-                Per minggu
+                By week
               </h2>
               <span className="text-xs text-muted-foreground">
-                minggu {summary.series[0]?.weekNo ?? 1}–{summary.series[summary.series.length - 1]?.weekNo ?? 1}
+                week {summary.series[0]?.weekNo ?? 1}–{summary.series[summary.series.length - 1]?.weekNo ?? 1}
               </span>
             </div>
             <RegisterCurve
@@ -261,7 +271,7 @@ export function SummaryScreen({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold leading-snug">{g.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{g.documents} dokumen</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{g.documents} documents</p>
                     </div>
                     {g.trend !== 'unplanned' && (
                       <Badge className={cn('shrink-0 font-normal', t.chip)}>{t.label}</Badge>
@@ -271,11 +281,11 @@ export function SummaryScreen({
                   <div className="mt-auto flex flex-col gap-2">
                     <div className="flex items-baseline justify-between text-sm">
                       <span className="font-semibold tabular-nums">
-                        {g.actual.toFixed(1).replace('.', ',')}%
+                        {g.actual.toFixed(1)}%
                       </span>
                       {g.plan !== null && (
                         <span className="text-xs text-muted-foreground tabular-nums">
-                          rencana {g.plan.toFixed(1).replace('.', ',')}% · {signed(g.deviation ?? 0, 1)}
+                          plan {g.plan.toFixed(1)}% · {signed(g.deviation ?? 0, 1)}
                         </span>
                       )}
                     </div>
@@ -310,9 +320,9 @@ export function SummaryScreen({
           <Reveal delay={0.4}>
             <div className="mt-12 flex flex-wrap items-center gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-                Yang menghambat
+                What is blocking
               </h2>
-              <Badge variant="secondary" className="font-normal">{obstacles.length} dokumen</Badge>
+              <Badge variant="secondary" className="font-normal">{obstacles.length} documents</Badge>
             </div>
           </Reveal>
 
@@ -341,9 +351,9 @@ export function SummaryScreen({
                         <p className="text-xs text-muted-foreground">{o.categoryName}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-4 text-xs sm:flex-col sm:items-end sm:gap-1">
-                        <span className="text-muted-foreground">{pendek(o.since)}</span>
+                        <span className="text-muted-foreground">{shortDate(o.since)}</span>
                         {o.days !== null && (
-                          <span className="font-medium tabular-nums">{o.days} hari</span>
+                          <span className="font-medium tabular-nums">{o.days} days</span>
                         )}
                       </div>
                     </CardContent>
@@ -356,8 +366,8 @@ export function SummaryScreen({
           {obstacles.length > OBSTACLES_SHOWN && (
             <Reveal delay={0.6}>
               <p className="mt-3 text-xs text-muted-foreground">
-                Menampilkan {OBSTACLES_SHOWN} teratas dari {obstacles.length} — yang kembali dengan
-                komentar lebih dulu, lalu yang lewat tanggal, lalu yang belum pernah bergerak.
+                Showing the top {OBSTACLES_SHOWN} of {obstacles.length} — returned with comments
+                first, then past their promised date, then never moved.
               </p>
             </Reveal>
           )}

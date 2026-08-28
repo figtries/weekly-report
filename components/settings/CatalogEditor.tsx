@@ -71,7 +71,7 @@ export default function CatalogEditor({
                   onChange={(e) => patch(i, { claimable: e.target.checked })}
                   className="size-4 accent-primary"
                 />
-                bisa diklaim
+                claimable
               </label>
             )}
             <button
@@ -81,9 +81,9 @@ export default function CatalogEditor({
                 setSaved(false);
               }}
               className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors duration-150 ease-ios hover:bg-destructive/10 hover:text-destructive"
-              aria-label={`Hapus ${r.label}`}
+              aria-label={`Remove ${r.label}`}
             >
-              Hapus
+              Remove
             </button>
           </li>
         ))}
@@ -99,12 +99,12 @@ export default function CatalogEditor({
             setSaved(false);
           }}
         >
-          Tambah baris
+          Add row
         </Button>
         <Button size="sm" onClick={save} disabled={!dirty || pending}>
-          {pending ? 'Menyimpan…' : 'Simpan'}
+          {pending ? 'Saving…' : 'Save'}
         </Button>
-        {saved && !dirty && <span className="text-xs text-emerald-600">Tersimpan.</span>}
+        {saved && !dirty && <span className="text-xs text-emerald-600">Saved.</span>}
       </div>
 
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}

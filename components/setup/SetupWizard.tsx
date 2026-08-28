@@ -36,11 +36,11 @@ import PlanCurvePreview from './PlanCurvePreview';
  */
 
 const STEPS = [
-  { key: 'identitas', label: 'Identitas', hint: 'Nama, kontrak, durasi' },
-  { key: 'wbs', label: 'WBS', hint: 'Susun atau tempel dari Excel' },
-  { key: 'nilai', label: 'Nilai', hint: 'Harga → bobot otomatis' },
-  { key: 'jadwal', label: 'Jadwal', hint: 'Mulai, selesai, pola sebaran' },
-  { key: 'baseline', label: 'Baseline', hint: 'Tinjau kurva lalu kunci' },
+  { key: 'identitas', label: 'Identity', hint: 'Name, contract, duration' },
+  { key: 'wbs', label: 'WBS', hint: 'Build it or paste from Excel' },
+  { key: 'nilai', label: 'Value', hint: 'Prices → weights, automatically' },
+  { key: 'jadwal', label: 'Schedule', hint: 'Start, finish, spread' },
+  { key: 'baseline', label: 'Baseline', hint: 'Review the curve, then lock' },
 ] as const;
 
 const SAMPLE = `1\tPekerjaan Persiapan
@@ -173,9 +173,9 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
   return (
     <div className="mx-auto max-w-5xl px-3 py-5 sm:p-6 lg:p-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Setup Proyek</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Setup</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Lima langkah. Bobot dan kurva rencana dihitung app — kamu cukup isi yang kamu punya.
+          Five steps. The app works out the weights and the plan curve — you fill in what you have.
         </p>
       </header>
 
@@ -220,46 +220,46 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
       <div key={step} className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-6">
         {step === 0 && (
           <Section
-            title="Identitas proyek"
-            desc="Yang muncul di kop tiap laporan. Bisa diubah kapan saja nanti."
+            title="Project identity"
+            desc="What appears in the header of every report. Editable at any time later."
           >
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nama proyek" required>
+              <Field label="Project name" required>
                 <Input
                   value={project.name}
                   onChange={(e) => setProject({ ...project, name: e.target.value })}
-                  placeholder="Relokasi 2 Unit GTG ke Field …"
+                  placeholder="Relocation of 2 GTG units to Field …"
                 />
               </Field>
-              <Field label="Nomor kontrak">
+              <Field label="Contract number">
                 <Input
                   value={project.contractNo}
                   onChange={(e) => setProject({ ...project, contractNo: e.target.value })}
                   placeholder="002/PPC60000/2025-SO"
                 />
               </Field>
-              <Field label="Pemberi kerja">
+              <Field label="Client">
                 <Input
                   value={project.customer}
                   onChange={(e) => setProject({ ...project, customer: e.target.value })}
                   placeholder="PT …"
                 />
               </Field>
-              <Field label="Kontraktor">
+              <Field label="Contractor">
                 <Input
                   value={project.contractor}
                   onChange={(e) => setProject({ ...project, contractor: e.target.value })}
                   placeholder="PT …"
                 />
               </Field>
-              <Field label="Lokasi kerja">
+              <Field label="Site">
                 <Input
                   value={project.workLocation}
                   onChange={(e) => setProject({ ...project, workLocation: e.target.value })}
                   placeholder="CPP …"
                 />
               </Field>
-              <Field label="Durasi proyek" hint="Jumlah minggu sampai serah terima.">
+              <Field label="Project duration" hint="Weeks until handover.">
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -269,14 +269,14 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                     onChange={(e) => setTotalWeeks(Math.max(1, Number(e.target.value) || 1))}
                     className="max-w-28 tabular-nums"
                   />
-                  <span className="text-sm text-muted-foreground">minggu</span>
+                  <span className="text-sm text-muted-foreground">weeks</span>
                 </div>
               </Field>
             </div>
             {hasExistingProject && (
               <p className="mt-4 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                Sudah ada proyek aktif di app ini. Menyelesaikan wizard akan menggantinya —
-                jalankan <code className="font-mono">npm run seed</code> untuk mengembalikan data
+                There is already an active project in this app. Finishing the wizard replaces it —
+                run <code className="font-mono">npm run seed</code> to bring the demo data
                 semula.
               </p>
             )}
@@ -286,7 +286,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         {step === 1 && (
           <Section
             title="Susun WBS"
-            desc="Tempel dari Excel. Hirarki dibaca dari nomor bertitik (1.2.3), indentasi, atau kolom level — mana pun yang kamu punya."
+            desc="Paste from Excel. The hierarchy is read from dotted numbering (1.2.3), indentation, or a level column — whichever you have."
           >
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
@@ -329,7 +329,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                 </div>
                 <div className="max-h-80 overflow-auto rounded-md border">
                   {rows.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">Belum ada yang dibaca.</p>
+                    <p className="p-4 text-sm text-muted-foreground">Nothing read yet.</p>
                   ) : (
                     <ul className="divide-y text-sm">
                       {rows.map((r, i) => (
@@ -359,13 +359,13 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
         {step === 2 && (
           <Section
-            title="Harga per item"
-            desc="Isi harga satuan dari BOQ — bobot dihitung sendiri, dan totalnya dijamin 100%. Tidak ada bobot yang perlu kamu tebak."
+            title="Price per item"
+            desc="Fill in the unit prices from the BOQ — the weights work themselves out and are guaranteed to total 100%. No weight is ever guessed."
           >
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border bg-muted/40 px-3 py-2.5">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Nilai kontrak
+                  Contract value
                 </div>
                 <div className="text-lg font-semibold tabular-nums">
                   {useEven ? '—' : formatRupiah(pricing.contractValue)}
@@ -373,7 +373,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
               </div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Total bobot
+                  Total weight
                 </div>
                 <div className="text-lg font-semibold tabular-nums">{fmtPct(weightTotal)}</div>
               </div>
@@ -384,14 +384,14 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                   onChange={(e) => setUseEven(e.target.checked)}
                   className="size-4 accent-primary"
                 />
-                <span>Belum punya BOQ — pakai bobot rata dulu</span>
+                <span>No BOQ yet — use even weights for now</span>
               </label>
             </div>
 
             {useEven && (
               <p className="mb-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                Bobot rata bukan bobot sebenarnya. Proyek tetap bisa jalan, tapi deviasinya belum
-                bisa dipercaya sampai BOQ diisi — dan laporan tidak bisa bicara Rupiah.
+                Even weights are not real weights. The project still runs, but its deviation cannot
+                be trusted until the BOQ is filled in — and the report cannot speak in money.
               </p>
             )}
 
@@ -402,8 +402,8 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                     <th className="px-3 py-2 text-left font-medium">Item</th>
                     <th className="px-3 py-2 text-right font-medium">Volume</th>
                     <th className="px-3 py-2 text-right font-medium">Harga satuan</th>
-                    <th className="px-3 py-2 text-right font-medium">Nilai</th>
-                    <th className="px-3 py-2 text-right font-medium">Bobot</th>
+                    <th className="px-3 py-2 text-right font-medium">Value</th>
+                    <th className="px-3 py-2 text-right font-medium">Weight</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -457,8 +457,8 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
         {step === 3 && (
           <Section
-            title="Jadwal per item"
-            desc="Minggu mulai, minggu selesai, dan bentuk sebarannya. Dari tiga ini kurva rencana terbentuk sendiri."
+            title="Schedule per item"
+            desc="Start week, finish week, and the shape of the spread. The plan curve falls out of those three."
           >
             <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {(Object.keys(PATTERN_LABELS) as DistributionPattern[]).map((p) => (
@@ -476,8 +476,8 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                 <thead className="sticky top-0 bg-muted/70 backdrop-blur">
                   <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">Item</th>
-                    <th className="px-3 py-2 text-right font-medium">Mulai</th>
-                    <th className="px-3 py-2 text-right font-medium">Selesai</th>
+                    <th className="px-3 py-2 text-right font-medium">Start</th>
+                    <th className="px-3 py-2 text-right font-medium">Finish</th>
                     <th className="px-3 py-2 text-left font-medium">Pola</th>
                   </tr>
                 </thead>
@@ -531,7 +531,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
             </div>
             {!canAdvance && (
               <p className="mt-2 text-xs text-destructive">
-                Ada item yang minggu selesainya lebih awal dari minggu mulai.
+                Some items finish in an earlier week than they start.
               </p>
             )}
           </Section>
@@ -539,19 +539,19 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
         {step === 4 && (
           <Section
-            title="Kurva rencana"
-            desc="Terbentuk dari jadwal dan bobot di langkah sebelumnya — bukan diimpor. Kalau jadwal direvisi nanti, kurva ini menghitung ulang sendiri."
+            title="Plan curve"
+            desc="Built from the schedule and weights in the steps before — never imported. Revise the schedule later and this curve recomputes itself."
           >
             {curve && <PlanCurvePreview series={curve.projectPlan} totalWeeks={totalWeeks} />}
 
             <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Summary label="Item berbobot" value={fmtNum(leafIdx.length)} />
-              <Summary label="Total bobot" value={fmtPct(weightTotal)} />
+              <Summary label="Weighted items" value={fmtNum(leafIdx.length)} />
+              <Summary label="Total weight" value={fmtPct(weightTotal)} />
               <Summary
-                label="Nilai kontrak"
-                value={useEven ? 'belum diisi' : formatRupiah(pricing.contractValue)}
+                label="Contract value"
+                value={useEven ? 'not filled in' : formatRupiah(pricing.contractValue)}
               />
-              <Summary label="Durasi" value={`${totalWeeks} minggu`} />
+              <Summary label="Duration" value={`${totalWeeks} weeks`} />
             </dl>
 
             {error && (
@@ -562,10 +562,10 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t pt-4">
               <Button onClick={commit} disabled={pending || !leafIdx.length}>
-                {pending ? 'Mengunci…' : 'Kunci baseline & mulai proyek'}
+                {pending ? 'Locking…' : 'Lock the baseline & start the project'}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Sampai tombol ini ditekan, tidak ada yang tersimpan.
+                Nothing is saved until this button is pressed.
               </p>
             </div>
           </Section>
@@ -578,7 +578,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0}
         >
-          Kembali
+          Back
         </Button>
         {step < STEPS.length - 1 && (
           <Button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>

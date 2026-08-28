@@ -3,7 +3,7 @@ import { getCatalogs } from '@/lib/catalogs';
 import CatalogEditor from '@/components/settings/CatalogEditor';
 import SectionTabs, { PROJECT_TABS } from '@/components/layout/SectionTabs';
 
-export const metadata = { title: 'Pengaturan Proyek' };
+export const metadata = { title: 'Project Settings' };
 
 export default async function SettingsPage() {
   const db = await getDb();
@@ -14,11 +14,11 @@ export default async function SettingsPage() {
       <SectionTabs tabs={PROJECT_TABS} className="mb-5" />
 
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pengaturan Proyek</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Settings</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kategori di bawah ini milik proyek ini, bukan bawaan aplikasi. Proyek lain punya
-          daftarnya sendiri — inilah yang membuat app ini bisa dipakai perusahaan mana pun.
-          Perubahan berlaku untuk laporan berikutnya; laporan yang sudah terbit tidak diubah.
+          The lists below belong to this project, not to the app. Another project keeps its own —
+          which is what lets this app serve any company. Changes apply to the next report; reports
+          already issued are left alone.
         </p>
       </header>
 

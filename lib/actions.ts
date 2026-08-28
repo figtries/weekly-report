@@ -132,7 +132,7 @@ export async function saveWeekUpdatesAction(
 
 export async function setContractValueAction(value: number): Promise<ActionResult> {
   try {
-    if (!Number.isFinite(value) || value < 0) throw new Error('Nilai kontrak tidak valid');
+    if (!Number.isFinite(value) || value < 0) throw new Error('Contract value is not valid');
     await mutateDb((db) => {
       // 0 clears it — a project that never had a BOQ should be able to go back
       // to percent-only rather than carry a made-up number forward.
@@ -204,7 +204,7 @@ export async function saveCatalogAction(
 export async function switchProjectAction(projectId: string): Promise<ActionResult> {
   try {
     await mutateWorkspace((ws) => {
-      if (!ws.projects[projectId]) throw new Error('Proyek tidak ditemukan');
+      if (!ws.projects[projectId]) throw new Error('Project not found');
       ws.activeProjectId = projectId;
     });
     updateTag('db');
@@ -219,7 +219,7 @@ export async function createProjectAction(name: string): Promise<ActionResult & 
   try {
     const id = await mutateWorkspace((ws) => {
       const newId = newProjectId();
-      ws.projects[newId] = emptyDatabase(name.trim() || 'Proyek baru');
+      ws.projects[newId] = emptyDatabase(name.trim() || 'New project');
       ws.order.push(newId);
       // Switch immediately: creating a project and then having to select it is
       // a step that exists only because the data model made it convenient.
@@ -236,8 +236,8 @@ export async function createProjectAction(name: string): Promise<ActionResult & 
 export async function deleteProjectAction(projectId: string): Promise<ActionResult> {
   try {
     await mutateWorkspace((ws) => {
-      if (!ws.projects[projectId]) throw new Error('Proyek tidak ditemukan');
-      if (ws.order.length <= 1) throw new Error('Proyek terakhir tidak bisa dihapus');
+      if (!ws.projects[projectId]) throw new Error('Project not found');
+      if (ws.order.length <= 1) throw new Error('The last project cannot be deleted');
       delete ws.projects[projectId];
       ws.order = ws.order.filter((id) => id !== projectId);
       if (ws.activeProjectId === projectId) ws.activeProjectId = ws.order[0];

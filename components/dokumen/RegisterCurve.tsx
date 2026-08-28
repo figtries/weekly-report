@@ -54,10 +54,14 @@ export function RegisterCurve({
 
   const lastActual = actualPoints[actualPoints.length - 1];
   const gridValues = [100, 75, 50, 25, 0];
+  // The last week always gets a tick; a computed one that would land on top
+  // of it is dropped, because two labels sharing a pixel is worse than five.
   const step = Math.max(1, Math.ceil(series.length / 6));
+  const lastWeekNo = series[series.length - 1].weekNo;
   const tickWeeks = series
     .filter((_, i) => i % step === 0 || i === series.length - 1)
-    .map((p) => p.weekNo);
+    .map((p) => p.weekNo)
+    .filter((w, i, all) => w === lastWeekNo || x(lastWeekNo) - x(w) > 9 || i === all.length - 1);
 
   return (
     <figure className="w-full">
@@ -95,7 +99,7 @@ export function RegisterCurve({
             preserveAspectRatio="none"
             className="absolute inset-0 h-full w-full"
             role="img"
-            aria-label={`Kurva rencana dan aktual register, minggu ${first} sampai ${last}`}
+            aria-label={`Register plan and actual curve, week ${first} to ${last}`}
             initial={reduced ? false : { clipPath: 'inset(0 100% 0 0)' }}
             animate={{ clipPath: 'inset(0 0% 0 0)' }}
             transition={{ duration: 0.9, ease: EASE }}
@@ -165,19 +169,19 @@ export function RegisterCurve({
 
       <figcaption className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-0.5 w-6 rounded-full bg-blue-600" /> aktual
+          <span className="h-0.5 w-6 rounded-full bg-blue-600" /> actual
         </span>
         {planPath && (
           <span className="flex items-center gap-2">
             <span className="h-0 w-6 border-t-2 border-dashed border-muted-foreground/70" />
-            rencana
+            plan
           </span>
         )}
-        <span>keduanya dihitung dari tanggal di register, bukan diketik</span>
+        <span>both counted from the dates in the register, never typed</span>
         {undated > 0 && (
           <span className="basis-full text-amber-600">
-            {undated} pengiriman di register tidak bertanggal — ditempatkan pada minggu rencananya,
-            jadi bentuk kurvanya di titik itu perkiraan.
+            {undated} submissions in the register carry no date — placed on the week they were
+            promised for, so the curve’s shape there is an estimate.
           </span>
         )}
       </figcaption>

@@ -98,36 +98,36 @@ export default function ControlPanel({
         <Stat
           label="SPI"
           value={fmtNum(health.spi, 3)}
-          sub={health.spi < 1 ? '< 1,00 = terlambat' : '≥ 1,00 = sesuai'}
+          sub={health.spi < 1 ? '< 1.00 = behind' : '≥ 1.00 = on plan'}
           tone={health.spi < 1 ? 'bad' : 'good'}
           delay={80}
         />
         <Stat
           label="Earned value"
           value={health.earnedValue !== null ? formatRupiah(health.earnedValue) : '—'}
-          sub={health.earnedValue !== null ? 'nilai pekerjaan jadi' : 'isi nilai kontrak'}
+          sub={health.earnedValue !== null ? 'value of work done' : 'fill in the contract value'}
           delay={120}
         />
         <Stat
-          label="Tertunda"
+          label="Deferred"
           value={
             health.scheduleVarianceRp !== null
               ? formatRupiah(Math.abs(health.scheduleVarianceRp))
               : '—'
           }
-          sub={health.scheduleVarianceRp !== null ? 'selisih vs rencana' : 'isi nilai kontrak'}
+          sub={health.scheduleVarianceRp !== null ? 'gap against plan' : 'fill in the contract value'}
           tone={health.scheduleVarianceRp !== null && health.scheduleVarianceRp > 0 ? 'bad' : 'plain'}
           delay={160}
         />
         <Stat
-          label="Forecast selesai"
-          value={forecast !== null ? `Minggu ${Math.round(forecast)}` : '—'}
+          label="Forecast finish"
+          value={forecast !== null ? `Week ${Math.round(forecast)}` : '—'}
           sub={
             gap === null
-              ? 'laju belum cukup'
+              ? 'not enough velocity yet'
               : Math.abs(Math.round(gap)) === 0
-                ? 'tepat akhir kontrak'
-                : `${Math.abs(Math.round(gap))} minggu ${gap > 0 ? 'lebih cepat' : 'lebih lambat'}`
+                ? 'exactly on the contract end'
+                : `${Math.abs(Math.round(gap))} weeks ${gap > 0 ? 'earlier' : 'later'}`
           }
           tone={gap === null ? 'plain' : gap >= 0 ? 'good' : 'bad'}
           delay={200}
@@ -140,8 +140,8 @@ export default function ControlPanel({
       >
         <ContractValueField value={health.contractValue} />
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Bobot tiap item sudah tersimpan, jadi earned value tinggal perkalian — satu field ini yang
-          membuat laporan bisa bicara Rupiah, bukan cuma persen.
+          Every item already carries a weight, so earned value is one multiplication away — this
+          single field is what lets the report speak in money instead of only percentages.
         </p>
       </section>
 
@@ -150,24 +150,24 @@ export default function ControlPanel({
           className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-5"
           style={{ animationDelay: '280ms' }}
         >
-          <h2 className="text-sm font-semibold">Ringkasan minggu ini</h2>
+          <h2 className="text-sm font-semibold">This week in a paragraph</h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Ditulis app dari angka rollup — siap ditempel ke laporan.
+            Written by the app from the rolled-up figures — ready to paste into the report.
           </p>
           <p className="border-l-2 border-primary/60 pl-3 text-sm leading-relaxed text-foreground/90">
             {narrative}
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
             <div>
-              <dt className="text-muted-foreground">Laju 4 minggu terakhir</dt>
+              <dt className="text-muted-foreground">Velocity, last 4 weeks</dt>
               <dd className="mt-0.5 font-semibold tabular-nums">
-                {fmtPct(health.velocityPerWeek)} / minggu
+                {fmtPct(health.velocityPerWeek)} / week
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Laju yang dibutuhkan</dt>
+              <dt className="text-muted-foreground">Velocity required</dt>
               <dd className="mt-0.5 font-semibold tabular-nums">
-                {fmtPct(health.requiredVelocity)} / minggu
+                {fmtPct(health.requiredVelocity)} / week
               </dd>
             </div>
           </dl>
@@ -177,11 +177,11 @@ export default function ControlPanel({
           className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-5"
           style={{ animationDelay: '320ms' }}
         >
-          <h2 className="text-sm font-semibold">Pemeriksaan sebelum terbit</h2>
+          <h2 className="text-sm font-semibold">Checks before issuing</h2>
           <p className="mb-3 text-xs text-muted-foreground">
             {validation.errors > 0
-              ? `${validation.errors} temuan wajib diperbaiki`
-              : 'Tidak ada temuan yang menahan penerbitan'}
+              ? `${validation.errors} findings must be fixed`
+              : 'Nothing found that holds the report back'}
           </p>
 
           <ul className="divide-y rounded-md border">
@@ -207,7 +207,7 @@ export default function ControlPanel({
 
           {!validation.canIssue && (
             <p className="mt-3 rounded-md border border-dashed border-destructive/50 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-              Laporan minggu {health.week} ditahan sampai temuan di atas diperbaiki.
+              Week {health.week} stays unissued until the findings above are fixed.
             </p>
           )}
         </section>
@@ -225,10 +225,10 @@ export default function ControlPanel({
           className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-5"
           style={{ animationDelay: '340ms' }}
         >
-          <h2 className="text-sm font-semibold">Look-ahead {lookAhead.length} minggu</h2>
+          <h2 className="text-sm font-semibold">{lookAhead.length}-week look-ahead</h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Bukan sekadar target rencana — dinyatakan terhadap laju yang benar-benar tercapai
-            belakangan ini.
+            Not just the planned target — stated against the velocity actually being achieved
+            lately.
           </p>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {lookAhead.map((la) => {
@@ -236,24 +236,24 @@ export default function ControlPanel({
               return (
                 <div key={la.week} className="rounded-md border bg-muted/30 p-3">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold">Minggu {la.week}</span>
+                    <span className="text-sm font-semibold">Week {la.week}</span>
                     <span className="tabular-nums text-sm">{fmtPct(la.targetPct)}</span>
                   </div>
                   <div className="mt-1.5 text-xs text-muted-foreground">
-                    Harus naik{' '}
+                    Must rise{' '}
                     <strong className="tabular-nums text-foreground">
                       {fmtPct(Math.max(0, la.gapFromNow))}
                     </strong>{' '}
-                    dari posisi sekarang
+                    from where it stands now
                   </div>
                   <div
                     className={`mt-1 text-xs ${hard ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
                   >
                     {la.paceMultiple === null
-                      ? 'Laju sekarang belum bisa dijadikan pembanding'
+                      ? 'Current velocity is not a usable comparison yet'
                       : la.paceMultiple <= 0
-                        ? 'Sudah terpenuhi'
-                        : `Perlu ${fmtNum(la.paceMultiple, 1)}× laju rata-rata sekarang`}
+                        ? 'Already met'
+                        : `Needs ${fmtNum(la.paceMultiple, 1)}× the current average pace`}
                   </div>
                 </div>
               );
@@ -267,15 +267,15 @@ export default function ControlPanel({
         style={{ animationDelay: '360ms' }}
       >
         <div className="p-4 pb-3 sm:p-5 sm:pb-3">
-          <h2 className="text-sm font-semibold">Item penyeret</h2>
+          <h2 className="text-sm font-semibold">What is dragging</h2>
           <p className="text-xs text-muted-foreground">
-            Diurut berdasar deviasi weight factor, bukan persen — item bobot besar yang telat sedikit
-            lebih berbahaya daripada item bobot kecil yang telat total.
+            Sorted by weight-factor deviation, not by percentage — a heavy item running slightly
+            late is more dangerous than a light one that has not started.
           </p>
         </div>
         {laggards.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5 sm:pb-5">
-            Tidak ada item yang tertinggal dari rencana minggu ini.
+            Nothing is behind this week’s plan.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -283,11 +283,11 @@ export default function ControlPanel({
               <thead>
                 <tr className="border-y bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-2 text-left font-medium">Item</th>
-                  <th className="px-3 py-2 text-right font-medium">Bobot</th>
-                  <th className="px-3 py-2 text-right font-medium">Rencana</th>
-                  <th className="px-3 py-2 text-right font-medium">Aktual</th>
-                  <th className="px-3 py-2 text-right font-medium">Seret</th>
-                  <th className="px-4 py-2 text-right font-medium">Nilai</th>
+                  <th className="px-3 py-2 text-right font-medium">Weight</th>
+                  <th className="px-3 py-2 text-right font-medium">Plan</th>
+                  <th className="px-3 py-2 text-right font-medium">Actual</th>
+                  <th className="px-3 py-2 text-right font-medium">Drag</th>
+                  <th className="px-4 py-2 text-right font-medium">Value</th>
                 </tr>
               </thead>
               <tbody className="divide-y">

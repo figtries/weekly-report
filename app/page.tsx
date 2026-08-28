@@ -45,15 +45,15 @@ export default async function DashboardPage() {
   if (!rollup || !health) {
     return (
       <div className="mx-auto max-w-2xl animate-fade-in-up px-4 py-20 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Belum ada data progress</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">No progress data yet</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-          Susun WBS dan bobotnya dulu — setelah itu semua angka di halaman ini terisi sendiri.
+          Build the WBS and its weights first — every number on this page fills itself in after that.
         </p>
         <Link
           href="/setup"
           className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 active:scale-[0.97]"
         >
-          Mulai setup proyek <ArrowRight className="h-4 w-4" />
+          Set the project up <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     );
@@ -92,7 +92,7 @@ export default async function DashboardPage() {
         <div className="flex flex-wrap items-start justify-between gap-4 p-6 pb-2 sm:p-8 sm:pb-3">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
-              Minggu {health.week} dari {health.lastWeek} · sisa {weeksLeft} minggu
+              Week {health.week} of {health.lastWeek} · {weeksLeft} weeks left
             </p>
             <p className="mt-2 text-[3.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-6xl">
               {fmtPct(health.actualPct)}
@@ -100,11 +100,11 @@ export default async function DashboardPage() {
             <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/55">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-4 rounded bg-current" />
-                aktual
+                actual
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block w-4 border-t border-dashed border-current" />
-                rencana {fmtPct(health.planPct)}
+                plan {fmtPct(health.planPct)}
               </span>
               <span>SPI {fmtNum(health.spi, 3)}</span>
             </p>
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
               )}
             >
               {behind ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
-              {fmtPct(Math.abs(health.deviationPct))} {behind ? 'di belakang' : 'di depan'}
+              {fmtPct(Math.abs(health.deviationPct))} {behind ? 'behind' : 'ahead'}
             </span>
             {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
               <p className="mt-2 text-sm text-white/55">
@@ -141,7 +141,7 @@ export default async function DashboardPage() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Per kontrak
+                By contract
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -153,7 +153,7 @@ export default async function DashboardPage() {
         <Card className={cn(units.length > 1 ? '' : 'lg:col-span-2')}>
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Sebaran pekerjaan
+              Work spread
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -166,14 +166,14 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Tambahan tiap minggu
+              Added each week
             </CardTitle>
           </CardHeader>
           <CardContent>
             <VelocityBars rows={curve} />
             <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">
-              Laju <span className="font-medium text-foreground">{fmtPct(health.velocityPerWeek)}</span> per
-              minggu, rencana menuntut{' '}
+              Running at <span className="font-medium text-foreground">{fmtPct(health.velocityPerWeek)}</span> per
+              week; the plan demands{' '}
               <span className="font-medium text-foreground">{fmtPct(health.requiredVelocity)}</span>.
             </p>
           </CardContent>
@@ -182,16 +182,16 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Proyeksi
+              Forecast
             </CardTitle>
           </CardHeader>
           <CardContent>
             {health.forecastFinishWeek === null ? (
-              <p className="text-sm text-muted-foreground">Belum bisa diproyeksikan.</p>
+              <p className="text-sm text-muted-foreground">Not enough to forecast yet.</p>
             ) : (
               <>
                 <p className="text-3xl font-semibold tabular-nums">
-                  minggu {Math.round(health.forecastFinishWeek)}
+                  week {Math.round(health.forecastFinishWeek)}
                 </p>
                 {health.weeksAgainstContract !== null && (
                   <Badge
@@ -203,12 +203,12 @@ export default async function DashboardPage() {
                         : 'bg-destructive/10 text-destructive'
                     )}
                   >
-                    {Math.abs(Math.round(health.weeksAgainstContract))} minggu{' '}
-                    {health.weeksAgainstContract >= 0 ? 'lebih cepat' : 'lebih lambat'}
+                    {Math.abs(Math.round(health.weeksAgainstContract))} weeks{' '}
+                    {health.weeksAgainstContract >= 0 ? 'earlier' : 'later'}
                   </Badge>
                 )}
                 <p className="mt-3 text-xs text-muted-foreground">
-                  akhir kontrak minggu {health.lastWeek}
+                  contract ends in week {health.lastWeek}
                 </p>
               </>
             )}
@@ -222,18 +222,18 @@ export default async function DashboardPage() {
               that only splits into two columns when a card-action slot is present. */}
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Yang genting
+              What is urgent
             </CardTitle>
             {urgent.length > 0 && (
               <CardAction className="text-[11px] font-medium tabular-nums text-muted-foreground">
-                {urgent.length} temuan
+                {urgent.length} findings
               </CardAction>
             )}
           </CardHeader>
           <CardContent>
             {urgent.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Tidak ada temuan. Minggu ini aman untuk diterbitkan.
+                Nothing found. This week is safe to issue.
               </p>
             ) : (
               <ul className="space-y-2.5">
@@ -249,7 +249,7 @@ export default async function DashboardPage() {
                 ))}
                 {urgent.length > 4 && (
                   <li className="pl-[26px] text-sm text-muted-foreground">
-                    dan {urgent.length - 4} lainnya
+                    and {urgent.length - 4} more
                   </li>
                 )}
               </ul>
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
                 href={`/weekly/${week}/control`}
                 className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/15"
               >
-                Belum layak diterbitkan
+                Not ready to issue
                 <ArrowRight className="h-4 w-4" />
               </Link>
             )}
@@ -273,12 +273,12 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Penyeret terbesar
+              Biggest drags
             </CardTitle>
           </CardHeader>
           <CardContent>
             {laggards.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tidak ada item yang tertinggal.</p>
+              <p className="text-sm text-muted-foreground">Nothing is lagging.</p>
             ) : (
               <ul className="space-y-3">
                 {laggards.slice(0, 5).map((l) => (
@@ -304,7 +304,7 @@ export default async function DashboardPage() {
                         />
                       </div>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {l.wbsCode} · {fmtPct(l.actualPct)} dari {fmtPct(l.planPct)}
+                        {l.wbsCode} · {fmtPct(l.actualPct)} of {fmtPct(l.planPct)}
                       </span>
                     </div>
                   </li>
@@ -319,25 +319,25 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Yang harus terjadi
+              What has to happen
             </CardTitle>
             <CardAction>
               <Link
                 href={`/weekly/${week}/input`}
                 className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
               >
-                Perbarui <ArrowRight className="h-3.5 w-3.5" />
+                Update <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </CardAction>
           </CardHeader>
           <CardContent>
             {lookAhead.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tidak ada minggu berikutnya.</p>
+              <p className="text-sm text-muted-foreground">No week after this one.</p>
             ) : (
               <ul className="space-y-2.5">
                 {lookAhead.map((w) => (
                   <li key={w.week} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-muted-foreground">Minggu {w.week}</span>
+                    <span className="text-muted-foreground">Week {w.week}</span>
                     <span className="text-right">
                       <span className="font-medium tabular-nums">+{fmtPct(w.gapFromNow)}</span>
                       {w.paceMultiple !== null && (
@@ -349,7 +349,7 @@ export default async function DashboardPage() {
                               : 'text-muted-foreground'
                           )}
                         >
-                          {fmtNum(w.paceMultiple, 1)}× laju sekarang
+                          {fmtNum(w.paceMultiple, 1)}× the current pace
                         </span>
                       )}
                     </span>
@@ -364,7 +364,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Yang sebenarnya terjadi
+              What actually happened
             </CardTitle>
           </CardHeader>
           <CardContent>

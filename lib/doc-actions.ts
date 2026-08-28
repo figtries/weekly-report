@@ -33,31 +33,31 @@ import type { DocStage, RegisterKind } from './schema';
 export type ActionResult = { ok: true; changed: number } | { ok: false; error: string };
 
 function fail(err: unknown): { ok: false; error: string } {
-  return { ok: false, error: err instanceof Error ? err.message : 'Ada yang salah' };
+  return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function assertDate(value: string, what: string): string {
-  if (!ISO_DATE.test(value)) throw new Error(`${what} belum diisi`);
+  if (!ISO_DATE.test(value)) throw new Error(`${what} is required`);
   return value;
 }
 
 function assertStage(value: string): DocStage {
-  if (!STAGE_ORDER.includes(value as DocStage)) throw new Error(`Tahap "${value}" tidak dikenal`);
+  if (!STAGE_ORDER.includes(value as DocStage)) throw new Error(`Unknown stage "${value}"`);
   return value as DocStage;
 }
 
 /** Documents that really belong to this project and this register. */
 function ownedDocuments(projectId: string, register: RegisterKind, documentIds: string[]) {
-  if (documentIds.length === 0) throw new Error('Belum ada dokumen yang dipilih');
+  if (documentIds.length === 0) throw new Error('No documents selected');
   const rows = db.select().from(schema.documents)
     .where(and(
       eq(schema.documents.projectId, projectId),
       eq(schema.documents.register, register),
       inArray(schema.documents.id, documentIds),
     )).all();
-  if (rows.length !== documentIds.length) throw new Error('Ada dokumen yang tidak ditemukan di register ini');
+  if (rows.length !== documentIds.length) throw new Error('Some documents are not in this register');
   return rows;
 }
 
@@ -114,7 +114,7 @@ export interface SubmissionInput {
 export async function recordSubmission(input: SubmissionInput): Promise<ActionResult> {
   try {
     const stage = assertStage(input.stage);
-    const date = assertDate(input.date, 'Tanggal kirim');
+    const date = assertDate(input.date, 'Date sent');
     const documents = ownedDocuments(input.projectId, input.register, input.documentIds);
 
     const changed = db.transaction((tx) => {
@@ -173,9 +173,9 @@ export interface ReturnInput {
 export async function recordReturn(input: ReturnInput): Promise<ActionResult> {
   try {
     const stage = assertStage(input.stage);
-    const date = assertDate(input.date, 'Tanggal terima');
+    const date = assertDate(input.date, 'Date received');
     const code = input.returnCode.trim().toUpperCase();
-    if (!code) throw new Error('Return code belum diisi');
+    if (!code) throw new Error('Return code is required');
     const documents = ownedDocuments(input.projectId, input.register, input.documentIds);
 
     const changed = db.transaction((tx) => {
@@ -199,7 +199,7 @@ export async function recordReturn(input: ReturnInput): Promise<ActionResult> {
       return n;
     });
 
-    if (changed === 0) throw new Error('Tidak ada dokumen yang sudah dikirim di tahap itu');
+    if (changed === 0) throw new Error('None of those documents have been sent at that stage');
     refreshRegister();
     return { ok: true, changed };
   } catch (err) {
@@ -221,7 +221,7 @@ export interface NewDocumentInput {
 export async function addDocument(input: NewDocumentInput): Promise<ActionResult> {
   try {
     const title = input.title.trim();
-    if (!title) throw new Error('Judul dokumen belum diisi');
+    if (!title) throw new Error('Document title is required');
 
     const category = db.select().from(schema.docCategories)
       .where(and(
@@ -229,7 +229,7 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
       )).all()[0];
-    if (!category) throw new Error('Kategori tidak ditemukan');
+    if (!category) throw new Error('Category not found');
 
     const docNo = input.docNo.trim() || null;
     if (docNo) {
@@ -239,7 +239,7 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
           eq(schema.documents.register, input.register),
           eq(schema.documents.docNo, docNo),
         )).all()[0];
-      if (clash) throw new Error(`Nomor ${docNo} sudah dipakai`);
+      if (clash) throw new Error(`Number ${docNo} is already in use`);
     }
 
     // Adding a document changes every percentage in its category: the weight is
@@ -292,14 +292,14 @@ export async function setDisciplineLink(input: LinkInput): Promise<ActionResult>
     const leaves = db.select().from(schema.wbsNodes)
       .where(and(eq(schema.wbsNodes.parentId, input.nodeId), eq(schema.wbsNodes.isLeaf, true)))
       .all();
-    if (leaves.length === 0) throw new Error('Disiplin ini tidak punya leaf engineering');
+    if (leaves.length === 0) throw new Error('This discipline has no engineering leaves');
 
     const category = db.select().from(schema.docCategories)
       .where(and(
         eq(schema.docCategories.id, input.categoryId),
         eq(schema.docCategories.projectId, input.projectId),
       )).all()[0];
-    if (!category) throw new Error('Kategori register tidak ditemukan');
+    if (!category) throw new Error('Register category not found');
 
     let changed = 0;
     db.transaction((tx) => {

@@ -65,6 +65,9 @@ export interface RegisterSummary {
   thisWeek: number;
   asOfWeek: number;
   asOfDate: string;
+  /** The last week anything actually happened, whatever week is being viewed. */
+  evidenceWeek: number;
+  evidenceDate: string;
   series: WeekPoint[];
   untouched: number;
   returnedOpen: number;

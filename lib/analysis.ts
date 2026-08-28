@@ -192,8 +192,8 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       .join(', ');
     findings.push({
       level: 'error',
-      title: `${backwards.length} item progressnya mundur`,
-      detail: `${worst}${backwards.length > 3 ? `, dan ${backwards.length - 3} lainnya` : ''}. Pekerjaan fisik tidak bisa berkurang.`,
+      title: `${backwards.length} items went backwards`,
+      detail: `${worst}${backwards.length > 3 ? `, and ${backwards.length - 3} more` : ''}. Physical work cannot un-happen.`,
     });
   }
 
@@ -202,14 +202,14 @@ export function validateWeek(db: Database, week: number): ValidationResult {
   if (Math.abs(total - 100) > 0.01) {
     findings.push({
       level: 'error',
-      title: `Total bobot ${fmtPct(total)}, bukan 100%`,
-      detail: 'Selama bobot tidak menutup, setiap persen di laporan ini salah skala.',
+      title: `Weights total ${fmtPct(total)}, not 100%`,
+      detail: 'While the weights do not close, every percentage in this report is on the wrong scale.',
     });
   } else {
     findings.push({
       level: 'ok',
-      title: 'Total bobot 100,00%',
-      detail: `${leaves.length} item leaf terjumlah utuh, tidak ada bobot menggantung.`,
+      title: 'Weights total 100.00%',
+      detail: `All ${leaves.length} leaf items add up, with no weight left dangling.`,
     });
   }
 
@@ -219,8 +219,8 @@ export function validateWeek(db: Database, week: number): ValidationResult {
     if (gt.thisWeekProgressPct < -0.001) {
       findings.push({
         level: 'error',
-        title: 'Progress mingguan negatif',
-        detail: `Minggu ini tercatat ${fmtPct(gt.thisWeekProgressPct)} — laporan resmi tidak boleh mundur.`,
+        title: 'Weekly progress is negative',
+        detail: `This week records ${fmtPct(gt.thisWeekProgressPct)} — a signed report must not go backwards.`,
       });
     }
   }
@@ -231,9 +231,9 @@ export function validateWeek(db: Database, week: number): ValidationResult {
   if (roundedShare > 80) {
     findings.push({
       level: 'warn',
-      title: `${fmtPct(roundedShare)} nilai progress kelipatan 5`,
+      title: `${fmtPct(roundedShare)} of progress values are multiples of 5`,
       detail:
-        'Angka yang selalu bulat menandakan taksiran, bukan pengukuran. Item dengan kuantitas akan menghasilkan angka yang tidak bulat.',
+        'Numbers that are always round are estimates, not measurements. Items with a real quantity produce numbers that are not round.',
     });
   }
 
@@ -247,8 +247,8 @@ export function validateWeek(db: Database, week: number): ValidationResult {
   if (hoursLogged > 0 && stalled > 0) {
     findings.push({
       level: 'warn',
-      title: 'Ada jam kerja tapi sebagian item belum bergerak',
-      detail: `${fmtNum(hoursLogged)} jam kumulatif tercatat sementara ${stalled} item masih 0%.`,
+      title: 'Hours are being spent on items that have not moved',
+      detail: `${fmtNum(hoursLogged)} cumulative hours recorded while ${stalled} items sit at 0%.`,
     });
   }
 
@@ -259,16 +259,16 @@ export function validateWeek(db: Database, week: number): ValidationResult {
   if (quantified === 0) {
     findings.push({
       level: 'warn',
-      title: 'Tidak ada item berkuantitas',
+      title: 'No item carries a quantity',
       detail:
-        'Semua item bersatuan lumpsum, jadi tidak ada progress yang bisa diverifikasi ulang di lapangan.',
+        'Every item is lumpsum, so no progress figure can be checked again on site.',
     });
   }
   if (!db.project.contractValue) {
     findings.push({
       level: 'warn',
-      title: 'Nilai kontrak belum diisi',
-      detail: 'Tanpa itu laporan hanya bisa bicara persen — tidak bisa naik ke direksi.',
+      title: 'Contract value is not filled in',
+      detail: 'Without it the report can only speak in percentages — not in money a board will read.',
     });
   }
 
@@ -321,17 +321,17 @@ function statusSentence(health: ProjectHealth): string {
   const parts: string[] = [];
 
   parts.push(
-    `Progress minggu ${health.week} tercatat ${fmtPct(health.actualPct)} terhadap rencana ${fmtPct(
+    `Week ${health.week} records ${fmtPct(health.actualPct)} against a plan of ${fmtPct(
       health.planPct
-    )}, sehingga proyek berada ${fmtPct(Math.abs(health.deviationPct))} ${
-      behind ? 'di belakang' : 'di depan'
-    } jadwal (SPI ${fmtNum(health.spi, 3)})`
+    )}, which puts the project ${fmtPct(Math.abs(health.deviationPct))} ${
+      behind ? 'behind' : 'ahead of'
+    } schedule (SPI ${fmtNum(health.spi, 3)})`
   );
 
   if (health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0) {
     parts.push(
-      ` atau setara ${formatRupiah(Math.abs(health.scheduleVarianceRp))} pekerjaan yang ${
-        behind ? 'belum terealisasi' : 'terealisasi lebih awal'
+      ` — ${formatRupiah(Math.abs(health.scheduleVarianceRp))} of work ${
+        behind ? 'not yet delivered' : 'delivered early'
       }`
     );
   }
@@ -344,13 +344,13 @@ function laggardSentence(laggards: Laggard[]): string | null {
   const top = laggards[0];
   const parts: string[] = [];
   parts.push(
-    `Penyeret terbesar adalah ${top.deskripsi} (bobot ${fmtPct(top.bobot)}) yang baru mencapai ${fmtPct(
+    `The biggest drag is ${top.deskripsi} (weight ${fmtPct(top.bobot)}), at ${fmtPct(
       top.actualPct
-    )} dari rencana ${fmtPct(top.planPct)}`
+    )} against a plan of ${fmtPct(top.planPct)}`
   );
   if (laggards.length > 1) {
     const sum = laggards.reduce((s, l) => s + Math.abs(l.varianceWF), 0);
-    parts.push(`; ${laggards.length} item teratas menahan total ${fmtPct(sum)} progress proyek`);
+    parts.push(`; the top ${laggards.length} items hold back ${fmtPct(sum)} of project progress`);
   }
   parts.push('.');
   return parts.join('');
@@ -362,18 +362,18 @@ function forecastSentence(health: ProjectHealth): string {
     const early = health.weeksAgainstContract > 0;
     const gap = Math.abs(Math.round(health.weeksAgainstContract));
     parts.push(
-      `Kecepatan ${VELOCITY_WINDOW} minggu terakhir ${fmtPct(
+      `Velocity over the last ${VELOCITY_WINDOW} weeks is ${fmtPct(
         health.velocityPerWeek
-      )} per minggu, sementara sisa rencana menuntut ${fmtPct(health.requiredVelocity)} per minggu`
+      )} per week, while the remaining plan demands ${fmtPct(health.requiredVelocity)} per week`
     );
     parts.push(
-      `; bila laju ini terjaga, penyelesaian diproyeksikan pada minggu ${Math.round(
+      `; at this rate completion lands in week ${Math.round(
         health.forecastFinishWeek
-      )}${gap > 0 ? `, ${gap} minggu ${early ? 'lebih cepat' : 'lebih lambat'} dari akhir kontrak` : ', tepat pada akhir kontrak'}.`
+      )}${gap > 0 ? `, ${gap} weeks ${early ? 'earlier' : 'later'} than the contract end` : ', exactly on the contract end'}.`
     );
   } else {
     parts.push(
-      'Kecepatan empat minggu terakhir belum cukup untuk memproyeksikan tanggal penyelesaian.'
+      'The last four weeks do not give enough velocity to forecast a completion date.'
     );
   }
 
@@ -385,19 +385,22 @@ function forecastSentence(health: ProjectHealth): string {
 // ---------------------------------------------------------------------------
 
 export function fmtPct(n: number, digits = 2): string {
-  return `${n.toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+  return `${n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
 }
 
 export function fmtNum(n: number, digits = 0): string {
-  return n.toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 /** Rupiah at meeting scale: nobody reads twelve digits off a slide. */
 export function formatRupiah(n: number): string {
   const abs = Math.abs(n);
-  if (abs >= 1e12) return `Rp ${fmtNum(n / 1e12, 2)} T`;
-  if (abs >= 1e9) return `Rp ${fmtNum(n / 1e9, 2)} M`;
-  if (abs >= 1e6) return `Rp ${fmtNum(n / 1e6, 1)} jt`;
+  // Spelled out rather than abbreviated: Indonesian "M" means miliar while
+  // English "M" means million, and a Rupiah figure off by a thousand times is
+  // the kind of mistake a meeting does not catch.
+  if (abs >= 1e12) return `Rp ${fmtNum(n / 1e12, 2)} trillion`;
+  if (abs >= 1e9) return `Rp ${fmtNum(n / 1e9, 2)} billion`;
+  if (abs >= 1e6) return `Rp ${fmtNum(n / 1e6, 1)} million`;
   return `Rp ${fmtNum(n)}`;
 }
 
@@ -655,7 +658,7 @@ export function buildPortfolio(
         forecastFinishWeek: null,
         weeksAgainstContract: null,
         status: 'watch',
-        topRisk: 'Belum di-setup',
+        topRisk: 'Not set up yet',
         approvedThroughWeek: null,
         blockingFindings: 0,
       });

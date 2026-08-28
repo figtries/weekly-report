@@ -143,15 +143,15 @@ export default function FieldInput({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari item…"
+          placeholder="Search items…"
           className="h-9 min-w-48 flex-1 rounded-md border bg-background px-3 text-sm outline-none transition-colors duration-150 ease-ios focus:border-primary/60"
         />
         <div className="flex overflow-hidden rounded-md border">
           {(
             [
-              ['all', `Semua ${rows.length}`],
-              ['measurable', `Terukur ${rows.length - guessedCount}`],
-              ['guessed', `Taksiran ${guessedCount}`],
+              ['all', `All ${rows.length}`],
+              ['measurable', `Measured ${rows.length - guessedCount}`],
+              ['guessed', `Estimated ${guessedCount}`],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -169,20 +169,19 @@ export default function FieldInput({
 
       {guessedCount > 0 && filter !== 'guessed' && (
         <p className="rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-          {guessedCount} item masih diisi dengan mengetik persen. Ubah ke Kuantitas atau Milestone
-          lewat menu di kolom terakhir — angkanya jadi bisa diperiksa ulang di lapangan.
+          {guessedCount} items are still filled in by typing a percentage. Switch them to Quantity
+          or Milestone from the last column — the figure then becomes checkable on site.
         </p>
       )}
 
       {askQty && (
         <div className="animate-fade-in-up rounded-lg border border-primary/40 bg-primary/5 p-3.5">
           <div className="text-sm font-medium">
-            Berapa total pekerjaan “{askQty.item.deskripsi}”?
+            What is the total quantity for “{askQty.item.deskripsi}”?
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Item ini tercatat sebagai lumpsum, jadi belum punya kuantitas yang bisa dihitung. Isi
-            total dan satuannya — progress yang sudah dilaporkan akan dipindahkan ke satuan baru,
-            tidak hilang.
+            This item is recorded as lumpsum, so it has no quantity to count. Give it a total and
+            a unit — the progress already reported is carried across into the new unit, not lost.
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <input
@@ -198,7 +197,7 @@ export default function FieldInput({
               value={askQty.unit}
               onChange={(e) => setAskQty({ ...askQty, unit: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && confirmQty()}
-              placeholder="m, m3, kg, titik…"
+              placeholder="m, m3, kg, points…"
               className="h-8 w-36 rounded-md border bg-background px-2 text-sm outline-none transition-colors duration-150 ease-ios focus:border-primary/60"
             />
             <Button
@@ -206,10 +205,10 @@ export default function FieldInput({
               onClick={confirmQty}
               disabled={pending || !askQty.total.trim() || !askQty.unit.trim()}
             >
-              Ubah ke kuantitas
+              Switch to quantity
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setAskQty(null)} disabled={pending}>
-              Batal
+              Cancel
             </Button>
           </div>
         </div>
@@ -220,18 +219,18 @@ export default function FieldInput({
           <thead>
             <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
               <th className="px-3 py-2 text-left font-medium">Item</th>
-              <th className="px-3 py-2 text-left font-medium">Yang diselesaikan</th>
+              <th className="px-3 py-2 text-left font-medium">What was completed</th>
               <th className="px-3 py-2 text-right font-medium">Progress</th>
-              <th className="px-3 py-2 text-right font-medium">Rencana</th>
-              <th className="px-3 py-2 text-left font-medium">Bukti</th>
-              <th className="px-3 py-2 text-right font-medium">Cara ukur</th>
+              <th className="px-3 py-2 text-right font-medium">Plan</th>
+              <th className="px-3 py-2 text-left font-medium">Evidence</th>
+              <th className="px-3 py-2 text-right font-medium">Method</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {visible.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
-                  Tidak ada item yang cocok.
+                  Nothing matches.
                 </td>
               </tr>
             )}
@@ -252,7 +251,7 @@ export default function FieldInput({
                     <div className="text-[11px] text-muted-foreground">
                       <span className="tabular-nums">{r.item.wbsCode}</span>
                       {r.ancestors && <span> · {r.ancestors}</span>}
-                      <span> · bobot {fmtPct(r.item.bobot, 3)}</span>
+                      <span> · weight {fmtPct(r.item.bobot, 3)}</span>
                     </div>
                   </td>
 
@@ -275,7 +274,7 @@ export default function FieldInput({
                           className="h-8 w-24 rounded-md border bg-background px-2 text-right text-sm tabular-nums outline-none transition-colors duration-150 ease-ios focus:border-primary/60 disabled:opacity-50"
                         />
                         <span className="whitespace-nowrap text-xs text-muted-foreground">
-                          dari {fmtNum(totalQty(r.item))} {r.item.satuan ?? ''}
+                          of {fmtNum(totalQty(r.item))} {r.item.satuan ?? ''}
                         </span>
                       </div>
                     )}
@@ -317,7 +316,7 @@ export default function FieldInput({
 
                     {m === 'lumpsum' && (
                       <span className="text-xs italic text-muted-foreground">
-                        Diisi di Data Overall — tanpa bukti
+                        Entered in Data Overall — no evidence
                       </span>
                     )}
                   </td>
@@ -390,10 +389,10 @@ export default function FieldInput({
             <strong className="tabular-nums">{dirtyIds.length}</strong> item diubah
           </span>
           <Button size="sm" onClick={save} disabled={pending} className="ml-auto">
-            {pending ? 'Menyimpan…' : 'Simpan'}
+            {pending ? 'Saving…' : 'Save'}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setDrafts({})} disabled={pending}>
-            Batal
+            Cancel
           </Button>
         </div>
       )}

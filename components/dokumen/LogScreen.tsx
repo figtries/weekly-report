@@ -25,20 +25,20 @@ export interface TaggedEvent extends LogEvent {
  */
 
 const FILTERS = [
-  { id: 'all', label: 'Semua' },
+  { id: 'all', label: 'All' },
   { id: 'edl', label: 'EDL' },
   { id: 'vdrl', label: 'VDRL' },
-  { id: 'return', label: 'Hanya balikan' },
+  { id: 'return', label: 'Returns only' },
 ] as const;
 
 type FilterId = (typeof FILTERS)[number]['id'];
 
-const hari = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', {
+const dayLabel = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
   });
 
-export function LogScreen({ events }: { events: TaggedEvent[] }) {
+export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: number }) {
   const reduced = useReducedMotion();
   const [filter, setFilter] = useState<FilterId>('all');
 
@@ -84,7 +84,7 @@ export function LogScreen({ events }: { events: TaggedEvent[] }) {
           </button>
         ))}
         <span className="flex h-11 items-center text-xs text-muted-foreground">
-          {shown.length} kejadian
+          {shown.length} events up to the end of week {weekNo}
         </span>
       </div>
 
@@ -101,7 +101,7 @@ export function LogScreen({ events }: { events: TaggedEvent[] }) {
               className="flex flex-col gap-2"
             >
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {hari(date)}
+                {dayLabel(date)}
               </h2>
 
               {list.map((e, i) => (
@@ -123,7 +123,7 @@ export function LogScreen({ events }: { events: TaggedEvent[] }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium">
-                          {e.kind === 'submit' ? 'Dikirim' : 'Kembali'}
+                          {e.kind === 'submit' ? 'Sent' : 'Returned'}
                         </span>
                         <Badge variant="secondary" className="font-normal">{STAGE_LABEL[e.stage]}</Badge>
                         {e.returnCode && (
@@ -138,13 +138,13 @@ export function LogScreen({ events }: { events: TaggedEvent[] }) {
                           <span className="font-mono text-[0.7rem] text-muted-foreground">{e.transmittal}</span>
                         )}
                         {!e.dated && (
-                          <span className="text-[0.7rem] text-amber-600">tanggal tidak dicatat</span>
+                          <span className="text-[0.7rem] text-amber-600">no date recorded</span>
                         )}
                         <Badge variant="outline" className="font-normal uppercase">{e.register}</Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-sm">{e.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {e.docNo ? <span className="font-mono">{e.docNo}</span> : 'belum bernomor'} · {e.categoryName}
+                        {e.docNo ? <span className="font-mono">{e.docNo}</span> : 'unnumbered'} · {e.categoryName}
                       </p>
                     </div>
                   </CardContent>
@@ -156,7 +156,7 @@ export function LogScreen({ events }: { events: TaggedEvent[] }) {
 
         {days.length === 0 && (
           <p className="py-16 text-center text-sm text-muted-foreground">
-            Belum ada kejadian yang cocok dengan penyaring ini.
+            No events match this filter.
           </p>
         )}
       </div>

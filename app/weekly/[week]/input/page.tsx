@@ -44,12 +44,12 @@ export default async function FieldInputPage({ params }: { params: Promise<{ wee
     <div className="animate-fade-in-up px-3 py-4 sm:p-6 lg:p-8 print:hidden">
       <header className="mb-5 sm:mb-6">
         <h1 className="mb-1 text-2xl font-semibold tracking-tight sm:mb-2 sm:text-3xl">
-          Input Lapangan
+          Field Input
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
-          <span className="font-medium text-foreground">Minggu {week}</span> · Lapor yang selesai,
-          bukan tebak persennya. {measurable} dari {rows.length} item sudah bisa diukur — setiap
-          angka di sini punya bukti yang bisa dicek ulang di lapangan.
+          <span className="font-medium text-foreground">Week {week}</span> · Report what was
+          finished, do not guess a percentage. {measurable} of {rows.length} items are measurable —
+          every figure here has evidence that can be checked again on site.
         </p>
       </header>
 

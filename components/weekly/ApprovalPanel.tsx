@@ -60,25 +60,25 @@ export default function ApprovalPanel({
       className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-5"
       style={{ animationDelay: '300ms' }}
     >
-      <h2 className="text-sm font-semibold">Persetujuan minggu {week}</h2>
+      <h2 className="text-sm font-semibold">Week {week} approval</h2>
       <p className="mb-3 text-xs text-muted-foreground">
-        Gerbang di samping memutuskan angkanya <em>boleh</em> terbit. Ini mencatat bahwa ada orang
-        yang berdiri di belakangnya.
+        The gate beside this decides whether the figure <em>may</em> be issued. This records that
+        a person stands behind it.
       </p>
 
       {approval ? (
         <div className="space-y-3">
           <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
             <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              Disetujui oleh {approval.by}
+              Approved by {approval.by}
             </div>
             <div className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-400/80">
               {approval.role} ·{' '}
-              {new Date(approval.at).toLocaleString('id-ID', {
+              {new Date(approval.at).toLocaleString('en-GB', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               })}{' '}
-              · pada {fmtPct(approval.approvedPct)}
+              · at {fmtPct(approval.approvedPct)}
             </div>
             {approval.note && (
               <p className="mt-1.5 text-xs italic text-emerald-700/80 dark:text-emerald-400/80">
@@ -89,19 +89,19 @@ export default function ApprovalPanel({
 
           {drifted && (
             <p className="rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              Angka berubah <strong className="tabular-nums">{fmtPct(Math.abs(drift))}</strong>{' '}
-              {drift > 0 ? 'naik' : 'turun'} sejak disetujui — persetujuan ini menyangkut{' '}
-              {fmtPct(approval.approvedPct)}, bukan {fmtPct(currentPct)}. Setujui ulang bila
-              perubahannya memang dimaksudkan.
+              The figure moved <strong className="tabular-nums">{fmtPct(Math.abs(drift))}</strong>{' '}
+              {drift > 0 ? 'up' : 'down'} since it was approved — this approval covers{' '}
+              {fmtPct(approval.approvedPct)}, not {fmtPct(currentPct)}. Approve again if the change
+              was intended.
             </p>
           )}
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={approve} disabled={pending || !by.trim()}>
-              Setujui ulang pada {fmtPct(currentPct)}
+              Approve again at {fmtPct(currentPct)}
             </Button>
             <Button size="sm" variant="ghost" onClick={revoke} disabled={pending}>
-              Cabut
+              Revoke
             </Button>
           </div>
         </div>
@@ -109,32 +109,32 @@ export default function ApprovalPanel({
         <div className="space-y-2.5">
           {blocked && (
             <p className="rounded-md border border-dashed border-destructive/50 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              Masih ada temuan yang menahan penerbitan. Kamu tetap bisa menyetujui, tapi
-              persetujuan itu akan tercatat di atas data yang belum bersih.
+              Findings are still holding the report back. You can approve anyway, but the
+              approval will be recorded on top of data that is not clean.
             </p>
           )}
           <div className="grid gap-2 sm:grid-cols-2">
             <Input
               value={by}
               onChange={(e) => setBy(e.target.value)}
-              placeholder="Nama penyetuju"
+              placeholder="Approver name"
               className="text-sm"
             />
             <Input
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Jabatan"
+              placeholder="Role"
               className="text-sm"
             />
           </div>
           <Input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Catatan (opsional)"
+            placeholder="Note (optional)"
             className="text-sm"
           />
           <Button size="sm" onClick={approve} disabled={pending || !by.trim()}>
-            {pending ? 'Menyimpan…' : `Setujui pada ${fmtPct(currentPct)}`}
+            {pending ? 'Saving…' : `Approve at ${fmtPct(currentPct)}`}
           </Button>
         </div>
       )}

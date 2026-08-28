@@ -234,10 +234,22 @@ Supaya kurva rencana bisa ada, importer sekarang menulis baris tahap untuk tahap
 yang **baru dijanjikan** juga, dan kolom baru `doc_stages.submitted` yang
 memisahkan janji dari kenyataan — keberadaan baris tidak lagi jadi bukti apa pun.
 
-**Semuanya diukur per tanggal register itu sendiri**, bukan per hari ini. Berkas
-ini `R2, 15 Januari 2026`; menilainya dengan kalender Agustus akan melaporkan
-semua dokumen terlambat berbulan-bulan dan tidak mengatakan apa pun tentang
-pekerjaannya.
+**Register dibaca per minggu, sama seperti laporan mingguan.** Minggunya ada di
+alamat (`/dokumen/43/summary`) dan dipilih dengan kontrol yang sama persis
+(`components/weekly/WeekSelect.tsx`, sekarang menerima `basePath`). Semua angka
+di kelima layar dihitung sebagaimana keadaannya di akhir minggu itu, dan dialog
+pencatatan memulai tanggalnya di minggu yang sedang dilaporkan. Yang tidak ikut
+bergeser: pengiriman tanpa tanggal tetap ditambatkan ke minggu terakhir register
+benar-benar bergerak — kalau tidak, melihat minggu 43 akan menyeret 42
+pengiriman itu ikut maju dan mengosongkan minggu-minggu sebelumnya. Layar juga
+menyebutkan bila register belum bergerak sejak minggu itu.
+
+**Bahasa aplikasi Inggris, laporan cetak tidak.** Dikunci 28 Agustus 2026:
+seluruh layar, label, tombol, pesan kesalahan dan format angka aplikasi memakai
+Inggris (titik desimal, tanggal `en-GB`). Yang tetap: apa pun yang datang dari
+data — deskripsi WBS, judul dokumen, nama kategori, katalog milik proyek — dan
+seluruh `/print/*`, karena itu dokumen tanda tangan milik klien dalam formatnya
+sendiri.
 
 **Jalur menulisnya** ada di `lib/doc-actions.ts`: catat pengiriman (satu
 transmittal, banyak dokumen sekaligus — `T.001` di Gundih memuat 34 dokumen),

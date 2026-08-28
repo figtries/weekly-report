@@ -54,7 +54,7 @@ export function Reveal({
  */
 export function CountUp({ value, suffix = '%', decimals = 2 }: { value: number; suffix?: string; decimals?: number }) {
   const reduced = useReducedMotion();
-  const text = `${value.toFixed(decimals).replace('.', ',')}${suffix}`;
+  const text = `${value.toFixed(decimals)}${suffix}`;
 
   if (reduced) return <span className="tabular-nums">{text}</span>;
 

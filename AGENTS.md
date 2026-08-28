@@ -266,7 +266,7 @@ FASE 3 — laporan mingguan
 13 PDF format Pertamina
 FASE 4 — yang mengisi laporan
 14 Form Harian → draft ringkasan mingguan
-15 Modul Document Control  selesai   EDL + VDRL · 5 layar · jalur menulis · sakelar tautan
+15 Modul Document Control  selesai   EDL + VDRL · 5 layar · per minggu · jalur menulis · tautan
 FASE 5 — membuat proyek dari nol
 16 Project management
 17 Planner (WBS · bobot dari BOQ · Gantt lihat-saja)
@@ -346,6 +346,15 @@ stroke-dasharray, so it silently shreds a line that already has
 scaled to fit its container scales its `<text>` too — at 390px the axis labels
 came out about five pixels tall, so chart labels are HTML positioned over the
 plot, never `<text>`.
+
+**The app is in English; the printed report is not.** Every screen, label,
+button, error message and number format in the app reads in English — decimal
+POINT, `en-GB` dates, `fmtPct`/`fmtNum` in `lib/analysis.ts`. What stays as it
+is: anything that comes from the data (WBS descriptions, document titles,
+category names, catalog rows a project typed for itself), and everything under
+`/print/*`, which is the client's own signed deliverable in the client's own
+format. `components/print/*` formats its numbers inline with `en-US` and never
+imports the app's formatters, which is what keeps the two apart.
 
 **Verifying UI work.** The Browser pane never composites in this environment, so
 `computer{action:"screenshot"}` always fails. Use `scripts/shoot.mjs <url>

@@ -53,7 +53,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
   }
 
   function remove(id: string, label: string) {
-    if (!confirm(`Hapus proyek “${label}” beserta seluruh datanya? Tindakan ini tidak bisa dibatalkan.`)) return;
+    if (!confirm(`Delete project “${label}” and all of its data? This cannot be undone.`)) return;
     setError(null);
     startTransition(async () => {
       const res = await deleteProjectAction(id);
@@ -69,7 +69,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
           value={active?.id ?? ''}
           onChange={(e) => switchTo(e.target.value)}
           disabled={pending}
-          aria-label="Pilih proyek"
+          aria-label="Select project"
           className="h-8 min-w-0 flex-1 truncate rounded-md border bg-background px-2 text-xs outline-none transition-colors duration-150 ease-ios focus:border-primary/60 disabled:opacity-50"
         >
           {projects.map((p) => (
@@ -81,8 +81,8 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
         <button
           onClick={() => setAdding((v) => !v)}
           disabled={pending}
-          aria-label="Tambah proyek"
-          title="Tambah proyek"
+          aria-label="Add project"
+          title="Add project"
           className="flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors duration-150 ease-ios hover:bg-muted hover:text-foreground disabled:opacity-50"
         >
           +
@@ -96,7 +96,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()}
-            placeholder="Nama proyek baru"
+            placeholder="New project name"
             className="h-8 text-xs"
           />
           <div className="flex gap-1.5">
@@ -110,7 +110,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
               onClick={() => setAdding(false)}
               disabled={pending}
             >
-              Batal
+              Cancel
             </Button>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectSummary
           disabled={pending}
           className="text-[11px] text-muted-foreground underline-offset-2 transition-colors duration-150 ease-ios hover:text-destructive hover:underline disabled:opacity-50"
         >
-          Hapus proyek ini
+          Delete this project
         </button>
       )}
 

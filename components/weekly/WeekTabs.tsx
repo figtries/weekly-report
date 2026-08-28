@@ -24,15 +24,15 @@ import WeekSelect from './WeekSelect';
  */
 const GROUPS = {
   progress: [
-    { key: 'input', label: 'Input Lapangan', short: 'Input', printable: false },
+    { key: 'input', label: 'Field Input', short: 'Input', printable: false },
     { key: 'overall', label: 'Data Overall', short: 'Data Overall', printable: false },
-    { key: 'control', label: 'Panel Kendali', short: 'Kendali', printable: false },
+    { key: 'control', label: 'Control Panel', short: 'Control', printable: false },
   ],
   laporan: [
-    { key: 'summary', label: 'Overall Summary', short: 'Ringkasan', printable: true },
+    { key: 'summary', label: 'Overall Summary', short: 'Summary', printable: true },
     { key: 'detail', label: 'Detail Progress', short: 'Detail', printable: true },
-    { key: 'scurve', label: 'S-Curve', short: 'Kurva S', printable: true },
-    { key: 'documentation', label: 'Documentation', short: 'Foto', printable: true },
+    { key: 'scurve', label: 'S-Curve', short: 'S-Curve', printable: true },
+    { key: 'documentation', label: 'Documentation', short: 'Photos', printable: true },
   ],
 } as const;
 

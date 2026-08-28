@@ -8,11 +8,14 @@ export default function WeekSelect({
   selectedWeek,
   projectCurrentWeek,
   activeTab,
+  basePath = '/weekly',
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
   activeTab: string;
+  /** Document Control drives the same control over its own routes. */
+  basePath?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,7 +51,7 @@ export default function WeekSelect({
     close();
     if (w !== selectedWeek) {
       setPickedWeek(w);
-      startTransition(() => router.push(`/weekly/${w}/${activeTab}`));
+      startTransition(() => router.push(`${basePath}/${w}/${activeTab}`));
     }
   }
 
@@ -64,7 +67,7 @@ export default function WeekSelect({
     ]);
     const warm = () =>
       targets.forEach((w) => {
-        if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+        if (w && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
       });
     // Defer to idle time so warming never competes with rendering this page.
     // (Safari has no requestIdleCallback — fall back to a short timeout.)
@@ -74,13 +77,13 @@ export default function WeekSelect({
     }
     const id = window.setTimeout(warm, 300);
     return () => window.clearTimeout(id);
-  }, [weeks, selectedWeek, projectCurrentWeek, activeTab, router]);
+  }, [weeks, selectedWeek, projectCurrentWeek, activeTab, basePath, router]);
 
   useEffect(() => {
     if (!open) return;
     const w = weeks[activeIdx];
-    if (w != null && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
-  }, [open, activeIdx, weeks, selectedWeek, activeTab, router]);
+    if (w != null && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
+  }, [open, activeIdx, weeks, selectedWeek, activeTab, basePath, router]);
 
   // Prefetch every week row the moment it becomes visible in the open panel
   // (including while scrolling), so whichever week the user can see and click
@@ -92,7 +95,7 @@ export default function WeekSelect({
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const w = Number((entry.target as HTMLElement).dataset.week);
-          if (w && w !== selectedWeek) router.prefetch(`/weekly/${w}/${activeTab}`);
+          if (w && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
           observer.unobserve(entry.target);
         }
       },
@@ -100,7 +103,7 @@ export default function WeekSelect({
     );
     listRef.current.querySelectorAll('[data-week]').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [open, weeks, selectedWeek, activeTab, router]);
+  }, [open, weeks, selectedWeek, activeTab, basePath, router]);
 
   // Close on outside click.
   useEffect(() => {

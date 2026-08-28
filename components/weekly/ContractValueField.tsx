@@ -43,7 +43,7 @@ export default function ContractValueField({ value }: { value: number | null }) 
           htmlFor="contract-value"
           className="mb-1.5 block text-xs font-medium tracking-wide text-muted-foreground"
         >
-          Nilai kontrak
+          Contract value
         </label>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Rp</span>
@@ -61,7 +61,7 @@ export default function ContractValueField({ value }: { value: number | null }) 
         </div>
       </div>
       <Button size="sm" onClick={save} disabled={!dirty || pending}>
-        {pending ? 'Menyimpan…' : 'Simpan'}
+        {pending ? 'Saving…' : 'Save'}
       </Button>
       {error && <p className="w-full text-xs text-destructive">{error}</p>}
     </div>

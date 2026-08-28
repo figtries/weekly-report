@@ -2,9 +2,9 @@
 export function EmptyRegister({ script, name }: { script: string; name: string }) {
   return (
     <div className="mx-auto max-w-xl px-4 py-24 text-center">
-      <h2 className="text-xl font-semibold tracking-tight">Register ini masih kosong</h2>
+      <h2 className="text-xl font-semibold tracking-tight">This register is empty</h2>
       <p className="mt-3 text-sm text-muted-foreground">
-        Impor {name}-nya dulu, lalu muat ulang halaman ini.
+        Import the {name} first, then reload this page.
       </p>
       <pre className="mt-6 overflow-x-auto rounded-xl bg-gray-900 px-4 py-3 text-left text-xs text-gray-100">
         {script}

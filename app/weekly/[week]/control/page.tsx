@@ -23,11 +23,11 @@ export default async function ControlPage({ params }: { params: Promise<{ week: 
     <div className="animate-fade-in-up px-3 py-4 sm:p-6 lg:p-8 print:hidden">
       <header className="mb-5 sm:mb-7">
         <h1 className="mb-1 text-2xl font-semibold tracking-tight sm:mb-2 sm:text-3xl">
-          Panel Kendali
+          Control Panel
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          <span className="font-medium text-foreground">Minggu {week}</span> · Semua angka di bawah
-          dihitung dari data yang sudah ada — tidak ada isian tambahan.
+          <span className="font-medium text-foreground">Week {week}</span> · Every figure below is
+          computed from data already entered — nothing extra to fill in.
         </p>
       </header>
 

@@ -13,29 +13,29 @@ export default async function KlaimPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Delay Register</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Setiap jam non-efektif yang pernah dicatat, dijumlahkan lintas minggu jadi bahan klaim
-          perpanjangan waktu. Tidak ada isian baru — semuanya sudah kamu kumpulkan tiap hari,
-          hanya belum pernah ada yang menjumlahkannya.
+          Every non-effective hour ever recorded, added up across the weeks into material for an
+          extension-of-time claim. Nothing new to fill in — it was all collected daily already,
+          only nobody had ever totalled it.
         </p>
       </header>
 
       <dl className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          { l: 'Total jam hilang', v: fmtNum(reg.totalHours), s: 'seluruh sebab' },
+          { l: 'Hours lost', v: fmtNum(reg.totalHours), s: 'all causes' },
           {
-            l: 'Bisa diklaim',
+            l: 'Claimable',
             v: fmtNum(reg.claimableHours),
-            s: `${fmtNum(reg.claimableDays, 1)} hari kerja`,
+            s: `${fmtNum(reg.claimableDays, 1)} working days`,
           },
           {
-            l: 'Hari terekam',
+            l: 'Days recorded',
             v: fmtNum(reg.daysCovered),
-            s: `${fmtNum(reg.daysWithPhotos)} berfoto`,
+            s: `${fmtNum(reg.daysWithPhotos)} with photos`,
           },
           {
-            l: 'Jam kerja/hari',
+            l: 'Working hours/day',
             v: fmtNum(reg.workingHoursPerDay, 1),
-            s: 'rata-rata dari laporan',
+            s: 'average across the reports',
           },
         ].map((s, i) => (
           <div
@@ -52,26 +52,26 @@ export default async function KlaimPage() {
 
       <section className="animate-fade-in-up overflow-hidden rounded-lg border bg-card">
         <div className="border-b p-4 pb-3">
-          <h2 className="text-sm font-semibold">Rekap per sebab</h2>
+          <h2 className="text-sm font-semibold">By cause</h2>
           <p className="text-xs text-muted-foreground">
-            Sebab mana yang bisa diklaim diatur di{' '}
-            <span className="font-medium text-foreground">Pengaturan Proyek</span> — bukan
-            ditentukan aplikasi.
+            Which causes count as claimable is set in{' '}
+            <span className="font-medium text-foreground">Project Settings</span> — the app does
+            not decide it.
           </p>
         </div>
         {reg.rows.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">
-            Belum ada jam non-efektif yang tercatat. Begitu lapangan mulai mengisi, tabel ini
-            terisi sendiri tanpa kerja tambahan.
+            No non-effective hours recorded yet. As soon as the field crew starts filling them
+            in, this table fills itself with no extra work.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-sm">
               <thead>
                 <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-2 text-left font-medium">Sebab</th>
-                  <th className="px-3 py-2 text-right font-medium">Jam</th>
-                  <th className="px-3 py-2 text-right font-medium">Hari setara</th>
+                  <th className="px-4 py-2 text-left font-medium">Cause</th>
+                  <th className="px-3 py-2 text-right font-medium">Hours</th>
+                  <th className="px-3 py-2 text-right font-medium">Equivalent days</th>
                   <th className="px-3 py-2 text-right font-medium">Kejadian</th>
                   <th className="px-3 py-2 text-left font-medium">Rentang</th>
                   <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -101,7 +101,7 @@ export default async function KlaimPage() {
                             : 'bg-muted text-muted-foreground'
                         }`}
                       >
-                        {r.claimable ? 'Bisa diklaim' : 'Tidak diklaim'}
+                        {r.claimable ? 'Claimable' : 'Not claimable'}
                       </span>
                     </td>
                   </tr>
@@ -115,13 +115,13 @@ export default async function KlaimPage() {
       {reg.totalPhotos > 0 && (
         <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
           {[
-            { l: "Foto tersimpan", v: fmtNum(reg.totalPhotos), s: "seluruh laporan harian" },
+            { l: "Photos stored", v: fmtNum(reg.totalPhotos), s: "across every daily report" },
             {
-              l: "Berstempel waktu",
+              l: "Time-stamped",
               v: fmtNum(reg.verifiedPhotos),
-              s: reg.verifiedPhotos === reg.totalPhotos ? "semua bisa dipertanggungjawabkan" : "sisanya bergantung pengunggah",
+              s: reg.verifiedPhotos === reg.totalPhotos ? "every one can be vouched for" : "the rest rest on whoever uploaded them",
             },
-            { l: "Ber-koordinat GPS", v: fmtNum(reg.photosWithGps), s: "lokasi melekat di file" },
+            { l: "With GPS", v: fmtNum(reg.photosWithGps), s: "location baked into the file" },
           ].map((s2) => (
             <div key={s2.l} className="rounded-lg border bg-card p-3">
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{s2.l}</div>
@@ -134,13 +134,13 @@ export default async function KlaimPage() {
 
       {!reg.photosVerifiable && (
         <p className="mt-4 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
-          <strong>Belum semua foto bisa berbicara sendiri.</strong>{' '}
+          <strong>Not every photo can speak for itself yet.</strong>{' '}
           {reg.totalPhotos === 0
-            ? 'Belum ada foto tersimpan.'
-            : `${reg.totalPhotos - reg.verifiedPhotos} dari ${reg.totalPhotos} foto tidak membawa stempel waktu dari kameranya sendiri — tanggalnya bergantung pada siapa yang mengunggah.`}{' '}
-          Foto yang diunggah langsung dari kamera atau galeri ponsel biasanya membawanya; yang
-          lewat WhatsApp hampir selalu sudah dibersihkan. Untuk klaim yang kuat, minta lapangan
-          mengunggah file aslinya.
+            ? 'No photos stored yet.'
+            : `${reg.totalPhotos - reg.verifiedPhotos} of ${reg.totalPhotos} photos carry no timestamp from the camera itself — their date rests on whoever uploaded them.`}{' '}
+          A photo uploaded straight from a camera or phone gallery usually carries one; one that
+          travelled through WhatsApp almost never does. For a claim that holds, ask the field crew
+          to upload the original file.
         </p>
       )}
     </div>

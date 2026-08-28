@@ -25,10 +25,10 @@ import type { ProjectSummary } from '@/lib/workspace';
  * Six destinations, not twelve.
  *
  * The old list mirrored the Excel workbook: four of its entries were report
- * SHEETS, which are output, not places to go. They belong to one Laporan
+ * SHEETS, which are output, not places to go. They belong to one Reports
  * destination with tabs, exactly as they appear in the PDF. Everything used to
  * put numbers in sits under Progress; everything used once a project starts
- * sits under Pengaturan, at the bottom, where it stops competing for attention
+ * sits under Settings, at the bottom, where it stops competing for attention
  * every day.
  *
  * `match` decides highlighting, so a destination stays lit while the user moves
@@ -61,14 +61,14 @@ const DESTINATIONS: Destination[] = [
     warm: (w) => WEEKLY_PROGRESS.map((k) => `/weekly/${w}/${k}`),
   },
   {
-    label: 'Harian',
+    label: 'Daily',
     icon: CalendarDays,
     href: () => '/daily',
     match: (p) => p.startsWith('/daily'),
     warm: () => ['/daily'],
   },
   {
-    label: 'Laporan',
+    label: 'Reports',
     icon: FileText,
     href: (w) => `/weekly/${w}/summary`,
     match: (p) => WEEKLY_REPORT.some((k) => p.endsWith(`/${k}`)),
@@ -77,11 +77,12 @@ const DESTINATIONS: Destination[] = [
   {
     label: 'Document Control',
     icon: Files,
-    href: () => '/dokumen',
+    href: (w) => `/dokumen/${w}/summary`,
     match: (p) => p.startsWith('/dokumen'),
+    warm: (w) => [`/dokumen/${w}/summary`, `/dokumen/${w}/data`],
   },
   {
-    label: 'Klaim',
+    label: 'Claims',
     icon: Scale,
     href: () => '/klaim',
     match: (p) => p.startsWith('/klaim'),
@@ -89,9 +90,9 @@ const DESTINATIONS: Destination[] = [
 ];
 
 const SETTINGS: Destination = {
-  label: 'Pengaturan',
+  label: 'Settings',
   icon: Settings,
-  // Setup and Portfolio live as tabs inside Pengaturan — a project is configured
+  // Setup and Portfolio live as tabs inside Settings — a project is configured
   // a handful of times, and until now they cost two permanent menu slots.
   href: () => '/settings',
   match: (p) => p.startsWith('/settings') || p.startsWith('/setup') || p.startsWith('/portfolio'),
@@ -221,7 +222,7 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
                 <Brand compact />
                 <button
                   onClick={() => setOpen(false)}
-                  aria-label="Tutup menu"
+                  aria-label="Close menu"
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                 >
                   <X className="h-5 w-5" />
@@ -245,7 +246,7 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label="Buka menu"
+        aria-label="Open menu"
         className="-ml-2 flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
       >
         <Menu className="h-5 w-5" />

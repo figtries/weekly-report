@@ -56,12 +56,21 @@ interface Loaded {
   byDoc: Map<string, StageRow[]>;
   docsByCategory: Map<string, DocumentRow[]>;
   transmittalNo: Map<string, string>;
-  asOfDate: string;
+  /** The week being looked at. Everything is counted as it stood at its end. */
   asOfWeek: number;
+  asOfDate: string;
+  /** The last week anything actually happened in the register, whatever week is being viewed. */
+  evidenceWeek: number;
+  evidenceDate: string;
   weekOf: (iso: string) => number;
 }
 
-function loadRegister(projectId: string, register: RegisterKind): Loaded | null {
+/**
+ * @param week the week to read the register as of. Left out, it is the last
+ *   week anything happened — which is what "now" means for a register whose
+ *   own file stops in January.
+ */
+function loadRegister(projectId: string, register: RegisterKind, week?: number): Loaded | null {
   const documents = db.select().from(schema.documents)
     .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
     .all();
@@ -111,10 +120,10 @@ function loadRegister(projectId: string, register: RegisterKind): Loaded | null 
   );
 
   // The register's own date: the last thing that actually happened in it.
-  let asOfDate = weeks[0]?.startDate ?? '2025-10-27';
+  let evidenceDate = weeks[0]?.startDate ?? '2025-10-27';
   for (const s of stages) {
-    if (s.submittedAt && s.submittedAt > asOfDate) asOfDate = s.submittedAt;
-    if (s.returnedAt && s.returnedAt > asOfDate) asOfDate = s.returnedAt;
+    if (s.submittedAt && s.submittedAt > evidenceDate) evidenceDate = s.submittedAt;
+    if (s.returnedAt && s.returnedAt > evidenceDate) evidenceDate = s.returnedAt;
   }
 
   const weekOf = (iso: string): number => {
@@ -123,9 +132,16 @@ function loadRegister(projectId: string, register: RegisterKind): Loaded | null 
     return weeks[weeks.length - 1].weekNo;
   };
 
+  const evidenceWeek = weekOf(evidenceDate);
+  const lastWeek = weeks[weeks.length - 1]?.weekNo ?? evidenceWeek;
+  // A week outside the project is not an error worth throwing over — it is a
+  // stale bookmark, and clamping shows the nearest week that exists.
+  const asOfWeek = week === undefined ? evidenceWeek : Math.min(Math.max(1, Math.trunc(week)), lastWeek);
+  const asOfDate = weeks.find((w) => w.weekNo === asOfWeek)?.endDate ?? evidenceDate;
+
   return {
     weeks, categories, documents, stages, weights, byDoc, docsByCategory,
-    transmittalNo, asOfDate, asOfWeek: weekOf(asOfDate), weekOf,
+    transmittalNo, asOfWeek, asOfDate, evidenceWeek, evidenceDate, weekOf,
   };
 }
 
@@ -143,8 +159,28 @@ function loadRegister(projectId: string, register: RegisterKind): Loaded | null 
 function reachedWeek(s: StageRow, loaded: Loaded): number | null {
   if (!s.submitted) return null;
   if (s.submittedAt) return loaded.weekOf(s.submittedAt);
-  if (s.planSubmitDate) return Math.min(loaded.weekOf(s.planSubmitDate), loaded.asOfWeek);
-  return loaded.asOfWeek;
+  // Anchored to the register's own last movement, never to the week being
+  // viewed: otherwise looking at week 43 would drag 42 dateless submissions
+  // forward with it and the earlier weeks would lose them.
+  if (s.planSubmitDate) return Math.min(loaded.weekOf(s.planSubmitDate), loaded.evidenceWeek);
+  return loaded.evidenceWeek;
+}
+
+/** Whether the document had reached this stage by the week being viewed. */
+function reachedBy(s: StageRow, loaded: Loaded): boolean {
+  const week = reachedWeek(s, loaded);
+  return week !== null && week <= loaded.asOfWeek;
+}
+
+/** The week a stage came back, on the same terms. */
+function returnedWeek(s: StageRow, loaded: Loaded): number | null {
+  if (!s.returnedAt && !s.returnCode) return null;
+  return s.returnedAt ? loaded.weekOf(s.returnedAt) : loaded.evidenceWeek;
+}
+
+function returnedBy(s: StageRow, loaded: Loaded): boolean {
+  const week = returnedWeek(s, loaded);
+  return week !== null && week <= loaded.asOfWeek;
 }
 
 function plannedWeek(s: StageRow, loaded: Loaded): number | null {
@@ -152,7 +188,7 @@ function plannedWeek(s: StageRow, loaded: Loaded): number | null {
 }
 
 /** Weighted percent for one set of documents. */
-function percentOf(docs: DocumentRow[], loaded: Loaded, upToWeek?: number): number {
+function percentOf(docs: DocumentRow[], loaded: Loaded, upToWeek = loaded.asOfWeek): number {
   if (docs.length === 0) return 0;
   let total = 0;
   for (const { stage, weight } of loaded.weights) {
@@ -161,7 +197,7 @@ function percentOf(docs: DocumentRow[], loaded: Loaded, upToWeek?: number): numb
       const row = loaded.byDoc.get(d.id)?.find((s) => s.stage === stage);
       if (!row) continue;
       const week = reachedWeek(row, loaded);
-      if (week !== null && (upToWeek === undefined || week <= upToWeek)) reached += 1;
+      if (week !== null && week <= upToWeek) reached += 1;
     }
     total += (reached / docs.length) * weight;
   }
@@ -202,16 +238,14 @@ function countsFor(docs: DocumentRow[], loaded: Loaded) {
 
   for (const d of docs) {
     const rows = loaded.byDoc.get(d.id) ?? [];
-    const moved = rows.filter((s) => s.submitted);
-    if (moved.length === 0) untouched += 1;
+    if (!rows.some((s) => reachedBy(s, loaded))) untouched += 1;
 
-    const returned = rows.filter((s) => s.returnCode);
+    const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
     const last = returned[returned.length - 1];
     if (last && !isApproved(last.returnCode)) returnedOpen += 1;
 
-    // Promised by now and still not out. Measured against the register's own
-    // date, not today — see the note at the top of the file.
-    if (rows.some((s) => !s.submitted && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)) {
+    // Promised by the week being viewed and still not out.
+    if (rows.some((s) => !reachedBy(s, loaded) && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)) {
       overdue += 1;
     }
   }
@@ -221,8 +255,27 @@ function countsFor(docs: DocumentRow[], loaded: Loaded) {
 
 /* ----------------------------------------------------------------- public */
 
-export function getRegisterSummary(projectId: string, register: RegisterKind): RegisterSummary | null {
-  const loaded = loadRegister(projectId, register);
+export interface RegisterWeek {
+  weekNo: number;
+  startDate: string;
+  endDate: string;
+}
+
+/** Every week of the project, for the week picker. */
+export function getRegisterWeeks(projectId: string): RegisterWeek[] {
+  return db.select().from(schema.weeks)
+    .where(eq(schema.weeks.projectId, projectId)).all()
+    .sort((a, b) => a.weekNo - b.weekNo)
+    .map((w) => ({ weekNo: w.weekNo, startDate: w.startDate, endDate: w.endDate }));
+}
+
+
+export function getRegisterSummary(
+  projectId: string,
+  register: RegisterKind,
+  week?: number,
+): RegisterSummary | null {
+  const loaded = loadRegister(projectId, register, week);
   if (!loaded) return null;
   const { documents, weights, asOfWeek } = loaded;
 
@@ -231,13 +284,13 @@ export function getRegisterSummary(projectId: string, register: RegisterKind): R
     weight,
     reached: documents.filter((d) => {
       const row = loaded.byDoc.get(d.id)?.find((s) => s.stage === stage);
-      return row ? row.submitted : false;
+      return row ? reachedBy(row, loaded) : false;
     }).length,
   }));
 
-  // The curve runs to whichever ends later: the last evidence, or the last
-  // promise. Anything beyond that is empty chart.
-  let lastPlanWeek = asOfWeek;
+  // The curve runs to whichever ends latest: the week being viewed, the last
+  // evidence, or the last promise. Anything beyond that is empty chart.
+  let lastPlanWeek = Math.max(asOfWeek, loaded.evidenceWeek);
   for (const s of loaded.stages) {
     const w = plannedWeek(s, loaded);
     if (w !== null && w > lastPlanWeek) lastPlanWeek = w;
@@ -277,6 +330,8 @@ export function getRegisterSummary(projectId: string, register: RegisterKind): R
     asOfWeek,
     asOfDate: loaded.asOfDate,
     series,
+    evidenceWeek: loaded.evidenceWeek,
+    evidenceDate: loaded.evidenceDate,
     undated: loaded.stages.filter((s) => s.submitted && !s.submittedAt).length,
     ...counts,
   };
@@ -288,8 +343,8 @@ export function getRegisterSummary(projectId: string, register: RegisterKind): R
  * A parent's figures are its whole subtree's, so a vendor package reads as one
  * number without anyone adding up its groups by hand.
  */
-export function getRegisterTree(projectId: string, register: RegisterKind): RegisterNode[] {
-  const loaded = loadRegister(projectId, register);
+export function getRegisterTree(projectId: string, register: RegisterKind, week?: number): RegisterNode[] {
+  const loaded = loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const childrenOf = new Map<string | null, CategoryRow[]>();
@@ -322,7 +377,8 @@ export function getRegisterTree(projectId: string, register: RegisterKind): Regi
       reached: loaded.weights.map(({ stage, weight }) => ({
         stage,
         weight,
-        reached: docs.filter((d) => loaded.byDoc.get(d.id)?.some((s) => s.stage === stage && s.submitted)).length,
+        reached: docs.filter((d) =>
+          loaded.byDoc.get(d.id)?.some((s) => s.stage === stage && reachedBy(s, loaded))).length,
       })),
       actual,
       plan,
@@ -337,7 +393,7 @@ export function getRegisterTree(projectId: string, register: RegisterKind): Regi
 }
 
 /** The tree flattened to the categories that actually hold documents. */
-export function getRegisterLeaves(projectId: string, register: RegisterKind): RegisterNode[] {
+export function getRegisterLeaves(projectId: string, register: RegisterKind, week?: number): RegisterNode[] {
   const out: RegisterNode[] = [];
   const walk = (nodes: RegisterNode[]) => {
     for (const n of nodes) {
@@ -345,7 +401,7 @@ export function getRegisterLeaves(projectId: string, register: RegisterKind): Re
       else walk(n.children);
     }
   };
-  walk(getRegisterTree(projectId, register));
+  walk(getRegisterTree(projectId, register, week));
   return out.filter((n) => n.documents > 0);
 }
 
@@ -356,8 +412,8 @@ export function getRegisterLeaves(projectId: string, register: RegisterKind): Re
  * is blocking construction now; one that is past its promised date is blocking
  * it soon; one that has never moved is the vendor register's whole story.
  */
-export function getObstacles(projectId: string, register: RegisterKind): Obstacle[] {
-  const loaded = loadRegister(projectId, register);
+export function getObstacles(projectId: string, register: RegisterKind, week?: number): Obstacle[] {
+  const loaded = loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const categoryName = new Map(loaded.categories.map((c) => [c.id, c.name]));
@@ -372,7 +428,7 @@ export function getObstacles(projectId: string, register: RegisterKind): Obstacl
       categoryName: categoryName.get(doc.categoryId) ?? '—',
     };
 
-    const returned = rows.filter((s) => s.returnCode);
+    const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
     const last = returned[returned.length - 1];
     if (last && !isApproved(last.returnCode)) {
       out.push({
@@ -387,7 +443,7 @@ export function getObstacles(projectId: string, register: RegisterKind): Obstacl
     }
 
     const late = rows
-      .filter((s) => !s.submitted && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)
+      .filter((s) => !reachedBy(s, loaded) && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)
       .sort((a, b) => (a.planSubmitDate! < b.planSubmitDate! ? -1 : 1))[0];
     if (late) {
       out.push({
@@ -401,7 +457,7 @@ export function getObstacles(projectId: string, register: RegisterKind): Obstacl
       continue;
     }
 
-    if (!rows.some((s) => s.submitted)) {
+    if (!rows.some((s) => reachedBy(s, loaded))) {
       out.push({ ...base, kind: 'untouched', stage: null, returnCode: null, since: null, days: null });
     }
   }
@@ -417,8 +473,13 @@ export function getObstacles(projectId: string, register: RegisterKind): Obstacl
  * on each revision, so how many times a drawing went round, and how long each
  * lap took, is gone. An extension-of-time argument is built out of exactly this.
  */
-export function getRegisterLog(projectId: string, register: RegisterKind, limit = 200): LogEvent[] {
-  const loaded = loadRegister(projectId, register);
+export function getRegisterLog(
+  projectId: string,
+  register: RegisterKind,
+  limit = 200,
+  week?: number,
+): LogEvent[] {
+  const loaded = loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const categoryName = new Map(loaded.categories.map((c) => [c.id, c.name]));
@@ -435,20 +496,20 @@ export function getRegisterLog(projectId: string, register: RegisterKind, limit 
       categoryName: categoryName.get(doc.categoryId) ?? '—',
       stage: s.stage,
     };
-    if (s.submitted) {
+    if (reachedBy(s, loaded)) {
       events.push({
         ...base,
-        at: s.submittedAt ?? loaded.asOfDate,
+        at: s.submittedAt ?? loaded.evidenceDate,
         dated: s.submittedAt !== null,
         kind: 'submit',
         transmittal: s.submitTransmittalId ? loaded.transmittalNo.get(s.submitTransmittalId) ?? null : null,
         returnCode: null,
       });
     }
-    if (s.returnedAt || s.returnCode) {
+    if (returnedBy(s, loaded)) {
       events.push({
         ...base,
-        at: s.returnedAt ?? loaded.asOfDate,
+        at: s.returnedAt ?? loaded.evidenceDate,
         dated: s.returnedAt !== null,
         kind: 'return',
         transmittal: s.returnTransmittalId ? loaded.transmittalNo.get(s.returnTransmittalId) ?? null : null,
@@ -471,8 +532,9 @@ export function getRegisterLog(projectId: string, register: RegisterKind, limit 
 export function getRegisterCards(
   projectId: string,
   register: RegisterKind,
+  week?: number,
 ): Record<string, DocumentCard[]> {
-  const loaded = loadRegister(projectId, register);
+  const loaded = loadRegister(projectId, register, week);
   if (!loaded) return {};
 
   const out: Record<string, DocumentCard[]> = {};
@@ -483,11 +545,11 @@ export function getRegisterCards(
       .sort((a, b) => a.order - b.order)
       .map((d) => {
         const rows = loaded.byDoc.get(d.id) ?? [];
-        const moved = rows.filter((s) => s.submitted);
+        const moved = rows.filter((s) => reachedBy(s, loaded));
         const last = moved[moved.length - 1] ?? null;
-        const returned = rows.filter((s) => s.returnCode);
+        const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
         const lastReturn = returned[returned.length - 1] ?? null;
-        const next = rows.find((s) => !s.submitted) ?? null;
+        const next = rows.find((s) => !reachedBy(s, loaded)) ?? null;
 
         return {
           id: d.id,
@@ -504,11 +566,11 @@ export function getRegisterCards(
           nextStage: next?.stage ?? null,
           plannedAt: next?.planSubmitDate ?? null,
           overdue: Boolean(next?.planSubmitDate && next.planSubmitDate < loaded.asOfDate),
-          laps: rows.filter((s) => s.stage.startsWith('RE_') && s.submitted).length,
+          laps: rows.filter((s) => s.stage.startsWith('RE_') && reachedBy(s, loaded)).length,
           stages: rows.map((s) => ({
             stage: s.stage,
             planSubmitDate: s.planSubmitDate,
-            submitted: s.submitted,
+            submitted: reachedBy(s, loaded),
             submittedAt: s.submittedAt,
             submitTransmittal: s.submitTransmittalId ? loaded.transmittalNo.get(s.submitTransmittalId) ?? null : null,
             returnedAt: s.returnedAt,
@@ -544,8 +606,8 @@ const DISCIPLINE_CATEGORY: Record<string, string> = {
   instrument: 'B.4',
 };
 
-export function getDisciplineLinks(projectId: string): DisciplineLink[] {
-  const loaded = loadRegister(projectId, 'edl');
+export function getDisciplineLinks(projectId: string, week?: number): DisciplineLink[] {
+  const loaded = loadRegister(projectId, 'edl', week);
   if (!loaded) return [];
 
   const nodes = db.select().from(schema.wbsNodes)
@@ -560,7 +622,11 @@ export function getDisciplineLinks(projectId: string): DisciplineLink[] {
     .sort((a, b) => b.weekNo - a.weekNo);
   const recorded = new Set(db.selectDistinct({ weekId: schema.leafProgress.weekId })
     .from(schema.leafProgress).all().map((r) => r.weekId));
-  const latestWeek = weeks.find((w) => recorded.has(w.id)) ?? null;
+  // Compare like with like: the WBS figure for the week being viewed, if that
+  // week was reported at all, otherwise the last week that was.
+  const latestWeek = weeks.find((w) => w.weekNo <= loaded.asOfWeek && recorded.has(w.id))
+    ?? weeks.find((w) => recorded.has(w.id))
+    ?? null;
   const progress = latestWeek
     ? new Map(db.select().from(schema.leafProgress)
         .where(eq(schema.leafProgress.weekId, latestWeek.id)).all()
@@ -601,7 +667,7 @@ export function getDisciplineLinks(projectId: string): DisciplineLink[] {
           const stage = leaf.deskripsi.trim().toUpperCase().replace('-', '_') as DocStage;
           if (!STAGE_ORDER.includes(stage)) return null;
           const reached = docs.filter(
-            (d) => loaded.byDoc.get(d.id)?.some((s) => s.stage === stage && s.submitted),
+            (d) => loaded.byDoc.get(d.id)?.some((s) => s.stage === stage && reachedBy(s, loaded)),
           ).length;
           return {
             nodeId: leaf.id,

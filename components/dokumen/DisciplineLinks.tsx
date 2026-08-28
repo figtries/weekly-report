@@ -44,21 +44,21 @@ export function DisciplineLinks({
         <div className="flex flex-wrap items-center gap-3">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            Tautan ke laporan mingguan
+            Link to the weekly report
           </h2>
         </div>
       </Reveal>
 
       <Reveal delay={0.04}>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-          Kalau dinyalakan, leaf engineering di WBS membaca angkanya dari register ini — tidak ada
-          lagi persen engineering yang diketik. Register ini terakhir bergerak{' '}
-          {new Date(`${asOfDate}T00:00:00Z`).toLocaleDateString('id-ID', {
+          Switched on, the engineering leaves in the WBS read their figure from this register —
+          no engineering percentage is typed anywhere again. This register last moved{' '}
+          {new Date(`${asOfDate}T00:00:00Z`).toLocaleDateString('en-GB', {
             day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
           })}
-          , sementara kolom WBS di bawah adalah angka minggu{' '}
-          {disciplines[0]?.wbsWeek ?? '—'} — laporan terakhir yang benar-benar diisi. Selisih di
-          kolom kanan itulah seberapa jauh angkanya akan mundur kalau dinyalakan hari ini.
+          , while the WBS column below is the week{' '}
+          {disciplines[0]?.wbsWeek ?? '—'} figure — the last report actually filled in. The
+          difference on the right is how far each leaf would move if it were switched on today.
         </p>
       </Reveal>
 
@@ -104,18 +104,18 @@ function DisciplineCard({ projectId, discipline }: { projectId: string; discipli
           <div className="min-w-0">
             <p className="text-sm font-semibold">{discipline.name}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {discipline.categoryName ?? 'tidak ada kategori yang cocok'} · bobot{' '}
-              {discipline.bobot.toFixed(3).replace('.', ',')}% dari proyek
+              {discipline.categoryName ?? 'no matching category'} ·{' '}
+              {discipline.bobot.toFixed(3)}% of project weight
             </p>
           </div>
           {/* 44px of height around a 18px control: this is tapped on a phone. */}
           <label className="flex h-11 shrink-0 cursor-pointer items-center gap-2 text-xs font-medium">
-            <span className="text-muted-foreground">{on ? 'baca register' : 'mati'}</span>
+            <span className="text-muted-foreground">{on ? 'reading register' : 'off'}</span>
             <Switch
               checked={on}
               disabled={pending || !discipline.categoryId}
               onCheckedChange={toggle}
-              aria-label={`Tautkan ${discipline.name} ke register`}
+              aria-label={`Link ${discipline.name} to the register`}
             />
           </label>
         </div>
@@ -128,12 +128,12 @@ function DisciplineCard({ projectId, discipline }: { projectId: string; discipli
                 <span className="w-14 shrink-0 font-mono text-muted-foreground">{STAGE_LABEL[s.stage]}</span>
                 <span className="flex-1 border-b border-dashed border-border" />
                 <span className="tabular-nums text-muted-foreground">
-                  WBS {s.wbsPercent.toFixed(1).replace('.', ',')}%
+                  WBS {s.wbsPercent.toFixed(1)}%
                 </span>
                 <span className="w-24 shrink-0 text-right tabular-nums">
-                  <span className="font-medium">{s.registerPercent.toFixed(1).replace('.', ',')}%</span>
+                  <span className="font-medium">{s.registerPercent.toFixed(1)}%</span>
                   <span className={cn('ml-1', delta < 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                    {delta >= 0 ? '+' : '−'}{Math.abs(delta).toFixed(1).replace('.', ',')}
+                    {delta >= 0 ? '+' : '−'}{Math.abs(delta).toFixed(1)}
                   </span>
                 </span>
               </div>
@@ -157,7 +157,7 @@ function DisciplineCard({ projectId, discipline }: { projectId: string; discipli
                 )}
               >
                 <TriangleAlert className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                {error ?? `Laporan mingguan akan turun rata-rata ${Math.abs(drop).toFixed(1).replace('.', ',')} poin di disiplin ini.`}
+                {error ?? `The weekly report would fall by an average of ${Math.abs(drop).toFixed(1)} points in this discipline.`}
               </Badge>
             </motion.div>
           )}
