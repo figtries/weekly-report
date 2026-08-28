@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { getCachedWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
+import DocumentControlLink from '@/components/weekly/DocumentControlLink';
+import { getEngineeringBridge } from '@/lib/register';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
@@ -12,6 +14,9 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);
+  // The other half of the seam: the EDL summary carries the mirror of this band
+  // pointing back here, and both read the same week.
+  const bridge = getEngineeringBridge('gundih', week);
 
   return (
     <>
@@ -22,6 +27,8 @@ export default async function SummaryPage({ params }: { params: Promise<{ week: 
             <span className="font-medium text-gray-900">Week {week}</span> · Progress per SPK contract.
           </p>
         </div>
+
+        {bridge && <DocumentControlLink bridge={bridge} week={week} />}
 
         <SummaryCards roots={summaryRows} grandTotal={grandTotal} />
       </div>

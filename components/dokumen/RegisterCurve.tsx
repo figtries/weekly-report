@@ -169,15 +169,15 @@ export function RegisterCurve({
 
       <figcaption className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-0.5 w-6 rounded-full bg-blue-600" /> actual
+          <span className="h-0.5 w-6 rounded-full bg-blue-600" /> where it actually got to
         </span>
         {planPath && (
           <span className="flex items-center gap-2">
             <span className="h-0 w-6 border-t-2 border-dashed border-muted-foreground/70" />
-            plan
+            where the promised dates said it would be
           </span>
         )}
-        <span>both counted from the dates in the register, never typed</span>
+        <span>both counted from the dates in the register — neither is typed in</span>
         {undated > 0 && (
           <span className="basis-full text-amber-600">
             {undated} submissions in the register carry no date — placed on the week they were

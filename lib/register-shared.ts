@@ -150,6 +150,64 @@ export interface LinkStage {
   registerPercent: number;
 }
 
+/** One document that moved inside the week being viewed. */
+export interface Movement {
+  documentId: string;
+  docNo: string | null;
+  title: string;
+  categoryName: string;
+  stage: DocStage;
+  kind: 'submitted' | 'returned' | 'approved';
+  returnCode: string | null;
+  at: string;
+}
+
+/**
+ * What actually happened in one week, counted from the dates.
+ *
+ * The summary used to say `+0.00 this week` and stop, which tells a reader
+ * nothing about whether the week was quiet or the file is simply stale. These
+ * are the three events a document controller chases, plus the honest reason
+ * when all three are zero.
+ */
+export interface WeekMovement {
+  weekNo: number;
+  startDate: string;
+  endDate: string;
+  submitted: number;
+  returned: number;
+  approved: number;
+  /** Percentage points the register gained over the week. */
+  gain: number;
+  /** The newest movements first, for the short list on the summary. */
+  events: Movement[];
+  /** The last week anything moved at all — below weekNo means the file is stale. */
+  evidenceWeek: number;
+  evidenceDate: string;
+}
+
+/**
+ * The seam between this register and the weekly report.
+ *
+ * Both screens describe the same engineering work, so each one carries a band
+ * pointing at the other with the other's own figure on it. Reading one and
+ * being surprised by the other is exactly what this feature exists to stop.
+ */
+export interface EngineeringBridge {
+  /** The week both sides are being read at. */
+  weekNo: number;
+  /** The last week the weekly report was actually filled in. */
+  wbsWeek: number | null;
+  /** Weighted percent the weekly report carries for the engineering leaves. */
+  typedPercent: number;
+  /** Weighted percent the register counts for the same work. */
+  registerPercent: number;
+  disciplines: number;
+  /** How many of them already take their figure from the register. */
+  linked: number;
+  documents: number;
+}
+
 export interface DisciplineLink {
   nodeId: string;
   name: string;
@@ -169,6 +227,26 @@ export const STAGE_ORDER: DocStage[] =
 export const STAGE_LABEL: Record<DocStage, string> = {
   IFR: 'IFR', RE_IFR: 'RE-IFR', IFA: 'IFA', RE_IFA: 'RE-IFA',
   AFC: 'AFC', RE_AFC1: 'RE-AFC 1', RE_AFC2: 'RE-AFC 2', ASBUILT: 'AS-BUILT',
+};
+
+/**
+ * What the acronym stands for.
+ *
+ * The abbreviations are what a document controller says out loud, but they are
+ * also the first thing that stops everyone else reading this screen. Anywhere
+ * a stage is the subject of a line, the full name leads and the acronym
+ * follows; in a dense list where the reader has already met it, STAGE_LABEL
+ * alone is enough.
+ */
+export const STAGE_FULL: Record<DocStage, string> = {
+  IFR: 'Issued for Review',
+  RE_IFR: 'Re-issued for Review',
+  IFA: 'Issued for Approval',
+  RE_IFA: 'Re-issued for Approval',
+  AFC: 'Approved for Construction',
+  RE_AFC1: 'Re-approved for Construction (1)',
+  RE_AFC2: 'Re-approved for Construction (2)',
+  ASBUILT: 'As-built',
 };
 
 /** Return codes that mean the document is genuinely through. */

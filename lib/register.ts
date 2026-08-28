@@ -35,6 +35,7 @@ import {
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
+  type EngineeringBridge, type Movement, type WeekMovement,
 } from './register-shared';
 import type { DocStage, RegisterKind } from './schema';
 
@@ -683,4 +684,121 @@ export function getDisciplineLinks(projectId: string, week?: number): Discipline
 
   const order = Object.keys(DISCIPLINE_CATEGORY);
   return out.sort((a, b) => order.indexOf(a.name.toLowerCase()) - order.indexOf(b.name.toLowerCase()));
+}
+
+/**
+ * What moved inside one week, counted from the dates in the register.
+ *
+ * The summary used to report the week as a single delta — `+0.00 this week` —
+ * which cannot tell a quiet week apart from a stale file. A controller's week
+ * is three events: what went out, what came back with comments, and what was
+ * finally approved. All three are counted the same way progress is, from the
+ * stage rows, so the block can never disagree with the headline above it.
+ *
+ * Dateless submissions are deliberately left out. `reachedWeek` places them on
+ * the week they were promised for so the curve keeps its shape, but claiming a
+ * particular week saw them go out would be inventing a fact about that week.
+ */
+export function getWeekMovement(
+  projectId: string,
+  register: RegisterKind,
+  week?: number,
+): WeekMovement | null {
+  const loaded = loadRegister(projectId, register, week);
+  if (!loaded) return null;
+
+  const { asOfWeek, documents } = loaded;
+  const bounds = loaded.weeks.find((w) => w.weekNo === asOfWeek);
+  const startDate = bounds?.startDate ?? loaded.asOfDate;
+  const endDate = bounds?.endDate ?? loaded.asOfDate;
+  const inWeek = (iso: string | null) => iso !== null && iso >= startDate && iso <= endDate;
+
+  const categoryName = new Map(loaded.categories.map((c) => [c.id, c.name]));
+  const documentById = new Map(documents.map((d) => [d.id, d]));
+  const events: Movement[] = [];
+
+  for (const s of loaded.stages) {
+    const doc = documentById.get(s.documentId);
+    if (!doc) continue;
+    const base = {
+      documentId: doc.id,
+      docNo: doc.docNo,
+      title: doc.title,
+      categoryName: categoryName.get(doc.categoryId) ?? '—',
+      stage: s.stage,
+    };
+
+    if (s.submitted && inWeek(s.submittedAt)) {
+      events.push({ ...base, kind: 'submitted', returnCode: null, at: s.submittedAt! });
+    }
+    if (s.returnCode && inWeek(s.returnedAt)) {
+      events.push({
+        ...base,
+        kind: isApproved(s.returnCode) ? 'approved' : 'returned',
+        returnCode: s.returnCode,
+        at: s.returnedAt!,
+      });
+    }
+  }
+
+  events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+
+  return {
+    weekNo: asOfWeek,
+    startDate,
+    endDate,
+    submitted: events.filter((e) => e.kind === 'submitted').length,
+    returned: events.filter((e) => e.kind === 'returned').length,
+    approved: events.filter((e) => e.kind === 'approved').length,
+    gain: percentOf(documents, loaded, asOfWeek) - percentOf(documents, loaded, asOfWeek - 1),
+    events,
+    evidenceWeek: loaded.evidenceWeek,
+    evidenceDate: loaded.evidenceDate,
+  };
+}
+
+/**
+ * The seam between the EDL and the weekly report, weighted the same way.
+ *
+ * Both screens describe the same engineering work and used to do it without
+ * ever mentioning each other, so a reader could leave one and be surprised by
+ * the other. This rolls `getDisciplineLinks` up into a single pair of figures —
+ * what the report carries, what the register counts — and each screen shows it
+ * as a band pointing at the other.
+ *
+ * Weighted by each discipline's project weight rather than averaged flat: a
+ * discipline worth six times another should move this number six times as far.
+ */
+export function getEngineeringBridge(projectId: string, week?: number): EngineeringBridge | null {
+  const links = getDisciplineLinks(projectId, week);
+  if (links.length === 0) return null;
+
+  const loaded = loadRegister(projectId, 'edl', week);
+  if (!loaded) return null;
+
+  let weight = 0;
+  let typed = 0;
+  let counted = 0;
+  let linked = 0;
+
+  for (const d of links) {
+    if (d.stages.length === 0) continue;
+    const w = d.bobot > 0 ? d.bobot : 1;
+    weight += w;
+    typed += w * (d.stages.reduce((a, s) => a + s.wbsPercent, 0) / d.stages.length);
+    counted += w * (d.stages.reduce((a, s) => a + s.registerPercent, 0) / d.stages.length);
+    if (d.stages.every((s) => s.linked)) linked += 1;
+  }
+
+  if (weight === 0) return null;
+
+  return {
+    weekNo: loaded.asOfWeek,
+    wbsWeek: links[0]?.wbsWeek ?? null,
+    typedPercent: typed / weight,
+    registerPercent: counted / weight,
+    disciplines: links.length,
+    linked,
+    documents: loaded.documents.length,
+  };
 }
