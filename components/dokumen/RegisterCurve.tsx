@@ -97,7 +97,7 @@ export function RegisterCurve({
           <motion.svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
-            className="absolute inset-0 h-full w-full"
+            className="absolute inset-0 h-full w-full text-foreground"
             role="img"
             aria-label={`Register plan and actual curve, week ${first} to ${last}`}
             initial={reduced ? false : { clipPath: 'inset(0 100% 0 0)' }}
@@ -106,8 +106,8 @@ export function RegisterCurve({
           >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-blue-600, #2563eb)" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="var(--color-blue-600, #2563eb)" stopOpacity="0" />
+                <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
               </linearGradient>
             </defs>
 
@@ -137,7 +137,7 @@ export function RegisterCurve({
               strokeLinecap="round"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
-              className="stroke-blue-600"
+              className="stroke-foreground"
             />
           </motion.svg>
 
@@ -145,7 +145,7 @@ export function RegisterCurve({
           {lastActual && (
             <motion.span
               aria-hidden
-              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600 ring-2 ring-background"
+              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground ring-2 ring-background"
               style={{ left: `${x(lastActual.weekNo)}%`, top: `${y(lastActual.actual)}%` }}
               initial={reduced ? false : { scale: 0 }}
               animate={{ scale: 1 }}
@@ -169,7 +169,7 @@ export function RegisterCurve({
 
       <figcaption className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-0.5 w-6 rounded-full bg-blue-600" /> where it actually got to
+          <span className="h-0.5 w-6 rounded-full bg-foreground" /> where it actually got to
         </span>
         {planPath && (
           <span className="flex items-center gap-2">
@@ -179,7 +179,7 @@ export function RegisterCurve({
         )}
         <span>both counted from the dates in the register — neither is typed in</span>
         {undated > 0 && (
-          <span className="basis-full text-amber-600">
+          <span className="basis-full text-amber-700">
             {undated} submissions in the register carry no date — placed on the week they were
             promised for, so the curve’s shape there is an estimate.
           </span>

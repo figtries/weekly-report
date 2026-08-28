@@ -6,6 +6,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 import { CountUp, Reveal } from '@/components/motion/Reveal';
 import { RegisterCurve } from '@/components/dokumen/RegisterCurve';
 import {
@@ -34,6 +35,21 @@ import { cn } from '@/lib/utils';
  * returned, then overdue, then never sent — so the three always sum to the
  * list beneath them.
  *
+ * **One theme, no exceptions.** The first version of this screen led with a
+ * near-black slab carrying a huge number and a hole of empty space beneath it,
+ * and painted its status chips in saturated `-600` fills. Neither belonged to
+ * this app: the slab was a colour the theme does not define, and the chips were
+ * a second status palette beside the soft tinted pairs every other screen uses.
+ * Everything here is now built from the shadcn surface tokens — `bg-card`,
+ * `border`, `muted`, `secondary` — with the weekly report's own
+ * `emerald-100/700`, `red-100/700`, `amber-100/700` pairs for status, so a
+ * reader moving between the two screens stays inside one visual language.
+ *
+ * The focal anchor is the ring: a page needs one place the eye lands first, and
+ * with the slab gone the ring is what carries that job while still living on a
+ * plain card. Beside it a divided rail names the things the ring is made of, so
+ * no zone of the card is empty.
+ *
  * One shape still serves both registers. The EDL arrives with promised dates,
  * so it gets a plan and a deviation; the VDRL has none — its vendors never gave
  * any — so instead of inventing a baseline it says what it does know.
@@ -57,28 +73,34 @@ const signed = (n: number, decimals = 2) =>
 /** Full within rounding — the curve lands exactly on 1.0, so 99.995 is 100. */
 const isFull = (n: number) => n >= 99.995;
 
-// Written out rather than composed: Tailwind reads these files as text, so a
-// class built from a variable at runtime never reaches the stylesheet.
+/**
+ * The app's status palette, and nothing else.
+ *
+ * Written out rather than composed, because Tailwind reads these files as text
+ * and a class built from a variable at runtime never reaches the stylesheet.
+ * The pairs are lifted from `SummaryCards` on the weekly report so the two
+ * screens agree on what green and red look like.
+ */
 const TREND: Record<RegisterNode['trend'], { label: string; chip: string; bar: string }> = {
   ahead: {
-    label: 'ahead of plan', chip: 'bg-emerald-600 text-white',
-    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
+    label: 'ahead of plan', chip: 'bg-emerald-100 text-emerald-700',
+    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
   },
   'on-track': {
-    label: 'on plan', chip: 'bg-emerald-600 text-white',
-    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
+    label: 'on plan', chip: 'bg-emerald-100 text-emerald-700',
+    bar: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
   },
   slipping: {
-    label: 'slipping', chip: 'bg-amber-600 text-white',
-    bar: '[&_[data-slot=progress-indicator]]:bg-amber-600',
+    label: 'slipping', chip: 'bg-amber-100 text-amber-700',
+    bar: '[&_[data-slot=progress-indicator]]:bg-amber-500',
   },
   behind: {
-    label: 'behind plan', chip: 'bg-rose-600 text-white',
-    bar: '[&_[data-slot=progress-indicator]]:bg-rose-600',
+    label: 'behind plan', chip: 'bg-red-100 text-red-700',
+    bar: '[&_[data-slot=progress-indicator]]:bg-red-500',
   },
   unplanned: {
-    label: 'no promised dates', chip: 'bg-slate-600 text-white',
-    bar: '[&_[data-slot=progress-indicator]]:bg-blue-600',
+    label: 'no promised dates', chip: 'bg-muted text-muted-foreground',
+    bar: '[&_[data-slot=progress-indicator]]:bg-primary',
   },
 };
 
@@ -88,41 +110,85 @@ const OBSTACLE: Record<Obstacle['kind'], {
   returned: {
     heading: 'Came back with comments',
     blurb: 'The reviewer sent it back and it has not been approved since.',
-    chip: 'bg-rose-600 text-white', tone: 'text-rose-600', icon: AlertTriangle,
+    chip: 'bg-red-100 text-red-700', tone: 'text-red-600', icon: AlertTriangle,
   },
   overdue: {
     heading: 'Past the date it was promised',
     blurb: 'The date in the register has gone by and it is still not out.',
-    chip: 'bg-amber-600 text-white', tone: 'text-amber-600', icon: Clock,
+    chip: 'bg-amber-100 text-amber-700', tone: 'text-amber-600', icon: Clock,
   },
   untouched: {
     heading: 'Never sent at all',
     blurb: 'Nothing has left for this document at any stage.',
-    chip: 'bg-slate-600 text-white', tone: 'text-slate-600', icon: CircleSlash,
+    chip: 'bg-muted text-muted-foreground', tone: 'text-muted-foreground', icon: CircleSlash,
   },
 };
 
 const MOVEMENT = {
-  submitted: { label: 'Sent out', tone: 'text-blue-600', icon: Send },
-  returned: { label: 'Came back with comments', tone: 'text-rose-600', icon: Inbox },
-  approved: { label: 'Approved', tone: 'text-emerald-600', icon: ShieldCheck },
+  submitted: { label: 'Sent out', chip: 'bg-secondary text-secondary-foreground', tone: 'text-foreground', icon: Send },
+  returned: { label: 'Came back with comments', chip: 'bg-red-100 text-red-700', tone: 'text-red-600', icon: Inbox },
+  approved: { label: 'Approved', chip: 'bg-emerald-100 text-emerald-700', tone: 'text-emerald-600', icon: ShieldCheck },
 } as const;
 
 const OBSTACLES_SHOWN = 8;
 const MOVEMENTS_SHOWN = 6;
 const NAMES_SHOWN = 12;
 
+/**
+ * The ring the eye lands on.
+ *
+ * Hand-drawn rather than a charting library: it is one arc, it has to inherit
+ * the theme's own foreground colour, and it must not animate its stroke — a
+ * `pathLength` tween is implemented with stroke-dasharray and would fight the
+ * dash offset this uses. It fades in with everything else instead.
+ */
+function Ring({ value, caption }: { value: number; caption: string }) {
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  return (
+    <div className="relative flex shrink-0 items-center justify-center">
+      <svg viewBox="0 0 128 128" className="h-36 w-36 -rotate-90" aria-hidden>
+        <circle cx="64" cy="64" r={R} fill="none" strokeWidth="12" className="stroke-muted" />
+        <circle
+          cx="64" cy="64" r={R} fill="none" strokeWidth="12" strokeLinecap="round"
+          className="stroke-foreground"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - Math.min(100, Math.max(0, value)) / 100)}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center">
+        <span className="text-3xl font-semibold leading-none tracking-tight">
+          <CountUp value={value} decimals={1} />
+        </span>
+        <span className="mt-1 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+          {caption}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** One cell of the rail beside the ring. Every zone gets a name. */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-2">
+      <span className="text-xl font-semibold tabular-nums">{value}</span>
+      <span className="truncate text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 /** One heading, one sentence — every block on this screen opens the same way. */
 function BlockHeading({ step, title, blurb }: { step: string; title: string; blurb: string }) {
   return (
-    <div className="mb-4 flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <span className="rounded bg-foreground px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-background">
+    <div className="mb-4 flex flex-col gap-1.5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-semibold tabular-nums text-secondary-foreground">
           {step}
         </span>
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-          {title}
-        </h2>
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
       </div>
       <p className="max-w-3xl text-sm text-muted-foreground">{blurb}</p>
     </div>
@@ -178,17 +244,19 @@ export function SummaryScreen({
       {/* ------------------------------------------------ the honesty band */}
       {stale && (
         <Reveal>
-          <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-sm leading-relaxed">
-              <span className="font-semibold">
-                This register has not moved since week {summary.evidenceWeek}
-                {' '}({longDate(summary.evidenceDate)}).
-              </span>{' '}
-              You are looking at week {summary.asOfWeek}, so everything below is still week{' '}
-              {summary.evidenceWeek}’s picture — nothing new has been filed since.
-            </p>
-          </div>
+          <Card className="py-0 mt-6 border-amber-200 bg-amber-50 shadow-none">
+            <CardContent className="flex items-start gap-3 p-4 text-amber-900">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="text-sm leading-relaxed">
+                <span className="font-semibold">
+                  This register has not moved since week {summary.evidenceWeek}
+                  {' '}({longDate(summary.evidenceDate)}).
+                </span>{' '}
+                You are looking at week {summary.asOfWeek}, so everything below is still week{' '}
+                {summary.evidenceWeek}’s picture — nothing new has been filed since.
+              </p>
+            </CardContent>
+          </Card>
         </Reveal>
       )}
 
@@ -198,118 +266,126 @@ export function SummaryScreen({
           <BlockHeading
             step="1"
             title="Where it stands"
-            blurb={`Every figure here is counted from the dates in the register — nothing is typed in. A document earns its share of the total stage by stage, so one that is only out for review counts for less than one already approved.`}
+            blurb="Every figure here is counted from the dates in the register — nothing is typed in. A document earns its share of the total stage by stage, so one that is only out for review counts for less than one already approved."
           />
         </Reveal>
 
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-          <Reveal delay={0.04}>
-            <Card className="py-0 h-full overflow-hidden border-0 bg-slate-900 text-white shadow-xl ring-1 ring-black/10">
-              <CardContent className="flex h-full flex-col justify-between gap-6 p-6 sm:p-7">
-                <div className="flex items-start justify-between gap-4">
-                  <span className="text-xs font-medium uppercase tracking-widest text-white/70">
+        {/* One card, two zones, both full. The version before this was a grid
+            of three cards whose tallest column left the others with a hole of
+            empty space under their last line — the same emptiness the dark
+            slab had, just repainted. A single divided surface cannot have
+            that: each zone is as tall as the card, and the card is as tall as
+            its fullest zone. */}
+        <Reveal delay={0.04}>
+          <Card className="py-0 overflow-hidden shadow-sm">
+            <CardContent className="flex flex-col divide-y p-0 lg:flex-row lg:divide-x lg:divide-y-0">
+              {/* ---------------------------------------- the anchor zone */}
+              <div className="flex flex-col gap-5 p-5 sm:p-6 lg:w-[42%]">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
                     {isEdl ? 'Engineering documents' : 'Vendor documents'}
                   </span>
-                  <Badge className="shrink-0 bg-white/15 font-normal text-white hover:bg-white/15">
+                  <Badge variant="secondary" className="shrink-0 font-normal">
                     week {summary.asOfWeek}
                   </Badge>
                 </div>
 
-                <div>
-                  <p className="text-[3.25rem] font-semibold leading-none tracking-tight sm:text-6xl">
-                    <CountUp value={summary.actual} />
-                  </p>
-                  <p className="mt-3 max-w-md text-sm leading-relaxed text-white/80">
-                    of the work in this register is done, across{' '}
-                    {/* Counts the cards below, not the register's leaf
-                        categories: a hero that says 76 above a breakdown that
-                        shows 15 is the reader's first reason to distrust it. */}
-                    <span className="font-medium text-white">{summary.documents} {thing}</span>
-                    {' '}in {groups.length} {groupNoun}.
-                  </p>
+                {/* Ring above a three-cell rail rather than beside a two-cell
+                    one: side by side left the bottom half of this zone empty
+                    whenever the readings opposite ran long, and an empty half
+                    is what the reader reads as unfinished. */}
+                <div className="flex flex-1 flex-col justify-center gap-5">
+                  <div className="flex justify-center">
+                    <Ring value={summary.actual} caption="done" />
+                  </div>
+                  <div className="flex divide-x rounded-lg border bg-muted/40 py-3">
+                    <Stat label="Documents" value={String(summary.documents)} />
+                    <Stat
+                      label={groupNoun.replace(/^./, (c) => c.toUpperCase())}
+                      value={String(groups.length)}
+                    />
+                    <Stat label="Still open" value={String(obstacles.length)} />
+                  </div>
                 </div>
 
-                <p className="text-xs leading-relaxed text-white/60">
-                  Counted as it stood on {longDate(summary.evidenceDate)}
-                  {summary.numbered < summary.documents
-                    && ` · ${summary.documents - summary.numbered} still have no document number`}
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Counted as it stood on{' '}
+                  <span className="font-medium text-foreground">{longDate(summary.evidenceDate)}</span>
+                  {summary.numbered < summary.documents && (
+                    <> · {summary.documents - summary.numbered} still have no document number</>
+                  )}
                 </p>
-              </CardContent>
-            </Card>
-          </Reveal>
+              </div>
 
-          <div className="grid gap-4">
-            <Reveal delay={0.1}>
-              <Card className="py-0 shadow-sm">
-                <CardContent className="flex flex-col gap-3 p-6">
-                  {summary.plan !== null ? (
-                    <>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                          Against what was promised
-                        </p>
-                        <Badge className={cn('shrink-0', TREND[
-                          summary.deviation === null ? 'unplanned'
-                            : summary.deviation >= 1 ? 'ahead'
-                            : summary.deviation >= -1 ? 'on-track'
-                            : summary.deviation >= -10 ? 'slipping' : 'behind'
-                        ].chip)}>
-                          {(summary.deviation ?? 0) >= -1 ? 'on plan' : 'behind'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm leading-relaxed">
-                        The dates in the register had this work{' '}
-                        {planFullWeek !== null && isFull(summary.plan) ? (
-                          <>finished by <span className="font-semibold">week {planFullWeek}</span></>
-                        ) : (
-                          <>at <span className="font-semibold tabular-nums">
-                            {summary.plan.toFixed(1)}%
-                          </span> by week {summary.asOfWeek}</>
-                        )}
-                        . It is at{' '}
-                        <span className="font-semibold tabular-nums">{summary.actual.toFixed(1)}%</span>
-                        {(summary.deviation ?? 0) < -0.05 && (
-                          <>
-                            {' '}— <span className="font-semibold text-rose-600 tabular-nums">
-                              {Math.abs(summary.deviation ?? 0).toFixed(1)}%
-                            </span> short.
-                          </>
-                        )}
-                        {(summary.deviation ?? 0) >= -0.05 && <>, so it is where it should be.</>}
+              {/* ------------------------------------------ the two readings */}
+              <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
+                {summary.plan !== null ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
+                        Against what was promised
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <Badge className={cn('shrink-0 font-normal', TREND[
+                        summary.deviation === null ? 'unplanned'
+                          : summary.deviation >= 1 ? 'ahead'
+                          : summary.deviation >= -1 ? 'on-track'
+                          : summary.deviation >= -10 ? 'slipping' : 'behind'
+                      ].chip)}>
+                        {(summary.deviation ?? 0) >= -1 ? 'on plan' : 'behind'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm leading-relaxed">
+                      The dates in the register had this work{' '}
+                      {planFullWeek !== null && isFull(summary.plan) ? (
+                        <>finished by <span className="font-semibold">week {planFullWeek}</span></>
+                      ) : (
+                        <>at <span className="font-semibold tabular-nums">
+                          {summary.plan.toFixed(1)}%
+                        </span> by week {summary.asOfWeek}</>
+                      )}
+                      . It is{' '}
+                      {(summary.deviation ?? 0) < -0.05 ? (
+                        <>
+                          <span className="font-semibold tabular-nums text-red-600">
+                            {Math.abs(summary.deviation ?? 0).toFixed(1)}%
+                          </span> short of that.
+                        </>
+                      ) : (
+                        <>where it should be.</>
+                      )}{' '}
+                      <span className="text-muted-foreground">
                         {obstacles.length} of {summary.documents} documents are still open — the
                         third block below names them.
+                      </span>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
+                        Against what was promised
                       </p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                          Against what was promised
-                        </p>
-                        <Badge className="shrink-0 bg-slate-600 text-white">no promised dates</Badge>
-                      </div>
-                      <p className="text-sm leading-relaxed">
-                        Not one vendor gave a submission date, so there is nothing to compare this
-                        against — and none is invented here. What the register does say:{' '}
-                        <span className="font-semibold tabular-nums">{summary.untouched}</span> of{' '}
-                        <span className="tabular-nums">{summary.documents}</span> documents have
-                        never been sent at all.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      <Badge variant="secondary" className="shrink-0 font-normal">
+                        no promised dates
+                      </Badge>
+                    </div>
+                    <p className="text-sm leading-relaxed">
+                      Not one vendor gave a submission date, so there is nothing to compare this
+                      against — and none is invented here. What the register does say:{' '}
+                      <span className="font-semibold tabular-nums">{summary.untouched}</span> of{' '}
+                      <span className="tabular-nums">{summary.documents}</span> documents have
+                      never been sent at all.{' '}
+                      <span className="text-muted-foreground">
                         Chasing those dates is what would give this register a plan curve.
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Reveal>
+                      </span>
+                    </p>
+                  </div>
+                )}
 
-            <Reveal delay={0.16}>
-              <Card className="py-0 shadow-sm">
-                <CardContent className="flex flex-col gap-4 p-6">
-                  <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                <Separator />
+
+                <div className="flex flex-col gap-3.5">
+                  <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
                     How far they have got
                   </p>
                   {summary.stages.map((s) => (
@@ -327,7 +403,7 @@ export function SummaryScreen({
                       </div>
                       <Progress
                         value={(s.reached / summary.documents) * 100}
-                        className="h-2 [&_[data-slot=progress-indicator]]:bg-blue-600"
+                        className="h-2 [&_[data-slot=progress-indicator]]:bg-foreground"
                       />
                     </div>
                   ))}
@@ -336,29 +412,26 @@ export function SummaryScreen({
                     {summary.stages.map((s) => `${s.weight.toFixed(0)}%`).join(' / ')} of a
                     document’s progress, in that order.
                   </p>
-                </CardContent>
-              </Card>
-            </Reveal>
-          </div>
-        </div>
-
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Reveal>
         {/* -------------------------------------- the seam to the weekly */}
-        {bridge && <EngineeringSeam bridge={bridge} registerPercent={summary.actual} />}
+        {bridge && <EngineeringSeam bridge={bridge} />}
 
         {/* ---------------------------------------------- the breakdown */}
         <Reveal delay={0.22}>
-          <div className="mt-8 flex flex-col gap-1">
-            <h3 className="text-sm font-semibold">{groupsTitle}</h3>
+          <div className="mt-8 flex flex-col gap-1.5">
+            <h3 className="text-base font-semibold tracking-tight">{groupsTitle}</h3>
             <p className="max-w-3xl text-sm text-muted-foreground">{groupsBlurb}</p>
           </div>
         </Reveal>
 
         {foldEmptyGroups && (
           <Reveal delay={0.24}>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <Badge variant="secondary" className="font-normal">
-                {moving.length} under way
-              </Badge>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge variant="secondary" className="font-normal">{moving.length} under way</Badge>
               <Badge variant="secondary" className="font-normal">
                 {untouchedGroups.length} not started
               </Badge>
@@ -377,9 +450,7 @@ export function SummaryScreen({
 
         {moving.length === 0 && (
           <Reveal delay={0.26}>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Nothing here has been started yet.
-            </p>
+            <p className="mt-4 text-sm text-muted-foreground">Nothing here has been started yet.</p>
           </Reveal>
         )}
 
@@ -449,13 +520,13 @@ export function SummaryScreen({
                   <Reveal key={kind} delay={0.1 + i * 0.04}>
                     <Card className="py-0 h-full shadow-sm">
                       <CardContent className="flex items-center justify-between gap-3 p-5">
-                        <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Icon className={cn('h-4 w-4 shrink-0', m.tone)} />
+                        <span className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                          <span className={cn('flex h-8 w-8 items-center justify-center rounded-full', m.chip)}>
+                            <Icon className="h-4 w-4" />
+                          </span>
                           {m.label}
                         </span>
-                        <span className={cn('text-2xl font-semibold tabular-nums', m.tone)}>
-                          {movement[kind]}
-                        </span>
+                        <span className="text-2xl font-semibold tabular-nums">{movement[kind]}</span>
                       </CardContent>
                     </Card>
                   </Reveal>
@@ -476,16 +547,14 @@ export function SummaryScreen({
             <div className="mt-3 flex flex-col gap-2">
               {movement.events.slice(0, MOVEMENTS_SHOWN).map((e, i) => {
                 const m = MOVEMENT[e.kind];
-                const Icon = m.icon;
                 return (
                   <Reveal key={`${e.documentId}-${e.stage}-${e.kind}`} delay={0.26 + Math.min(i, 6) * 0.03}>
                     <Card className="py-0 shadow-sm">
                       <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                         <div className="flex min-w-0 flex-col gap-1.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Icon className={cn('h-3.5 w-3.5 shrink-0', m.tone)} />
                             {e.docNo && <span className="font-mono text-xs font-medium">{e.docNo}</span>}
-                            <Badge variant="secondary" className="font-normal">
+                            <Badge className={cn('font-normal', m.chip)}>
                               {m.label} · {STAGE_LABEL[e.stage]}
                             </Badge>
                             {e.returnCode && (
@@ -518,9 +587,7 @@ export function SummaryScreen({
           <Reveal delay={0.1}>
             <Card className="py-0 border-dashed shadow-none">
               <CardContent className="flex flex-col gap-2 p-6">
-                <p className="text-sm font-semibold">
-                  Nothing moved in week {summary.asOfWeek}.
-                </p>
+                <p className="text-sm font-semibold">Nothing moved in week {summary.asOfWeek}.</p>
                 <p className="max-w-2xl text-sm text-muted-foreground">
                   {movement && movement.evidenceWeek < summary.asOfWeek ? (
                     <>
@@ -575,17 +642,19 @@ export function SummaryScreen({
               return (
                 <Reveal key={b.kind} delay={0.1 + i * 0.04}>
                   <Card className="py-0 h-full shadow-sm">
-                    <CardContent className="flex h-full flex-col gap-2 p-5">
+                    <CardContent className="flex h-full flex-col gap-3 p-5">
                       <div className="flex items-start justify-between gap-3">
-                        <span className="flex items-center gap-2 text-sm font-medium">
-                          <Icon className={cn('h-4 w-4 shrink-0', o.tone)} />
-                          {o.heading}
+                        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', o.chip)}>
+                          <Icon className="h-4 w-4" />
                         </span>
-                        <span className={cn('text-2xl font-semibold leading-none tabular-nums', o.tone)}>
+                        <span className="text-3xl font-semibold leading-none tabular-nums">
                           {b.value}
                         </span>
                       </div>
-                      <p className="text-xs leading-relaxed text-muted-foreground">{o.blurb}</p>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">{o.heading}</span>
+                        <p className="text-xs leading-relaxed text-muted-foreground">{o.blurb}</p>
+                      </div>
                     </CardContent>
                   </Card>
                 </Reveal>
@@ -596,17 +665,15 @@ export function SummaryScreen({
           <div className="mt-4 flex flex-col gap-2">
             {obstacles.slice(0, OBSTACLES_SHOWN).map((o, i) => {
               const kind = OBSTACLE[o.kind];
-              const Icon = kind.icon;
               return (
                 <Reveal key={o.documentId} delay={0.24 + Math.min(i, 6) * 0.03}>
                   <Card className="py-0 shadow-sm transition-shadow duration-300 ease-ios hover:shadow-md">
                     <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                       <div className="flex min-w-0 flex-col gap-1.5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           {o.docNo && <span className="font-mono text-xs font-medium">{o.docNo}</span>}
                           {o.stage && (
-                            <Badge variant="secondary" className="font-normal">{STAGE_LABEL[o.stage]}</Badge>
+                            <Badge variant="outline" className="font-normal">{STAGE_LABEL[o.stage]}</Badge>
                           )}
                           <Badge className={cn('font-normal', kind.chip)}>
                             {o.returnCode ?? kind.heading}
@@ -620,9 +687,7 @@ export function SummaryScreen({
                       <div className="flex shrink-0 items-center gap-4 text-xs sm:flex-col sm:items-end sm:gap-1">
                         <span className="text-muted-foreground">{shortDate(o.since)}</span>
                         {o.days !== null && (
-                          <span className="font-medium tabular-nums">
-                            {o.days} days waiting
-                          </span>
+                          <span className="font-medium tabular-nums">{o.days} days waiting</span>
                         )}
                       </div>
                     </CardContent>
@@ -656,13 +721,7 @@ export function SummaryScreen({
  * for the same week is here, with the gap between them stated rather than left
  * for someone to discover in a meeting.
  */
-function EngineeringSeam({
-  bridge,
-  registerPercent,
-}: {
-  bridge: EngineeringBridge;
-  registerPercent: number;
-}) {
+function EngineeringSeam({ bridge }: { bridge: EngineeringBridge }) {
   const gap = bridge.registerPercent - bridge.typedPercent;
   const agrees = Math.abs(gap) < 0.05;
 
@@ -670,8 +729,10 @@ function EngineeringSeam({
     <Reveal delay={0.2}>
       <Card className="py-0 mt-4 shadow-sm">
         <CardContent className="flex flex-col gap-4 p-5 sm:p-6">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold">This is the same work the weekly report counts</h3>
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-base font-semibold tracking-tight">
+              This is the same work the weekly report counts
+            </h3>
             <p className="max-w-3xl text-sm text-muted-foreground">
               The weekly report measures engineering as {bridge.disciplines} disciplines with a
               typed-in percentage; this register measures it as {bridge.documents} documents with
@@ -682,27 +743,32 @@ function EngineeringSeam({
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground">
-                Typed into the weekly report{bridge.wbsWeek !== null && ` (week ${bridge.wbsWeek})`}
+          <div className="flex flex-col divide-y rounded-lg border sm:flex-row sm:divide-x sm:divide-y-0">
+            <div className="flex-1 p-4">
+              <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                Typed into the weekly report{bridge.wbsWeek !== null && ` · week ${bridge.wbsWeek}`}
               </p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums">
                 {bridge.typedPercent.toFixed(1)}%
               </p>
             </div>
-            <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground">Counted from this register</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">
+            <div className="flex-1 p-4">
+              <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                Counted from this register
+              </p>
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums">
                 {bridge.registerPercent.toFixed(1)}%
               </p>
             </div>
-            <div className={cn('rounded-lg border p-4', !agrees && 'border-amber-300 bg-amber-50')}>
-              <p className={cn('text-xs', agrees ? 'text-muted-foreground' : 'text-amber-900')}>
+            <div className={cn('flex-1 p-4', !agrees && 'bg-amber-50')}>
+              <p className={cn(
+                'text-[0.65rem] font-medium uppercase tracking-wider',
+                agrees ? 'text-muted-foreground' : 'text-amber-700',
+              )}>
                 {agrees ? 'The two agree' : 'The two disagree by'}
               </p>
               <p className={cn(
-                'mt-1 text-2xl font-semibold tabular-nums',
+                'mt-1.5 text-2xl font-semibold tabular-nums',
                 agrees ? 'text-emerald-600' : 'text-amber-700',
               )}>
                 {agrees ? 'in step' : `${signed(gap, 1)}%`}
@@ -710,10 +776,10 @@ function EngineeringSeam({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <Link
               href={`/weekly/${bridge.weekNo}/summary`}
-              className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
+              className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium hover:underline"
             >
               Open the week {bridge.weekNo} report
               <ArrowRight className="h-4 w-4" />
@@ -725,10 +791,6 @@ function EngineeringSeam({
               Choose where engineering progress comes from
             </Link>
           </div>
-
-          <p className="sr-only">
-            This register is at {registerPercent.toFixed(1)}% overall.
-          </p>
         </CardContent>
       </Card>
     </Reveal>
