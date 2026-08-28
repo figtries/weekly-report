@@ -62,7 +62,7 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
   }, [shown]);
 
   return (
-    <div className="mt-6 pb-16">
+    <div className="pb-4">
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <button

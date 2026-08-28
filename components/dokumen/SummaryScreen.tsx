@@ -19,13 +19,12 @@ import { cn } from '@/lib/utils';
  *
  * Two rules hold the whole screen together.
  *
- * **ACTUAL IS BLUE, PLAN IS RED, AND THE RED IS THE POINT.** The convention
+ * **ACTUAL IS BLUE, PLAN IS RED, AND BOTH ARE ALWAYS DRAWN.** The convention
  * comes from `SCurveClient` — `#3b82f6` and `#ef4444` — and a reader who
- * learned it on the S-curve must not relearn it here. It is drawn as a stack,
- * never as a tick: the red arc runs to the plan, the blue arc runs to the
- * actual and is painted over it, so the red still showing past the blue IS the
- * shortfall. A one-pixel marker technically encoded the same fact and nobody
- * could see it.
+ * learned it on the S-curve must not relearn it here. Each gets its own track:
+ * concentric arcs in the ring, stacked bars in the meter. A one-pixel plan
+ * marker encoded the same fact and nobody could see it; painting the two on one
+ * track made the plan vanish outright whenever the work ran ahead of it.
  *
  * **The screen shows, it does not lecture.** An earlier pass gave every block a
  * paragraph of explanation and every count a sentence of its own; together they
@@ -253,10 +252,10 @@ export function SummaryScreen({
   const moved = movement ? movement.submitted + movement.returned + movement.approved : 0;
 
   return (
-    <div className="pb-16">
+    <div className="pb-4">
       {stale && (
         <Reveal>
-          <Card className="py-0 mt-6 border-amber-200 bg-amber-50 shadow-none">
+          <Card className="py-0 border-amber-200 bg-amber-50 shadow-none">
             <CardContent className="flex items-center gap-3 p-4 text-sm text-amber-900">
               <TriangleAlert className="h-4 w-4 shrink-0" />
               <p>
@@ -271,7 +270,7 @@ export function SummaryScreen({
       )}
 
       {/* ============================================ 1 · where it stands */}
-      <section className="mt-8">
+      <section className={cn(stale && "mt-4")}>
         <Reveal>
           <BlockHeading step="1" title="Where it stands" />
         </Reveal>

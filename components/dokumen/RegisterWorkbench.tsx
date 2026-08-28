@@ -38,13 +38,15 @@ interface Group {
   node: RegisterNode;
 }
 
-const TREND_BAR: Record<RegisterNode['trend'], string> = {
-  ahead: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
-  'on-track': '[&_[data-slot=progress-indicator]]:bg-emerald-600',
-  slipping: '[&_[data-slot=progress-indicator]]:bg-amber-600',
-  behind: '[&_[data-slot=progress-indicator]]:bg-rose-600',
-  unplanned: '[&_[data-slot=progress-indicator]]:bg-blue-600',
-};
+/**
+ * Every bar in Document Control is blue, because blue means actual.
+ *
+ * These were painted by trend — emerald when ahead, rose when behind. Once the
+ * summary screens settled on the S-curve's convention (actual blue, plan red) a
+ * rose bar on this screen read as a plan line, which is the opposite of what it
+ * is: no plan is drawn here at all, only how far each group has got.
+ */
+const BAR = '[&_[data-slot=progress-indicator]]:bg-blue-500';
 
 export function RegisterWorkbench({
   projectId,
@@ -104,7 +106,7 @@ export function RegisterWorkbench({
   }, [selected, cards, q]);
 
   return (
-    <div className="mt-6 pb-16 lg:grid lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6">
+    <div className="pb-4 lg:grid lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6">
       {/* ------------------------------------------------------- categories */}
       <aside className={cn('flex-col gap-3', selected ? 'hidden lg:flex' : 'flex')}>
         <div className="relative">
@@ -141,7 +143,7 @@ export function RegisterWorkbench({
                     <div className="mt-1.5 flex items-center gap-2">
                       <Progress
                         value={g.node.actual}
-                        className={cn('h-1.5 flex-1', TREND_BAR[g.node.trend])}
+                        className={cn('h-1.5 flex-1', BAR)}
                       />
                       <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
                         {g.node.actual.toFixed(0)}% · {g.node.documents}
@@ -226,7 +228,7 @@ export function RegisterWorkbench({
                             <Badge variant="secondary" className="font-normal">{STAGE_LABEL[doc.stage]}</Badge>
                           )}
                           {doc.returnCode && (
-                            <Badge className="bg-rose-600 font-normal text-white">{doc.returnCode}</Badge>
+                            <Badge className="bg-red-100 font-normal text-red-700">{doc.returnCode}</Badge>
                           )}
                         </div>
                         <p className="mt-0.5 line-clamp-1 text-sm">{doc.title}</p>
@@ -235,7 +237,7 @@ export function RegisterWorkbench({
                       <div className="flex w-24 shrink-0 items-center gap-2">
                         <Progress
                           value={doc.percent}
-                          className="h-1.5 flex-1 [&_[data-slot=progress-indicator]]:bg-blue-600"
+                          className={cn("h-1.5 flex-1", BAR)}
                         />
                         <span className="w-9 text-right text-[0.7rem] tabular-nums text-muted-foreground">
                           {doc.percent.toFixed(0)}%

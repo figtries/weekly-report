@@ -1,27 +1,24 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { motion, useReducedMotion } from 'framer-motion';
-
+import SectionTabs from '@/components/layout/SectionTabs';
 import WeekSelect from '@/components/weekly/WeekSelect';
-import { DURATION, EASE } from '@/components/motion/Reveal';
-import { cn } from '@/lib/utils';
+import { usePathname } from 'next/navigation';
 
 /**
- * The five screens of Document Control, and the week they are read as of.
+ * The five screens of Document Control, laid out exactly like the weekly
+ * report's header: the week first, the tabs under it, nothing above either.
  *
- * They are routes rather than tab state, so a controller can bookmark the one
- * they live in and a reload lands where they were. The moving underline is one
- * `layoutId` — framer-motion's shared-element transition — which is why it
- * slides between tabs instead of blinking.
+ * It used to sit below a page title, a contract number and a paragraph of
+ * explanation, inside a centred `max-w-6xl` column — so every edge on this
+ * screen landed a different distance from the window than the same edge on the
+ * weekly report. The padding here is `WeekTabs`' own, and the tab row is the
+ * shared `SectionTabs`, so the two sections now line up to the pixel.
  *
- * The week picker is the weekly report's own control, pointed at these routes:
- * one place to learn, one behaviour to maintain, and the two screens stay in
- * step when someone moves between them.
- *
- * The bar scrolls sideways on a phone. Five labels do not fit in 390px and
- * shortening them to fit would cost the one thing a tab has to do.
+ * They are routes rather than tab state, so a controller can bookmark the
+ * screen they live in and a reload lands where they were. The week picker is
+ * the weekly report's own control pointed at these routes: one place to learn,
+ * one behaviour to maintain, and the two sections stay in step when someone
+ * moves between them.
  */
 const TABS = [
   { key: 'summary', label: 'EDL Summary' },
@@ -41,13 +38,11 @@ export function RegisterTabs({
   projectCurrentWeek: number;
 }) {
   const pathname = usePathname();
-  const reduced = useReducedMotion();
-
   const active = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'summary';
 
   return (
-    <div className="mt-6 flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
+      <div className="flex items-center gap-2">
         <WeekSelect
           weeks={weeks}
           selectedWeek={selectedWeek}
@@ -58,47 +53,15 @@ export function RegisterTabs({
         {selectedWeek === projectCurrentWeek && (
           <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Current week
+            Current
           </span>
         )}
       </div>
 
-      <nav
-        aria-label="Document Control"
-        className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <ul className="flex min-w-max items-stretch gap-1 border-b">
-          {TABS.map((tab) => {
-            const isActive = active === tab.key;
-            return (
-              <li key={tab.key} className="relative">
-                <Link
-                  href={`/dokumen/${selectedWeek}/${tab.key}`}
-                  aria-current={isActive ? 'page' : undefined}
-                  // 44px minimum: this is tapped standing up, on site.
-                  className={cn(
-                    'flex min-h-11 items-center whitespace-nowrap rounded-t-lg px-3 text-sm font-medium transition-colors duration-300 ease-ios',
-                    isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {tab.label}
-                </Link>
-                {isActive && (
-                  reduced ? (
-                    <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-foreground" />
-                  ) : (
-                    <motion.span
-                      layoutId="dokumen-tab"
-                      className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-foreground"
-                      transition={{ duration: DURATION, ease: EASE }}
-                    />
-                  )
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <SectionTabs
+        className="-mx-3 mt-2 px-3 sm:mx-0 sm:px-0"
+        tabs={TABS.map((t) => ({ href: `/dokumen/${selectedWeek}/${t.key}`, label: t.label }))}
+      />
     </div>
   );
 }
