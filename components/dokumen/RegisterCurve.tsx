@@ -128,9 +128,9 @@ export function RegisterCurve({
               <path
                 d={planPath}
                 fill="none"
-                strokeWidth={2}
-                strokeDasharray="6 5"
+                strokeWidth={2.5}
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
                 className="stroke-red-500"
               />
@@ -175,20 +175,18 @@ export function RegisterCurve({
 
       <figcaption className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="h-0.5 w-6 rounded-full bg-blue-500" /> <span className="font-medium text-blue-600">Actual</span> — where it got to
+          <span className="h-0.5 w-6 rounded-full bg-blue-500" /> <span className="font-medium text-blue-600">Actual</span>
         </span>
         {planPath && (
           <span className="flex items-center gap-2">
-            <span className="h-0 w-6 border-t-2 border-dashed border-red-500" />
-            <span className="font-medium text-red-600">Plan</span> — where the promised dates said
-            it would be
+            <span className="h-0 w-6 border-t-2 border-red-500" />
+            <span className="font-medium text-red-600">Plan</span>
           </span>
         )}
-        <span>both counted from the dates in the register — neither is typed in</span>
         {undated > 0 && (
           <span className="basis-full text-amber-700">
-            {undated} submissions in the register carry no date — placed on the week they were
-            promised for, so the curve’s shape there is an estimate.
+            {undated} submissions carry no date — placed on the week they were promised for, so the
+            shape there is an estimate.
           </span>
         )}
       </figcaption>

@@ -27,8 +27,7 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
       obstacles={getObstacles(PROJECT_ID, 'vdrl', week)}
       movement={getWeekMovement(PROJECT_ID, 'vdrl', week)}
       groupNoun="packages"
-      groupsTitle="Package by package"
-      groupsBlurb="One line per vendor package. Only the packages that have sent something get a card; the rest are folded into the two lines below so the ones worth chasing stay visible."
+      groupsTitle="By vendor package"
       foldEmptyGroups
     />
   );

@@ -39,8 +39,7 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
       movement={getWeekMovement(PROJECT_ID, 'edl', week)}
       bridge={getEngineeringBridge(PROJECT_ID, week)}
       groupNoun="disciplines"
-      groupsTitle="Discipline by discipline"
-      groupsBlurb="The same total, split the way the engineering team is. The marker on each bar is where the promised dates said that discipline would be by now."
+      groupsTitle="By discipline"
     />
   );
 }
