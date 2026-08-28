@@ -21,6 +21,11 @@ import { cn } from '@/lib/utils';
  * the figure at the top recomputes itself — that is the whole deal.
  */
 
+/**
+ * APP closes a stage; anything else means it came back for comment and is still
+ * holding construction up. It is the only field here that is a judgement rather
+ * than a fact, which is why it is a short list and not free text.
+ */
 const CODES = ['', 'APP', 'AWC', 'RWC'];
 
 /** Only the three that carry weight are shown by default; the rest on request. */

@@ -18,12 +18,13 @@ import type { DocStage, RegisterKind } from './schema';
  *
  * Two rules hold everything here together:
  *
- * **A submission is recorded once, for every document that went out in it.**
- * The evidence says why: 47 outgoing transmittals in Gundih's EDL carry 232
- * submissions between them — `T.001` alone carries 34. Recording one document
- * at a time would mean typing the same number and the same date 34 times.
+ * **A field is saved as it was typed, one at a time.** The first attempt made
+ * people tick documents and then choose a mode — "record submission" or
+ * "record return" — before they could touch anything, and the modes were what
+ * confused them. Correcting a wrong date is the commonest thing a controller
+ * does, so it costs one click and one keystroke.
  *
- * **Progress is never typed.** Nothing here writes a percentage. A submission
+ * **Progress is never typed.** Nothing here writes a percentage. What happened
  * is written down, and every figure on every screen — the category, the
  * register total, the weekly curve, and the WBS leaf once it is linked — is
  * recomputed from it by `lib/register.ts`. That is decision 17 actually
@@ -118,7 +119,13 @@ export interface StageInput {
   sentTransmittal: string;
   returnedAt: string;
   returnTransmittal: string;
-  returnCode: string;
+  /**
+   * Left out by the working screen, which no longer asks for it. Undefined
+   * means "leave whatever is stored alone" — an imported APP/AWC is what marks
+   * a document as still out for comment, and a screen that stopped asking must
+   * not quietly erase it.
+   */
+  returnCode?: string;
 }
 
 /**
@@ -142,12 +149,8 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
 
     const sentAt = optionalDate(input.sentAt, 'Sent');
     const returnedAt = optionalDate(input.returnedAt, 'Returned');
-    const code = input.returnCode.trim().toUpperCase() || null;
     const sentNo = input.sentTransmittal.trim();
     const returnNo = input.returnTransmittal.trim();
-
-    // Anything known about the outbound leg means it went out.
-    const submitted = Boolean(sentAt || sentNo || returnedAt || returnNo || code);
 
     db.transaction((tx) => {
       const outId = sentNo
@@ -160,6 +163,12 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
       const existing = tx.select().from(schema.docStages)
         .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)))
         .all()[0];
+
+      const code = input.returnCode === undefined
+        ? existing?.returnCode ?? null
+        : input.returnCode.trim().toUpperCase() || null;
+      // Anything known about the outbound leg means it went out.
+      const submitted = Boolean(sentAt || sentNo || returnedAt || returnNo || code);
 
       const values = {
         submitted,
