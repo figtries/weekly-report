@@ -844,8 +844,10 @@ The `reduced ? false : {...}` guard is dropped here because `MotionConfig reduce
 Each of these is an existing `condition && (...)` block. Replace the `&&` with `<Expand open={condition}>` wrapping the same children, unchanged:
 
 - `components/weekly/ApprovalPanel.tsx` — three of them: `drifted &&` (line ~91), `blocked &&` (line ~111), and `!by.trim() && !pending &&` (line ~145). The drift notice is the one that matters most: it appears when a signed week is edited afterwards, and a notice that pops in without movement reads as a page glitch rather than as a warning.
-- `components/settings/CatalogEditor.tsx` — `showClaim &&` (line ~66). Leave the two `hidden={fixedLength}` attributes alone; those are a permanent structural state, not something a person toggles.
-- `components/dokumen/DocumentEditor.tsx` — the region gated by `showAll` (state at line ~47), which discloses the non-core stages.
+**Both of the other two turned out not to be panels, and were skipped — 30 August 2026:**
+
+- `components/settings/CatalogEditor.tsx` — `showClaim` sits INSIDE the `.map()` over catalog rows, which is the one place this layer is not allowed to go. It is also a prop rather than state, so it never toggles and there is nothing to animate. Its two `hidden={fixedLength}` attributes are permanent structure, not a disclosure. Left alone entirely.
+- `components/dokumen/DocumentEditor.tsx` — `showAll` swaps the `stages` array between `CORE` and `STAGE_ORDER` and the result is rendered through a `.map()`. That is a list changing length, not a panel opening: wrapping it in `Expand` would collapse and re-expand the three core stages as well, which is wrong. It is a reasonable candidate for the Task 7 treatment (`AnimatePresence` on the rows, ~7 of them) and is recorded here rather than done, because Task 6 is panels.
 
 Do not change any condition, any child, or any class on the children. If a block's children contain a `.map()` that can exceed ~20 rows, skip that block and say so.
 

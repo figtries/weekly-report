@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+
+import { Expand } from '@/components/motion/Expand';
 import { approveWeekAction, revokeApprovalAction } from '@/lib/actions';
 import { fmtPct } from '@/lib/analysis';
 import type { Approval } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TYPE } from '@/lib/design';
 
 /**
  * Sign-off for a reporting week.
@@ -56,23 +60,22 @@ export default function ApprovalPanel({
   }
 
   return (
-    <section
-      className="animate-fade-in-up rounded-lg border bg-card p-4 sm:p-5"
-      style={{ animationDelay: '300ms' }}
-    >
-      <h2 className="text-sm font-semibold">Week {week} approval</h2>
-      <p className="mb-3 text-xs text-muted-foreground">
-        The gate beside this decides whether the figure <em>may</em> be issued. This records that
-        a person stands behind it.
-      </p>
-
-      {approval ? (
+    <Card>
+      <CardHeader>
+        <CardTitle className={TYPE.cardTitle}>Week {week} approval</CardTitle>
+        <CardDescription className={TYPE.cardDesc}>
+          The gate beside this decides whether the figure <em>may</em> be issued. This records that
+          a person stands behind it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {approval ? (
         <div className="space-y-3">
-          <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
-            <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+          <div className="rounded-xl bg-ok-soft p-3">
+            <div className="text-sm font-semibold text-ok">
               Approved by {approval.by}
             </div>
-            <div className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-400/80">
+            <div className="mt-0.5 text-xs text-ok/85">
               {approval.role} ·{' '}
               {new Date(approval.at).toLocaleString('en-GB', {
                 dateStyle: 'medium',
@@ -81,20 +84,24 @@ export default function ApprovalPanel({
               · at {fmtPct(approval.approvedPct)}
             </div>
             {approval.note && (
-              <p className="mt-1.5 text-xs italic text-emerald-700/80 dark:text-emerald-400/80">
+              <p className="mt-1.5 text-xs italic text-ok/85">
                 “{approval.note}”
               </p>
             )}
           </div>
 
-          {drifted && (
-            <p className="rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          {/* The drift notice is the one that most needed the movement: it
+              appears when a week someone already signed is edited underneath
+              them, and a warning that pops in without travel reads as a page
+              glitch rather than as something that just became true. */}
+          <Expand open={!!drifted}>
+            <p className="rounded-xl bg-warn-soft px-3 py-2.5 text-xs text-warn">
               The figure moved <strong className="tabular-nums">{fmtPct(Math.abs(drift))}</strong>{' '}
               {drift > 0 ? 'up' : 'down'} since it was approved — this approval covers{' '}
               {fmtPct(approval.approvedPct)}, not {fmtPct(currentPct)}. Approve again if the change
               was intended.
             </p>
-          )}
+          </Expand>
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={approve} disabled={pending || !by.trim()}>
@@ -107,12 +114,12 @@ export default function ApprovalPanel({
         </div>
       ) : (
         <div className="space-y-2.5">
-          {blocked && (
-            <p className="rounded-md border border-dashed border-destructive/50 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <Expand open={blocked}>
+            <p className="rounded-xl bg-bad-soft px-3 py-2.5 text-xs font-medium text-bad">
               Findings are still holding the report back. You can approve anyway, but the
               approval will be recorded on top of data that is not clean.
             </p>
-          )}
+          </Expand>
           <div className="grid gap-2 sm:grid-cols-2">
             <Input
               value={by}
@@ -133,13 +140,25 @@ export default function ApprovalPanel({
             placeholder="Note (optional)"
             className="text-sm"
           />
-          <Button size="sm" onClick={approve} disabled={pending || !by.trim()}>
-            {pending ? 'Saving…' : `Approve at ${fmtPct(currentPct)}`}
-          </Button>
+          {/* The button greys out until a name is typed, and used to give no
+              reason for it — a dead control next to a red warning reads as "the
+              findings have locked me out", which is the opposite of true: the
+              findings never block approval, only an unsigned name does. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Button size="sm" onClick={approve} disabled={pending || !by.trim()}>
+              {pending ? 'Saving…' : `Approve at ${fmtPct(currentPct)}`}
+            </Button>
+            {!by.trim() && !pending && (
+              <span className="text-xs text-muted-foreground">
+                Type your name above to approve.
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-    </section>
+      {error && <p className="mt-2 text-xs text-bad">{error}</p>}
+      </CardContent>
+    </Card>
   );
 }

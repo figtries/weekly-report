@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
+import { Expand } from '@/components/motion/Expand';
 import { TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { DURATION, EASE, Reveal } from '@/components/motion/Reveal';
+import { Reveal } from '@/components/motion/Reveal';
 import { setDisciplineLink } from '@/lib/doc-actions';
 import { STAGE_FULL, STAGE_LABEL, type DisciplineLink } from '@/lib/register-shared';
 import { cn } from '@/lib/utils';
@@ -86,7 +86,6 @@ export function EngineeringSource({
 }
 
 function DisciplineRow({ projectId, discipline }: { projectId: string; discipline: DisciplineLink }) {
-  const reduced = useReducedMotion();
   const [pending, start] = useTransition();
   const [on, setOn] = useState(discipline.stages.every((s) => s.linked));
   const [error, setError] = useState<string | null>(null);
@@ -184,27 +183,20 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
         </table>
       </div>
 
-      <AnimatePresence initial={false}>
-        {(error || (on && drop < -0.05)) && (
-          <m.div
-            initial={reduced ? false : { opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: DURATION, ease: EASE }}
-            className="overflow-hidden"
-          >
-            <Badge
-              className={cn(
-                'mt-3 w-full justify-start whitespace-normal text-left font-normal',
-                error ? 'bg-rose-600 text-white' : 'bg-amber-600 text-white',
-              )}
-            >
-              <TriangleAlert className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-              {error ?? `Reported engineering progress in this discipline falls by an average of ${Math.abs(drop).toFixed(1)} points while this is on.`}
-            </Badge>
-          </m.div>
-        )}
-      </AnimatePresence>
+      {/* This was the Expand pattern written out longhand; it is the primitive
+          now. The `reduced ? false : …` guard went with it — MotionConfig's
+          `reducedMotion="user"` in MotionRoot covers the whole app centrally. */}
+      <Expand open={!!(error || (on && drop < -0.05))}>
+        <Badge
+          className={cn(
+            'mt-3 w-full justify-start whitespace-normal text-left font-normal',
+            error ? 'bg-rose-600 text-white' : 'bg-amber-600 text-white',
+          )}
+        >
+          <TriangleAlert className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          {error ?? `Reported engineering progress in this discipline falls by an average of ${Math.abs(drop).toFixed(1)} points while this is on.`}
+        </Badge>
+      </Expand>
     </div>
   );
 }
