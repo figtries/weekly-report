@@ -24,7 +24,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // holds the drill-down Swap, /settings the Expand panels and a SectionTabs pill.
 // If forced synchronous layouts rise on either, the cause is Expand's height or
 // a `layout` prop that reached a long list — not the spring.
-for (const url of ['/', '/dokumen/36/summary', '/daily/2026-08-29', '/weekly/36/overall', '/settings']) {
+//
+// KNOWN, AND NOT YET EXPLAINED: this script reports ~8 long tasks on
+// /dokumen/36/log (worst 235–340ms) and nothing anywhere else. It did not
+// reproduce under four other measurements on 30 Aug 2026 — a fresh load, a
+// reload with the observer installed first, a scroll taken after the entrances
+// had settled, and the same seven routes visited in the same order in one
+// browser. Emulating prefers-reduced-motion changed nothing in any of them, so
+// whatever it is, it is not the animation: that page renders 511 cards and 53
+// framer-motion sections, and the cost is somewhere in this script's own
+// timing against that tree. Believe the other four until this one is explained.
+for (const url of ['/', '/dokumen/36/summary', '/daily/2026-08-29', '/weekly/36/overall', '/settings', '/dokumen/36/data', '/dokumen/36/log']) {
   await page.goto(BASE + url, { waitUntil: 'networkidle0', timeout: 120_000 });
   await sleep(1500);
 

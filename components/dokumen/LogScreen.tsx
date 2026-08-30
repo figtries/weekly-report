@@ -61,6 +61,24 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
     return [...map.entries()];
   }, [shown]);
 
+  /**
+   * How many cards precede each day, so the entrance can be capped by TOTAL
+   * card count rather than per day.
+   *
+   * Capping per day was not enough: three days of a busy week is still eighty
+   * simultaneous keyframes, and the app's own limit is around twenty. This
+   * gives each card its position in the whole list, so the cascade stops at a
+   * fixed number no matter how the events happen to fall across dates.
+   */
+  const dayOffset = useMemo(() => {
+    let n = 0;
+    return days.map(([, list]) => {
+      const start = n;
+      n += list.length;
+      return start;
+    });
+  }, [days]);
+
   return (
     <div className="pb-4">
       <div className="flex flex-wrap gap-2">
@@ -90,7 +108,7 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
 
       <div className="mt-6 flex flex-col gap-8">
         <AnimatePresence initial={false} mode="popLayout">
-          {days.map(([date, list]) => (
+          {days.map(([date, list], dayIdx) => (
             <m.section
               key={date}
               layout={!reduced}
@@ -104,8 +122,33 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
                 {dayLabel(date)}
               </h2>
 
-              {list.map((e, i) => (
-                <Card key={`${e.documentId}-${e.stage}-${e.kind}-${i}`} className="py-0 shadow-sm">
+              {/* The cascade goes on the CARDS, not on the section around them.
+                  The section carries framer-motion's `layout`, which writes its
+                  own transform, and a CSS keyframe on the same element would be
+                  a second writer on one property. These are different elements,
+                  so the two never meet.
+
+                  It is also what gives this screen an entrance at all: the
+                  section's `initial` is skipped on first mount by
+                  `AnimatePresence initial={false}` — correctly, so nothing ships
+                  hidden — which left the log arriving completely still.
+
+                  ONLY THE FIRST TWENTY CARDS ANIMATE, counted across days and
+                  not within them. This log renders every event up to the week
+                  being viewed — 511 of them on Gundih — and capping the DELAY
+                  is not the same as capping the COUNT. Capping per day was the
+                  first attempt and still left eighty-seven keyframes running at
+                  once, because a busy day carries thirty events on its own.
+                  Twenty is the same limit the rest of the app uses, and it is
+                  already more than fills a phone screen. */}
+              {list.map((e, i) => {
+                const nth = dayOffset[dayIdx] + i;
+                return (
+                <Card
+                  key={`${e.documentId}-${e.stage}-${e.kind}-${i}`}
+                  style={nth < 20 ? { animationDelay: `${Math.min(nth, 8) * 40}ms` } : undefined}
+                  className={cn('py-0 shadow-sm', nth < 20 && 'animate-fade-in-up')}
+                >
                   <CardContent className="flex items-start gap-3 p-4">
                     <span
                       className={cn(
@@ -149,7 +192,8 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </m.section>
           ))}
         </AnimatePresence>

@@ -197,10 +197,20 @@ function Key({ hasPlan }: { hasPlan: boolean }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, delay = 0 }: { label: string; value: string; delay?: number }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-2">
-      <span className="text-xl font-semibold tabular-nums">{value}</span>
+      {/* The figure lands a beat after the tile carrying it, and the three
+          tiles land in sequence — the same shape CountUp gives the hero number
+          elsewhere. `.animate-fade-in-up` and not `.animate-enter`: this is one
+          figure inside something that is already arriving, and the two must not
+          travel the same distance or the number slides against its own tile. */}
+      <span
+        className="animate-fade-in-up text-xl font-semibold tabular-nums"
+        style={delay ? { animationDelay: `${delay}s` } : undefined}
+      >
+        {value}
+      </span>
       <span className="truncate text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
@@ -307,12 +317,13 @@ export function SummaryScreen({
                     <Key hasPlan={summary.plan !== null} />
                   </div>
                   <div className="flex divide-x rounded-lg border bg-muted/40 py-3">
-                    <Stat label="Documents" value={String(summary.documents)} />
+                    <Stat label="Documents" value={String(summary.documents)} delay={0.06} />
                     <Stat
                       label={groupNoun.replace(/^./, (c) => c.toUpperCase())}
                       value={String(groups.length)}
+                      delay={0.12}
                     />
-                    <Stat label="Still open" value={String(obstacles.length)} />
+                    <Stat label="Still open" value={String(obstacles.length)} delay={0.18} />
                   </div>
                 </div>
 

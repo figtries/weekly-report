@@ -108,7 +108,10 @@ export function RegisterWorkbench({
   return (
     <div className="pb-4 lg:grid lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6">
       {/* ------------------------------------------------------- categories */}
-      <aside className={cn('flex-col gap-3', selected ? 'hidden lg:flex' : 'flex')}>
+      {/* The classes go on the aside and the section themselves rather than on
+          a `Reveal` wrapper: this is a two-column grid, and a wrapper div would
+          become the grid child in their place and collapse the layout. */}
+      <aside className={cn('animate-enter flex-col gap-3', selected ? 'hidden lg:flex' : 'flex')}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -121,18 +124,35 @@ export function RegisterWorkbench({
         </div>
 
         <div className="flex flex-col gap-4">
-          {groupByPackage(matchingGroups).map(([packageName, list]) => (
+          {/* `packagesBefore` carries a running count across packages so the
+              cascade cap below counts the WHOLE column, not each package from
+              zero. Without it VDRL's many small packages each restart the
+              index and every button animates. */}
+          {groupByPackage(matchingGroups).map(([packageName, list], pkgIdx, packages) => {
+          const packagesBefore = packages
+            .slice(0, pkgIdx)
+            .reduce((n, [, l]) => n + l.length, 0);
+          return (
             <div key={packageName} className="flex flex-col gap-1.5">
               <p className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {packageName}
               </p>
-              {list.map((g) => (
+              {list.map((g, gj) => {
+                const gi = packagesBefore + gj;
+                return (
                 <button
                   key={g.id}
                   type="button"
                   onClick={() => { setSelectedId(g.id); setOpenDoc(null); }}
+                  // Delay capped at 8 steps AND the count capped at 20. The two
+                  // are different limits: the first stops the last row arriving
+                  // seconds in, the second stops a register with sixty vendor
+                  // packages from starting sixty keyframes at once. VDRL has
+                  // enough packages to need the second one.
+                  style={gi < 20 ? { animationDelay: `${Math.min(gi, 8) * 40}ms` } : undefined}
                   className={cn(
                     'flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors duration-300 ease-ios',
+                    gi < 20 && 'animate-fade-in-up',
                     selectedId === g.id
                       ? 'border-foreground/20 bg-muted'
                       : 'border-transparent bg-card hover:bg-muted/60',
@@ -143,7 +163,11 @@ export function RegisterWorkbench({
                     <div className="mt-1.5 flex items-center gap-2">
                       <Progress
                         value={g.node.actual}
-                        className={cn('h-1.5 flex-1', BAR)}
+                        className={cn(
+                          'h-1.5 flex-1',
+                          BAR,
+                          gi < 20 && '[&_[data-slot=progress-indicator]]:animate-bar-grow',
+                        )}
                       />
                       <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
                         {g.node.actual.toFixed(0)}% · {g.node.documents}
@@ -152,9 +176,11 @@ export function RegisterWorkbench({
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
-              ))}
+                );
+              })}
             </div>
-          ))}
+          );
+          })}
 
           {matchingGroups.length === 0 && (
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">No match.</p>
@@ -163,7 +189,7 @@ export function RegisterWorkbench({
       </aside>
 
       {/* -------------------------------------------------------- documents */}
-      <section className={cn('self-start', selected ? 'block' : 'hidden lg:block')}>
+      <section className={cn('animate-enter stagger-1 self-start', selected ? 'block' : 'hidden lg:block')}>
         {!selected ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center lg:sticky lg:top-6">
             <Inbox className="h-6 w-6 text-muted-foreground" />
@@ -196,13 +222,19 @@ export function RegisterWorkbench({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              {shown.map((doc) => {
+              {shown.map((doc, di) => {
                 const open = openDoc === doc.id;
                 return (
                   <div
                     key={doc.id}
+                    // Only the first twenty animate. A discipline can hold far
+                    // more than that, and capping the delay is not capping the
+                    // count — the rows past this point are below the fold and
+                    // have nothing to announce.
+                    style={di < 20 ? { animationDelay: `${Math.min(di, 8) * 40}ms` } : undefined}
                     className={cn(
                       'overflow-hidden rounded-xl border bg-card transition-shadow duration-300 ease-ios',
+                      di < 20 && 'animate-fade-in-up',
                       open ? 'shadow-md ring-1 ring-blue-600/30' : 'hover:shadow-sm',
                     )}
                   >
@@ -235,9 +267,18 @@ export function RegisterWorkbench({
                       </div>
 
                       <div className="flex w-24 shrink-0 items-center gap-2">
+                        {/* Gated on the list being short, exactly as the daily
+                            list is: one discipline can hold enough documents
+                            that every row starting a 1s grow at once is real
+                            work on a phone. */}
                         <Progress
                           value={doc.percent}
-                          className={cn("h-1.5 flex-1", BAR)}
+                          className={cn(
+                            'h-1.5 flex-1',
+                            BAR,
+                            shown.length <= 20 &&
+                              '[&_[data-slot=progress-indicator]]:animate-bar-grow',
+                          )}
                         />
                         <span className="w-9 text-right text-[0.7rem] tabular-nums text-muted-foreground">
                           {doc.percent.toFixed(0)}%
