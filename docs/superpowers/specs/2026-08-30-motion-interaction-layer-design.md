@@ -34,11 +34,24 @@ ada apa pun yang disembunyikan menunggu hidrasi.
    (pudar, warna, skala kecil); spring untuk yang **berpindah tempat** (level
    menggeser, pil tab meluncur, panel membuka). Keduanya ditulis sekali, di
    `MOTION`, dan tidak boleh ditulis di tempat lain.
-2. **`strict` menyala.** `LazyMotion` dipasang dengan `strict`, yang membuat
-   `motion.*` melempar error dan memaksa `m.*`. Tanpa penjaga ini "satu kurva"
-   mati pelan-pelan: enam bulan lagi ada tiga durasi berbeda dan tidak ada yang
-   tahu mana yang benar. Itu persis penyakit yang `lib/design.ts` dibuat untuk
-   mencegah.
+2. **`strict` menyala, DAN ada aturan lint di sebelahnya.** `LazyMotion`
+   dipasang dengan `strict`, yang membuat `motion.*` melempar error dan memaksa
+   `m.*`. Tanpa penjaga ini "satu kurva" mati pelan-pelan: enam bulan lagi ada
+   tiga durasi berbeda dan tidak ada yang tahu mana yang benar. Itu persis
+   penyakit yang `lib/design.ts` dibuat untuk mencegah.
+
+   **Tapi `strict` hanya berlaku di development.** Guard-nya di
+   `node_modules/framer-motion/dist/es/motion/index.mjs:89` dibungkus
+   `process.env.NODE_ENV !== "production"`. Dibuktikan 30 Agustus 2026 dengan
+   membangun aplikasi ini sambil menyisipkan `motion.div` yang disengaja:
+   `next build` keluar dengan status **0**. Jadi build tidak akan pernah
+   menangkapnya, dan yang ikut lolos bukan cuma disiplinnya — seluruh pustaka
+   ikut terkirim, bukan irisan yang sudah di-tree-shake.
+
+   Karena itu `eslint.config.mjs` melarang impor `motion` dari `framer-motion`
+   lewat `no-restricted-imports`. Itu separuh yang berjalan di CI dan separuh
+   yang menggagalkan pull request. `strict` menangkapnya lebih cepat, saat
+   mengetik; lint menangkapnya lebih pasti.
 3. **Masuk halaman tetap CSS.** Tidak ada pengecualian, tidak ada perkecualian
    kecil. Alasannya sudah dibayar tiga kali dan ditulis panjang di
    `components/motion/Reveal.tsx`.

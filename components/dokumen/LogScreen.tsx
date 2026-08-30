@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { CornerDownLeft, Send } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -77,7 +77,7 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
             {filter === f.id && (
               reduced
                 ? <span className="absolute inset-0 rounded-full bg-foreground" />
-                : <motion.span layoutId="log-filter" className="absolute inset-0 rounded-full bg-foreground"
+                : <m.span layoutId="log-filter" className="absolute inset-0 rounded-full bg-foreground"
                     transition={{ duration: DURATION, ease: EASE }} />
             )}
             <span className="relative">{f.label}</span>
@@ -91,7 +91,7 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
       <div className="mt-6 flex flex-col gap-8">
         <AnimatePresence initial={false} mode="popLayout">
           {days.map(([date, list]) => (
-            <motion.section
+            <m.section
               key={date}
               layout={!reduced}
               initial={reduced ? false : { opacity: 0, y: 8 }}
@@ -150,7 +150,7 @@ export function LogScreen({ events, weekNo }: { events: TaggedEvent[]; weekNo: n
                   </CardContent>
                 </Card>
               ))}
-            </motion.section>
+            </m.section>
           ))}
         </AnimatePresence>
 

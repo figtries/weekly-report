@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -186,7 +186,7 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
 
       <AnimatePresence initial={false}>
         {(error || (on && drop < -0.05)) && (
-          <motion.div
+          <m.div
             initial={reduced ? false : { opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -202,7 +202,7 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
               <TriangleAlert className="mr-1.5 h-3.5 w-3.5 shrink-0" />
               {error ?? `Reported engineering progress in this discipline falls by an average of ${Math.abs(drop).toFixed(1)} points while this is on.`}
             </Badge>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

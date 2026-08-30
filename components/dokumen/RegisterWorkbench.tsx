@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, ChevronRight, FilePlus2, Inbox, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -247,7 +247,7 @@ export function RegisterWorkbench({
 
                     <AnimatePresence initial={false}>
                       {open && (
-                        <motion.div
+                        <m.div
                           initial={reduced ? false : { height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
@@ -255,7 +255,7 @@ export function RegisterWorkbench({
                           className="overflow-hidden"
                         >
                           <DocumentEditor projectId={projectId} register={register} doc={doc} />
-                        </motion.div>
+                        </m.div>
                       )}
                     </AnimatePresence>
                   </div>

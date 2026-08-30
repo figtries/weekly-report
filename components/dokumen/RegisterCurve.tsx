@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { useId } from 'react';
 
 import { EASE } from '@/components/motion/Reveal';
@@ -100,7 +100,7 @@ export function RegisterCurve({
               framer-motion implements that with stroke-dasharray in user units,
               and on a stretched viewBox with non-scaling strokes it breaks both
               lines into ragged dashes. */}
-          <motion.svg
+          <m.svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             className="absolute inset-0 h-full w-full text-foreground"
@@ -145,11 +145,11 @@ export function RegisterCurve({
               vectorEffect="non-scaling-stroke"
               className="stroke-blue-500"
             />
-          </motion.svg>
+          </m.svg>
 
           {/* the head of the curve, drawn in HTML so it stays a circle */}
           {lastActual && (
-            <motion.span
+            <m.span
               aria-hidden
               className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500 ring-2 ring-background"
               style={{ left: `${x(lastActual.weekNo)}%`, top: `${y(lastActual.actual)}%` }}

@@ -256,12 +256,42 @@ Expected: `0`.
 Run: `npx next build > build.log 2>&1; echo $?`
 Expected: `0`. Never pipe this. If non-zero, read `build.log`.
 
-- [ ] **Step 6: Prove `strict` is actually armed**
+- [ ] **Step 6: Add the lint rule, because `strict` alone is not enough**
 
-Temporarily add `import { motion } from 'framer-motion';` and a `<motion.div />` to `components/dokumen/LogScreen.tsx`, run the dev server, and load `/dokumen/43/log`.
-Expected: a thrown error naming `LazyMotion`/`strict`. Remove the probe.
+**Finding, 30 August 2026:** `strict` is development-only. The guard at `node_modules/framer-motion/dist/es/motion/index.mjs:89` is wrapped in `process.env.NODE_ENV !== "production"`. Building this app with a deliberate `motion.div` in place exits **0** — the build never catches it, and what slips through is not only the discipline but the whole library instead of the tree-shaken slice.
 
-This step exists because a provider that silently is not applied looks exactly like one that is.
+So add a static guard beside the runtime one, in `eslint.config.mjs`, before the `globalIgnores` call:
+
+```js
+  {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "framer-motion",
+              importNames: ["motion"],
+              message:
+                "Import `m` instead of `motion`. The app mounts LazyMotion with `strict`; a `motion` component throws in dev and silently defeats tree shaking in production. See components/motion/MotionRoot.tsx.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+```
+
+Then prove it both ways — a guard nobody has watched fail is not a guard:
+
+```bash
+npx eslint components lib app > lint.log 2>&1; echo $?
+```
+Expected: no `no-restricted-imports` error (the app's 8 pre-existing `setState`-in-effect errors are unrelated and stay).
+
+Then temporarily add `motion` back to LogScreen's import and re-run against that one file.
+Expected: exit `1` with `'motion' import from 'framer-motion' is restricted`. Restore the file.
 
 - [ ] **Step 7: Look at the two screens that changed**
 
