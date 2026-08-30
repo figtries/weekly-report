@@ -129,9 +129,21 @@ function Ring({ actual, plan }: { actual: number; plan: number | null }) {
           </>
         )}
         <circle cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" className="stroke-muted" />
+        {/* ONLY THE ACTUAL SWEEPS. The plan ring above stands still, which is
+            the same call the hero gauge in WbsTreeVisual makes and for the same
+            reason: standing still it states the target first, and the actual
+            then runs at it and stops short, so the shortfall is something you
+            watch happen rather than a gap you find afterwards. Sweeping both
+            would race them, and on a week that is behind, the one thing worth
+            seeing is exactly the distance between the two.
+
+            `--ring-c` is the circumference the keyframe counts back from; the
+            offset in the markup is already the true one. */}
         <circle
           cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" strokeLinecap="round"
-          className="stroke-blue-500" {...arc(ACTUAL_R, actual)}
+          className="animate-ring-draw stroke-blue-500"
+          style={{ '--ring-c': 2 * Math.PI * ACTUAL_R } as React.CSSProperties}
+          {...arc(ACTUAL_R, actual)}
         />
       </svg>
       <div className="absolute flex flex-col items-center">

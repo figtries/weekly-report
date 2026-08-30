@@ -720,6 +720,25 @@ a:active {
   animation: arc-draw 1.3s var(--ease-draw) both;
 }
 
+/* Document Control's ring, swept round from nothing to the value ALREADY IN
+   THE MARKUP. Sibling of `arc-draw` above, and separate from it because the two
+   arcs are built differently: the hero gauge animates `stroke-dasharray`, while
+   this ring sets a full-circumference dasharray and moves the OFFSET. `--ring-c`
+   is the circumference, handed in by the component, so one class serves both
+   radii.
+
+   The resting state is the real offset, so a browser that never runs the
+   animation still shows the right figure — the same rule the gauge follows. */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-c);
+  }
+}
+
+.animate-ring-draw {
+  animation: ring-draw 1.3s var(--ease-draw) both;
+}
+
 /* The dashboard curve, revealed by a CLIP WIPE rather than a dash offset.
    AGENTS.md prescribes exactly this, and that chart is why: its viewBox is
    stretched (`preserveAspectRatio="none"`), every path carries
