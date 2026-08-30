@@ -231,6 +231,7 @@ export default function ProgressCurve({
       <EndDot
         leftPct={(x(lastPlan.week) / W) * 100}
         topPct={(y(lastPlan.planPct) / H) * 100}
+        value={lastPlan.planPct}
         tone="plan"
       />
     )}
@@ -238,6 +239,7 @@ export default function ProgressCurve({
       <EndDot
         leftPct={(x(lastActual.week) / W) * 100}
         topPct={(y(lastActual.actualPct) / H) * 100}
+        value={lastActual.actualPct}
         tone="actual"
       />
     )}
@@ -258,17 +260,49 @@ export default function ProgressCurve({
  * moves, so nothing is misstated: what changes is only whether you can see that
  * there are two.
  */
-function EndDot({ leftPct, topPct, tone }: { leftPct: number; topPct: number; tone: 'plan' | 'actual' }) {
+function EndDot({
+  leftPct,
+  topPct,
+  value,
+  tone,
+}: {
+  leftPct: number;
+  topPct: number;
+  value: number;
+  tone: 'plan' | 'actual';
+}) {
   const actual = tone === 'actual';
   return (
-    <span
-      aria-hidden
-      className={cn(
-        'pointer-events-none absolute block -translate-x-1/2 -translate-y-1/2 animate-scale-in rounded-full',
-        actual ? 'z-20 size-2.5 bg-chart-1 ring-2 ring-card' : 'z-10 size-3.5 bg-chart-2'
-      )}
-      // Just after the wipe reaches this end of the line.
-      style={{ left: `${leftPct}%`, top: `${topPct}%`, animationDelay: '0.95s' }}
-    />
+    <div
+      className="pointer-events-none absolute z-20"
+      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'absolute block -translate-x-1/2 -translate-y-1/2 animate-dot-in rounded-full',
+          actual ? 'z-20 size-2.5 bg-chart-1 ring-2 ring-card' : 'z-10 size-3.5 bg-chart-2'
+        )}
+        // Just after the wipe reaches this end of the line.
+        style={{ animationDelay: '0.95s' }}
+      />
+      {/* THE FIGURE, PLACED SO THE TWO CAN NEVER COLLIDE.
+          Both chips sit to the LEFT of their dot — the cut-off is the plot's
+          right edge, and anything placed to its right leaves the card. The
+          plan's chip then sits ABOVE its dot and the actual's BELOW its own, so
+          the separation comes from which side of which dot they are on rather
+          than from the values being far enough apart. That matters because they
+          usually are not: this project is 1.79 points behind, which is about
+          four pixels of height on a phone. */}
+      <span
+        className={cn(
+          'absolute right-3 animate-fade-in-up whitespace-nowrap rounded-md bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold leading-tight tabular-nums shadow-sm ring-1 ring-border/60',
+          actual ? 'top-1 text-chart-1' : 'bottom-1 text-chart-2'
+        )}
+        style={{ animationDelay: actual ? '1.15s' : '1.05s' }}
+      >
+        {actual ? 'Actual' : 'Plan'} {value.toFixed(2)}%
+      </span>
+    </div>
   );
 }

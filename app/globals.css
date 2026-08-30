@@ -720,6 +720,30 @@ a:active {
   animation: arc-draw 1.3s var(--ease-draw) both;
 }
 
+/* The curve's endpoint dot. Its own keyframe rather than `.animate-scale-in`,
+   which travels 0.97 → 1 and on a 10px dot is no movement at all.
+
+   IT CARRIES THE CENTRING TRANSLATE ITSELF, and the element keeps its
+   `-translate-x-1/2 -translate-y-1/2` classes as well. An animation on
+   `transform` overrides those classes while it runs, so the keyframe has to
+   repeat them or the dot would jump half its own width on the way in; and the
+   classes have to stay for the reduced-motion case, where the animation never
+   runs and the transform must still come from somewhere. */
+@keyframes dot-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.animate-dot-in {
+  animation: dot-in 0.55s var(--ease-out-expo) both;
+}
+
 /* Document Control's ring, swept round from nothing to the value ALREADY IN
    THE MARKUP. Sibling of `arc-draw` above, and separate from it because the two
    arcs are built differently: the hero gauge animates `stroke-dasharray`, while
