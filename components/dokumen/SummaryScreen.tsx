@@ -1,10 +1,12 @@
+import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import Link from 'next/link';
 import { ArrowRight, TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { CountUp, Reveal } from '@/components/motion/Reveal';
+import { Reveal } from '@/components/motion/Reveal';
+import { CountUp } from '@/components/motion/CountUp';
 import { RegisterCurve } from '@/components/dokumen/RegisterCurve';
 import {
   STAGE_FULL, STAGE_LABEL,
@@ -151,15 +153,26 @@ function Ring({ actual, plan }: { actual: number; plan: number | null }) {
  * plan completely whenever the work is ahead of it. Same left edge and same
  * scale, so the two ends can be read against each other at a glance.
  */
-function Meter({ actual, plan }: { actual: number; plan?: number | null }) {
+function Meter({ actual, plan, delay = 0 }: { actual: number; plan?: number | null; delay?: number }) {
   return (
     <div className="flex w-full flex-col gap-1">
+      {/* Both tracks grow, the plan a beat behind the actual, so the gap between
+          the two ends is something you watch open rather than a difference you
+          have to go looking for. The widths in the markup are already the real
+          ones — the keyframe only scales X — so nothing here depends on the
+          bundle arriving. */}
       <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <span className="block h-full rounded-full bg-blue-500" style={{ width: `${clamp(actual)}%` }} />
+        <span
+          className="block h-full animate-bar-grow rounded-full bg-blue-500"
+          style={{ width: `${clamp(actual)}%`, animationDelay: delay ? `${delay}s` : undefined }}
+        />
       </div>
       {plan != null && (
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <span className="block h-full rounded-full bg-red-500" style={{ width: `${clamp(plan)}%` }} />
+          <span
+            className="block h-full animate-bar-grow rounded-full bg-red-500"
+            style={{ width: `${clamp(plan)}%`, animationDelay: `${delay + 0.12}s` }}
+          />
         </div>
       )}
     </div>
@@ -365,7 +378,7 @@ export function SummaryScreen({
                   <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
                     How far they have got
                   </p>
-                  {summary.stages.map((s) => (
+                  {summary.stages.map((s, i) => (
                     <div key={s.stage} className="flex flex-col gap-1.5">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
                         <span className="font-medium">
@@ -378,7 +391,12 @@ export function SummaryScreen({
                           {s.reached} of {summary.documents}
                         </span>
                       </div>
-                      <Meter actual={(s.reached / summary.documents) * 100} />
+                      {/* IFR, then IFA, then AFC — a tenth of a second apart, so
+                          the three read as one sweep down the stages rather than
+                          three bars all firing at once. They are the same three
+                          stages in the same order every time, so the cascade is
+                          telling the truth about their sequence. */}
+                      <Meter actual={(s.reached / summary.documents) * 100} delay={i * 0.1} />
                     </div>
                   ))}
                   <p className="text-xs text-muted-foreground">
@@ -445,6 +463,7 @@ export function SummaryScreen({
       </section>
 
       {/* =========================================== 2 · what moved this week */}
+      <ScrollReveal>
       <section className="mt-12">
         <Reveal delay={0.06}>
           <BlockHeading
@@ -549,9 +568,11 @@ export function SummaryScreen({
           </Card>
         </Reveal>
       </section>
+      </ScrollReveal>
 
       {/* ========================================= 3 · what is holding it up */}
       {obstacles.length > 0 && (
+        <ScrollReveal>
         <section className="mt-12">
           <Reveal delay={0.06}>
             <BlockHeading
@@ -616,6 +637,7 @@ export function SummaryScreen({
             </Reveal>
           )}
         </section>
+        </ScrollReveal>
       )}
     </div>
   );

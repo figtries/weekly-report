@@ -145,7 +145,7 @@ export default function DailyReportsView({
           <p className="p-6 text-sm text-gray-500">No daily reports for {selectedLabel}.</p>
         )}
         <AnimatePresence initial={false} mode="popLayout">
-        {filtered.map((d) => (
+        {filtered.map((d, idx) => (
           <m.div
             key={d.date}
             // `layout` is what makes the rows SLIDE to their new places when a
@@ -156,12 +156,23 @@ export default function DailyReportsView({
             // 415 rows on each filter change is exactly the jank this layer
             // was asked to remove, not add.
             layout={animatedRows}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={MOTION.spring}
-            className="flex items-center gap-2 px-4 sm:px-6 transition-colors duration-150 ease-ios hover:bg-gray-50"
+            className="transition-colors duration-150 ease-ios hover:bg-gray-50"
           >
+            {/* TWO ELEMENTS, ON PURPOSE. The arrival is a CSS keyframe on this
+                inner div; the outer one owns `layout` and `exit`. Putting both
+                on one element means CSS and framer-motion writing `transform`
+                at the same time, and the row judders.
+
+                The keyframe is also why the rows are visible at all before
+                hydration. An `initial` prop here would be skipped on first
+                mount by `AnimatePresence initial={false}` — which is what
+                briefly cost this list its entrance entirely. */}
+            <div
+              className="flex items-center gap-2 px-4 animate-fade-in-up sm:px-6"
+              style={{ animationDelay: `${Math.min(idx, 7) * 60}ms` }}
+            >
             <Link
               href={`/daily/${d.date}`}
               className="flex min-w-0 flex-1 flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4"
@@ -206,6 +217,7 @@ export default function DailyReportsView({
                   />
                 </svg>
               </button>
+            </div>
             </div>
           </m.div>
         ))}

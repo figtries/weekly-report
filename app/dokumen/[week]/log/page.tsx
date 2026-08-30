@@ -1,3 +1,5 @@
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import { Reveal } from '@/components/motion/Reveal';
 import { LogScreen, type TaggedEvent } from '@/components/dokumen/LogScreen';
 import { getRegisterLog } from '@/lib/register';
 
@@ -19,5 +21,16 @@ export default async function LogPage({ params }: { params: Promise<{ week: stri
     ...getRegisterLog(PROJECT_ID, 'vdrl', 400, week).map((e) => ({ ...e, register: 'vdrl' as const })),
   ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 
-  return <LogScreen events={events} weekNo={week} />;
+  return (
+    <RouteTransition id="dokumen-log">
+      {/* LogScreen's own day sections sit inside an `AnimatePresence
+          initial={false}`, which deliberately skips the FIRST mount so nothing
+          ships hidden — correct, and the reason this screen arrived with no
+          movement at all. The entrance belongs out here, in CSS, where it plays
+          on first paint whether or not the bundle has landed. */}
+      <Reveal>
+        <LogScreen events={events} weekNo={week} />
+      </Reveal>
+    </RouteTransition>
+  );
 }

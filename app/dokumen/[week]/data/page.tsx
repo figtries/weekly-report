@@ -1,3 +1,5 @@
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import { Reveal } from '@/components/motion/Reveal';
 import { EmptyRegister } from '@/components/dokumen/EmptyRegister';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import { getRegisterCards, getRegisterSummary, getRegisterTree } from '@/lib/register';
@@ -13,6 +15,8 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
   if (!summary) return <EmptyRegister script="node scripts/import-edl.ts" name="Engineering Deliverable List" />;
 
   return (
+    <RouteTransition id="dokumen-edl-data">
+    <Reveal>
     <RegisterWorkbench
       projectId={PROJECT_ID}
       register="edl"
@@ -20,5 +24,7 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
       cards={getRegisterCards(PROJECT_ID, 'edl', week)}
       weekNo={summary.asOfWeek}
     />
+    </Reveal>
+    </RouteTransition>
   );
 }

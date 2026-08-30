@@ -1028,7 +1028,7 @@ export default function DataOverallWorkbench({
                 <div className="h-2 w-24 overflow-hidden rounded-full bg-muted sm:w-32">
                   <div
                     className={cn(
-                      'h-full rounded-full transition-all duration-500',
+                      'h-full animate-bar-grow rounded-full transition-all duration-500',
                       queueDue.length === 0 ? 'bg-ok' : 'bg-chart-1'
                     )}
                     style={{ width: `${queueTotal ? (queueDone.length / queueTotal) * 100 : 0}%` }}
@@ -1571,7 +1571,7 @@ const LeafCard = memo(function LeafCard({
       {/* -------------------------------------------------------------- bar */}
       <div className="relative mt-3 h-2.5 rounded-full bg-muted">
         <div
-          className={cn('h-full rounded-full transition-all duration-500', st.bar)}
+          className={cn('h-full animate-bar-grow rounded-full transition-all duration-500', st.bar)}
           style={{ width: `${clamp(cum)}%` }}
         />
         {plan > 0.5 && plan < 99.5 && (
