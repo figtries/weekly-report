@@ -1,5 +1,9 @@
 'use client';
 
+import { pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -63,22 +67,22 @@ export default function ConfirmDialog({
         <div className="mt-1 text-sm text-gray-500">{message}</div>
 
         <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-          <button
+          <m.button {...pressMotion}
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 ease-ios hover:bg-gray-50 active:scale-[0.97] disabled:opacity-50 sm:py-2"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors duration-200 ease-ios hover:bg-gray-50 disabled:opacity-50 sm:py-2"
           >
             Cancel
-          </button>
-          <button
+          </m.button>
+          <m.button {...pressMotion}
             onClick={onConfirm}
             disabled={busy}
-            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-ios hover:shadow-md active:scale-[0.96] disabled:opacity-60 sm:py-2 ${
+            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:shadow-md disabled:opacity-60 sm:py-2 ${
               destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {busy ? (busyLabel ?? confirmLabel) : confirmLabel}
-          </button>
+          </m.button>
         </div>
       </div>
     </div>,

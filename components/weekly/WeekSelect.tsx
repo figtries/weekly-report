@@ -1,5 +1,9 @@
 'use client';
 
+import { pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
@@ -154,23 +158,23 @@ export default function WeekSelect({
 
   return (
     <div ref={rootRef} className="relative w-fit">
-      <button
+      <m.button {...pressMotion}
         type="button"
         onClick={toggle}
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-2.5 text-sm font-medium tabular-nums text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
+        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card py-2 pr-2.5 pl-3 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <span>Week {displayedWeek}</span>
         {isPending ? (
-          <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <svg className="h-4 w-4 animate-spin text-chart-1" viewBox="0 0 24 24" fill="none" aria-hidden>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         ) : (
           <svg
-            className="h-4 w-4 text-gray-400 transition-transform duration-200 ease-ios"
+            className="h-4 w-4 text-muted-foreground transition-transform duration-200 ease-ios"
             style={{ transform: open && !closing ? 'rotate(180deg)' : 'rotate(0deg)' }}
             fill="none"
             stroke="currentColor"
@@ -181,12 +185,12 @@ export default function WeekSelect({
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         )}
-      </button>
+      </m.button>
 
       {open && (
         <div
           role="listbox"
-          className={`absolute left-0 top-full z-50 mt-2 w-full origin-top-left overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl ring-1 ring-black/5 ${
+          className={`absolute left-0 top-full z-50 mt-2 w-full origin-top-left overflow-hidden rounded-xl border bg-popover p-1 shadow-xl ring-1 ring-foreground/10 ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
@@ -206,19 +210,19 @@ export default function WeekSelect({
                   onMouseEnter={() => setActiveIdx(i)}
                   className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm tabular-nums transition-colors duration-150 ${
                     isCurrent
-                      ? 'bg-emerald-50 font-semibold text-emerald-700'
+                      ? 'bg-ok-soft font-semibold text-ok'
                       : isSelected
-                        ? 'bg-blue-50 font-semibold text-blue-700'
+                        ? 'bg-chart-1/10 font-semibold text-chart-1'
                         : isActive
-                          ? 'bg-gray-100 text-gray-900'
-                          : 'text-gray-700'
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground'
                   }`}
                   title={isCurrent ? 'Current week' : undefined}
                 >
                   <span>Week {w}</span>
                   {isSelected && (
                     <svg
-                      className={`h-4 w-4 shrink-0 ${isCurrent ? 'text-emerald-600' : 'text-blue-600'}`}
+                      className={`h-4 w-4 shrink-0 ${isCurrent ? 'text-ok' : 'text-chart-1'}`}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} aria-hidden
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

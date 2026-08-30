@@ -1,5 +1,9 @@
 'use client';
 
+import { PressLink, pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import Link from 'next/link';
 import { memo, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
@@ -992,12 +996,12 @@ export default function DataOverallWorkbench({
                   They are not in this week&apos;s list — they need a decision, not a number.
                 </p>
               </div>
-              <Link
+              <PressLink {...pressMotion}
                 href={`/weekly/${week}/control`}
-                className="shrink-0 self-center rounded-lg bg-card px-3 py-2 text-[13px] font-semibold text-warn shadow-sm transition-all hover:brightness-105 active:scale-[0.97]"
+                className="shrink-0 self-center rounded-lg bg-card px-3 py-2 text-[13px] font-semibold text-warn shadow-sm transition-colors hover:brightness-105"
               >
                 Review
-              </Link>
+              </PressLink>
             </div>
           )}
 
@@ -1056,12 +1060,12 @@ export default function DataOverallWorkbench({
               <p className="mx-auto mt-1 max-w-sm text-[13px] text-muted-foreground">
                 Next: check the figures on Review, then print the report.
               </p>
-              <Link
+              <PressLink {...pressMotion}
                 href={`/weekly/${week}/control`}
-                className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-chart-1 px-5 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]"
+                className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-chart-1 px-5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:brightness-110"
               >
                 Go to Review
-              </Link>
+              </PressLink>
             </div>
           )}
 
@@ -1119,15 +1123,15 @@ export default function DataOverallWorkbench({
           {currentPath.length > 0 && (
             <div className="mt-3 rounded-2xl border bg-card ring-1 ring-foreground/10 px-5 py-4 shadow-sm animate-fade-in">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-                <button
+                <m.button {...pressMotion}
                   onClick={goBack}
-                  className="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-muted-foreground transition-all hover:text-chart-1 active:scale-[0.96]"
+                  className="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-muted-foreground transition-colors hover:text-chart-1"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   Back
-                </button>
+                </m.button>
                 <span className="mx-1 text-muted-foreground/60">|</span>
                 <button onClick={() => goToLevel(-1)} className="text-muted-foreground transition-colors hover:text-chart-1">
                   All contracts
@@ -1263,7 +1267,7 @@ export default function DataOverallWorkbench({
                   {/* Both labels sit in one grid cell so the button is always as
                       wide as "Saving…" — swapping text in place used to resize it
                       mid-save and push Cancel across the bar. */}
-                  <button
+                  <m.button {...pressMotion}
                     // Not `onClick={save}`: that hands the MouseEvent to
                     // `silent`, and a manual save would swallow its own errors.
                     onClick={() => {
@@ -1272,7 +1276,7 @@ export default function DataOverallWorkbench({
                     }}
                     disabled={saving}
                     aria-label={saving ? 'Saving' : saveFailed ? 'Retry saving' : 'Save'}
-                    className="grid place-items-center rounded-lg bg-chart-1 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:brightness-110 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
+                    className="grid place-items-center rounded-lg bg-chart-1 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-colors hover:brightness-110 hover:shadow-md disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
                   >
                     <span
                       className={`col-start-1 row-start-1 transition-opacity duration-150 ${
@@ -1295,7 +1299,7 @@ export default function DataOverallWorkbench({
                           one-line row that narrow screens barely fit. */}
                       <span className="hidden sm:inline">Saving…</span>
                     </span>
-                  </button>
+                  </m.button>
                 </div>
               </>
             )}
@@ -1879,7 +1883,7 @@ function MilestoneEntry({
 
 function StepBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
-    <button
+    <m.button {...pressMotion}
       onClick={onClick}
       aria-label={label}
       title={label}
@@ -1887,10 +1891,10 @@ function StepBtn({ children, onClick, label }: { children: React.ReactNode; onCl
       // carried by shadow alone simply did not read as a button. It also sits a
       // touch shorter than that box, which is what keeps the box the anchor of
       // the group rather than three equal slabs.
-      className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card ring-1 ring-foreground/10 text-lg font-semibold text-foreground shadow-sm transition-all hover:bg-muted hover:text-chart-1 active:scale-90"
+      className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card ring-1 ring-foreground/10 text-lg font-semibold text-foreground shadow-sm transition-colors hover:bg-muted hover:text-chart-1"
     >
       {children}
-    </button>
+    </m.button>
   );
 }
 

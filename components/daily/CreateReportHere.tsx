@@ -1,5 +1,9 @@
 'use client';
 
+import { pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import { useState, useTransition } from 'react';
 import { createDailyAction, refreshDbAction } from '@/lib/actions';
 
@@ -28,16 +32,16 @@ export default function CreateReportHere({ date }: { date: string }) {
 
   return (
     <div className="mt-4 flex flex-col items-center gap-2">
-      <button
+      <m.button {...pressMotion}
         onClick={create}
         disabled={creating}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-blue-700 hover:shadow-md disabled:opacity-60"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
         </svg>
         {creating ? 'Creating…' : `Create report for ${date}`}
-      </button>
+      </m.button>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

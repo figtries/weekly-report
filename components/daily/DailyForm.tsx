@@ -1,5 +1,10 @@
 'use client';
 
+import { PressLink, pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
+import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { saveDailyAction } from '@/lib/actions';
@@ -179,21 +184,21 @@ export default function DailyForm({
         cascade instead of the whole page animating as one slow block. */}
     <div className="space-y-6 print:hidden">
       <div className="flex items-center justify-between mb-4">
-        <Link
+        <PressLink {...pressMotion}
           href="/daily"
-          className="inline-flex items-center gap-2 text-gray-600 transition-all duration-200 ease-ios hover:text-gray-900 active:scale-[0.96]"
+          className="inline-flex items-center gap-2 text-gray-600 transition-colors duration-200 ease-ios hover:text-gray-900"
           aria-label="Back to daily reports"
         >
           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
           </svg>
           <span className="text-sm font-medium">Back</span>
-        </Link>
+        </PressLink>
         <div className="flex items-center gap-2">
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-all duration-200 ease-ios active:scale-[0.96] disabled:cursor-default ${
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-colors duration-200 ease-ios disabled:cursor-default ${
               justSaved
                 ? 'bg-emerald-600 text-white shadow-md'
                 : dirty
@@ -230,7 +235,7 @@ export default function DailyForm({
           />
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
@@ -263,7 +268,7 @@ export default function DailyForm({
       </div>
 
       {/* Weather */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '40ms' }}>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter stagger-1">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Weather</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
@@ -327,12 +332,12 @@ export default function DailyForm({
       </section>
 
       {/* Man Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '80ms' }}>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter stagger-2">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">1. Man Hours</h2>
-          <button onClick={addManHour} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
+          <m.button {...pressMotion} onClick={addManHour} className="text-sm text-blue-600 transition-colors duration-200 ease-ios hover:text-blue-800">
             + Add company
-          </button>
+          </m.button>
         </div>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
@@ -411,7 +416,8 @@ export default function DailyForm({
       </section>
 
       {/* Non-Effective Working Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '120ms' }}>
+      <ScrollReveal>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Non Effective Working Hours</h2>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
@@ -468,14 +474,16 @@ export default function DailyForm({
         </table>
         </div>
       </section>
+      </ScrollReveal>
 
       {/* Permit to Work */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '160ms' }}>
+      <ScrollReveal>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">2. Permit to Work (PTW)</h2>
-          <button onClick={addPtw} className="text-sm text-blue-600 transition-all duration-200 ease-ios hover:text-blue-800 active:scale-[0.96]">
+          <m.button {...pressMotion} onClick={addPtw} className="text-sm text-blue-600 transition-colors duration-200 ease-ios hover:text-blue-800">
             + Add permit
-          </button>
+          </m.button>
         </div>
         <div className="space-y-6">
           {form.ptw.length === 0 && <p className="text-sm text-gray-400">No permits recorded for this day.</p>}
@@ -536,9 +544,11 @@ export default function DailyForm({
           ))}
         </div>
       </section>
+      </ScrollReveal>
 
       {/* HSE Input */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+      <ScrollReveal>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">3. HSE Input</h2>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[480px] text-sm">
@@ -587,9 +597,11 @@ export default function DailyForm({
         </table>
         </div>
       </section>
+      </ScrollReveal>
 
       {/* Activities & Plan/Actual */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up" style={{ animationDelay: '240ms' }}>
+      <ScrollReveal>
+      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Daily Activities</h2>
         <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
@@ -652,6 +664,7 @@ export default function DailyForm({
           </div>
         </div>
       </section>
+      </ScrollReveal>
     </div>
     </>
   );

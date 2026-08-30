@@ -1,5 +1,9 @@
 'use client';
 
+import { pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RollupNode } from '@/lib/rollup';
@@ -139,21 +143,21 @@ export default function WbsTreeTable({
           <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={expandAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
+          <m.button {...pressMotion} onClick={expandAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900">
             Expand all
-          </button>
+          </m.button>
           <span className="text-gray-300">|</span>
-          <button onClick={collapseAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900 active:scale-[0.97]">
+          <m.button {...pressMotion} onClick={collapseAll} className="text-sm text-gray-500 transition-colors duration-200 ease-ios hover:text-gray-900">
             Collapse all
-          </button>
+          </m.button>
           {!readOnly && (
-            <button
+            <m.button {...pressMotion}
               onClick={save}
               disabled={!dirtyCount || saving}
-              className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:bg-blue-700 hover:shadow-md active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40"
+              className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-blue-700 hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
             >
               {saving ? 'Saving…' : dirtyCount ? `Save ${dirtyCount} change${dirtyCount > 1 ? 's' : ''}` : 'Saved'}
-            </button>
+            </m.button>
           )}
         </div>
       </div>

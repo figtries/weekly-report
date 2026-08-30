@@ -1,5 +1,9 @@
 'use client';
 
+import { pressMotion } from '@/components/motion/Press';
+
+import { m } from 'framer-motion';
+
 import { useEffect, useRef, useState } from 'react';
 
 // The one way a report leaves this app: downloads the server-rendered PDF (see
@@ -147,12 +151,13 @@ export default function SavePdfButton({
         : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md';
 
   return (
-    <button
+    <m.button
+      {...pressMotion}
       onClick={save}
       disabled={phase === 'busy'}
       aria-label={ariaLabel}
       title={ariaLabel}
-      className={`inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg text-sm font-medium shadow-sm transition-all duration-300 ease-ios active:scale-[0.96] disabled:cursor-progress sm:w-auto sm:px-4 sm:py-2 ${palette}`}
+      className={`inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors duration-300 ease-ios disabled:cursor-progress sm:w-auto sm:px-4 sm:py-2 ${palette}`}
     >
       {phase === 'busy' ? (
         <>
@@ -206,6 +211,6 @@ export default function SavePdfButton({
       <span className="sr-only" aria-live="polite">
         {phase === 'busy' ? 'Preparing PDF' : phase === 'done' ? 'Saved' : phase === 'error' ? 'Failed, tap to retry' : ''}
       </span>
-    </button>
+    </m.button>
   );
 }
