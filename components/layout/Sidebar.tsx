@@ -2,9 +2,11 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { m } from 'framer-motion';
+
+import { PressLink, pressMotion } from '@/components/motion/Press';
 import {
   Activity,
   CalendarDays,
@@ -43,7 +45,7 @@ interface Destination {
   warm?: (week: number) => string[];
 }
 
-const WEEKLY_PROGRESS = ['input', 'overall', 'control'];
+const WEEKLY_PROGRESS = ['overall', 'control'];
 const WEEKLY_REPORT = ['summary', 'detail', 'scurve', 'documentation', 'print'];
 
 const DESTINATIONS: Destination[] = [
@@ -54,9 +56,9 @@ const DESTINATIONS: Destination[] = [
     match: (p) => p === '/',
   },
   {
-    label: 'Progress',
+    label: 'Weekly Progress',
     icon: Activity,
-    href: (w) => `/weekly/${w}/input`,
+    href: (w) => `/weekly/${w}/overall`,
     match: (p) => WEEKLY_PROGRESS.some((k) => p.endsWith(`/${k}`)),
     warm: (w) => WEEKLY_PROGRESS.map((k) => `/weekly/${w}/${k}`),
   },
@@ -100,21 +102,27 @@ const SETTINGS: Destination = {
 
 const itemClass = (active: boolean) =>
   cn(
-    'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
-    'transition-all duration-300 ease-ios active:scale-[0.97]',
+    // min-h-11: this is the app's primary navigation and has to clear the
+    // 44px touch target, which px-3 py-2 alone left at 36.
+    'group flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
+    // `transition-colors`, not `transition-all`: the press is framer-motion's
+    // now, and leaving a CSS transition on `transform` here would fight it —
+    // two writers on one property is a press that stutters halfway down. The
+    // colour change stays CSS, where it costs nothing.
+    'transition-colors duration-300 ease-ios',
     active
-      ? 'bg-blue-50 text-blue-600 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
-      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+      ? 'bg-chart-1/10 text-chart-1 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
   );
 
 function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pathname: string | null }) {
   const Icon = dest.icon;
   const active = pathname ? dest.match(pathname) : false;
   return (
-    <Link href={dest.href(week)} className={itemClass(active)}>
+    <PressLink href={dest.href(week)} className={itemClass(active)} {...pressMotion}>
       <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
       <span>{dest.label}</span>
-    </Link>
+    </PressLink>
   );
 }
 
@@ -149,7 +157,7 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
         ))}
       </div>
 
-      <div className="mt-auto border-t border-gray-100 pt-3">
+      <div className="mt-auto border-t pt-3">
         <NavItem dest={SETTINGS} week={week} pathname={pathname} />
       </div>
     </nav>
@@ -171,8 +179,8 @@ function Brand({ compact }: { compact?: boolean }) {
         className={compact ? 'h-7 w-7 object-contain' : 'h-8 w-8 object-contain'}
       />
       <div>
-        <h1 className={cn('font-semibold text-gray-900', compact ? 'text-sm' : 'text-base')}>Figtries</h1>
-        <p className={cn('text-gray-500', compact ? 'text-[10px]' : 'text-xs')}>Progress Report</p>
+        <h1 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Figtries</h1>
+        <p className={cn('text-muted-foreground', compact ? 'text-[10px]' : 'text-xs')}>Progress Report</p>
       </div>
     </div>
   );
@@ -212,21 +220,22 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
 
           <div
             className={cn(
-              'fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transition-transform duration-300 print:hidden',
+              'fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-2xl transition-transform duration-300 print:hidden',
               'ease-[cubic-bezier(0.32,0.72,0,1)]',
               open ? 'translate-x-0' : '-translate-x-full'
             )}
           >
             <div className="flex h-full flex-col">
-              <div className="flex h-14 items-center justify-between border-b border-gray-100 px-4">
+              <div className="flex h-14 items-center justify-between border-b px-4">
                 <Brand compact />
-                <button
+                <m.button
+                  {...pressMotion}
                   onClick={() => setOpen(false)}
                   aria-label="Close menu"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="h-5 w-5" />
-                </button>
+                </m.button>
               </div>
 
               {projects.length > 0 && (
@@ -244,13 +253,19 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
 
   return (
     <>
-      <button
+      {/* The hamburger is the app's proof that the provider reaches outside
+          <main>: it lives in the sidebar, which is a sibling of it. If this
+          stops pressing, MotionRoot's boundary has moved. `active:scale-95`
+          came off here — 0.95 was a third value for the same gesture, and the
+          token is 0.97. */}
+      <m.button
+        {...pressMotion}
         onClick={() => setOpen(true)}
         aria-label="Open menu"
-        className="-ml-2 flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
+        className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <Menu className="h-5 w-5" />
-      </button>
+      </m.button>
       {overlay}
     </>
   );
@@ -266,17 +281,17 @@ export default function Sidebar({
   return (
     <>
       {/* Mobile / tablet: slim top bar with hamburger */}
-      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:hidden print:hidden">
+      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur lg:hidden print:hidden">
         <Suspense>
           <MobileDrawer currentWeek={currentWeek} projects={projects} />
         </Suspense>
-        <span className="text-sm font-semibold text-gray-900">Progress Report</span>
+        <span className="text-sm font-semibold text-foreground">Progress Report</span>
       </header>
 
       {/* Desktop: full sidebar */}
-      <aside className="hidden h-screen w-56 flex-shrink-0 border-r border-gray-200 bg-white lg:block print:hidden">
+      <aside className="hidden h-screen w-56 flex-shrink-0 border-r bg-card lg:block print:hidden">
         <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center border-b border-gray-100 px-5">
+          <div className="flex h-16 items-center border-b px-5">
             <Brand />
           </div>
 
