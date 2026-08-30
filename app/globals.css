@@ -215,7 +215,7 @@ a:active {
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -432,8 +432,18 @@ a:active {
   animation: level-in-back 0.35s var(--ease-out-expo) both;
 }
 
+/* 0.34s over 10px, raised from 0.26s over 8px alongside `.animate-enter`.
+   This class carries every list cascade in Document Control — the group
+   buttons, the document rows, the log's event cards — and at 0.26s a row was
+   in place before the eye reached it, so a cascade of twenty read as one
+   flicker instead of as a sequence.
+
+   IT NO LONGER MIRRORS `MOTION.duration`, and that is deliberate: the two were
+   only ever the same number by coincidence. `MOTION.duration` is how long a
+   reply to a tap takes and must stay short; this is how long something takes to
+   ARRIVE, which is a different job with a different right answer. */
 .animate-fade-in-up {
-  animation: fade-in-up 0.26s var(--ease-out-expo) both;
+  animation: fade-in-up 0.34s var(--ease-out-expo) both;
 }
 
 /* ---------- The section entrance ---------- */
@@ -454,7 +464,7 @@ a:active {
 @keyframes enter-up {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.985);
+    transform: translateY(20px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -462,8 +472,23 @@ a:active {
   }
 }
 
+/* 0.55s over 20px, raised from 0.42s over 16px on 30 August 2026 because the
+   app was asked twice to feel softer.
+
+   The lever is distance and time, not the curve: `--ease-out-expo` is already
+   the softest landing in the file, and swapping it changes nothing anyone can
+   see. What made these read as a POP rather than a GLIDE was that they were
+   over almost before the eye caught them. A longer travel at a longer duration
+   is the same motion, given room to be seen.
+
+   The old value's note argued 0.42 was "under the half-second where a screen
+   someone opens forty times a week starts feeling slow". That is still the
+   right thing to worry about, so this stops at 0.55 rather than going where
+   "luxurious" would pull it — and it applies only to SECTIONS ARRIVING.
+   Interaction stays at MOTION.duration, because a reply must be instant even
+   when an introduction should not be. */
 .animate-enter {
-  animation: enter-up 0.42s var(--ease-out-expo) both;
+  animation: enter-up 0.55s var(--ease-out-expo) both;
 }
 
 /* ---------- Stagger ---------- */

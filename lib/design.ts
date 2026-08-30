@@ -62,14 +62,29 @@ export const MOTION = {
    * crossing into view on scroll. Longer than `duration` on purpose, and this
    * is the one exception rule 2 admits, because the two are different jobs:
    * an interaction is a reply and should be instant, an arrival is an
-   * introduction and reads as cheap when it is rushed. 0.42 is far enough from
-   * 0.26 to be felt and still under the half-second where a screen someone
-   * opens forty times a week starts feeling slow.
+   * introduction and reads as cheap when it is rushed.
+   *
+   * IT WAS 0.42, AND WAS RAISED TO 0.55 on 30 August 2026 after the app was
+   * asked twice to feel softer. The lever is time and distance, never the
+   * curve: `--ease-out-expo` is already the softest landing available, and
+   * swapping it changes nothing anyone can see. What read as a POP rather than
+   * a GLIDE was an entrance over almost before the eye caught it.
+   *
+   * The old note's warning still stands and is why this stopped at 0.55 rather
+   * than where "luxurious" would pull it: past about half a second, a screen
+   * someone opens forty times a week starts to feel slow. `duration` above did
+   * NOT move, because a reply must stay instant even when an introduction
+   * should not be.
+   *
+   * Mirrored by `.animate-enter` (0.55s over 20px) in globals.css, which also
+   * carries the matching change to `.animate-fade-in-up` (0.34s over 10px) —
+   * that one used to share this file's `duration` by coincidence and no longer
+   * does, for the same reason.
    *
    * The level slide keeps its own 0.35 in globals.css: a whole screen sliding
    * sideways is neither of these.
    */
-  enter: 0.42,
+  enter: 0.55,
   /** Between siblings in a staggered reveal. Keep a whole page under ~0.3s. */
   stagger: 0.06,
   /**

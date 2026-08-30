@@ -42,7 +42,10 @@ export function RegisterTabs({
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
-      <div className="flex items-center gap-2">
+      {/* The week picker leads, the tab row follows a step behind — the same
+          two-beat shape the weekly report's header uses, so entering either
+          section feels like the same app. */}
+      <div className="flex animate-enter items-center gap-2">
         <WeekSelect
           weeks={weeks}
           selectedWeek={selectedWeek}
@@ -59,7 +62,7 @@ export function RegisterTabs({
       </div>
 
       <SectionTabs
-        className="-mx-3 mt-2 px-3 sm:mx-0 sm:px-0"
+        className="-mx-3 mt-2 stagger-1 px-3 sm:mx-0 sm:px-0"
         tabs={TABS.map((t) => ({ href: `/dokumen/${selectedWeek}/${t.key}`, label: t.label }))}
       />
     </div>

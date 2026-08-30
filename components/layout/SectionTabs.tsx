@@ -51,7 +51,11 @@ export default function SectionTabs({
       value={activeHref}
       activationMode="manual"
       className={cn(
-        'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden print:hidden',
+        // The row arrives with the section it belongs to. It only plays when
+        // this actually mounts, and the section layouts keep it mounted across
+        // sub-tab navigation on purpose — so it fires on the way INTO a
+        // section and stays still once you are moving around inside it.
+        'animate-enter overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden print:hidden',
         className
       )}
     >
