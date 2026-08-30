@@ -11,6 +11,15 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* fast start, long soft landing */
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1); /* gentle overshoot */
   --ease-gentle: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Long fills and draws only — the gauge arc and the meter segments.
+     `--ease-out-expo` covers ~90% of its distance in the first third of its
+     duration, which is exactly right for a card that should arrive and settle,
+     and exactly wrong for anything that runs past ~0.6s: the ring snapped
+     almost full and then crawled, so a longer duration read as a stall rather
+     than as care. This one is symmetric — it leaves gently, moves through the
+     middle, and lands soft, so a slow sweep looks deliberate the whole way.
+     Short entrances keep `--ease-out-expo`; see lib/design.ts rule 2. */
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
   --background: #f9fafb;
   --foreground: #171717;
   --card: oklch(1 0 0);
@@ -29,11 +38,37 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* The five chart slots shadcn ships arrive as a grey ramp, which is why every
+     chart here used to invent its own colours. They now carry the meanings this
+     app actually has, so a chart picks a role rather than a colour. 1 and 2 are
+     the measurement pair and are not negotiable: actual is blue, plan is red, on
+     every line, bar and tick. 3/4/5 are states, never verdicts. */
+  --chart-1: #3b82f6; /* actual  — blue-500 */
+  --chart-2: #ef4444; /* plan    — red-500 */
+  --chart-3: #10b981; /* done    — emerald-500 */
+  --chart-4: #f59e0b; /* at risk — amber-500 */
+  --chart-5: #94a3b8; /* dormant — slate-400 */
+  /* VERDICT — the only two colours allowed to say whether the news is good.
+     Kept apart from the chart ramp on purpose: --chart-1/2 answer "which line
+     is this", these answer "is this all right". Every ahead/behind figure and
+     chip in the app reads from here, so the green in the hero is the same
+     green as the one in a table cell. */
+  --ok: #059669;      /* emerald-600 — on or ahead of plan */
+  --ok-soft: #d1fae5; /* its tinted ground for chips */
+  --bad: #dc2626;     /* red-600 — behind plan */
+  --bad-soft: #fee2e2;
+  --warn: #b45309;    /* amber-700 — needs attention, not yet a failure */
+  --warn-soft: #fef3c7;
+  /* IDENTITY, NOT VERDICT. The weekly stat row colours its four figures so they
+     are told apart at a glance instead of read one label at a time; Plan and
+     Actual reuse --chart-2/--chart-1 so that row teaches the same pair as the
+     S-Curve. Deviation needs a fourth colour that is neither of those nor the
+     green beside them, and --warn reads brown at 30px.
+     yellow-600 is the brightest TRUE yellow that stays legible on a white card:
+     2.94:1, against the 3:1 bar for large text (this figure is 24–30px
+     semibold). yellow-500 is 1.92:1 and yellow-400 is 1.53:1 — both unreadable
+     here, so do not "brighten" this without re-measuring. */
+  --deviation: #ca8a04;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -68,6 +103,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-deviation: var(--deviation);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -394,6 +436,138 @@ a:active {
   animation: fade-in-up 0.26s var(--ease-out-expo) both;
 }
 
+/* ---------- The section entrance ---------- */
+/* One step up from `.animate-fade-in-up`, and the difference is what the thing
+   IS. `.animate-fade-in-up` is for something incidental appearing — a tick
+   inside a button, an error banner, a row. This is for a SECTION arriving: a
+   card, a panel, a block a page is built out of. Bigger objects need to travel
+   further and take longer or they read as twitchy, which is the whole reason
+   `.animate-rise-in` (18px / 0.7s) exists above for the single hero surface.
+   The three now form a scale — 8px/0.26s, 16px/0.42s, 18px/0.7s — instead of
+   every page picking one at random.
+
+   Mirrors `MOTION.enter` in lib/design.ts. Change one, change the other.
+
+   transform + opacity ONLY. No filter, no blur, no width: those relayout or
+   re-rasterise every frame, and this class is about to be on ten elements per
+   page on a phone. */
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-enter {
+  animation: enter-up 0.42s var(--ease-out-expo) both;
+}
+
+/* ---------- Stagger ---------- */
+/* The delays, as classes, because they were being written as inline
+   `style={{ animationDelay: '240ms' }}` on every section of every page — six
+   of them in DailyForm alone — which put the timing of the app's motion in
+   thirty different files with no way to see it as one thing.
+
+   Both properties are set on purpose: `animation-delay` staggers the load
+   entrance (`.animate-enter`), `transition-delay` staggers a scroll reveal
+   (`.scroll-reveal`, which transitions rather than animates). An element only
+   ever uses one of them; the other costs nothing.
+
+   It stops at 8. The whole cascade is then 0.48s of delay plus a 0.42s
+   animation — already at the edge of what a page can spend before it stops
+   feeling responsive. A section further down the page than eight is below the
+   fold, and below the fold belongs to `.scroll-reveal`, not to a delay. */
+.stagger-1 {
+  animation-delay: 0.06s;
+  transition-delay: 0.06s;
+}
+.stagger-2 {
+  animation-delay: 0.12s;
+  transition-delay: 0.12s;
+}
+.stagger-3 {
+  animation-delay: 0.18s;
+  transition-delay: 0.18s;
+}
+.stagger-4 {
+  animation-delay: 0.24s;
+  transition-delay: 0.24s;
+}
+.stagger-5 {
+  animation-delay: 0.3s;
+  transition-delay: 0.3s;
+}
+.stagger-6 {
+  animation-delay: 0.36s;
+  transition-delay: 0.36s;
+}
+.stagger-7 {
+  animation-delay: 0.42s;
+  transition-delay: 0.42s;
+}
+.stagger-8 {
+  animation-delay: 0.48s;
+  transition-delay: 0.48s;
+}
+
+/* ---------- Scroll reveal ---------- */
+/* A section below the fold arrives as it is scrolled to, rather than having
+   already happened somewhere the user never looked.
+
+   NOTHING HERE IS IN THE SERVER HTML, and that is the whole safety argument.
+   `.scroll-reveal` is added by `components/motion/ScrollReveal.tsx` at runtime
+   and only to an element the observer has confirmed is OFF SCREEN. So a
+   phone that never receives the bundle renders every section visible, and a
+   user who scrolls faster than hydration never watches content vanish from
+   under their finger. Shipping the hidden state in the markup instead — the
+   obvious version of this feature — is precisely the bug
+   `components/motion/Reveal.tsx` exists to document.
+
+   It is a TRANSITION, not an animation, so the observer's job is one class
+   toggle and there is no second keyframe set to keep in step with
+   `.animate-enter`. The values are deliberately identical to `enter-up`: an
+   element should not be able to tell you whether it arrived by load or by
+   scroll. transform + opacity only, for the same reason as above — this one
+   runs while the user's finger is on the glass, which is the least forgiving
+   moment in the app. */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(16px) scale(0.985);
+  transition:
+    opacity 0.42s var(--ease-out-expo),
+    transform 0.42s var(--ease-out-expo);
+}
+
+.scroll-reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* A hero-scale surface arriving — the one card a page is about, not a row in a
+   list. The same argument `.animate-level-fwd` already makes for a whole screen
+   sliding sideways: a bigger object needs longer and further, and matching it
+   to the row cards is what made this one feel like a row card. Reserve it for
+   the single dominant surface on a page; everything else keeps
+   `.animate-fade-in-up`. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.7s var(--ease-out-expo) both;
+}
+
 .animate-scale-in {
   animation: scale-in 0.22s var(--ease-out-expo) both;
 }
@@ -486,9 +660,31 @@ a:active {
     glow-once 0.9s ease-out both;
 }
 
+/* A meter segment filling its own slot.
+   IT ANIMATES transform, NOT width, and the difference is the whole feature.
+   `from { width: 0 }` made the browser re-lay-out the flex row on every frame
+   of every segment: measured on Detail Progress at 4x CPU, the four segments
+   alone accounted for 72 Layout passes / 276ms and 144ms of Layerize across
+   the entrance, and dragged the hero gauge's repaints along with them. scaleX
+   runs on the compositor, and the slot keeps its final width from the first
+   frame, so the meter no longer shoves its own segments rightward as it
+   fills. */
 @keyframes bar-grow {
   from {
-    width: 0;
+    transform: scaleX(0);
+  }
+}
+
+/* The hero gauge's arc, drawn from nothing to the value ALREADY IN THE HTML.
+   `--arc-c` is the circle's circumference, handed in by the component; the
+   resting state is the real dasharray, so a browser that never runs the
+   animation still shows the right number. This replaced a `drawn` useState +
+   useEffect that left `stroke-dasharray="0 361.28"` in the server markup —
+   the ring sat empty until hydration finished (6.6s at 4x CPU) and then
+   lurched. Same class of bug as the one Reveal.tsx exists to prevent. */
+@keyframes arc-draw {
+  from {
+    stroke-dasharray: 0 var(--arc-c);
   }
 }
 
@@ -509,8 +705,46 @@ a:active {
   animation: pdf-arrow-dip 2.6s var(--ease-ios) infinite;
 }
 
+/* The two long ones. They can afford their length now: the segment rides the
+   compositor and the arc is already correct in the markup, so time here buys
+   grace instead of jank. Cutting them to 0.45/0.55 while fixing the jank was
+   a separate mistake — nothing about the fix required a shorter animation, and
+   the hero stopped feeling like the hero. */
 .animate-bar-grow {
-  animation: bar-grow 0.9s var(--ease-out-expo) both;
+  /* Grows from its own left edge, so a row of segments reads as one sweep. */
+  transform-origin: left center;
+  animation: bar-grow 1s var(--ease-draw) both;
+}
+
+.animate-arc-draw {
+  animation: arc-draw 1.3s var(--ease-draw) both;
+}
+
+/* The dashboard curve, revealed by a CLIP WIPE rather than a dash offset.
+   AGENTS.md prescribes exactly this, and that chart is why: its viewBox is
+   stretched (`preserveAspectRatio="none"`), every path carries
+   `vector-effect: non-scaling-stroke`, and the plan line ALREADY has its own
+   `stroke-dasharray="7 6"`. A dash-offset reveal would have to overwrite that
+   pattern to work, so the plan line would stop being dashed for the length of
+   the animation — and on a stretched viewBox the path's length in user units
+   does not match what you see anyway, so the offset would be wrong as well.
+
+   A clip rect has none of those problems. It sweeps left to right over the
+   whole group, the dashes stay dashes, and it is one composited element rather
+   than one per path.
+
+   `transform-box: fill-box` is what makes `transform-origin` mean the rect's
+   own left edge instead of the SVG's origin. */
+@keyframes curve-wipe {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.animate-curve-wipe {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: curve-wipe 1.1s var(--ease-draw) both;
 }
 
 .animate-shimmer {
@@ -520,33 +754,48 @@ a:active {
 }
 
 /* ---------- Route view transitions ---------- */
-/* Old page slips away quickly; the new one settles in with a soft rise.
-   Asymmetric timing (fast exit, gentle delayed enter) is what makes it
-   feel deliberate instead of flickery. Transform + opacity only — GPU cheap. */
+/* The old page slips away fast — nobody wants to watch what they just left.
+   The incoming page does NOT slide, and that is the deliberate part: it only
+   fades up its opacity while the sections INSIDE it play `.animate-enter` in
+   sequence. So what the eye follows on a route change is the cards cascading
+   in, not one grey slab moving, and the load entrance and the route entrance
+   are the same piece of motion instead of two fighting each other.
+
+   It is also the cheap choice, which matters more here than it looks. A view
+   transition rasterises the captured element; on Detail Progress that element
+   is a page of hundreds of rows, and putting a 0.36s transform on an image
+   that size is exactly how this goes janky on a phone. Opacity on a snapshot
+   composites; a transform on one that big does not, reliably.
+
+   Timings mirror `MOTION.routeOut` / `MOTION.routeIn` in lib/design.ts. */
 
 ::view-transition-old(.page-exit) {
-  animation: 80ms var(--ease-ios) both vt-out;
+  animation: 120ms var(--ease-ios) both vt-out;
 }
 
 ::view-transition-new(.page-enter) {
-  animation: 170ms var(--ease-out-expo) both vt-in;
+  animation: 200ms var(--ease-out-expo) both vt-in;
+}
+
+/* Both layers are painted at once mid-transition; without this the two
+   opacities sum and the crossfade flashes brighter than either page. */
+::view-transition-old(.page-exit),
+::view-transition-new(.page-enter) {
+  mix-blend-mode: normal;
 }
 
 @keyframes vt-out {
   to {
     opacity: 0;
-    transform: translateY(-6px) scale(0.995);
   }
 }
 
 @keyframes vt-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.995);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -955,11 +1204,23 @@ a:active {
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Same hues at the same meanings, one step lighter so they still carry on a
+     dark ground. */
+  --chart-1: #60a5fa;
+  --chart-2: #f87171;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #64748b;
+  /* Lighter faces of the same verdicts so they carry on a dark ground. */
+  --ok: #34d399;
+  --ok-soft: color-mix(in oklab, #34d399 18%, transparent);
+  --bad: #f87171;
+  --bad-soft: color-mix(in oklab, #f87171 18%, transparent);
+  --warn: #fbbf24;
+  --warn-soft: color-mix(in oklab, #fbbf24 18%, transparent);
+  /* Free to be the bright yellow here: on the dark card this is 9.5:1, where
+     the same hue on white was 1.5:1. */
+  --deviation: #facc15;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

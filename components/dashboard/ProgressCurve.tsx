@@ -7,6 +7,12 @@ import type { SCurveRow } from '@/lib/scurve';
  * in this trade reads instinctively — the gap between two lines says more at a
  * glance than any percentage does. Plain SVG on purpose: it renders in the
  * static shell with no chart library, no hydration, and no layout shift.
+ *
+ * The two lines are coloured by what they ARE, never by whether the news is
+ * good: actual is `--chart-1` (blue), plan is `--chart-2` (red), the same pair
+ * the S-curve and every bar in the app use. Painting the whole chart red on a
+ * bad week — which this component used to do — removes the only thing that
+ * tells the two lines apart, on the week it matters most.
  */
 export default function ProgressCurve({
   rows,
@@ -57,6 +63,10 @@ export default function ProgressCurve({
       ? `${actualPath}L${x(lastActual.week).toFixed(1)},${H}L${x(minW).toFixed(1)},${H}Z`
       : null;
 
+  // Quarter lines only. On a card this short anything denser reads as texture
+  // rather than as a scale, and the figures themselves are stated above.
+  const grid = [0.25, 0.5, 0.75].map((f) => H - BOTTOM - f * (H - TOP - BOTTOM));
+
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
@@ -67,18 +77,44 @@ export default function ProgressCurve({
     >
       <defs>
         <linearGradient id="curve-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity="0" />
         </linearGradient>
+        {/* The reveal is a clip wipe, not a dash offset — see `curve-wipe` in
+            globals.css. Short version: the plan line below already owns its
+            `strokeDasharray`, and this viewBox is stretched, so the two things
+            a dash-offset reveal needs are both already spoken for. */}
+        <clipPath id="curve-wipe-clip">
+          <rect className="animate-curve-wipe" x="0" y="0" width={W} height={H} />
+        </clipPath>
       </defs>
 
+      {grid.map((gy) => (
+        <line
+          key={gy}
+          x1={0}
+          y1={gy}
+          x2={W}
+          y2={gy}
+          stroke="currentColor"
+          strokeOpacity="0.07"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+
+      {/* The GRID STAYS PUT and only the data sweeps in over it. Wiping the
+          grid too would read as the whole card loading rather than as the
+          project's own line being drawn, and the scale is context — it should
+          already be there for the curve to arrive against. */}
+      <g clipPath="url(#curve-wipe-clip)">
       {area && <path d={area} fill="url(#curve-fill)" />}
       {planPath && (
         <path
           d={planPath}
           fill="none"
-          stroke="currentColor"
-          strokeOpacity="0.35"
+          stroke="var(--color-chart-2)"
+          strokeOpacity="0.85"
           strokeWidth="2"
           strokeDasharray="7 6"
           vectorEffect="non-scaling-stroke"
@@ -88,7 +124,7 @@ export default function ProgressCurve({
         <path
           d={actualPath}
           fill="none"
-          stroke="currentColor"
+          stroke="var(--color-chart-1)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -104,12 +140,13 @@ export default function ProgressCurve({
           y1={y(lastActual.actualPct as number)}
           x2={x(lastActual.week)}
           y2={H}
-          stroke="currentColor"
-          strokeOpacity="0.45"
+          stroke="var(--color-chart-1)"
+          strokeOpacity="0.5"
           strokeWidth="1.5"
           vectorEffect="non-scaling-stroke"
         />
       )}
+      </g>
     </svg>
   );
 }
