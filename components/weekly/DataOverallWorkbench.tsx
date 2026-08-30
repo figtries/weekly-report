@@ -1,17 +1,68 @@
 'use client';
 
+import Link from 'next/link';
 import { memo, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { saveWeekUpdatesAction } from '@/lib/actions';
+import {
+  markNoProgressAction,
+  saveFieldProgressAction,
+  saveWeekUpdatesAction,
+  setProgressMethodAction,
+} from '@/lib/actions';
 import type { RollupNode } from '@/lib/rollup';
-import type { ChangeLogEntry } from '@/lib/types';
+import type { Worklist, WorklistEntry } from '@/lib/worklist';
+import type { ChangeLogEntry, LeafSnapshot, ProgressMethod } from '@/lib/types';
+import { hasRealQuantity, methodOf, totalQty } from '@/lib/progress';
+import { Swap } from '@/components/motion/Swap';
 import TruncatedName from '@/components/ui/TruncatedName';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
+/**
+ * A pending change to one leaf.
+ *
+ * Three of these four fields are three different ways of saying the same
+ * thing, because an item is measured ONE way: `cumProgressPct` is a typed
+ * percent, `qtyDone` is a counted quantity, `milestonesDone` is a ticked
+ * ladder. Which one a card offers is decided by `methodOf(item)`, never by the
+ * user picking a screen — that choice is what the old separate "Field Input"
+ * tab made people make every week, for no benefit.
+ */
 interface EditState {
   cumProgressPct?: number;
   planPct?: number;
+  qtyDone?: number;
+  milestonesDone?: string[];
 }
 
+/** The percent an item has reached, read from whatever it is measured by. */
+function pctOf(node: RollupNode, edit: EditState | undefined, snap: LeafSnapshot | undefined) {
+  const method = methodOf(node);
+  if (method === 'qty') {
+    const total = totalQty(node);
+    const done = edit?.qtyDone ?? snap?.qtyDone ?? 0;
+    return total > 0 ? clamp(round2((done / total) * 100)) : 0;
+  }
+  if (method === 'milestone') {
+    const ms = node.milestones ?? [];
+    const total = ms.reduce((sum, m) => sum + m.weight, 0);
+    if (!total) return 0;
+    const done = edit?.milestonesDone ?? snap?.milestonesDone ?? [];
+    return clamp(round2((ms.filter((m) => done.includes(m.id)).reduce((sum, m) => sum + m.weight, 0) / total) * 100));
+  }
+  return null;
+}
+
+const METHOD_LABEL: Record<ProgressMethod, string> = {
+  qty: 'A counted quantity',
+  milestone: 'A ladder of milestones',
+  lumpsum: 'A percent typed by hand',
+};
+
 const round2 = (v: number) => Math.round(v * 100) / 100;
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|');
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
 function isMilestone(n: RollupNode): boolean {
@@ -89,56 +140,68 @@ function RelativeTime({ iso, className }: { iso: string; className?: string }) {
 }
 
 /**
- * Human status — words first, numbers second. Every colour (ring, chip, bar)
- * comes from this one place so they can never drift out of sync:
- *   100%            → hijau  (Selesai)
- *   di/atas target  → biru   (On track)
- *   telat ≤ 7.5%    → kuning (Sedikit telat)
- *   telat > 7.5%    → merah  (Perlu perhatian)
- *   belum mulai     → abu    (Belum mulai)
+ * Human status — words first, numbers second. Every colour comes from this one
+ * place so they can never drift out of sync:
+ *
+ *   100%              → Done            · green chip
+ *   at or above plan  → On track        · green chip
+ *   behind by ≤ 7.5%  → Slightly behind · amber chip
+ *   behind by > 7.5%  → Needs attention · red chip
+ *   not started       → Not started     · grey chip
  */
 function statusOf(cum: number, plan: number) {
+  // The ring draws HOW MUCH is done, so it stays the measurement blue and only
+  // turns green once there is nothing left to measure. The chip beside it is
+  // what carries the verdict. Values are the --chart-*/--ok/--bad/--warn
+  // tokens; this is an inline SVG stroke, which cannot take a class.
+  const ring = { done: '#10b981', running: '#3b82f6', idle: '#cbd5e1' };
   if (cum >= 99.95)
-    return { label: 'Done', chip: 'bg-emerald-50 text-emerald-700', ring: '#10b981', ringText: '#047857', bar: 'bg-emerald-500' };
+    return { label: 'Done', chip: 'bg-ok-soft text-ok', ring: ring.done, ringText: '#047857', bar: 'bg-chart-3' };
   if (cum <= 0.05 && plan <= 0.05)
-    return { label: 'Not started', chip: 'bg-gray-100 text-gray-500', ring: '#d1d5db', ringText: '#6b7280', bar: 'bg-gray-300' };
+    return { label: 'Not started', chip: 'bg-muted text-muted-foreground', ring: ring.idle, ringText: '#64748b', bar: 'bg-chart-5/45' };
   const gap = cum - plan;
   if (gap >= -1)
-    return { label: 'On track', chip: 'bg-blue-50 text-blue-700', ring: '#3b82f6', ringText: '#1d4ed8', bar: 'bg-blue-500' };
+    return { label: 'On track', chip: 'bg-ok-soft text-ok', ring: ring.running, ringText: '#1d4ed8', bar: 'bg-chart-1' };
   if (gap >= -7.5)
-    return { label: 'Slightly behind', chip: 'bg-amber-50 text-amber-700', ring: '#f59e0b', ringText: '#b45309', bar: 'bg-amber-400' };
-  return { label: 'Needs attention', chip: 'bg-red-50 text-red-600', ring: '#ef4444', ringText: '#b91c1c', bar: 'bg-red-400' };
+    return { label: 'Slightly behind', chip: 'bg-warn-soft text-warn', ring: ring.running, ringText: '#1d4ed8', bar: 'bg-chart-1' };
+  return { label: 'Needs attention', chip: 'bg-bad-soft text-bad', ring: ring.running, ringText: '#1d4ed8', bar: 'bg-chart-1' };
 }
 
 function gapText(cum: number, plan: number): { text: string; cls: string } {
   const gap = round2(cum - plan);
-  if (Math.abs(gap) < 0.05) return { text: 'on plan', cls: 'text-gray-500' };
-  if (gap >= -1 && gap < 0) return { text: 'nearly on plan', cls: 'text-gray-500' };
-  if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-red-500' };
-  return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-emerald-600' };
+  if (Math.abs(gap) < 0.05) return { text: 'On plan', cls: 'text-muted-foreground' };
+  if (gap >= -1 && gap < 0) return { text: 'Nearly on plan', cls: 'text-muted-foreground' };
+  if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-bad' };
+  return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-ok' };
 }
 
-/* The behind/ahead verdict, always uppercase in its status colour. From sm up
+/* The behind/ahead verdict, in its status colour. From sm up
  * it stays inline at the end of the meta line; on phones it moves to its own
  * bottom row instead of wrapping mid-sentence. Mirrors Detail Progress. */
 function GapInline({ cum, plan }: { cum: number; plan: number }) {
   const gap = gapText(cum, plan);
-  return <span className={`hidden font-semibold uppercase sm:inline ${gap.cls}`}> · {gap.text}</span>;
+  return <span className={`hidden font-semibold sm:inline ${gap.cls}`}> · {gap.text}</span>;
 }
 
 function GapBottomRow({ cum, plan, className = 'mt-1' }: { cum: number; plan: number; className?: string }) {
   const gap = gapText(cum, plan);
-  return <div className={`text-[12px] font-bold uppercase tracking-wide sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
+  return <div className={`text-[12px] font-semibold sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
 }
 
 export default function DataOverallWorkbench({
   roots,
   week,
   recentChanges,
+  snapshots,
+  worklist,
 }: {
   roots: RollupNode[];
   week: number;
   recentChanges: ChangeLogEntry[];
+  /** Stored evidence per leaf — the quantities and ticks behind a percentage. */
+  snapshots: Record<string, LeafSnapshot | undefined>;
+  /** What the schedule says is due this week. See lib/worklist.ts. */
+  worklist: Worklist;
 }) {
   const flatAll = useMemo(() => flattenAll(roots), [roots]);
   // With a single umbrella root, the SPK contracts underneath are the real
@@ -156,10 +219,29 @@ export default function DataOverallWorkbench({
   const [rawInputs, setRawInputs] = useState<Record<string, { cum?: string; plan?: string }>>({});
   const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set());
   const [saving, startSaveTransition] = useTransition();
+  const [switching, startSwitchTransition] = useTransition();
+  // Set while an item is being moved to quantity mode but has no real total.
+  const [askQty, setAskQty] = useState<{ node: RollupNode; total: string; unit: string } | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
+  /**
+   * 'queue' is this week's due items, 'browse' is the full 285-row drill-down.
+   *
+   * Queue is the default wherever the project has dates, because the drill-down
+   * cannot answer "what do I have to do today" — it shows every contract
+   * equally and leaves the filtering to the person. Browse stays one tap away
+   * and unchanged; nothing was taken out, it just stopped being the front door.
+   */
+  const [mode, setMode] = useState<'queue' | 'browse'>(
+    worklist.hasSchedule ? 'queue' : 'browse'
+  );
+  const [showDone, setShowDone] = useState(false);
+  /** Set when an autosave fails, so it stops retrying and the bar offers Retry. */
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
+  /** Leaves whose "no progress" write is in flight — the card shows it at once. */
+  const [markingNone, setMarkingNone] = useState<Set<string>>(new Set());
   const logPanelRef = useRef<HTMLDivElement>(null);
   const logToggleRef = useRef<HTMLButtonElement>(null);
   const logListRef = useRef<HTMLDivElement>(null);
@@ -371,26 +453,101 @@ export default function DataOverallWorkbench({
   function discardAll() {
     setEdits({});
     setRawInputs({});
+    setSaveFailed(null);
   }
 
-  function save() {
+  /**
+   * Autosave.
+   *
+   * A week gets filled in one card at a time, often on a phone in a site
+   * office, and under the batch Save button every card typed so far was lost to
+   * a locked screen or a closed tab. Each settled edit now writes on its own.
+   * The bottom bar survives as the status line, and the manual Save stays for
+   * anyone who would rather commit deliberately.
+   *
+   * 1200ms is measured against the fastest control on a card: the quantity
+   * stepper moves a twentieth of the total per tap, so a 0→100 sweep is twenty
+   * taps, and a shorter delay turns one gesture into twenty writes.
+   */
+  useEffect(() => {
+    if (dirtyCount === 0 || saving || saveFailed) return;
+    const t = setTimeout(() => save(true), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edits, dirtyCount, saving, saveFailed]);
+
+  /**
+   * "Looked at it, nothing moved this week."
+   *
+   * Optimistic on purpose — the card leaves the queue on the tap rather than
+   * after the round trip, because the whole point of the control is to get an
+   * item out of the way. `markingNone` only ever ADDS to what the server
+   * already says, so a refresh landing mid-flight cannot contradict it.
+   */
+  function markNone(node: RollupNode) {
+    setMarkingNone((prev) => new Set(prev).add(node.id));
+    startSaveTransition(async () => {
+      const res = await markNoProgressAction(week, [node.id]);
+      if (!res.ok) {
+        alert(res.error);
+        setMarkingNone((prev) => {
+          const next = new Set(prev);
+          next.delete(node.id);
+          return next;
+        });
+      }
+    });
+  }
+
+  /**
+   * @param silent autosave. A failed autosave must not alert — it would fire
+   * again on the next tick and trap the page behind a loop of dialogs — so it
+   * parks the reason in `saveFailed`, which stops the retry and turns the
+   * bottom bar into "Couldn't save · Retry".
+   */
+  function save(silent = false) {
     if (!dirtyCount || saving) return;
     setJustSaved(false);
     setBarLeaving(false);
+    const report = (msg: string) => {
+      if (silent) setSaveFailed(msg);
+      else alert(msg);
+    };
     startSaveTransition(async () => {
+      // Typed percents and plan targets go through one action; counted
+      // quantities and ticked milestones go through the other, because for
+      // those the EVIDENCE is what is stored and the percentage is derived
+      // from it (see AGENTS.md, "Progress has one origin"). One Save button
+      // covers both — the person filling this in should never have to know
+      // which of the two their item uses.
       const updates: Record<string, { cumProgressPct?: number; targetWF?: number }> = {};
+      const evidence: { leafId: string; qtyDone?: number; milestonesDone?: string[] }[] = [];
       for (const [id, patch] of Object.entries(edits)) {
         const node = flatAll.find((n) => n.id === id);
         if (!node) continue;
+        if (patch.qtyDone !== undefined || patch.milestonesDone !== undefined) {
+          evidence.push({ leafId: id, qtyDone: patch.qtyDone, milestonesDone: patch.milestonesDone });
+        }
+        if (patch.cumProgressPct === undefined && patch.planPct === undefined) continue;
         updates[id] = {};
         if (patch.cumProgressPct !== undefined) updates[id].cumProgressPct = patch.cumProgressPct;
         if (patch.planPct !== undefined) updates[id].targetWF = (node.bobot * patch.planPct) / 100;
       }
-      const res = await saveWeekUpdatesAction(week, updates);
-      if (!res.ok) {
-        alert(res.error);
-        return;
+      if (evidence.length) {
+        const res = await saveFieldProgressAction(week, evidence);
+        if (!res.ok) {
+          report(res.error ?? 'Could not save');
+          return;
+        }
       }
+      if (Object.keys(updates).length) {
+        const res = await saveWeekUpdatesAction(week, updates);
+        if (!res.ok) {
+          report(res.error ?? 'Could not save');
+          return;
+        }
+      }
+      setSaveFailed(null);
       // Drop the transient typing buffer, but KEEP `edits` in place as an
       // optimistic overlay. The reconcile effect below removes each edit once
       // the action's refresh delivers matching server data — so the number
@@ -400,7 +557,40 @@ export default function DataOverallWorkbench({
     });
   }
 
-  // "Tersimpan ✓" toast timeline: hold the green confirmation briefly, then
+  /**
+   * Change how an item is measured.
+   *
+   * Quantity mode needs a REAL total. `vol: 1, satuan: 'Ls'` is how every
+   * seeded item is stored and it passes a naive `vol > 0` check, so switching
+   * one of those to quantity silently invents a total of 1 — see AGENTS.md.
+   * Ask instead.
+   */
+  function switchMethod(node: RollupNode, method: ProgressMethod) {
+    if (method === methodOf(node)) return;
+    if (method === 'qty' && !hasRealQuantity(node)) {
+      setAskQty({ node, total: '', unit: '' });
+      return;
+    }
+    startSwitchTransition(async () => {
+      const res = await setProgressMethodAction(node.id, method);
+      if (!res.ok) alert(res.error);
+    });
+  }
+
+  function confirmQty() {
+    if (!askQty) return;
+    const total = Number(askQty.total.replace(',', '.'));
+    if (!Number.isFinite(total) || total <= 0 || !askQty.unit.trim()) return;
+    const node = askQty.node;
+    const unit = askQty.unit.trim();
+    setAskQty(null);
+    startSwitchTransition(async () => {
+      const res = await setProgressMethodAction(node.id, 'qty', { vol: total, satuan: unit });
+      if (!res.ok) alert(res.error);
+    });
+  }
+
+  // "Saved ✓" toast timeline: hold the green confirmation briefly, then
   // play the slide-out before unmounting — so the bar never blinks away.
   useEffect(() => {
     if (!justSaved) return;
@@ -442,14 +632,19 @@ export default function DataOverallWorkbench({
           continue;
         }
         const e = prev[id];
+        const snap = snapshots[id];
         const cumSame = e.cumProgressPct === undefined || round2(e.cumProgressPct) === round2(node.curProgressPct);
         const planSame = e.planPct === undefined || round2(e.planPct) === round2(planPctOf(node));
-        if (cumSame && planSame) changed = true; // matched server → drop it
+        const qtySame = e.qtyDone === undefined || e.qtyDone === (snap?.qtyDone ?? 0);
+        const msSame =
+          e.milestonesDone === undefined ||
+          sameIds(e.milestonesDone, snap?.milestonesDone ?? []);
+        if (cumSame && planSame && qtySame && msSame) changed = true; // matched server → drop it
         else next[id] = prev[id];
       }
       return changed ? next : prev;
     });
-  }, [flatAll]);
+  }, [flatAll, snapshots]);
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -473,13 +668,32 @@ export default function DataOverallWorkbench({
     };
   }, [flatAll, pathBase]);
 
+  // An item marked "no progress" leaves the queue on the tap. This only ever
+  // moves things from due to done, so a server refresh landing mid-flight
+  // agrees with it rather than fighting it.
+  const queueDue = useMemo(
+    () => worklist.due.filter((e) => !markingNone.has(e.node.id)),
+    [worklist.due, markingNone]
+  );
+  const queueDone = useMemo(
+    () => [...worklist.done, ...worklist.due.filter((e) => markingNone.has(e.node.id))],
+    [worklist.done, worklist.due, markingNone]
+  );
+  const queueTotal = queueDue.length + queueDone.length;
+
   const leafProps = {
     week,
+    askQty,
+    setAskQty,
+    confirmQty,
     recentIds,
     recentChanges,
     edits,
     rawInputs,
     detailOpen,
+    snapshots,
+    onSwitchMethod: switchMethod,
+    switching,
     currentCum,
     currentPlan,
     setEdit,
@@ -500,8 +714,8 @@ export default function DataOverallWorkbench({
          above so the search lines up under Plan→This Week and the update pill
          sits under Deviation. */}
       <div className="grid grid-cols-1 gap-2 sm:gap-4 lg:grid-cols-4">
-        <div className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-shadow focus-within:shadow-md lg:col-span-3">
-          <svg className="h-[18px] w-[18px] shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+        <div className="flex min-w-0 items-center gap-2.5 rounded-2xl border bg-card ring-1 ring-foreground/10 px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-shadow focus-within:shadow-md lg:col-span-3">
+          <svg className="h-[18px] w-[18px] shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -509,10 +723,10 @@ export default function DataOverallWorkbench({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search an activity…"
-            className="w-full border-none bg-transparent text-[14px] text-gray-900 outline-none placeholder:text-gray-400"
+            className="w-full border-none bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Clear search">
+            <button onClick={() => setQuery('')} className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground" aria-label="Clear search">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -525,30 +739,30 @@ export default function DataOverallWorkbench({
           disabled={recentChanges.length === 0}
           className={`flex w-full items-center gap-2.5 rounded-2xl border bg-white px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-[border-color,box-shadow,transform] duration-200 [transition-timing-function:var(--ease-out-expo)] lg:col-span-1 ${
             recentChanges.length > 0
-              ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
+              ? 'cursor-pointer hover:border-border hover:shadow-md active:scale-[0.98]'
               : 'cursor-default'
-          } ${showLog ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200'}`}
+          } ${showLog ? 'ring-2 ring-chart-1/40' : 'border-border'}`}
         >
           {/* Dot sits in an 18px slot so its text starts at the exact same x as
              the search input's text (which leads with an 18px magnifier). */}
           <span className="flex w-[18px] shrink-0 items-center justify-center">
-            <span suppressHydrationWarning className={`h-2 w-2 rounded-full ${todayCount > 0 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+            <span suppressHydrationWarning className={`h-2 w-2 rounded-full ${todayCount > 0 ? 'bg-ok' : 'bg-muted-foreground/40'}`} />
           </span>
           {/* "Today" is the viewer's local midnight, which the server can't
              know — suppress the one-off SSR/client text mismatch. */}
-          <span suppressHydrationWarning className="flex-1 text-left text-[14px] text-gray-600">
+          <span suppressHydrationWarning className="flex-1 text-left text-[14px] text-muted-foreground">
             {todayCount > 0 ? (
-              <><span className="font-semibold text-gray-900">{todayCount} {todayCount === 1 ? 'update' : 'updates'}</span> today</>
+              <><span className="font-semibold text-foreground">{todayCount} {todayCount === 1 ? 'update' : 'updates'}</span> today</>
             ) : (
               'No updates today yet'
             )}
           </span>
           {recentChanges.length > 0 && (
-            <span className="ml-auto text-[12px] text-gray-400 sm:hidden">View</span>
+            <span className="ml-auto text-[12px] text-muted-foreground sm:hidden">View</span>
           )}
           {recentChanges.length > 0 && (
             <svg
-              className="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-300"
+              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300"
               style={{ transform: showLog ? 'rotate(180deg)' : 'rotate(0deg)' }}
               fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
             >
@@ -588,17 +802,17 @@ export default function DataOverallWorkbench({
              next block's own top margin. `overflow-hidden` is only the desktop
              accordion's clip; keeping it on mobile also chopped off the panel's
              drop shadow, which is what made the edge look severed. */}
-          <div className="bg-gray-50 pb-3 sm:bg-transparent sm:overflow-hidden sm:pb-0 sm:[contain:layout_paint]">
+          <div className="bg-muted/50 pb-3 sm:bg-transparent sm:overflow-hidden sm:pb-0 sm:[contain:layout_paint]">
             {/* The card clips its own corners: without this the scrolling list
                paints square over the bottom rounding. */}
             <div
-              className="mt-3 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl sm:shadow-sm"
+              className="mt-3 flex flex-col overflow-hidden rounded-2xl border bg-card ring-1 ring-foreground/10 shadow-xl sm:shadow-sm"
               style={logMaxH ? { maxHeight: logMaxH } : undefined}
             >
-            <div className="flex shrink-0 flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
-              <div className="text-[14px] font-semibold text-gray-900">Change history · Week {week}</div>
-              <div suppressHydrationWarning className="text-[12px] text-gray-500">
-                {todayCount > 0 && <span className="font-medium text-emerald-600">{todayCount} today · </span>}
+            <div className="flex shrink-0 flex-col gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
+              <div className="text-[14px] font-semibold text-foreground">Change history · Week {week}</div>
+              <div suppressHydrationWarning className="text-[12px] text-muted-foreground">
+                {todayCount > 0 && <span className="font-medium text-ok">{todayCount} today · </span>}
                 {sortedLog.length} {sortedLog.length === 1 ? 'update' : 'updates'} recorded
               </div>
             </div>
@@ -615,7 +829,7 @@ export default function DataOverallWorkbench({
               // The list takes whatever the capped card has left over — hence
               // min-h-0, without which a flex child refuses to shrink below its
               // content and the cap does nothing.
-              className={`min-h-0 flex-1 touch-pan-y overflow-y-auto divide-y divide-gray-100 sm:max-h-96 sm:flex-none ${
+              className={`min-h-0 flex-1 touch-pan-y overflow-y-auto divide-y divide-border sm:max-h-96 sm:flex-none ${
                 logScrollable ? 'overscroll-contain' : 'overscroll-auto'
               }`}
               // Fade the last few pixels only while there is more to reach, so a
@@ -638,7 +852,7 @@ export default function DataOverallWorkbench({
                 return (
                   <div key={c.id}>
                     {showDivider && (
-                      <div className="bg-gray-50/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <div className="bg-muted/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Earlier
                       </div>
                     )}
@@ -655,11 +869,11 @@ export default function DataOverallWorkbench({
                       // skipped rendering shrank the list by 28px — the list
                       // resized under the fade and that was the close "glitch".
                       // The overlay already removed the need for it.
-                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-blue-50/40 disabled:pointer-events-none"
+                      className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-chart-1/5 disabled:pointer-events-none"
                     >
                       <span
                         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
-                          delta > 0 ? 'bg-emerald-50 text-emerald-600' : delta < 0 ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-500'
+                          delta > 0 ? 'bg-ok-soft text-ok' : delta < 0 ? 'bg-bad-soft text-bad' : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'}
@@ -676,43 +890,43 @@ export default function DataOverallWorkbench({
                            the time sat on their own text baselines and the
                            column looked a pixel or two out. */}
                         <span className="flex h-5 items-center justify-between gap-2">
-                          <span className="truncate text-[13px] font-medium text-gray-900">
+                          <span className="truncate text-[13px] font-medium text-foreground">
                             {leaf?.deskripsi ?? 'Activity not found'}
                           </span>
-                          <span suppressHydrationWarning className="hidden shrink-0 text-[11px] text-gray-400 sm:inline">{timeAgo(c.at)}</span>
+                          <span suppressHydrationWarning className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">{timeAgo(c.at)}</span>
                           <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:hidden ${
-                            c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                            c.field === 'cumProgressPct' ? 'bg-chart-1/10 text-chart-1' : 'bg-chart-2/10 text-chart-2'
                           }`}>
                             {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
                           </span>
                         </span>
-                        <span className="mt-1 flex h-5 items-center gap-1.5 text-[12px] text-gray-500">
+                        <span className="mt-1 flex h-5 items-center gap-1.5 text-[12px] text-muted-foreground">
                           <span className={`hidden items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium sm:inline-flex ${
-                            c.field === 'cumProgressPct' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                            c.field === 'cumProgressPct' ? 'bg-chart-1/10 text-chart-1' : 'bg-chart-2/10 text-chart-2'
                           }`}>
                             {c.field === 'cumProgressPct' ? 'Actual' : 'Plan'}
                           </span>
-                          <span className="font-medium tabular-nums text-gray-700">{c.oldValue.toFixed(1)}%</span>
-                          <span className="text-gray-400">→</span>
-                          <span className="font-medium tabular-nums text-gray-700">{c.newValue.toFixed(1)}%</span>
-                          <span className={`font-semibold tabular-nums ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                          <span className="font-medium tabular-nums text-foreground">{c.oldValue.toFixed(1)}%</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-medium tabular-nums text-foreground">{c.newValue.toFixed(1)}%</span>
+                          <span className={`font-semibold tabular-nums ${delta > 0 ? 'text-ok' : delta < 0 ? 'text-bad' : 'text-muted-foreground'}`}>
                             ({delta > 0 ? '+' : ''}{delta.toFixed(1)}%)
                           </span>
-                          <span suppressHydrationWarning className="ml-auto shrink-0 pl-2 text-[11px] text-gray-400 sm:hidden">{timeAgo(c.at)}</span>
+                          <span suppressHydrationWarning className="ml-auto shrink-0 pl-2 text-[11px] text-muted-foreground sm:hidden">{timeAgo(c.at)}</span>
                           {/* On phones the chevron rides the timestamp's line
                              rather than sitting in a column of its own. That is
                              what puts the tag above it flush to the same right
                              edge — give the chevron its own column and it pushes
                              both lines left of itself, and the tag stops short. */}
                           {leaf && (
-                            <svg className="h-4 w-4 shrink-0 text-gray-300 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <svg className="h-4 w-4 shrink-0 text-muted-foreground/60 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                             </svg>
                           )}
                         </span>
                       </span>
                       {leaf && (
-                        <svg className="mt-1 hidden h-4 w-4 shrink-0 text-gray-300 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <svg className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground/60 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       )}
@@ -721,7 +935,7 @@ export default function DataOverallWorkbench({
                 );
               })}
               {sortedLog.length === 0 && (
-                <div className="px-5 py-8 text-center text-[13px] text-gray-500">No updates recorded this week yet.</div>
+                <div className="px-5 py-8 text-center text-[13px] text-muted-foreground">No updates recorded this week yet.</div>
               )}
             </div>
             </div>
@@ -732,7 +946,7 @@ export default function DataOverallWorkbench({
       {/* Search results replace the browser */}
       {searchResults ? (
         <div className="mt-3 space-y-2.5 animate-fade-in">
-          <div className="px-1 text-[13px] text-gray-500">
+          <div className="px-1 text-[13px] text-muted-foreground">
             {searchResults.length === 0
               ? 'No matching activities.'
               : `${searchResults.length} ${searchResults.length === 1 ? 'activity' : 'activities'} found`}
@@ -741,44 +955,190 @@ export default function DataOverallWorkbench({
             <div key={leaf.id} className="animate-fade-in-up">
               <button
                 onClick={() => jumpToLeaf(leaf)}
-                className="mb-1 flex items-center gap-1.5 px-1 text-[12px] text-gray-500 hover:text-blue-600"
+                className="mb-1 flex items-center gap-1.5 px-1 text-[12px] text-muted-foreground hover:text-chart-1"
               >
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
                 {ancestorsOf(leaf.id).map((a) => shortName(a.deskripsi)).join(' › ') || 'Top level'}
-                <span className="text-blue-500">· open folder</span>
+                <span className="text-chart-1">· open folder</span>
               </button>
               <LeafCard node={leaf} {...leafProps} />
             </div>
           ))}
         </div>
+      ) : mode === 'queue' ? (
+        /* ------------------------------------------------ this week's queue */
+        <div className="mt-3 space-y-3 animate-fade-in">
+          {/* Items whose finish week has passed while still short of 100%. They
+              are NOT queued: at W43 there are 44 of them, which is a project
+              problem for the Review page, not a list to hand whoever is filling
+              in the week. See lib/worklist.ts. */}
+          {worklist.stuck.length > 0 && (
+            <div className="flex items-start gap-3 rounded-2xl bg-warn-soft px-4 py-3.5 ring-1 ring-warn/25">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warn text-[13px] font-bold text-white">
+                !
+              </span>
+              <div className="min-w-0 flex-1 text-[13px]">
+                <p className="font-semibold text-foreground">
+                  {worklist.stuck.length} {worklist.stuck.length === 1 ? 'item is' : 'items are'} past
+                  their finish date and not complete
+                </p>
+                {/* Desktop only. On a phone this sentence wrapped to three
+                    lines and pushed the first item of the actual queue a
+                    further 80px down a screen that already scrolls to reach
+                    it — and the headline above already says what it is. */}
+                <p className="mt-0.5 hidden text-muted-foreground sm:block">
+                  They are not in this week&apos;s list — they need a decision, not a number.
+                </p>
+              </div>
+              <Link
+                href={`/weekly/${week}/control`}
+                className="shrink-0 self-center rounded-lg bg-card px-3 py-2 text-[13px] font-semibold text-warn shadow-sm transition-all hover:brightness-105 active:scale-[0.97]"
+              >
+                Review
+              </Link>
+            </div>
+          )}
+
+          {/* The counter. It is the only thing on the page that says when the
+              week is finished, so it counts DEALT WITH rather than changed —
+              "no progress" is an answer. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border bg-card px-4 py-3.5 shadow-sm ring-1 ring-foreground/10 sm:px-5">
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold">
+                {queueDue.length === 0
+                  ? queueTotal === 0
+                    ? 'Nothing is scheduled for this week'
+                    : "This week's list is done"
+                  : `${queueDue.length} ${queueDue.length === 1 ? 'item' : 'items'} to fill in`}
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                {queueTotal === 0
+                  ? 'No contract has work planned in these dates.'
+                  : `${queueDone.length} of ${queueTotal} done · scheduled for Week ${week}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {queueTotal > 0 && (
+                <div className="h-2 w-24 overflow-hidden rounded-full bg-muted sm:w-32">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500',
+                      queueDue.length === 0 ? 'bg-ok' : 'bg-chart-1'
+                    )}
+                    style={{ width: `${queueTotal ? (queueDone.length / queueTotal) * 100 : 0}%` }}
+                  />
+                </div>
+              )}
+              <button
+                onClick={() => setMode('browse')}
+                className="shrink-0 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-chart-1 transition-colors hover:bg-chart-1/10"
+              >
+                Browse all {flatAll.filter((n) => n.children.length === 0 && !isMilestone(n)).length}
+              </button>
+            </div>
+          </div>
+
+          {queueDue.map((entry) => (
+            <QueueCard
+              key={entry.node.id}
+              entry={entry}
+              pathBase={pathBase}
+              onNoProgress={() => markNone(entry.node)}
+              leafProps={leafProps}
+            />
+          ))}
+
+          {queueDue.length === 0 && queueTotal > 0 && (
+            <div className="rounded-2xl border border-dashed bg-card px-5 py-10 text-center">
+              <p className="text-[15px] font-semibold text-ok">Every item due this week is done</p>
+              <p className="mx-auto mt-1 max-w-sm text-[13px] text-muted-foreground">
+                Next: check the figures on Review, then print the report.
+              </p>
+              <Link
+                href={`/weekly/${week}/control`}
+                className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-chart-1 px-5 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]"
+              >
+                Go to Review
+              </Link>
+            </div>
+          )}
+
+          {queueDone.length > 0 && (
+            <div className="rounded-2xl border bg-card shadow-sm ring-1 ring-foreground/10">
+              <button
+                onClick={() => setShowDone((v) => !v)}
+                className="flex w-full items-center gap-2.5 px-4 py-3.5 text-left sm:px-5"
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ok text-white">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                <span className="flex-1 text-[14px] font-semibold">
+                  {queueDone.length} already dealt with
+                </span>
+                <svg
+                  className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300"
+                  style={{ transform: showDone ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showDone && (
+                <div className="space-y-3 border-t px-3 py-3 sm:px-4">
+                  {queueDone.map((entry) => (
+                    <QueueCard
+                      key={entry.node.id}
+                      entry={entry}
+                      pathBase={pathBase}
+                      leafProps={leafProps}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       ) : (
         <>
+          {worklist.hasSchedule && (
+            <button
+              onClick={() => setMode('queue')}
+              className="mt-3 flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold text-chart-1 transition-colors hover:bg-chart-1/10"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to this week&apos;s list
+            </button>
+          )}
           {/* Breadcrumb + level header */}
           {currentPath.length > 0 && (
-            <div className="mt-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-fade-in">
+            <div className="mt-3 rounded-2xl border bg-card ring-1 ring-foreground/10 px-5 py-4 shadow-sm animate-fade-in">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                 <button
                   onClick={goBack}
-                  className="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-gray-600 transition-all hover:text-blue-600 active:scale-[0.96]"
+                  className="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-muted-foreground transition-all hover:text-chart-1 active:scale-[0.96]"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   Back
                 </button>
-                <span className="mx-1 text-gray-300">|</span>
-                <button onClick={() => goToLevel(-1)} className="text-gray-500 transition-colors hover:text-blue-600">
+                <span className="mx-1 text-muted-foreground/60">|</span>
+                <button onClick={() => goToLevel(-1)} className="text-muted-foreground transition-colors hover:text-chart-1">
                   All contracts
                 </button>
                 {currentPath.map((p, i) => (
                   <span key={p.id} className="flex items-center gap-2">
-                    <span className="text-gray-300">›</span>
+                    <span className="text-muted-foreground/60">›</span>
                     {i === currentPath.length - 1 ? (
-                      <span className="font-semibold text-gray-900">{shortName(p.deskripsi)}</span>
+                      <span className="font-semibold text-foreground">{shortName(p.deskripsi)}</span>
                     ) : (
-                      <button onClick={() => goToLevel(i)} className="text-gray-500 transition-colors hover:text-blue-600">
+                      <button onClick={() => goToLevel(i)} className="text-muted-foreground transition-colors hover:text-chart-1">
                         {shortName(p.deskripsi)}
                       </button>
                     )}
@@ -794,13 +1154,13 @@ export default function DataOverallWorkbench({
                     size={48}
                   />
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900">
+                    <h2 className="text-lg font-semibold text-foreground">
                       <TruncatedName
                         text={currentNode.deskripsi}
                         accent={statusOf(currentCumOf(currentNode, edits), round2(planPctOf(currentNode))).ring}
                       />
                     </h2>
-                    <p className="mt-0.5 text-[13px] text-gray-500">
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
                       {leafCount(currentNode)} activities · Weight {currentNode.bobot.toFixed(2)}% ·{' '}
                       Plan {round2(planPctOf(currentNode)).toFixed(1)}%
                       <GapInline cum={round2(currentNode.curProgressPct)} plan={round2(planPctOf(currentNode))} />
@@ -812,8 +1172,11 @@ export default function DataOverallWorkbench({
             </div>
           )}
 
-          {/* Level cards — keyed so each navigation replays the slide animation */}
-          <div key={levelKey} className={`mt-3 ${direction === 'fwd' ? 'animate-level-fwd' : 'animate-level-back'}`}>
+          {/* Level cards — keyed so each navigation replays the slide, and now
+              so the level being LEFT slides out rather than simply ceasing to
+              exist. See components/motion/Swap.tsx for why this is allowed to
+              be framer-motion when the page's entrances are not. */}
+          <Swap key={levelKey} levelKey={levelKey} direction={direction} className="mt-3">
             <div className="space-y-2.5">
               {currentNodes.map((node, idx) =>
                 node.children.length > 0 ? (
@@ -832,16 +1195,20 @@ export default function DataOverallWorkbench({
                 )
               )}
               {currentNodes.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 py-10 text-center text-sm text-gray-500">
+                <div className="rounded-2xl border border-dashed border-border bg-muted/40 py-10 text-center text-sm text-muted-foreground">
                   No activities at this level.
                 </div>
               )}
             </div>
-          </div>
+          </Swap>
         </>
       )}
 
-      {/* Floating save bar — morphs through unsaved → saving → saved */}
+      {/* Floating save bar — morphs through unsaved → saving → saved.
+          Under autosave it is a status line rather than a control: it appears
+          for the second between an edit settling and the write landing, and
+          stays put only when a write FAILED, which is the one case where the
+          person has to know their number is not stored yet. */}
       {(dirtyCount > 0 || justSaved) && (
         <div
           className={`sticky bottom-3 z-30 px-1 sm:bottom-4 sm:px-0 ${
@@ -850,12 +1217,12 @@ export default function DataOverallWorkbench({
         >
           <div
             className={`mx-auto flex max-w-xl items-center justify-between gap-2 rounded-2xl border px-2.5 py-3 shadow-xl backdrop-blur transition-colors duration-300 min-[360px]:px-3 sm:gap-4 sm:px-5 sm:py-3.5 ${
-              justSaved ? 'border-emerald-200 bg-emerald-50/95' : 'border-gray-200 bg-white/95'
+              justSaved ? 'ring-ok/40 bg-ok-soft/95' : 'bg-card ring-1 ring-foreground/10/95'
             }`}
           >
             {justSaved ? (
-              <div className="flex items-center gap-3 text-[15px] font-semibold text-emerald-700">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white animate-pop-in">
+              <div className="flex items-center gap-3 text-[15px] font-semibold text-ok">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ok text-white animate-pop-in">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                     <path className="animate-check-draw" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -864,14 +1231,20 @@ export default function DataOverallWorkbench({
               </div>
             ) : (
               <>
-                <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] font-semibold text-gray-900 min-[360px]:text-[14px] min-[380px]:gap-2.5 min-[380px]:text-[15px] sm:gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white animate-badge-pending min-[360px]:h-7 min-[360px]:w-7">
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] font-semibold text-foreground min-[360px]:text-[14px] min-[380px]:gap-2.5 min-[380px]:text-[15px] sm:gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warn text-white animate-badge-pending min-[360px]:h-7 min-[360px]:w-7">
                     <svg className="h-3 w-3 min-[360px]:h-3.5 min-[360px]:w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.86 4.49l2.65 2.65a1.5 1.5 0 010 2.12l-9.2 9.2-4.24.71.71-4.24 9.2-9.2a1.5 1.5 0 012.12 0z" />
                     </svg>
                   </span>
                   <span className="animate-label-in whitespace-nowrap">
-                    {dirtyCount === 1 ? 'Unsaved change' : 'Unsaved changes'}
+                    {saveFailed
+                      ? "Couldn't save"
+                      : saving
+                        ? 'Saving…'
+                        : dirtyCount === 1
+                          ? 'Unsaved change'
+                          : 'Unsaved changes'}
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -881,7 +1254,7 @@ export default function DataOverallWorkbench({
                     onClick={discardAll}
                     disabled={saving}
                     aria-hidden={saving}
-                    className={`rounded-lg px-2 py-2 text-[13px] font-medium text-gray-500 transition-opacity duration-200 hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none min-[380px]:px-2.5 min-[380px]:text-[14px] sm:px-3.5 ${
+                    className={`rounded-lg px-2 py-2 text-[13px] font-medium text-muted-foreground transition-opacity duration-200 hover:bg-muted hover:text-foreground disabled:pointer-events-none min-[380px]:px-2.5 min-[380px]:text-[14px] sm:px-3.5 ${
                       saving ? 'opacity-0' : 'opacity-100'
                     }`}
                   >
@@ -891,17 +1264,22 @@ export default function DataOverallWorkbench({
                       wide as "Saving…" — swapping text in place used to resize it
                       mid-save and push Cancel across the bar. */}
                   <button
-                    onClick={save}
+                    // Not `onClick={save}`: that hands the MouseEvent to
+                    // `silent`, and a manual save would swallow its own errors.
+                    onClick={() => {
+                      setSaveFailed(null);
+                      save();
+                    }}
                     disabled={saving}
-                    aria-label={saving ? 'Saving' : 'Save'}
-                    className="grid place-items-center rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
+                    aria-label={saving ? 'Saving' : saveFailed ? 'Retry saving' : 'Save'}
+                    className="grid place-items-center rounded-lg bg-chart-1 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:brightness-110 hover:shadow-md active:scale-[0.97] disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
                   >
                     <span
                       className={`col-start-1 row-start-1 transition-opacity duration-150 ${
                         saving ? 'opacity-0' : 'opacity-100'
                       }`}
                     >
-                      Save
+                      {saveFailed ? 'Retry' : 'Save'}
                     </span>
                     <span
                       className={`col-start-1 row-start-1 flex items-center gap-2 transition-opacity duration-150 ${
@@ -991,13 +1369,13 @@ const FolderCard = memo(function FolderCard({
   return (
     <button
       onClick={onOpen}
-      className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition-all duration-300 ease-ios hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md active:scale-[0.99] animate-fade-in-up"
+      className="group flex w-full items-center gap-4 rounded-2xl border bg-card ring-1 ring-foreground/10 px-5 py-4 text-left shadow-sm transition-all duration-300 ease-ios hover:-translate-y-0.5 hover:border-border hover:shadow-md active:scale-[0.99] animate-fade-in-up"
       style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
     >
       <Ring pct={cum} color={st.ring} textColor={st.ringText} />
       <div className="min-w-0 flex-1">
-        <TruncatedName text={node.deskripsi} className="text-[15px] font-semibold text-gray-900" accent={st.ring} />
-        <div className="mt-1 text-[13px] text-gray-500">
+        <TruncatedName text={node.deskripsi} className="text-[15px] font-semibold text-foreground" accent={st.ring} />
+        <div className="mt-1 text-[13px] text-muted-foreground">
           {leafCount(node)} activities · Plan {plan.toFixed(1)}%
           <GapInline cum={cum} plan={plan} />
         </div>
@@ -1007,7 +1385,7 @@ const FolderCard = memo(function FolderCard({
         {st.label}
       </span>
       <svg
-        className="h-5 w-5 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-500"
+        className="h-5 w-5 shrink-0 text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-chart-1"
         fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -1018,6 +1396,64 @@ const FolderCard = memo(function FolderCard({
 
 // ============================================================================
 
+/**
+ * One queued item: where it lives, how far into its span it is, and the way out
+ * for the week where the honest answer is "nothing happened".
+ *
+ * The strip above the card carries the contract, because in the queue an
+ * activity has been lifted out of the tree that gave it its context —
+ * "Piping Installation" appears under three different SPKs, and the drill-down
+ * answered that with the breadcrumb the queue does not have.
+ *
+ * "No progress" writes a change-log entry that moves nothing (see
+ * `markNoProgress` in lib/mutations.ts). Without it the counter above the queue
+ * could never reach zero on a week where an item genuinely did not move, and a
+ * progress counter that cannot finish is worse than none.
+ */
+function QueueCard({
+  entry,
+  pathBase,
+  onNoProgress,
+  leafProps,
+}: {
+  entry: WorklistEntry;
+  pathBase: number;
+  onNoProgress?: () => void;
+  leafProps: Omit<LeafCardProps, 'node'>;
+}) {
+  const trail = entry.trail.slice(pathBase);
+  return (
+    <div className="animate-fade-in-up">
+      <div className="mb-1 flex items-center justify-between gap-2 px-1">
+        <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+          {trail.map(shortName).join(' › ') || 'Top level'}
+          {entry.spanWeeks > 1 && (
+            <span className="ml-1.5 whitespace-nowrap text-muted-foreground/70">
+              · week {entry.weekOfSpan} of {entry.spanWeeks}
+            </span>
+          )}
+        </span>
+        {onNoProgress ? (
+          <button
+            onClick={onNoProgress}
+            className="shrink-0 rounded-lg px-2 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            No progress
+          </button>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-ok">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Done
+          </span>
+        )}
+      </div>
+      <LeafCard node={entry.node} {...leafProps} />
+    </div>
+  );
+}
+
 interface LeafCardProps {
   node: RollupNode;
   week: number;
@@ -1026,28 +1462,57 @@ interface LeafCardProps {
   edits: Record<string, EditState>;
   rawInputs: Record<string, { cum?: string; plan?: string }>;
   detailOpen: Set<string>;
+  snapshots: Record<string, LeafSnapshot | undefined>;
+  askQty: { node: RollupNode; total: string; unit: string } | null;
+  setAskQty: (v: { node: RollupNode; total: string; unit: string } | null) => void;
+  confirmQty: () => void;
   currentCum: (n: RollupNode) => number;
   currentPlan: (n: RollupNode) => number;
   setEdit: (id: string, patch: EditState) => void;
   setRawInputs: React.Dispatch<React.SetStateAction<Record<string, { cum?: string; plan?: string }>>>;
   adjustCum: (n: RollupNode, delta: number) => void;
   toggleDetail: (id: string) => void;
+  onSwitchMethod: (node: RollupNode, method: ProgressMethod) => void;
+  switching: boolean;
 }
 
+/**
+ * One item, and the one control that fills it in.
+ *
+ * THE CARD ASKS THE QUESTION THE ITEM CAN ANSWER. An item measured by quantity
+ * is asked how many metres are done; one measured by milestones is asked which
+ * ones are ticked; only an item with neither is asked for a percentage. This
+ * used to be split across two tabs — "Data Overall" typed percentages and a
+ * separate "Field Input" table collected evidence — which meant every person
+ * filling in a week first had to choose a screen, and the answer depended on a
+ * property of the item they could not see from either.
+ *
+ * The percentage stays visible in all three cases, because it is what the
+ * report is made of; for quantity and milestone items it is READ-ONLY, derived
+ * from the evidence beside it, which is the whole point of measuring.
+ */
 const LeafCard = memo(function LeafCard({
-  node, week, recentIds, recentChanges, edits, rawInputs, detailOpen,
+  node, week, recentIds, recentChanges, edits, rawInputs, detailOpen, snapshots,
   currentCum, currentPlan, setEdit, setRawInputs, adjustCum, toggleDetail,
+  onSwitchMethod, switching, askQty, setAskQty, confirmQty,
 }: LeafCardProps) {
-  const cum = currentCum(node);
+  const asking = askQty?.node.id === node.id ? askQty : null;
+  const method = methodOf(node);
+  const edit = edits[node.id];
+  const snap = snapshots[node.id];
+  // Derived for measured items, typed for the rest.
+  const derived = pctOf(node, edit, snap);
+  const cum = derived ?? currentCum(node);
   const plan = currentPlan(node);
   // The stepper sizes its input from this string, so it has to be the exact
   // text the input renders — typing buffer first, formatted value otherwise.
   const cumShown = rawInputs[node.id]?.cum ?? cum.toFixed(cum % 1 === 0 ? 0 : 1);
-  const isDirty = !!edits[node.id];
+  const isDirty = !!edit;
   const isRecent = recentIds.has(node.id);
   const isDone = cum >= 99.95 && !isDirty;
   const showDetail = detailOpen.has(node.id);
   const st = statusOf(cum, plan);
+  const gap = gapText(cum, plan);
   const thisWeek = round2(cum - node.prevProgressPct);
 
   const history = useMemo(
@@ -1059,145 +1524,199 @@ const LeafCard = memo(function LeafCard({
     [recentChanges, node.id]
   );
 
-  // Colour is centralised in statusOf so the bar always matches the ring/chip.
-  const barColor = st.bar;
-
   return (
     <div
-      className={`rounded-2xl border bg-white px-5 py-4 shadow-sm transition-all duration-300 ${
-        isDirty ? 'border-amber-300 ring-2 ring-amber-100' : 'border-gray-200'
-      } ${isDone ? 'opacity-70 hover:opacity-100' : ''}`}
+      className={cn(
+        'rounded-2xl bg-card px-4 py-4 shadow-sm ring-1 transition-all duration-300 ease-ios sm:px-5',
+        isDirty ? 'ring-2 ring-warn/40' : 'ring-foreground/10',
+        isDone && 'opacity-75 hover:opacity-100'
+      )}
     >
-      {/* Title row — the stepper wraps below the name on narrow screens, and
-          everything that wraps starts at the card's left edge. Right-aligning
-          the wrapped pieces (ml-auto/justify-between) zig-zagged the card on
-          phones; the split only reads as a split once both halves share a row. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-[55%] flex-1">
+      {/* ---------------------------------------------------------- name row */}
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[14px] font-semibold leading-snug text-gray-900">{node.deskripsi}</span>
-            {isDone && (
-              <svg className="h-4 w-4 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
+            <span className="text-[15px] font-semibold leading-snug">{node.deskripsi}</span>
             {isRecent && !isDirty && (
-              <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">New</span>
+              <Badge variant="secondary" className="bg-chart-1/10 text-chart-1">
+                New
+              </Badge>
             )}
             {isDirty && (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Unsaved</span>
+              <Badge variant="secondary" className="bg-warn-soft text-warn">
+                Unsaved
+              </Badge>
             )}
           </div>
+          <p className="mt-1 text-[12px] tabular-nums text-muted-foreground">
+            {node.wbsCode} · Weight {node.bobot.toFixed(3)}%
+          </p>
         </div>
-
-        {/* Stepper */}
-        {isDone ? (
-          <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">100%</span>
-            <button
-              onClick={() => adjustCum(node, -5)}
-              className="rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
-              title="Correct value"
-              aria-label="Correct value"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
+        {/* The figure is the headline of the card, and for a measured item it is
+            the only place the percentage appears at all. */}
+        <div className="shrink-0 text-right">
+          <div className={cn('text-2xl font-semibold tabular-nums leading-none', isDone && 'text-ok')}>
+            {cum.toFixed(cum % 1 === 0 ? 0 : 1)}%
           </div>
-        ) : (
-          <div className="flex w-full items-center justify-end gap-2.5 sm:ml-auto sm:w-auto sm:shrink-0 sm:gap-1.5">
-            <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
-            {/* The BOX is drawn by this label and keeps a fixed width, so the row
-                never jitters as digits come and go; the input inside shrink-wraps
-                its value so the number and its "%" read as one pair centred in
-                the box. A fixed-width input instead parked the number against the
-                % and pushed the pair visibly off-centre. It has to be a label,
-                not a span: once the input is only as wide as one digit, the box
-                must take the tap and hand focus over, or most of this 88px
-                control is dead to a thumb. */}
-            <label className="flex h-11 w-[88px] cursor-text items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white px-1 shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 sm:h-10 sm:w-[84px]">
-              <input
-                type="text"
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Plan {plan.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+
+      {/* -------------------------------------------------------------- bar */}
+      <div className="relative mt-3 h-2.5 rounded-full bg-muted">
+        <div
+          className={cn('h-full rounded-full transition-all duration-500', st.bar)}
+          style={{ width: `${clamp(cum)}%` }}
+        />
+        {plan > 0.5 && plan < 99.5 && (
+          <div
+            className="absolute -top-[3px] h-4 w-[3px] rounded-full bg-chart-2"
+            style={{ left: `calc(${clamp(plan)}% - 1px)` }}
+            title={`Plan ${plan.toFixed(1)}%`}
+          />
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-x-3 text-[12px] text-muted-foreground">
+        <span>
+          Last week <span className="font-medium text-foreground">{node.prevProgressPct.toFixed(1)}%</span>
+          {thisWeek !== 0 && (
+            <span className={thisWeek > 0 ? 'text-ok' : 'text-bad'}>
+              {' '}({thisWeek > 0 ? '+' : ''}{thisWeek.toFixed(1)}%)
+            </span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-2.5">
+          <span className={cn('hidden font-semibold sm:inline', gap.cls)}>{gap.text}</span>
+          <span className="hidden sm:contents">
+            <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+          </span>
+        </span>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-x-3 sm:hidden">
+        <GapBottomRow cum={cum} plan={plan} className="" />
+        <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
+      </div>
+
+      {/* ------------------------------------------------------------ entry */}
+      {/* Its own well, below the reading, so "where do I fill this in" is never
+          a question — and so the control can be full width on a phone. */}
+      <div className="mt-3 rounded-xl bg-muted/50 p-3">
+        {asking ? (
+          // Switching to quantity needs a real total first. Asked HERE, inside
+          // the item's own card: as a banner at the top of the page it named an
+          // item that was two screens further down.
+          <div>
+            <p className="text-[12px] font-semibold">How much of it is there in total?</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              This item is recorded as lumpsum, so it has nothing to count yet. The progress
+              already reported is carried across into the new unit, not lost.
+            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <Input
+                autoFocus
                 inputMode="decimal"
-                value={cumShown}
-                style={{ width: `${chWidth(cumShown)}ch` }}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: raw } }));
-                  const parsed = parseInput(raw, round2(node.curProgressPct));
-                  if (parsed !== null) setEdit(node.id, { cumProgressPct: parsed });
-                }}
-                onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: undefined } }))}
-                className="max-w-full shrink border-none bg-transparent p-0 text-center text-[17px] font-bold tabular-nums text-gray-900 outline-none focus:ring-0 sm:text-[15px] sm:font-semibold"
+                value={asking.total}
+                onChange={(e) => setAskQty({ ...asking, total: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && confirmQty()}
+                placeholder="340"
+                className="w-24 bg-background text-right tabular-nums"
               />
-              <span className="shrink-0 text-[15px] font-medium text-gray-400 sm:text-[13px]">%</span>
-            </label>
-            <StepBtn onClick={() => adjustCum(node, 5)} label="Increase 5%">+</StepBtn>
+              <Input
+                value={asking.unit}
+                onChange={(e) => setAskQty({ ...asking, unit: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && confirmQty()}
+                placeholder="m, m3, kg…"
+                className="w-36 bg-background"
+              />
+              <Button
+                size="sm"
+                onClick={confirmQty}
+                disabled={switching || !asking.total.trim() || !asking.unit.trim()}
+              >
+                Set total
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setAskQty(null)} disabled={switching}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {!asking && method === 'qty' && (
+          <QuantityEntry node={node} edit={edit} snap={snap} setEdit={setEdit} />
+        )}
+
+        {!asking && method === 'milestone' && (
+          <MilestoneEntry node={node} edit={edit} snap={snap} setEdit={setEdit} />
+        )}
+
+        {!asking && method === 'lumpsum' && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium">Percent complete</p>
+              <p className="text-[11px] text-bad">Typed by hand — nothing on site to check it against</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
+              {/* The BOX is drawn by this label and keeps a fixed width, so the
+                  row never jitters as digits come and go; the input inside
+                  shrink-wraps its value so the number and its "%" read as one
+                  pair centred in the box. It has to be a label, not a span:
+                  once the input is only as wide as one digit, the box must take
+                  the tap and hand focus over, or most of this 88px control is
+                  dead to a thumb. */}
+              <label className="flex h-11 w-[88px] cursor-text items-center justify-center gap-1.5 overflow-hidden rounded-xl border bg-background px-1 shadow-sm transition-all focus-within:border-chart-1 focus-within:ring-4 focus-within:ring-chart-1/15 sm:h-10">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={cumShown}
+                  style={{ width: `${chWidth(cumShown)}ch` }}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: raw } }));
+                    const parsed = parseInput(raw, round2(node.curProgressPct));
+                    if (parsed !== null) setEdit(node.id, { cumProgressPct: parsed });
+                  }}
+                  onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: undefined } }))}
+                  className="max-w-full shrink border-none bg-transparent p-0 text-center text-[17px] font-semibold tabular-nums outline-none focus:ring-0 sm:text-[15px]"
+                />
+                <span className="shrink-0 text-[15px] font-medium text-muted-foreground sm:text-[13px]">%</span>
+              </label>
+              <StepBtn onClick={() => adjustCum(node, 5)} label="Increase 5%">+</StepBtn>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Bars + meta (hidden for completed to keep them calm) */}
-      {!isDone && (
-        <>
-          {/* One clean fill in the status colour, with a tick marking the
-             target — no more stacked orange layer that read as a second bar. */}
-          <div className="relative mt-3.5 h-2.5 rounded-full bg-gray-100">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-              style={{ width: `${clamp(cum)}%` }}
-            />
-            {plan > 0.5 && plan < 99.5 && (
-              <div
-                className="absolute -top-[3px] h-4 w-0.5 rounded-full bg-gray-600/70"
-                style={{ left: `calc(${clamp(plan)}% - 1px)` }}
-                title={`Plan ${plan.toFixed(1)}%`}
-              />
-            )}
-          </div>
-          {/* Every row spans the full card: one item anchored left, one right.
-              Left-aligning everything instead left a dead column down the right
-              side of the card on phones. */}
-          <div className="mt-2 flex items-center justify-between gap-x-3 text-[12px] text-gray-500">
-            <span>
-              Last week <span className="font-medium text-gray-700">{node.prevProgressPct.toFixed(1)}%</span>
-              {thisWeek !== 0 && (
-                <span className={thisWeek > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                  {' '}({thisWeek > 0 ? '+' : ''}{thisWeek.toFixed(1)}%)
-                </span>
-              )}
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              Plan <span className="font-medium text-gray-700">{plan.toFixed(1)}%</span>
-              <GapInline cum={cum} plan={plan} />
-              <span className="hidden sm:contents">
-                <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
-              </span>
-            </span>
-          </div>
-          {/* Phones get the status and the toggle as their own full-width row —
-              on desktop the toggle rides along in the row above. */}
-          <div className="mt-1.5 flex items-center justify-between gap-x-3 sm:hidden">
-            <GapBottomRow cum={cum} plan={plan} className="" />
-            <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
-          </div>
-        </>
-      )}
-      {isDone && (
-        <div className="mt-1.5 flex items-center justify-end">
-          <DetailToggle open={showDetail} onClick={() => toggleDetail(node.id)} />
-        </div>
-      )}
-
-      {/* Expandable detail */}
+      {/* --------------------------------------------------- expandable rest */}
       <div
         className="grid transition-[grid-template-rows] duration-300 ease-out"
         style={{ gridTemplateRows: showDetail ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="mt-3.5 space-y-4 rounded-xl bg-gray-50 p-4">
-            <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
+          <div className="mt-3.5 space-y-4 rounded-xl bg-muted/50 p-4">
+            {/* Switching how an item is measured is a deliberate act, so it
+                lives one fold down rather than beside the value. Native select:
+                a level can hold ninety of these cards, and a Radix Select in
+                each is ninety portals (AGENTS.md). */}
+            <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-3">
+              <Field label="Measured by">
+                <select
+                  value={method}
+                  disabled={switching}
+                  onChange={(e) => onSwitchMethod(node, e.target.value as ProgressMethod)}
+                  className="mt-1 h-9 w-full rounded-lg border bg-background px-2 text-[13px] outline-none transition-colors focus:border-chart-1 disabled:opacity-50"
+                >
+                  {(Object.keys(METHOD_LABEL) as ProgressMethod[]).map((k) => (
+                    <option key={k} value={k}>
+                      {METHOD_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <Field label="Edit target (plan)">
                 <div className="mt-1 flex items-center gap-1.5">
                   <input
@@ -1211,28 +1730,31 @@ const LeafCard = memo(function LeafCard({
                       if (parsed !== null) setEdit(node.id, { planPct: parsed });
                     }}
                     onBlur={() => setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], plan: undefined } }))}
-                    className="h-9 w-[70px] rounded-lg border border-gray-300 bg-white text-center text-[13px] font-semibold tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="h-9 w-[70px] rounded-lg border bg-background text-center text-[13px] font-semibold tabular-nums outline-none focus:border-chart-1"
                   />
-                  <span className="text-[12px] text-gray-400">%</span>
+                  <span className="text-[12px] text-muted-foreground">%</span>
                 </div>
               </Field>
-              <Field label="WBS Code" value={node.wbsCode} />
-              <Field label="Weight" value={`${node.bobot.toFixed(3)}%`} sub="of the whole project" />
-              <Field label="Contribution to total" value={`${round2((node.bobot * cum) / 100).toFixed(3)}%`} sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`} />
+              <Field
+                label="Contribution to total"
+                value={`${round2((node.bobot * cum) / 100).toFixed(3)}%`}
+                sub={`${cum.toFixed(1)}% × ${node.bobot.toFixed(2)}%`}
+              />
               <Field label="Volume" value={node.vol && node.satuan ? `${node.vol} ${node.satuan}` : '—'} />
               <Field label={`Last week (W${week - 1})`} value={`${node.prevProgressPct.toFixed(2)}%`} />
+              <Field label="WBS Code" value={node.wbsCode} />
             </div>
             {history.length > 0 && (
-              <div className="border-t border-gray-200 pt-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">History</div>
+              <div className="border-t pt-3">
+                <div className="mb-2 text-[11px] font-semibold text-muted-foreground">History</div>
                 <div className="space-y-1.5">
                   {history.map((h) => (
                     <div key={h.id} className="flex items-center gap-2 text-[12px]">
-                      <span className={`h-1.5 w-1.5 rounded-full ${h.field === 'cumProgressPct' ? 'bg-blue-500' : 'bg-orange-400'}`} />
-                      <span className="font-medium tabular-nums text-gray-800">
+                      <span className={cn('h-1.5 w-1.5 rounded-full', h.field === 'cumProgressPct' ? 'bg-chart-1' : 'bg-chart-2')} />
+                      <span className="font-medium tabular-nums">
                         {h.field === 'cumProgressPct' ? 'Actual' : 'Plan'} {h.oldValue.toFixed(1)}% → {h.newValue.toFixed(1)}%
                       </span>
-                      <span suppressHydrationWarning className="text-gray-400">· {timeAgo(h.at)}</span>
+                      <span suppressHydrationWarning className="text-muted-foreground">· {timeAgo(h.at)}</span>
                     </div>
                   ))}
                 </div>
@@ -1245,6 +1767,116 @@ const LeafCard = memo(function LeafCard({
   );
 });
 
+/**
+ * "How much of it is done?" asked in the item's own unit.
+ *
+ * The buttons move a twentieth of the total rather than one unit: on a 500 m
+ * run, a +1 button is a control nobody can reach the end of.
+ */
+function QuantityEntry({
+  node,
+  edit,
+  snap,
+  setEdit,
+}: {
+  node: RollupNode;
+  edit: EditState | undefined;
+  snap: LeafSnapshot | undefined;
+  setEdit: (id: string, patch: EditState) => void;
+}) {
+  const total = totalQty(node);
+  const done = edit?.qtyDone ?? snap?.qtyDone ?? 0;
+  const step = Math.max(1, round2(total / 20));
+  const set = (v: number) => setEdit(node.id, { qtyDone: Math.max(0, Math.min(total, round2(v))) });
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[12px] font-medium">How much is finished?</p>
+        <p className="text-[11px] text-muted-foreground">
+          Out of {total.toLocaleString('en-GB')} {node.satuan ?? ''} in total
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <StepBtn onClick={() => set(done - step)} label={`Subtract ${step}`}>−</StepBtn>
+        <label className="flex h-11 min-w-[112px] cursor-text items-center justify-center gap-1.5 rounded-xl border bg-background px-2 shadow-sm transition-all focus-within:border-chart-1 focus-within:ring-4 focus-within:ring-chart-1/15 sm:h-10">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={String(done)}
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(',', '.'));
+              if (Number.isFinite(n)) set(n);
+            }}
+            className="w-14 border-none bg-transparent p-0 text-center text-[17px] font-semibold tabular-nums outline-none focus:ring-0 sm:text-[15px]"
+          />
+          <span className="shrink-0 text-[13px] font-medium text-muted-foreground">
+            {node.satuan ?? ''}
+          </span>
+        </label>
+        <StepBtn onClick={() => set(done + step)} label={`Add ${step}`}>+</StepBtn>
+      </div>
+    </div>
+  );
+}
+
+/** "Which ones are through?" — the ladder, as buttons big enough for a thumb. */
+function MilestoneEntry({
+  node,
+  edit,
+  snap,
+  setEdit,
+}: {
+  node: RollupNode;
+  edit: EditState | undefined;
+  snap: LeafSnapshot | undefined;
+  setEdit: (id: string, patch: EditState) => void;
+}) {
+  const ms = node.milestones ?? [];
+  const done = edit?.milestonesDone ?? snap?.milestonesDone ?? [];
+
+  return (
+    <div>
+      <p className="text-[12px] font-medium">Which milestones are through?</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {ms.map((m) => {
+          const on = done.includes(m.id);
+          return (
+            <button
+              key={m.id}
+              onClick={() =>
+                setEdit(node.id, {
+                  milestonesDone: on ? done.filter((x) => x !== m.id) : [...done, m.id],
+                })
+              }
+              title={`${m.label} · ${m.weight}%`}
+              className={cn(
+                'flex min-h-11 items-center gap-2 rounded-xl border px-3 text-[13px] font-medium transition-all duration-300 ease-ios active:scale-[0.97]',
+                on ? 'border-ok/40 bg-ok-soft text-ok' : 'bg-background hover:bg-muted'
+              )}
+            >
+              <span
+                className={cn(
+                  'flex h-4 w-4 items-center justify-center rounded-full border text-[10px]',
+                  on ? 'border-ok bg-ok text-white' : 'border-muted-foreground/40'
+                )}
+              >
+                {on ? '✓' : ''}
+              </span>
+              {m.label.split('—')[0].trim()}
+            </button>
+          );
+        })}
+        {ms.length === 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            This item has no milestones yet — set them from Details.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StepBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
     <button
@@ -1255,7 +1887,7 @@ function StepBtn({ children, onClick, label }: { children: React.ReactNode; onCl
       // carried by shadow alone simply did not read as a button. It also sits a
       // touch shorter than that box, which is what keeps the box the anchor of
       // the group rather than three equal slabs.
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-semibold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-90"
+      className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card ring-1 ring-foreground/10 text-lg font-semibold text-foreground shadow-sm transition-all hover:bg-muted hover:text-chart-1 active:scale-90"
     >
       {children}
     </button>
@@ -1266,7 +1898,7 @@ function DetailToggle({ open, onClick }: { open: boolean; onClick: () => void })
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+      className="flex min-h-8 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-muted-foreground transition-colors duration-300 ease-ios hover:bg-muted hover:text-foreground"
     >
       Details
       <svg
@@ -1283,11 +1915,11 @@ function DetailToggle({ open, onClick }: { open: boolean; onClick: () => void })
 function Field({ label, value, sub, children }: { label: string; value?: string; sub?: string; children?: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] font-medium text-gray-500">{label}</div>
+      <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
       {children ?? (
         <>
-          <div className="mt-0.5 text-[13px] font-semibold text-gray-900">{value}</div>
-          {sub && <div className="text-[11px] text-gray-400">{sub}</div>}
+          <div className="mt-0.5 text-[13px] font-semibold text-foreground">{value}</div>
+          {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
         </>
       )}
     </div>
