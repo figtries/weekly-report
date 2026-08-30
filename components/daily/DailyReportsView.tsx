@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { AnimatePresence, m } from 'framer-motion';
 import { deleteDailyAction } from '@/lib/actions';
+import { MOTION } from '@/lib/design';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import NewDailyButton from './NewDailyButton';
 
@@ -73,6 +75,16 @@ export default function DailyReportsView({
   }, [visible]);
 
   const filtered = selected === 'all' ? visible : visible.filter((r) => monthKey(r.date) === selected);
+
+  /**
+   * Whether the rows may carry framer-motion's `layout`.
+   *
+   * The threshold is the same ~20 the app uses for Radix, for the same reason:
+   * the cost is per element, and it is paid on every change rather than once.
+   * A month's worth of days sits comfortably under it; "All" on a finished
+   * project does not.
+   */
+  const animatedRows = filtered.length <= 20;
   const selectedLabel = selected === 'all' ? 'All months' : monthLabel(selected);
 
   function confirmDelete() {
@@ -130,11 +142,23 @@ export default function DailyReportsView({
         {visible.length > 0 && filtered.length === 0 && (
           <p className="p-6 text-sm text-gray-500">No daily reports for {selectedLabel}.</p>
         )}
-        {filtered.map((d, idx) => (
-          <div
+        <AnimatePresence initial={false} mode="popLayout">
+        {filtered.map((d) => (
+          <m.div
             key={d.date}
-            className="flex items-center gap-2 px-4 sm:px-6 transition-colors duration-150 ease-ios hover:bg-gray-50 animate-fade-in-up"
-            style={{ animationDelay: `${Math.min(idx, 8) * 20}ms` }}
+            // `layout` is what makes the rows SLIDE to their new places when a
+            // month is picked rather than jumping. It is also the expensive
+            // prop — it measures every element carrying it on every change —
+            // so it is gated on the list being short. This view holds a
+            // project's whole daily history, and Gundih is 415 days: measuring
+            // 415 rows on each filter change is exactly the jank this layer
+            // was asked to remove, not add.
+            layout={animatedRows}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={MOTION.spring}
+            className="flex items-center gap-2 px-4 sm:px-6 transition-colors duration-150 ease-ios hover:bg-gray-50"
           >
             <Link
               href={`/daily/${d.date}`}
@@ -181,8 +205,9 @@ export default function DailyReportsView({
                 </svg>
               </button>
             </div>
-          </div>
+          </m.div>
         ))}
+        </AnimatePresence>
       </div>
 
       <ConfirmDialog

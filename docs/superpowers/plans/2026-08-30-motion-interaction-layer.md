@@ -895,6 +895,11 @@ git commit -m "Open to the height the content actually has"
 
 - [ ] **Step 1: Count the rows before touching either file**
 
+**Counted, 30 August 2026:**
+
+- `PhotoUploadGrid` — **skipped, nothing rearranges.** It is a grid of fixed upload slots, `PAGE_SIZE = 6` per page. Deleting a photo sets that slot to `null` and the slot keeps its place, so no row ever moves. `layout` would buy nothing and cost per element.
+- `DailyReportsView` — **11 rows today**, filtered by month. Under the threshold, so it gets the treatment — but `layout` is gated on `filtered.length <= 20` rather than applied outright, because this view holds a project's whole daily history and Gundih is 415 days. "All months" on a finished project is exactly the 415-element measurement this layer exists to avoid.
+
 Read both files and establish the maximum length each list can reach. `PhotoUploadGrid` is paged by `PAGE_SIZE`; `DailyReportsView` is one report's rows.
 
 **If either can exceed ~20 items, do not add `layout` to it.** Record the number and skip that file, saying so. The constraint is not negotiable: `layout` measures every element carrying it on every change, and `WbsTreeTable`'s 285 leaves are the standing proof of what that costs.
