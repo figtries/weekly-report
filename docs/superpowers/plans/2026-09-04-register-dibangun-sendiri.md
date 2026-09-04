@@ -1244,7 +1244,7 @@ Kategori dan dokumen bisa ditambah, diganti nama, dan dihapus. Tanpa ini, salah 
   export async function deleteDocument(input: { projectId: string; register: RegisterKind; documentId: string }): Promise<ActionResult>
   ```
 
-- [ ] **Step 1: Tulis keempatnya**
+- [x] **Step 1: Tulis keempatnya**
 
 Di `lib/doc-actions.ts`:
 
@@ -1372,7 +1372,7 @@ export async function deleteDocument(input: {
 }
 ```
 
-- [ ] **Step 2: Periksa tipe**
+- [x] **Step 2: Periksa tipe**
 
 ```bash
 npx tsc --noEmit -p tsconfig.json > tsc.log 2>&1; echo $?
@@ -1380,7 +1380,7 @@ npx tsc --noEmit -p tsconfig.json > tsc.log 2>&1; echo $?
 
 Expected: `0`. (Berkas `tsconfig.json` di repo ini sudah disaring untuk keperluan ini — jangan mengubahnya.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/doc-actions.ts

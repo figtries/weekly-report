@@ -324,6 +324,131 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
   }
 }
 
+/* ---------------------------------------------------------- tending it */
+
+/**
+ * A group can only be deleted once it is EMPTY.
+ *
+ * `docCategories` cascades to `documents`, which cascades to `doc_stages`:
+ * deleting a group that still holds documents would take their whole history
+ * with it and nobody would be asked. This condition is what stands in the way.
+ */
+export async function deleteCategory(input: {
+  projectId: string; register: RegisterKind; categoryId: string;
+}): Promise<ActionResult> {
+  try {
+    const category = db.select().from(schema.docCategories)
+      .where(and(
+        eq(schema.docCategories.id, input.categoryId),
+        eq(schema.docCategories.projectId, input.projectId),
+        eq(schema.docCategories.register, input.register),
+      )).all()[0];
+    if (!category) throw new Error('Group not found');
+
+    const docs = db.select().from(schema.documents)
+      .where(eq(schema.documents.categoryId, category.id)).all();
+    if (docs.length > 0) {
+      throw new Error(`Empty it first — ${docs.length} document${docs.length === 1 ? '' : 's'} still inside`);
+    }
+
+    const children = db.select().from(schema.docCategories)
+      .where(eq(schema.docCategories.parentId, category.id)).all();
+    if (children.length > 0) throw new Error('Delete the groups inside it first');
+
+    db.delete(schema.docCategories).where(eq(schema.docCategories.id, category.id)).run();
+    refreshRegister();
+    return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** `General Prosedur` → `GENERAL-PROSEDUR`, and `-2` when that is taken. */
+function categoryCode(name: string, taken: Set<string>): string {
+  const base = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'CATEGORY';
+  let code = base;
+  let n = 2;
+  while (taken.has(code)) { code = `${base}-${n}`; n += 1; }
+  return code;
+}
+
+export async function addCategory(input: {
+  projectId: string; register: RegisterKind; name: string; parentId: string | null;
+}): Promise<ActionResult> {
+  try {
+    const name = input.name.trim();
+    if (!name) throw new Error('Group name is required');
+
+    const siblings = db.select().from(schema.docCategories)
+      .where(and(
+        eq(schema.docCategories.projectId, input.projectId),
+        eq(schema.docCategories.register, input.register),
+      )).all();
+
+    if (siblings.some((c) => (c.parentId ?? null) === input.parentId
+      && c.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`"${name}" is already here`);
+    }
+
+    db.insert(schema.docCategories).values({
+      id: randomUUID(),
+      projectId: input.projectId,
+      register: input.register,
+      parentId: input.parentId,
+      code: categoryCode(name, new Set(siblings.map((c) => c.code))),
+      name,
+      order: siblings.reduce((a, c) => Math.max(a, c.order), -1) + 1,
+    }).run();
+
+    refreshRegister();
+    return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function renameCategory(input: {
+  projectId: string; register: RegisterKind; categoryId: string; name: string;
+}): Promise<ActionResult> {
+  try {
+    const name = input.name.trim();
+    if (!name) throw new Error('Group name is required');
+
+    const updated = db.update(schema.docCategories)
+      .set({ name })
+      .where(and(
+        eq(schema.docCategories.id, input.categoryId),
+        eq(schema.docCategories.projectId, input.projectId),
+        eq(schema.docCategories.register, input.register),
+      )).run();
+    if (updated.changes === 0) throw new Error('Group not found');
+
+    refreshRegister();
+    return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Deleting a document deletes its history with it — that is what was asked for,
+ * and `doc_stages` already cascades from `documents`. What moves quietly is the
+ * denominator: every percentage in this group is recomputed from the documents
+ * that remain.
+ */
+export async function deleteDocument(input: {
+  projectId: string; register: RegisterKind; documentId: string;
+}): Promise<ActionResult> {
+  try {
+    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
+    db.delete(schema.documents).where(eq(schema.documents.id, doc.id)).run();
+    refreshRegister();
+    return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 /* ----------------------------------------------------- linking to the WBS */
 
 export interface LinkInput {
