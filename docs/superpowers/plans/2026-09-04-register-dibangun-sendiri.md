@@ -100,8 +100,8 @@ check('judulnya', sheet.categories[1].documents[0].title, 'Jadwal Pelaksanaan Pe
 check('jenisnya', sheet.categories[1].documents[0].kind, 'Doc');
 
 console.log('\nkode outline boleh dobel — nama yang membedakan');
-const b42 = sheet.categories.filter((c) => c.name.startsWith('Piping'));
-check('kategori Piping', b42.length, 4);
+const piping = sheet.categories.filter((c) => c.name.startsWith('Piping'));
+check('kategori Piping', piping.length, 5);
 
 console.log('\ndaftar ketikan tangan, dua kolom');
 const flat = parseRegisterPaste(
@@ -219,13 +219,24 @@ const at = (row: RawRow, col: number) => row.cells[col] ?? '';
 function guessColumns(rows: RawRow[], width: number): ColumnMapping {
   const none: ColumnMapping = { outline: null, docNo: null, title: null, kind: null };
 
-  // Kolom outline: yang paling sering berisi kode outline. Dua kecocokan sudah
-  // cukup — daftar ketikan tangan tidak punya satu pun, dan jatuh ke mode datar.
+  // Kolom outline dinilai dari kode outline DAN nomor urut sekaligus.
+  //
+  // Menilai dari kode outline saja terlihat cukup sampai sebuah sheet nyata
+  // dibaca: kolom REV berisi huruf tunggal `A` dan `B`, yang cocok dengan pola
+  // kode outline — pada EDL Petrogas 69 kali, terhadap 36 kode outline yang
+  // sebenarnya. Yang membedakan keduanya adalah baris dokumennya: kolom outline
+  // yang asli juga memuat seluruh nomor urut (skor 168), kolom REV nyaris tidak
+  // memuat satu pun (skor 87).
+  //
+  // Syarat dua kode outline menjaga daftar ketikan tangan tetap jatuh ke mode
+  // datar: daftar begitu tidak punya kode outline sama sekali.
   let outline: number | null = null;
-  let best = 1;
+  let best = 0;
   for (let c = 0; c < width; c += 1) {
-    const hits = rows.filter((r) => OUTLINE.test(at(r, c))).length;
-    if (hits > best) { best = hits; outline = c; }
+    const outlineHits = rows.filter((r) => OUTLINE.test(at(r, c))).length;
+    if (outlineHits < 2) continue;
+    const score = outlineHits + rows.filter((r) => SEQ.test(at(r, c))).length;
+    if (score > best) { best = score; outline = c; }
   }
   if (outline === null) return none;
 
