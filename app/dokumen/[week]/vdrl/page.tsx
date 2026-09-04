@@ -3,7 +3,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
+  getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
 } from '@/lib/register';
 
 export const metadata = { title: 'VDRL Summary' };
@@ -35,6 +35,7 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
 
           hasDocuments={false}
           existingSections={[]}
+          numbering={getNumbering(PROJECT_ID, 'vdrl')}
         />
       </RouteTransition>
     );

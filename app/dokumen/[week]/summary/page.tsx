@@ -3,7 +3,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getEngineeringBridge, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
+  getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
 } from '@/lib/register';
 
 export const metadata = { title: 'EDL Summary' };
@@ -40,6 +40,7 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
 
           hasDocuments={false}
           existingSections={[]}
+          numbering={getNumbering(PROJECT_ID, 'edl')}
         />
       </RouteTransition>
     );

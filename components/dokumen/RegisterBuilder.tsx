@@ -1,83 +1,84 @@
 'use client';
 
 import { useMemo, useRef, useState, useTransition } from 'react';
-import { ArrowLeft, Check, ChevronRight, FileSpreadsheet, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, FileSpreadsheet, Plus, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { addFromDraft, readRegisterFile, seedRegister } from '@/lib/doc-actions';
+import { addFromDraft, readRegisterFile, saveNumbering, seedRegister } from '@/lib/doc-actions';
 import { parseRegisterPaste, type ColumnMapping } from '@/lib/register-paste';
+import {
+  defaultRule, disciplineFor, nextNumber, type NumberingRule,
+} from '@/lib/register-numbering';
 import { templateFor, type TemplateBand } from '@/lib/register-template';
 import type { RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 
 /**
- * Building a register the way it is actually shaped: section by section.
+ * Building a register that follows the project's own numbering, without anyone
+ * having to know it.
  *
- * Two earlier attempts failed the same way. Both handed someone an empty text
- * box and asked them to express a THREE-LEVEL STRUCTURE in it — "a line on its
- * own is a group" — which is a format to learn before a register can be
- * started, and learning it is the whole difficulty. Moving 131 rows out of a
- * spreadsheet needs that box; creating five documents does not.
+ * Three attempts came before this one and all three failed the same way: they
+ * offered a text box. A text box accepts anything — a wrong number, no number,
+ * two people inventing two conventions — and a register whose numbers are
+ * arbitrary is not a register. Both real EDLs here prove there is a rule:
+ * `PROJECT-DISCIPLINE-TYPE-SEQUENCE`, with the type code's first letter saying
+ * whether the thing is a document or a drawing.
  *
- * So the structure is chosen by pressing it, not written. The sections come
- * ready-made from `lib/register-template.ts` — the union of the two real EDLs
- * in this repo — and a section is opened, filled with one title per line, and
- * closed. Nothing about grouping is ever typed. Sections nobody uses stay empty
- * and are never written; a project with its own discipline adds one.
- *
- * The Excel door stays open beside it, because a list that already exists
- * should never be retyped.
+ * So the structure is pressed rather than written, and the number is composed
+ * rather than typed. Pick the section, pick Doc or Dwg, type the title — the
+ * number is already there, continuing the sequence in that group. It stays
+ * editable, because a register inherited mid-project always carries a few that
+ * predate the rule.
  */
 
-interface Draft {
-  /** Keyed by the group's full path, joined — `DETAIL ENGINEERING›ELECTRICAL›Electrical Datasheet`. */
-  [path: string]: string;
+interface Row {
+  id: string;
+  docNo: string;
+  title: string;
+  kind: 'Doc' | 'Dwg';
+  /** False once someone edits the number by hand: it stops being recomputed. */
+  auto: boolean;
 }
 
+type Draft = Record<string, Row[]>;
+
 type View =
+  | { name: 'numbering' }
   | { name: 'sections' }
   | { name: 'section'; band: string; section: string; groups: string[] }
   | { name: 'paste' };
 
 const SEP = '›';
-
-/** One line = one document. A number in front is optional and split off. */
-function documentsFrom(text: string): { docNo: string | null; title: string }[] {
-  return text.split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\t|\s*\|\s*|\s{2,}/).map((p) => p.trim()).filter(Boolean);
-      if (parts.length >= 2) return { docNo: parts[0], title: parts.slice(1).join(' ') };
-      return { docNo: null, title: parts[0] ?? line };
-    });
-}
+const newId = () => Math.random().toString(36).slice(2);
 
 export function RegisterBuilder({
-  projectId, register, clientName, contractorName, hasDocuments, existingSections = [], onClose,
+  projectId, register, clientName, contractorName, hasDocuments,
+  existingSections = [], numbering, onClose,
 }: {
   projectId: string;
   register: RegisterKind;
   clientName: string;
   contractorName: string;
   hasDocuments: boolean;
-  /**
-   * Sections already in the register, so they appear beside the ready-made
-   * ones. Optional, and defaulted: a half-swapped dev bundle once rendered this
-   * component with the prop missing and the whole page died on a spread of
-   * undefined. A builder with no existing sections is a correct thing to show;
-   * a crash is not.
-   */
   existingSections?: { band: string; section: string; groups: string[] }[];
+  /** The rule, the numbers already spoken for, and a guess for a register with none. */
+  numbering?: { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
   onClose?: () => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
-  const [view, setView] = useState<View>({ name: 'sections' });
   const [error, setError] = useState<string | null>(null);
+
+  const savedRule = numbering?.rule ?? null;
+  const taken = numbering?.taken ?? [];
+
+  const [rule, setRule] = useState<NumberingRule>(
+    savedRule ?? defaultRule(numbering?.suggestedPrefix ?? ''),
+  );
+  const [view, setView] = useState<View>(savedRule ? { name: 'sections' } : { name: 'numbering' });
 
   const [client, setClient] = useState(clientName);
   const [contractor, setContractor] = useState(contractorName);
@@ -87,11 +88,7 @@ export function RegisterBuilder({
   const [pasteSource, setPasteSource] = useState<string | null>(null);
   const [override, setOverride] = useState<Partial<ColumnMapping>>({});
 
-  /**
-   * The ready-made shape, plus whatever this register already has, plus
-   * anything added during this sitting. A section that exists in both appears
-   * once — matched on name, because that is what the writer matches on too.
-   */
+  /** The ready-made shape, plus what this register already has, plus additions. */
   const bands = useMemo(() => {
     const merged: TemplateBand[] = templateFor(register).map((b) => ({
       name: b.name,
@@ -104,8 +101,14 @@ export function RegisterBuilder({
       return band;
     };
 
-    for (const row of [...existingSections, ...extraBands.flatMap((b) =>
-      b.sections.map((s) => ({ band: b.name, section: s.name, groups: s.groups })))]) {
+    const rows = [
+      ...existingSections,
+      ...extraBands.flatMap((b) => b.sections.map((s) => ({
+        band: b.name, section: s.name, groups: s.groups,
+      }))),
+    ];
+
+    for (const row of rows) {
       const band = findBand(row.band);
       let section = band.sections.find((s) => s.name.toLowerCase() === row.section.toLowerCase());
       if (!section) { section = { name: row.section, groups: [] }; band.sections.push(section); }
@@ -117,19 +120,20 @@ export function RegisterBuilder({
     return merged;
   }, [register, existingSections, extraBands]);
 
-  const countIn = (band: string, section: string) => Object.entries(draft)
-    .filter(([path]) => path.startsWith(`${band}${SEP}${section}${SEP}`) || path === `${band}${SEP}${section}`)
-    .reduce((n, [, text]) => n + documentsFrom(text).length, 0);
-
   const totals = useMemo(() => {
     let documents = 0;
     let groups = 0;
-    for (const text of Object.values(draft)) {
-      const n = documentsFrom(text).length;
-      if (n > 0) { documents += n; groups += 1; }
+    for (const rows of Object.values(draft)) {
+      const filled = rows.filter((r) => r.title.trim() !== '');
+      if (filled.length > 0) { documents += filled.length; groups += 1; }
     }
     return { documents, groups };
   }, [draft]);
+
+  const countIn = (band: string, section: string) => Object.entries(draft)
+    .filter(([path]) => path === `${band}${SEP}${section}`
+      || path.startsWith(`${band}${SEP}${section}${SEP}`))
+    .reduce((n, [, rows]) => n + rows.filter((r) => r.title.trim() !== '').length, 0);
 
   const named = client.trim() !== '' && contractor.trim() !== '';
   const label = register === 'edl' ? 'EDL' : 'VDRL';
@@ -137,14 +141,51 @@ export function RegisterBuilder({
     ? 'Engineering Deliverable List'
     : 'Vendor Deliverable Register';
 
-  /* ------------------------------------------------------------- writing */
+  /* --------------------------------------------------------- numbering */
+
+/**
+   * Numbers spoken for OUTSIDE one group: the register's own, plus every other
+   * group drafted in this sitting.
+   *
+   * The group being renumbered is deliberately excluded. Counting its own rows
+   * as taken makes every keystroke look like a collision, and the sequence
+   * climbed by one per letter typed — a title of twenty-five characters landed
+   * on 081.
+   */
+  const takenOutside = (path: string) => [
+    ...taken,
+    ...Object.entries(draft)
+      .filter(([p]) => p !== path)
+      .flatMap(([, rows]) => rows.map((r) => r.docNo))
+      .filter(Boolean),
+  ];
+
+  const saveRule = () => {
+    setError(null);
+    start(async () => {
+      const result = await saveNumbering({
+        projectId, register, prefix: rule.prefix,
+        disciplines: rule.disciplines, types: rule.types,
+      });
+      if (!result.ok) { setError(result.error); return; }
+      setView({ name: 'sections' });
+    });
+  };
+
+  /* ------------------------------------------------------------ writing */
 
   const saveDraft = () => {
     setError(null);
     start(async () => {
       const groups = Object.entries(draft)
-        .map(([path, text]) => ({ path: path.split(SEP), documents: documentsFrom(text) }))
+        .map(([path, rows]) => ({
+          path: path.split(SEP),
+          documents: rows
+            .filter((r) => r.title.trim() !== '')
+            .map((r) => ({ docNo: r.docNo.trim() || null, title: r.title.trim() })),
+        }))
         .filter((g) => g.documents.length > 0);
+
       const result = await addFromDraft({
         projectId, register, groups, clientName: client, contractorName: contractor,
       });
@@ -194,7 +235,6 @@ export function RegisterBuilder({
     </p>
   );
 
-  /** Asked once, while the register is still empty — after that the project knows. */
   const namesCard = !hasDocuments && (
     <section className="rounded-xl border bg-card p-4 sm:p-5">
       <h2 className="text-sm font-semibold">Who are the two sides?</h2>
@@ -230,7 +270,118 @@ export function RegisterBuilder({
     />
   );
 
-  /* --------------------------------------------------- one section, open */
+  /* ------------------------------------------------- step: the numbering */
+
+  if (view.name === 'numbering') {
+    const sample = (section: string, group: string, kind: 'Doc' | 'Dwg') =>
+      nextNumber(rule, section, group, kind, []);
+    const sections = bands.flatMap((b) => b.sections.map((s) => ({ band: b.name, section: s.name })));
+
+    return (
+      <div className="animate-fade-in-up mx-auto flex max-w-2xl flex-col gap-5 pb-24">
+        {onClose && (
+          <Button variant="ghost" className="h-11 w-fit px-2" onClick={onClose}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to the register
+          </Button>
+        )}
+
+        <header>
+          <p className="text-xs font-semibold tracking-wide text-chart-1">{longLabel}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            How this project numbers its documents
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Set once, so nobody has to invent a number again. It can be changed later, and
+            any single number can be overwritten where a document came with its own.
+          </p>
+        </header>
+
+        <section className="rounded-xl border bg-card p-4 sm:p-5">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="prefix">Project code</Label>
+            <Input
+              id="prefix"
+              className="h-11 w-full font-mono uppercase sm:w-48"
+              value={rule.prefix}
+              placeholder="WPP"
+              onChange={(e) => setRule((r) => ({ ...r, prefix: e.target.value.toUpperCase() }))}
+            />
+            <p className="text-sm text-muted-foreground">
+              The short code on your drawings — Petrogas uses <code>WPP</code>, Gundih{' '}
+              <code>PRGG</code>.
+            </p>
+          </div>
+
+          <div className="mt-5 rounded-lg bg-muted/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              What numbers will look like
+            </p>
+            <ul className="mt-3 flex flex-col gap-1.5 font-mono text-sm">
+              <li>
+                {sample('ELECTRICAL', 'Electrical Datasheet', 'Doc')}
+                <span className="ml-3 font-sans text-xs text-muted-foreground">
+                  Electrical Datasheet · Doc
+                </span>
+              </li>
+              <li>
+                {sample('ELECTRICAL', 'Electrical Drawing', 'Dwg')}
+                <span className="ml-3 font-sans text-xs text-muted-foreground">
+                  Electrical Drawing · Dwg
+                </span>
+              </li>
+              <li>
+                {sample('CIVIL', 'Civil Calculation', 'Doc')}
+                <span className="ml-3 font-sans text-xs text-muted-foreground">
+                  Civil Calculation · Doc
+                </span>
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Project · discipline · type · sequence. The type starts with <b>D</b> for a
+              document and <b>G</b> for a drawing, which is why the kind is chosen and not
+              typed.
+            </p>
+          </div>
+        </section>
+
+        <details className="rounded-xl border bg-card p-4 sm:p-5">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Adjust the discipline codes
+          </summary>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Filled in from what both real registers use. Change any that differ on your
+            project.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {sections.map(({ band, section }) => (
+              <div key={`${band}-${section}`} className="flex items-center gap-3">
+                <Input
+                  className="h-11 w-24 font-mono uppercase"
+                  value={rule.disciplines[section] ?? disciplineFor(section, rule)}
+                  onChange={(e) => setRule((r) => ({
+                    ...r,
+                    disciplines: { ...r.disciplines, [section]: e.target.value.toUpperCase() },
+                  }))}
+                  aria-label={`Discipline code for ${section}`}
+                />
+                <span className="min-w-0 truncate text-sm">{section}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        {errorBanner}
+
+        <div className="flex justify-end">
+          <Button className="h-11" disabled={!rule.prefix.trim() || pending} onClick={saveRule}>
+            {pending ? 'Saving…' : 'Use this numbering'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  /* --------------------------------------------------- step: one section */
 
   if (view.name === 'section') {
     const groups = view.groups.length > 0 ? view.groups : [view.section];
@@ -238,8 +389,37 @@ export function RegisterBuilder({
       ? `${view.band}${SEP}${view.section}${SEP}${group}`
       : `${view.band}${SEP}${view.section}`);
 
+    /** Rebuild every auto number in a group, in order, after any change. */
+    const renumber = (rows: Row[], group: string): Row[] => {
+      const outside = takenOutside(pathOf(group));
+      const used: string[] = [];
+      return rows.map((row) => {
+        if (!row.auto) { used.push(row.docNo); return row; }
+        const docNo = nextNumber(rule, view.section, group, row.kind, [...outside, ...used]);
+        used.push(docNo);
+        return { ...row, docNo };
+      });
+    };
+
+    const setRows = (group: string, next: Row[]) => {
+      setDraft((d) => ({ ...d, [pathOf(group)]: renumber(next, group) }));
+    };
+
+    const rowsOf = (group: string) => draft[pathOf(group)] ?? [];
+
+    const blankRow = (group: string, rows: Row[]): Row => ({
+      id: newId(),
+      docNo: nextNumber(rule, view.section, group, 'Doc', [
+        ...takenOutside(pathOf(group)),
+        ...rows.map((r) => r.docNo),
+      ]),
+      title: '',
+      kind: 'Doc',
+      auto: true,
+    });
+
     return (
-      <div className="animate-fade-in-up mx-auto flex max-w-3xl flex-col gap-5 pb-24">
+      <div className="animate-fade-in-up mx-auto flex max-w-4xl flex-col gap-5 pb-28">
         {fileField}
         <Button variant="ghost" className="h-11 w-fit px-2" onClick={() => setView({ name: 'sections' })}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> All sections
@@ -249,31 +429,112 @@ export function RegisterBuilder({
           <p className="text-xs font-semibold tracking-wide text-chart-1">{view.band}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{view.section}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            One document per line. Put its number first if it has one — otherwise just the
-            title.
+            Type the title. The number is written for you and can be changed. Press Enter for
+            the next one — or paste a whole list of titles into a title box and each line
+            becomes its own document.
           </p>
         </header>
 
         {groups.map((group) => {
-          const path = pathOf(group);
-          const value = draft[path] ?? '';
-          const n = documentsFrom(value).length;
+          const rows = rowsOf(group);
+          const filled = rows.filter((r) => r.title.trim() !== '').length;
+
           return (
             <section key={group} className="rounded-xl border bg-card p-4 sm:p-5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">{group}</h2>
                 <span className="text-sm tabular-nums text-muted-foreground">
-                  {n} document{n === 1 ? '' : 's'}
+                  {filled} document{filled === 1 ? '' : 's'}
                 </span>
               </div>
-              <Textarea
-                className="mt-3 max-h-64 min-h-28 overflow-auto font-mono text-xs leading-relaxed"
-                value={value}
-                spellCheck={false}
-                aria-label={`Documents in ${group}`}
-                placeholder={'PRGG-20-E0-DS-001\tDatasheet for Transformer\nDatasheet for LV Busduct'}
-                onChange={(e) => setDraft((d) => ({ ...d, [path]: e.target.value }))}
-              />
+
+              {rows.length > 0 && (
+                <div className="mt-3 flex flex-col gap-2">
+                  {/* Column names once, above the rows — on a phone each row
+                      stacks and the inputs carry their own labels instead. */}
+                  <div className="hidden gap-2 px-1 text-xs uppercase tracking-widest text-muted-foreground sm:grid sm:grid-cols-[13rem_1fr_6.5rem_2.75rem]">
+                    <span>Number</span>
+                    <span>Title</span>
+                    <span>Kind</span>
+                    <span />
+                  </div>
+
+                  {rows.map((row, index) => (
+                    // One row, two shapes. On a phone it is a card — number and
+                    // kind on one line, title beneath — because four full-width
+                    // fields in a column give no clue where one document ends
+                    // and the next begins. On a wide screen the same elements
+                    // sit in the four columns named above.
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg border bg-background p-2 sm:grid-cols-[13rem_1fr_6.5rem_2.75rem] sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
+                    >
+                      <Input
+                        className="h-11 font-mono text-xs sm:col-start-1 sm:row-start-1"
+                        value={row.docNo}
+                        aria-label="Document number"
+                        onChange={(e) => setRows(group, rows.map((r) => (r.id === row.id
+                          ? { ...r, docNo: e.target.value, auto: false } : r)))}
+                      />
+                      <Input
+                        className="col-span-3 h-11 sm:col-span-1 sm:col-start-2 sm:row-start-1"
+                        value={row.title}
+                        placeholder="Datasheet for Transformer"
+                        aria-label="Document title"
+                        autoFocus={index === rows.length - 1 && row.title === ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // A pasted block of titles becomes one row per line —
+                          // the fast path for someone handed a list.
+                          if (value.includes('\n')) {
+                            const lines = value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                            const made: Row[] = lines.map((title) => ({
+                              id: newId(), docNo: '', title, kind: row.kind, auto: true,
+                            }));
+                            setRows(group, [
+                              ...rows.filter((r) => r.id !== row.id),
+                              ...made,
+                            ]);
+                            return;
+                          }
+                          setRows(group, rows.map((r) => (r.id === row.id ? { ...r, title: value } : r)));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' || row.title.trim() === '') return;
+                          e.preventDefault();
+                          if (index === rows.length - 1) setRows(group, [...rows, blankRow(group, rows)]);
+                        }}
+                      />
+                      <select
+                        className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:col-start-3 sm:row-start-1 dark:bg-input/30"
+                        value={row.kind}
+                        aria-label="Document or drawing"
+                        onChange={(e) => setRows(group, rows.map((r) => (r.id === row.id
+                          ? { ...r, kind: e.target.value as 'Doc' | 'Dwg' } : r)))}
+                      >
+                        <option value="Doc">Doc</option>
+                        <option value="Dwg">Dwg</option>
+                      </select>
+                      <Button
+                        variant="ghost" size="icon" className="h-11 w-11 sm:col-start-4 sm:row-start-1"
+                        aria-label="Remove this row"
+                        onClick={() => setRows(group, rows.filter((r) => r.id !== row.id))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                className="mt-3 h-11"
+                onClick={() => setRows(group, [...rows, blankRow(group, rows)])}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                {rows.length === 0 ? 'Add the first document' : 'Add another'}
+              </Button>
             </section>
           );
         })}
@@ -281,9 +542,8 @@ export function RegisterBuilder({
         <AddNameCard
           label="Add another group here"
           placeholder="e.g. Electrical Single Line Diagram"
-          onAdd={(name) => setExtraBands((bandsSoFar) => [
-            ...bandsSoFar,
-            { name: view.band, sections: [{ name: view.section, groups: [name] }] },
+          onAdd={(name) => setExtraBands((soFar) => [
+            ...soFar, { name: view.band, sections: [{ name: view.section, groups: [name] }] },
           ])}
         />
 
@@ -298,7 +558,7 @@ export function RegisterBuilder({
     );
   }
 
-  /* ------------------------------------------------ a whole pasted sheet */
+  /* --------------------------------------------- step: a whole pasted sheet */
 
   if (view.name === 'paste') {
     const plan = parseRegisterPaste(pasteText, override);
@@ -328,16 +588,16 @@ export function RegisterBuilder({
           <section className="rounded-xl border bg-card p-4 sm:p-5">
             <h2 className="text-sm font-semibold">The list</h2>
             <Textarea
-              className="mt-3 max-h-72 min-h-48 overflow-auto font-mono text-xs leading-relaxed"
+              className="mt-3 max-h-72 min-h-40 overflow-auto font-mono text-xs leading-relaxed"
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               spellCheck={false}
               aria-label="Paste your document list"
-              placeholder={'GENERAL\nWPP-GN-DRE-001\tJadwal Pelaksanaan Pekerjaan\nPROCEDURE\nWPP-GN-DGS-001\tProsedur Penomoran Dokumen'}
+              placeholder={'GENERAL\nWPP-GN-DRE-001\tJadwal Pelaksanaan Pekerjaan'}
             />
             <p className="mt-2 text-sm text-muted-foreground">
-              Here a line on its own becomes a group. Filling sections one at a time is
-              easier — this box is for a list that already exists somewhere else.
+              For a list that already exists somewhere else, with its own numbers. Building
+              section by section is easier for anything new.
             </p>
           </section>
         )}
@@ -430,8 +690,8 @@ export function RegisterBuilder({
             {hasDocuments ? `Add to the ${label}` : `Build the ${label}`}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Open a section and write what belongs in it, one document per line. Sections you
-            do not use are simply left alone.
+            Open a section and write what belongs in it. Numbers follow{' '}
+            <span className="font-mono">{rule.prefix || 'PROJECT'}-…</span> on their own.
           </p>
         </div>
         <Button variant="outline" className="h-11" disabled={pending} onClick={() => fileInput.current?.click()}>
@@ -463,7 +723,12 @@ export function RegisterBuilder({
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{section.name}</p>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <p className="text-sm font-medium">{section.name}</p>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {rule.prefix || 'PROJECT'}-{disciplineFor(section.name, rule)}-…
+                    </span>
+                  </div>
                   {section.groups.length > 0 && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {section.groups.join(' · ')}
@@ -492,19 +757,25 @@ export function RegisterBuilder({
         </section>
       ))}
 
-      <button
-        type="button"
-        className="w-fit px-1 text-sm text-muted-foreground underline underline-offset-4"
-        onClick={() => { setPasteSource(null); setView({ name: 'paste' }); }}
-      >
-        Or paste a whole list instead
-      </button>
+      <div className="flex flex-wrap gap-x-5 gap-y-2 px-1 text-sm text-muted-foreground">
+        <button
+          type="button"
+          className="underline underline-offset-4"
+          onClick={() => setView({ name: 'numbering' })}
+        >
+          Change the numbering
+        </button>
+        <button
+          type="button"
+          className="underline underline-offset-4"
+          onClick={() => { setPasteSource(null); setView({ name: 'paste' }); }}
+        >
+          Paste a whole list instead
+        </button>
+      </div>
 
       {errorBanner}
 
-      {/* Sticky so the count and the button stay in sight while sections are
-          filled — on a phone the list is long and the total is the one thing
-          worth never scrolling back for. */}
       <div className="sticky bottom-0 -mx-3 mt-2 flex flex-wrap items-center gap-3 border-t bg-background/95 px-3 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:px-4">
         <span className="text-sm tabular-nums">
           <span className="font-semibold">{totals.documents}</span> document
@@ -523,7 +794,7 @@ export function RegisterBuilder({
   );
 }
 
-/** One field and one button, used for both "add a section" and "add a group". */
+/** One field and one button, for both "add a section" and "add a group". */
 function AddNameCard({
   label, placeholder, onAdd,
 }: {

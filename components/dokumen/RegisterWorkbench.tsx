@@ -17,6 +17,7 @@ import { deleteCategory } from '@/lib/doc-actions';
 import { DURATION, EASE } from '@/components/motion/Reveal';
 import { STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode } from '@/lib/register-shared';
 import type { RegisterKind } from '@/lib/schema';
+import type { NumberingRule } from '@/lib/register-numbering';
 import { cn } from '@/lib/utils';
 
 import { DocumentEditor } from './DocumentEditor';
@@ -45,6 +46,8 @@ const CategoryDialog = dynamic(() => import('./CategoryDialog').then((m) => m.Ca
  * `RegisterWorklist` — what is actually stuck — and every row there jumps into
  * the group it belongs to with that document already open.
  */
+
+type NumberingProps = { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
 
 interface Group {
   id: string;
@@ -146,6 +149,7 @@ export function RegisterWorkbench({
   weekNo,
   clientName,
   contractorName,
+  numbering,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -159,6 +163,8 @@ export function RegisterWorkbench({
   /** Passed straight back on import so a file cannot blank them. */
   clientName: string;
   contractorName: string;
+  /** The numbering rule and the numbers already spoken for. */
+  numbering: NumberingProps;
 }) {
   const reduced = useReducedMotion();
 
@@ -294,6 +300,7 @@ export function RegisterWorkbench({
         contractorName={contractorName}
         hasDocuments={totalDocuments > 0}
         existingSections={existingSections}
+        numbering={numbering}
         onClose={() => setBuilding(false)}
       />
     );

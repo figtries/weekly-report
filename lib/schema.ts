@@ -371,6 +371,31 @@ export const docStageWeights = sqliteTable('doc_stage_weights', {
   order: integer('sort_order').notNull().default(0),
 }, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.register, t.stage)]);
 
+/**
+ * How this project builds a document number: PROJECT-DISCIPLINE-TYPE-SEQUENCE.
+ *
+ * Stored per project and register because it IS per project — Petrogas numbers
+ * `WPP-EL-DDS-001` and Gundih `PRGG-20-E0-DS-001`, the same idea with a
+ * different alphabet. The per-section and per-group codes are JSON because they
+ * are a map keyed by names the project chose, and a table of two-letter codes
+ * would be a join for nothing.
+ *
+ * Set once and editable afterwards: a rule nobody can change is a rule people
+ * work around.
+ */
+export const docNumbering = sqliteTable('doc_numbering', {
+  id: id(),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register: text('register').$type<RegisterKind>().notNull().default('edl'),
+  /** `WPP`, `PRGG`. */
+  prefix: text('prefix').notNull(),
+  /** Section name → discipline code, as JSON. */
+  disciplines: text('disciplines').notNull().default('{}'),
+  /** Group name → type code without its kind letter, as JSON. */
+  types: text('types').notNull().default('{}'),
+  digits: integer('digits').notNull().default(3),
+}, (t) => [uniqueIndex('doc_numbering_project_idx').on(t.projectId, t.register)]);
+
 export const transmittals = sqliteTable('transmittals', {
   id: id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),

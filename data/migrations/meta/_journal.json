@@ -43,6 +43,13 @@
       "when": 1788501011282,
       "tag": "0005_clever_shinobi_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788515083111,
+      "tag": "0006_wonderful_quasimodo",
+      "breakpoints": true
     }
   ]
 }

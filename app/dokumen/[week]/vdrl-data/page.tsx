@@ -2,7 +2,7 @@ import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import {
-  getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
+  getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
 } from '@/lib/register';
 
 export const metadata = { title: 'VDRL Data' };
@@ -28,6 +28,7 @@ export default async function VdrlDataPage({ params }: { params: Promise<{ week:
 
           hasDocuments={false}
           existingSections={[]}
+          numbering={getNumbering(PROJECT_ID, 'vdrl')}
         />
       </RouteTransition>
     );
@@ -45,6 +46,7 @@ export default async function VdrlDataPage({ params }: { params: Promise<{ week:
       weekNo={summary.asOfWeek}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
+      numbering={getNumbering(PROJECT_ID, 'vdrl')}
     />
     </RouteTransition>
   );

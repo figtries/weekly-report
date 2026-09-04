@@ -331,6 +331,56 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
 }
 
 /**
+ * The numbering rule, set once and editable afterwards.
+ *
+ * Kept deliberately small: a prefix, the per-section and per-group codes that
+ * differ from the defaults, and how many digits. Everything else is derived, so
+ * there is nothing here to drift out of step with the register itself.
+ */
+export async function saveNumbering(input: {
+  projectId: string;
+  register: RegisterKind;
+  prefix: string;
+  disciplines: Record<string, string>;
+  types: Record<string, string>;
+}): Promise<ActionResult> {
+  try {
+    const prefix = input.prefix.trim().toUpperCase();
+    if (!prefix) throw new Error('A project code is required');
+    if (!/^[A-Z0-9-]{2,10}$/.test(prefix)) {
+      throw new Error('A project code is 2 to 10 letters, digits or dashes');
+    }
+
+    const values = {
+      prefix,
+      disciplines: JSON.stringify(input.disciplines ?? {}),
+      types: JSON.stringify(input.types ?? {}),
+      digits: 3,
+    };
+
+    const existing = db.select().from(schema.docNumbering)
+      .where(and(
+        eq(schema.docNumbering.projectId, input.projectId),
+        eq(schema.docNumbering.register, input.register),
+      )).all()[0];
+
+    if (existing) {
+      db.update(schema.docNumbering).set(values)
+        .where(eq(schema.docNumbering.id, existing.id)).run();
+    } else {
+      db.insert(schema.docNumbering).values({
+        id: randomUUID(), projectId: input.projectId, register: input.register, ...values,
+      }).run();
+    }
+
+    refreshRegister();
+    return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
  * The sections someone filled in, written as one register.
  *
  * Its counterpart `seedRegister` takes text and has to work out the structure

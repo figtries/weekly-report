@@ -38,6 +38,7 @@ import {
   type EngineeringBridge, type Movement, type WeekMovement,
 } from './register-shared';
 import type { DocStage, RegisterKind } from './schema';
+import { detectPrefix, type NumberingRule } from './register-numbering';
 
 export * from './register-shared';
 
@@ -305,6 +306,55 @@ export function getRegisterParties(projectId: string): {
   const project = db.select().from(schema.projects)
     .where(eq(schema.projects.id, projectId)).all()[0];
   return { clientName: project?.clientName ?? '', contractorName: project?.contractorName ?? '' };
+}
+
+/**
+ * The numbering rule for this register, and the numbers already spoken for.
+ *
+ * Both travel together because the builder needs both to propose the next
+ * number: the rule gives its shape, the existing numbers give its sequence.
+ */
+export function getNumbering(projectId: string, register: RegisterKind): {
+  rule: NumberingRule | null;
+  /** Every number already in this register, so a proposal cannot collide. */
+  taken: string[];
+  /** A guess at the project code, for a register that has none yet. */
+  suggestedPrefix: string;
+} {
+  const row = db.select().from(schema.docNumbering)
+    .where(and(
+      eq(schema.docNumbering.projectId, projectId),
+      eq(schema.docNumbering.register, register),
+    )).all()[0];
+
+  const taken = db.select().from(schema.documents)
+    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
+    .all().map((d) => d.docNo).filter((n): n is string => Boolean(n));
+
+  const parse = (raw: string): Record<string, string> => {
+    try {
+      const value: unknown = JSON.parse(raw);
+      return value && typeof value === 'object' ? value as Record<string, string> : {};
+    } catch { return {}; }
+  };
+
+  const project = db.select().from(schema.projects)
+    .where(eq(schema.projects.id, projectId)).all()[0];
+
+  return {
+    rule: row
+      ? {
+        prefix: row.prefix,
+        disciplines: parse(row.disciplines),
+        types: parse(row.types),
+        digits: row.digits,
+      }
+      : null,
+    taken,
+    suggestedPrefix: detectPrefix(taken)
+      ?? (project?.docNoPrefix?.split('-')[0] ?? '')
+      ?? '',
+  };
 }
 
 export interface ExportRow {
