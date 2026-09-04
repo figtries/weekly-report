@@ -1,4 +1,5 @@
 import { RegisterTabs } from '@/components/dokumen/RegisterTabs';
+import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb, getLatestWeek } from '@/lib/data';
 import { getRegisterWeeks } from '@/lib/register';
 
@@ -11,7 +12,7 @@ export function generateStaticParams() {
 }
 
 /**
- * Document Control is one workplace with five screens, and it wears the weekly
+ * Document Control is one workplace with four screens, and it wears the weekly
  * report's shell so the two feel like one app.
  *
  * The header this replaced carried a contract number, a page title and a
@@ -37,6 +38,9 @@ export default async function DocumentControlLayout({
   const db = await getDb();
 
   return (
+    // Stable across all four screens and every week: this fires on the way
+    // into Document Control and stays still inside it. See the weekly layout.
+    <RouteTransition id="dokumen">
     <div className="flex h-full flex-col">
       <RegisterTabs
         weeks={weeks}
@@ -46,9 +50,13 @@ export default async function DocumentControlLayout({
       {/* scrollbar-none for the same reason the weekly report hides it: the
           global classic scrollbar reserves width on this scroller alone and
           would pull every card's right edge in from the tab row above it. */}
+      {/* Same placement as the weekly report's: each screen's own boundary sits
+          inside this scroller, so moving between the four never disturbs the
+          week picker or the tab row. */}
       <div className="flex-1 overflow-auto scrollbar-none">
         <div className="px-3 py-4 sm:p-6 lg:p-8">{children}</div>
       </div>
     </div>
+    </RouteTransition>
   );
 }

@@ -271,6 +271,42 @@ export function getRegisterWeeks(projectId: string): RegisterWeek[] {
 }
 
 
+/**
+ * How far this register exists at all — two cheap counts, not its contents.
+ *
+ * Pages use it to choose between the working screen and the paste screen. It
+ * must not go through `loadRegister`, which gives up on zero documents: a
+ * category somebody just created and has not filled yet is still a register,
+ * and hiding it takes their work out of their sight.
+ */
+export function getRegisterShape(projectId: string, register: RegisterKind): {
+  documents: number; categories: number;
+} {
+  const documents = db.select().from(schema.documents)
+    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
+    .all().length;
+  const categories = db.select().from(schema.docCategories)
+    .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
+    .all().length;
+  return { documents, categories };
+}
+
+/**
+ * The two sides' names, to fill the paste screen in ahead of the person.
+ *
+ * Read straight from the `projects` table rather than through `lib/data.ts` —
+ * that file reads the older JSON store and knows nothing about this table. A
+ * synchronous read like this prerenders as it is (see `lib/sqlite.ts`), so it
+ * needs neither `'use cache'` nor a `<Suspense>` around it.
+ */
+export function getRegisterParties(projectId: string): {
+  clientName: string; contractorName: string;
+} {
+  const project = db.select().from(schema.projects)
+    .where(eq(schema.projects.id, projectId)).all()[0];
+  return { clientName: project?.clientName ?? '', contractorName: project?.contractorName ?? '' };
+}
+
 export function getRegisterSummary(
   projectId: string,
   register: RegisterKind,
@@ -426,6 +462,7 @@ export function getObstacles(projectId: string, register: RegisterKind, week?: n
       documentId: doc.id,
       docNo: doc.docNo,
       title: doc.title,
+      categoryId: doc.categoryId,
       categoryName: categoryName.get(doc.categoryId) ?? '—',
     };
 

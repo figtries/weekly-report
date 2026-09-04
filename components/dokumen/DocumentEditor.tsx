@@ -4,9 +4,11 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 
 import { saveDocument, saveStage } from '@/lib/doc-actions';
-import { STAGE_LABEL, STAGE_ORDER, type DocumentCard } from '@/lib/register-shared';
+import { STAGE_LABEL, STAGE_ORDER, buildJourney, type DocumentCard } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
+
+import { DocumentJourney } from './DocumentJourney';
 
 /**
  * A document, open and editable.
@@ -51,6 +53,15 @@ export function DocumentEditor({
 
   return (
     <div className="flex flex-col gap-4 border-t bg-muted/30 px-4 py-4">
+      {/* What happened leads; correcting it follows. You open a document to
+          find out where it got stuck, not to type — and this used to be a
+          separate Log tab that made you go and look for it. */}
+      <DocumentJourney
+        laps={buildJourney(doc.stages)}
+        overdue={doc.overdue}
+        returnOpen={doc.returnCode !== null}
+      />
+
       <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_1fr]">
         <Text
           label="Number"

@@ -1,8 +1,9 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { Reveal } from '@/components/motion/Reveal';
-import { EmptyRegister } from '@/components/dokumen/EmptyRegister';
+import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
-import { getRegisterCards, getRegisterSummary, getRegisterTree } from '@/lib/register';
+import {
+  getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
+} from '@/lib/register';
 
 export const metadata = { title: 'VDRL Data' };
 
@@ -11,20 +12,34 @@ const PROJECT_ID = 'gundih';
 /** The same working screen, pointed at what the vendors owe us. */
 export default async function VdrlDataPage({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const summary = getRegisterSummary(PROJECT_ID, 'vdrl', week);
-  if (!summary) return <EmptyRegister script="node scripts/import-vdrl.ts" name="Vendor Deliverable Register List" />;
+  const shape = getRegisterShape(PROJECT_ID, 'vdrl');
+  const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'vdrl', week) : null;
+
+  if (!summary) {
+    const parties = getRegisterParties(PROJECT_ID);
+    return (
+      <RouteTransition id="dokumen-vdrl-data">
+        <RegisterSeed
+          projectId={PROJECT_ID}
+          register="vdrl"
+          clientName={parties.clientName}
+          contractorName={parties.contractorName}
+        />
+      </RouteTransition>
+    );
+  }
 
   return (
     <RouteTransition id="dokumen-vdrl-data">
-    <Reveal>
     <RegisterWorkbench
       projectId={PROJECT_ID}
       register="vdrl"
       tree={getRegisterTree(PROJECT_ID, 'vdrl', week)}
       cards={getRegisterCards(PROJECT_ID, 'vdrl', week)}
+      obstacles={getObstacles(PROJECT_ID, 'vdrl', week)}
+      totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
     />
-    </Reveal>
     </RouteTransition>
   );
 }

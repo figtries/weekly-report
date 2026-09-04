@@ -1,7 +1,8 @@
-import { EmptyRegister } from '@/components/dokumen/EmptyRegister';
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
-  getEngineeringBridge, getObstacles, getRegisterSummary, getRegisterTree, getWeekMovement,
+  getEngineeringBridge, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
 } from '@/lib/register';
 
 export const metadata = { title: 'EDL Summary' };
@@ -23,8 +24,22 @@ const PROJECT_ID = 'gundih';
  */
 export default async function EdlSummaryPage({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const summary = getRegisterSummary(PROJECT_ID, 'edl', week);
-  if (!summary) return <EmptyRegister script="node scripts/import-edl.ts" name="Engineering Deliverable List" />;
+  const shape = getRegisterShape(PROJECT_ID, 'edl');
+  const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'edl', week) : null;
+
+  if (!summary) {
+    const parties = getRegisterParties(PROJECT_ID);
+    return (
+      <RouteTransition id="dokumen-edl-summary">
+        <RegisterSeed
+          projectId={PROJECT_ID}
+          register="edl"
+          clientName={parties.clientName}
+          contractorName={parties.contractorName}
+        />
+      </RouteTransition>
+    );
+  }
 
   const tree = getRegisterTree(PROJECT_ID, 'edl', week);
   // A and B are the sheet's own two bands; what a controller works in is the
@@ -32,6 +47,7 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
   const groups = tree.flatMap((root) => (root.children.length > 0 ? root.children : [root]));
 
   return (
+    <RouteTransition id="dokumen-edl-summary">
     <SummaryScreen
       summary={summary}
       groups={groups}
@@ -41,5 +57,6 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
       groupNoun="disciplines"
       groupsTitle="By discipline"
     />
+    </RouteTransition>
   );
 }

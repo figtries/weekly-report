@@ -872,7 +872,7 @@ Deliverable yang terlihat: register kosong berhenti menyuruh orang membuka termi
   export function getRegisterParties(projectId: string): { clientName: string; contractorName: string }
   ```
 
-- [ ] **Step 1: Tambahkan `getRegisterShape` dan `getRegisterParties`**
+- [x] **Step 1: Tambahkan `getRegisterShape` dan `getRegisterParties`**
 
 Di `lib/register.ts`, setelah `getRegisterWeeks`:
 
@@ -914,7 +914,7 @@ export function getRegisterParties(projectId: string): {
 }
 ```
 
-- [ ] **Step 2: Tulis layarnya**
+- [x] **Step 2: Tulis layarnya**
 
 Buat `components/dokumen/RegisterSeed.tsx`:
 
@@ -1112,7 +1112,7 @@ export function RegisterSeed({
 }
 ```
 
-- [ ] **Step 3: Sambungkan keempat halaman**
+- [x] **Step 3: Sambungkan keempat halaman**
 
 Pola yang sama di keempatnya. `app/dokumen/[week]/data/page.tsx` menjadi:
 
@@ -1178,7 +1178,7 @@ Ulangi untuk `summary/page.tsx` (register `edl`), `vdrl/page.tsx` dan `vdrl-data
 
 Jangan menambahkan bacaan ini ke `lib/data.ts`: berkas itu membaca store JSON lama (`readDb`) dan harus ter-cache karena root layout memakainya. `getRegisterParties` membaca SQLite secara sinkron, yang prerender apa adanya.
 
-- [ ] **Step 4: Hapus layar lama**
+- [x] **Step 4: Hapus layar lama**
 
 ```bash
 git rm components/dokumen/EmptyRegister.tsx
@@ -1187,7 +1187,7 @@ grep -rn "EmptyRegister" app components lib
 
 Expected: tidak ada hasil.
 
-- [ ] **Step 5: Buktikan di layar**
+- [x] **Step 5: Buktikan di layar**
 
 ```bash
 npx next build > build.log 2>&1; echo $?
@@ -1210,7 +1210,7 @@ node scripts/shoot.mjs http://localhost:3000/dokumen/36/data /tmp/seed-390.png 3
 
 **Lihat kedua gambarnya.** Yang harus benar: dua field nama tidak berdesakan di 390px, textarea cukup tinggi untuk dilihat isinya, tidak ada yang terpotong ke kanan. Teks yang diekstrak tidak membuktikan apa pun tentang komposisi.
 
-- [ ] **Step 6: Tempel sungguhan, lalu lihat hasilnya**
+- [x] **Step 6: Tempel sungguhan, lalu lihat hasilnya**
 
 Di layar itu, tempel isi `scripts/fixtures/petrogas-edl.tsv`, isi kedua nama, tekan tombolnya. Expected: halaman berpindah ke workbench, kolom kiri berisi GENERAL → EXECUTION PLAN dan seterusnya. Potret lagi pada dua ukuran dan lihat.
 
@@ -1218,7 +1218,7 @@ Di layar itu, tempel isi `scripts/fixtures/petrogas-edl.tsv`, isi kedua nama, te
 rm data/empty.db
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A components/dokumen app/dokumen lib/register.ts lib/data.ts

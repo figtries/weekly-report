@@ -56,3 +56,4 @@ next-env.d.ts
 
 # Kembaran database untuk melihat layar register kosong (scripts/make-empty-db.mjs)
 /data/empty.db*
+/.next-empty/

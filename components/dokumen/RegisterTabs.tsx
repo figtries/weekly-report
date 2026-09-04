@@ -5,7 +5,7 @@ import WeekSelect from '@/components/weekly/WeekSelect';
 import { usePathname } from 'next/navigation';
 
 /**
- * The five screens of Document Control, laid out exactly like the weekly
+ * The four screens of Document Control, laid out exactly like the weekly
  * report's header: the week first, the tabs under it, nothing above either.
  *
  * It used to sit below a page title, a contract number and a paragraph of
@@ -25,7 +25,6 @@ const TABS = [
   { key: 'data', label: 'EDL Data' },
   { key: 'vdrl', label: 'VDRL Summary' },
   { key: 'vdrl-data', label: 'VDRL Data' },
-  { key: 'log', label: 'Log' },
 ] as const;
 
 export function RegisterTabs({
