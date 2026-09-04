@@ -12,7 +12,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { STAGE_ORDER } from './register-shared';
-import { parseRegisterPaste, type ColumnMapping } from './register-paste';
+import { parseRegisterPaste, type ColumnMapping, type PasteCategory } from './register-paste';
 import type { RegisterKind } from './schema';
 
 export interface SeedInput {
@@ -45,13 +45,52 @@ export interface SeedResult {
 }
 
 export function writeSeed(input: SeedInput): SeedResult {
+  const plan = parseRegisterPaste(input.text, input.mapping);
+  return writeCategories(input, plan.categories);
+}
+
+/**
+ * A register built section by section, where the structure was CHOSEN rather
+ * than written out.
+ *
+ * Each group carries its own path — `['DETAIL ENGINEERING', 'ELECTRICAL',
+ * 'Electrical Datasheet']` — so the same writer that handles a pasted sheet
+ * handles this: a path becomes one category per level, and the documents hang
+ * off the last. Nothing about grouping has to be expressed in text, which is
+ * the whole point of picking a section by clicking it.
+ */
+export interface DraftGroup {
+  path: string[];
+  documents: { docNo: string | null; title: string }[];
+}
+
+export function writeDraft(
+  input: Omit<SeedInput, 'text' | 'mapping'> & { groups: DraftGroup[] },
+): SeedResult {
+  const categories: PasteCategory[] = [];
+  for (const group of input.groups) {
+    if (group.documents.length === 0) continue;
+    group.path.forEach((name, depth) => {
+      categories.push({
+        name,
+        depth: depth + 1,
+        documents: depth === group.path.length - 1
+          ? group.documents.map((d) => ({ docNo: d.docNo, title: d.title, kind: null }))
+          : [],
+      });
+    });
+  }
+  return writeCategories({ ...input, text: '' }, categories);
+}
+
+function writeCategories(input: SeedInput, categories: PasteCategory[]): SeedResult {
   const clientName = input.clientName.trim();
   const contractorName = input.contractorName.trim();
   if (!clientName) throw new Error('Client name is required');
   if (!contractorName) throw new Error('Contractor name is required');
 
-  const plan = parseRegisterPaste(input.text, input.mapping);
-  if (plan.counts.documents === 0) throw new Error('Nothing to add — the list has no documents');
+  const total = categories.reduce((n, c) => n + c.documents.length, 0);
+  if (total === 0) throw new Error('Nothing to add — no documents were given');
 
   return db.transaction((tx) => {
     tx.update(schema.projects)
@@ -126,7 +165,7 @@ export function writeSeed(input: SeedInput): SeedResult {
     let newDocuments = 0;
     let updated = 0;
 
-    for (const category of plan.categories) {
+    for (const category of categories) {
       const parentId = category.depth > 1 ? (stack[category.depth - 2] ?? null) : null;
       const key = `${parentId ?? ''}|${category.name.toLowerCase()}`;
       let id = byKey.get(key);

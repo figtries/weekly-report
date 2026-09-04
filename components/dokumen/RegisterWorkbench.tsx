@@ -263,6 +263,26 @@ export function RegisterWorkbench({
   // has gone looking at the worklist.
   const columnHidden = selected !== null || mobileWorklist;
 
+  /**
+   * What this register already contains, as bands → sections → groups, so the
+   * builder shows them beside the ready-made ones instead of offering to create
+   * a second "ELECTRICAL" next to the one that exists.
+   */
+  const existingSections = useMemo(() => {
+    const out: { band: string; section: string; groups: string[] }[] = [];
+    for (const band of tree) {
+      for (const section of band.children.length > 0 ? band.children : []) {
+        out.push({
+          band: band.name,
+          section: section.name,
+          groups: section.children.map((g) => g.name),
+        });
+      }
+      if (band.children.length === 0) out.push({ band: band.name, section: band.name, groups: [] });
+    }
+    return out;
+  }, [tree]);
+
   const tools = <RegisterTools register={register} onAdd={() => setBuilding(true)} />;
 
   if (building) {
@@ -273,6 +293,7 @@ export function RegisterWorkbench({
         clientName={clientName}
         contractorName={contractorName}
         hasDocuments={totalDocuments > 0}
+        existingSections={existingSections}
         onClose={() => setBuilding(false)}
       />
     );
@@ -295,7 +316,14 @@ export function RegisterWorkbench({
     //
     // Phones keep the ordinary page: one column there, and it should scroll
     // like anything else.
-    <div className="pb-4 lg:grid lg:h-[calc(100dvh_-_12rem)] lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6 lg:pb-0">
+    <div className="flex flex-col gap-4">
+      {/* ALWAYS here, whatever is open. It used to live inside the worklist,
+          which meant opening a group took it off the screen and there was no
+          way back to it — the one thing a person hunts for when they want to
+          add something. A row of its own cannot be replaced by anything. */}
+      <div className="flex items-center justify-end">{tools}</div>
+
+    <div className="pb-4 lg:grid lg:h-[calc(100dvh_-_15rem)] lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6 lg:pb-0">
       {/* ------------------------------------------------------- categories */}
       {/* The classes go on the aside and the section themselves rather than on
           a `Reveal` wrapper: this is a two-column grid, and a wrapper div would
@@ -316,9 +344,6 @@ export function RegisterWorkbench({
             aria-label="Search documents"
           />
         </div>
-
-        {/* Phones only — see the note on `tools`. */}
-        <div className="lg:hidden">{tools}</div>
 
         {/* Phones only. On a wide screen the worklist is already open to the
             right of this column, and a band pointing at it would be furniture. */}
@@ -471,10 +496,6 @@ export function RegisterWorkbench({
               totalDocuments={totalDocuments}
               query={query}
               onOpen={openFromWorklist}
-              // Desktop only: on a phone the same row sits under the search
-              // box, where it is on the first screen instead of one tap inside
-              // the worklist.
-              tools={<div className="hidden lg:flex">{tools}</div>}
             />
           </div>
         ) : (
@@ -736,6 +757,7 @@ export function RegisterWorkbench({
           categoryName={selected.name}
         />
       )}
+    </div>
     </div>
   );
 }

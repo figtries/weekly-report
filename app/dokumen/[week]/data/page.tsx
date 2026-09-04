@@ -27,6 +27,7 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
           contractorName={parties.contractorName}
 
           hasDocuments={false}
+          existingSections={[]}
         />
       </RouteTransition>
     );

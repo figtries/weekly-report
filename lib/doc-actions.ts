@@ -6,7 +6,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { STAGE_ORDER } from './register-shared';
-import { writeSeed, type SeedInput } from './register-seed';
+import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
 import type { DocStage, RegisterKind } from './schema';
 
@@ -325,6 +325,30 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
     const written = writeSeed(input);
     refreshRegister();
     return { ok: true, changed: written.documents };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * The sections someone filled in, written as one register.
+ *
+ * Its counterpart `seedRegister` takes text and has to work out the structure
+ * from it. Here the structure was chosen by pressing sections, so it arrives as
+ * paths and nothing has to be inferred — which is the entire reason building a
+ * register no longer requires learning a format first.
+ */
+export async function addFromDraft(input: {
+  projectId: string;
+  register: RegisterKind;
+  groups: DraftGroup[];
+  clientName: string;
+  contractorName: string;
+}): Promise<ActionResult> {
+  try {
+    const written = writeDraft(input);
+    refreshRegister();
+    return { ok: true, changed: written.documents + written.updated };
   } catch (err) {
     return fail(err);
   }

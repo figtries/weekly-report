@@ -39,6 +39,7 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
           contractorName={parties.contractorName}
 
           hasDocuments={false}
+          existingSections={[]}
         />
       </RouteTransition>
     );

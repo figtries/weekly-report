@@ -34,6 +34,7 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
           contractorName={parties.contractorName}
 
           hasDocuments={false}
+          existingSections={[]}
         />
       </RouteTransition>
     );
