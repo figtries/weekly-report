@@ -386,7 +386,13 @@ export function SummaryScreen({
                     </p>
                   ) : (
                     <p className="text-sm leading-relaxed">
-                      No vendor gave a submission date, so there is no plan to draw.{' '}
+                      {/* Register-aware, because this sentence is no longer the
+                          vendors' alone: a register built by hand in the app
+                          starts with no promised dates either, and on the EDL
+                          "no vendor gave one" names the wrong counterparty. */}
+                      {summary.register === 'vdrl'
+                        ? 'No vendor gave a submission date, so there is no plan to draw. '
+                        : 'No promised dates have been recorded, so there is no plan to draw. '}
                       <span className="font-semibold tabular-nums">{summary.untouched}</span> of{' '}
                       <span className="tabular-nums">{summary.documents}</span> have never been sent.
                     </p>

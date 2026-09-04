@@ -1843,7 +1843,7 @@ git commit -m "The stage weights are a contract agreement, so they can be change
 
 **Files:** tidak ada yang dibuat; ini gerbang sebelum pekerjaan disebut selesai.
 
-- [ ] **Step 1: Semua uji**
+- [x] **Step 1: Semua uji**
 
 ```bash
 node scripts/verify-register-paste.ts
@@ -1854,7 +1854,7 @@ node scripts/verify-worklist.ts
 
 Expected: keempatnya `all checks passed`. Dua yang terakhir membuktikan register Gundih yang sudah ada tidak berubah artinya oleh pekerjaan ini.
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 ```bash
 npx next build > build.log 2>&1; echo $?
@@ -1862,7 +1862,7 @@ npx next build > build.log 2>&1; echo $?
 
 Expected: `0`. Kalau gagal dengan "Uncached data was accessed outside of `<Suspense>`", penyebabnya hampir pasti bacaan baru di halaman yang belum ter-cache — lihat `getProject` di Task 4.
 
-- [ ] **Step 3: Perjalanan lengkap di database kosong**
+- [x] **Step 3: Perjalanan lengkap di database kosong**
 
 ```bash
 node scripts/make-empty-db.mjs --all
@@ -1882,7 +1882,7 @@ Jalankan dev, buka `/dokumen/36/data`, tempel `scripts/fixtures/petrogas-edl.tsv
 # tidak ada yang dikembalikan: data/report.db tidak pernah disentuh
 ```
 
-- [ ] **Step 4: Potret dua ukuran, lalu lihat**
+- [x] **Step 4: Potret dua ukuran, lalu lihat**
 
 ```bash
 node scripts/shoot.mjs http://localhost:3000/dokumen/36/data /tmp/final-390.png 390 844
@@ -1892,7 +1892,7 @@ node scripts/shoot.mjs http://localhost:3000/dokumen/36/summary /tmp/final-summa
 
 **Lihat ketiganya.** Teks yang diekstrak menunjukkan isi, tidak pernah komposisi.
 
-- [ ] **Step 5: Commit terakhir**
+- [x] **Step 5: Commit terakhir**
 
 ```bash
 git add -A

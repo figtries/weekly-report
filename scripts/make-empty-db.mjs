@@ -20,7 +20,15 @@ import Database from 'better-sqlite3';
 const all = process.argv.includes('--all');
 const OUT = 'data/empty.db';
 
-for (const suffix of ['', '-wal', '-shm']) rmSync(OUT + suffix, { force: true });
+try {
+  for (const suffix of ['', '-wal', '-shm']) rmSync(OUT + suffix, { force: true });
+} catch (err) {
+  // Windows menolak menghapus berkas yang masih dibuka. Yang membukanya
+  // hampir selalu dev server yang menunjuk ke sini.
+  if (err.code !== 'EPERM' && err.code !== 'EBUSY') throw err;
+  console.error(`${OUT} sedang dipakai — hentikan dev server yang memakai REPORT_DB_PATH=${OUT} lebih dulu.`);
+  process.exit(1);
+}
 
 const source = new Database('data/report.db', { readonly: true });
 await source.backup(OUT);
