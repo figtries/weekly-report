@@ -1658,7 +1658,7 @@ git commit -m "The register can be tended: groups added, renamed, emptied, remov
   export async function saveStageWeights(input: { projectId: string; register: RegisterKind; weights: { stage: string; weight: number }[] }): Promise<ActionResult>
   ```
 
-- [ ] **Step 1: Bacaannya**
+- [x] **Step 1: Bacaannya**
 
 Di `lib/register.ts`:
 
@@ -1675,7 +1675,7 @@ export function getStageWeights(projectId: string, register: RegisterKind) {
 }
 ```
 
-- [ ] **Step 2: Penulisnya**
+- [x] **Step 2: Penulisnya**
 
 Di `lib/doc-actions.ts`:
 
@@ -1714,7 +1714,7 @@ export async function saveStageWeights(input: {
 }
 ```
 
-- [ ] **Step 3: Kartunya**
+- [x] **Step 3: Kartunya**
 
 Buat `components/dokumen/StageWeightsCard.tsx`:
 
@@ -1802,7 +1802,7 @@ export function StageWeightsCard({
 }
 ```
 
-- [ ] **Step 4: Pasang di Summary**
+- [x] **Step 4: Pasang di Summary**
 
 Di `app/dokumen/[week]/summary/page.tsx`, di bawah isi yang sudah ada, di dalam `RouteTransition`:
 
@@ -1816,7 +1816,7 @@ Di `app/dokumen/[week]/summary/page.tsx`, di bawah isi yang sudah ada, di dalam 
 
 Lakukan hal yang sama di `app/dokumen/[week]/vdrl/page.tsx` dengan `register="vdrl"`.
 
-- [ ] **Step 5: Buktikan penolakan bekerja**
+- [x] **Step 5: Buktikan penolakan bekerja**
 
 ```bash
 npx next build > build.log 2>&1; echo $?
@@ -1830,7 +1830,7 @@ node scripts/shoot.mjs http://localhost:3000/dokumen/36/summary /tmp/weights-390
 
 **Lihat gambarnya** — tiga kotak dan tombolnya tidak boleh membungkus jadi empat baris di 390px.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add components/dokumen/StageWeightsCard.tsx lib/doc-actions.ts lib/register.ts app/dokumen

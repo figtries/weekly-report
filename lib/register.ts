@@ -307,6 +307,22 @@ export function getRegisterParties(projectId: string): {
   return { clientName: project?.clientName ?? '', contractorName: project?.contractorName ?? '' };
 }
 
+/**
+ * The stage weights as they stand, zeros included — the screen that edits them
+ * needs every row, not just the ones that carry weight.
+ */
+export function getStageWeights(projectId: string, register: RegisterKind): {
+  stage: DocStage; weight: number;
+}[] {
+  return db.select().from(schema.docStageWeights)
+    .where(and(
+      eq(schema.docStageWeights.projectId, projectId),
+      eq(schema.docStageWeights.register, register),
+    )).all()
+    .sort((a, b) => a.order - b.order)
+    .map((w) => ({ stage: w.stage, weight: w.weight }));
+}
+
 export function getRegisterSummary(
   projectId: string,
   register: RegisterKind,

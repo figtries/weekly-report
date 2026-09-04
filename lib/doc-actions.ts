@@ -324,6 +324,39 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
   }
 }
 
+/**
+ * Stage weights are an agreement per contract, not a law — Gundih and Petrogas
+ * happen to share 0.5/0.3/0.2, but another contract may not. What is not
+ * allowed is a total other than 100: every percentage in the register is
+ * computed from these, so a total of 90 reads a finished document as 90%.
+ */
+export async function saveStageWeights(input: {
+  projectId: string; register: RegisterKind; weights: { stage: string; weight: number }[];
+}): Promise<ActionResult> {
+  try {
+    const total = input.weights.reduce((a, w) => a + w.weight, 0);
+    if (Math.abs(total - 100) > 0.001) throw new Error(`The weights add up to ${total}, not 100`);
+
+    db.transaction((tx) => {
+      for (const { stage, weight } of input.weights) {
+        if (weight < 0) throw new Error('A weight cannot be negative');
+        tx.update(schema.docStageWeights)
+          .set({ weight })
+          .where(and(
+            eq(schema.docStageWeights.projectId, input.projectId),
+            eq(schema.docStageWeights.register, input.register),
+            eq(schema.docStageWeights.stage, assertStage(stage)),
+          )).run();
+      }
+    });
+
+    refreshRegister();
+    return { ok: true, changed: input.weights.length };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 /* ---------------------------------------------------------- tending it */
 
 /**

@@ -1,8 +1,9 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
+import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getEngineeringBridge, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
+  getEngineeringBridge, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
 } from '@/lib/register';
 
 export const metadata = { title: 'EDL Summary' };
@@ -57,6 +58,14 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
       groupNoun="disciplines"
       groupsTitle="By discipline"
     />
+
+    <div className="mt-6">
+      <StageWeightsCard
+        projectId={PROJECT_ID}
+        register="edl"
+        weights={getStageWeights(PROJECT_ID, 'edl')}
+      />
+    </div>
     </RouteTransition>
   );
 }
