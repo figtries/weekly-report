@@ -1,0 +1,1 @@
+DROP INDEX `documents_project_no_idx`;

@@ -319,12 +319,12 @@ export const documents = sqliteTable('documents', {
 }, (t) => [
   index('documents_category_idx').on(t.categoryId),
   index('documents_project_register_idx').on(t.projectId, t.register),
-  // Unique numbering is OUR discipline, so it is enforced on the EDL only. The
-  // vendor register already contains a number used twice
-  // (`PRGG-VDR-KMI-IN-PSV-DOC-003`, an organisation chart and a calculation
-  // sheet) and 115 rows with no number at all. Refusing them would mean
-  // refusing the register as it actually is.
-  uniqueIndex('documents_project_no_idx').on(t.projectId, t.register, t.docNo).where(sql`${t.register} = 'edl'`),
+  // Document numbers are NOT guaranteed unique. Numbering discipline is real,
+  // but enforcing it here means refusing a register as it actually is: Gundih's
+  // VDRL uses `PRGG-VDR-KMI-IN-PSV-DOC-003` twice, and Petrogas' EDL — an EDL,
+  // where this rule was once thought safe — uses `WPP-IN-LAY-003` twice. What
+  // replaces the refusal is sight: the paste preview counts them before writing,
+  // and the workbench flags them afterwards.
 ]);
 
 /**

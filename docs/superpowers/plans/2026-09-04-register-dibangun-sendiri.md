@@ -439,18 +439,21 @@ EDL Petrogas memakai `WPP-IN-LAY-003` dua kali. Index yang menolaknya akan menol
 - Consumes: tidak ada.
 - Produces: `documents` boleh memuat `docNo` yang sama dua kali pada register mana pun.
 
-- [ ] **Step 1: Salin database dan hitung baris anak**
+- [x] **Step 1: Salin database dan hitung baris anak**
 
 Aturan AGENTS.md: migrasi yang membangun ulang tabel membawa baris anaknya. `DROP INDEX` tidak membangun ulang tabel, tapi hitungannya tetap dicatat supaya klaim itu terbukti, bukan diyakini.
 
+Database ini berjalan dalam mode **WAL** — dibuktikan 4 September 2026, `data/report.db` bertanggal 28 Agustus sementara seluruh tulisan sejak itu masih duduk di `data/report.db-wal`. Menyalin berkas `.db` sendirian, seperti bunyi aturan itu selama ini, menghasilkan cadangan basi yang justru gagal saat dibutuhkan. Checkpoint dulu, baru salin.
+
 ```bash
+node -e "require('better-sqlite3')('data/report.db').pragma('wal_checkpoint(TRUNCATE)')"
 cp data/report.db data/report.db.before-0005
 node -e "const d=require('better-sqlite3')('data/report.db');for(const t of ['documents','doc_stages','doc_categories'])console.log(t,d.prepare('select count(*) c from '+t).get().c)"
 ```
 
 Catat ketiga angkanya.
 
-- [ ] **Step 2: Hapus index dari skema**
+- [x] **Step 2: Hapus index dari skema**
 
 Di `lib/schema.ts`, pada blok `documents`, buang baris `uniqueIndex('documents_project_no_idx')` beserta komentar yang menjelaskannya, dan ganti komentar itu dengan yang menjelaskan keadaan sekarang:
 
@@ -458,16 +461,16 @@ Di `lib/schema.ts`, pada blok `documents`, buang baris `uniqueIndex('documents_p
 }, (t) => [
   index('documents_category_idx').on(t.categoryId),
   index('documents_project_register_idx').on(t.projectId, t.register),
-  // Nomor dokumen TIDAK dijamin unik. Disiplin penomoran itu nyata, tapi
-  // menegakkannya di sini berarti menolak register apa adanya: VDRL Gundih
-  // memakai `PRGG-VDR-KMI-IN-PSV-DOC-003` dua kali, dan EDL Petrogas —
-  // sebuah EDL, tempat aturan ini dulu dianggap aman — memakai
-  // `WPP-IN-LAY-003` dua kali. Yang menggantikan penolakan adalah penglihatan:
-  // pratinjau tempelan menghitungnya, dan workbench menandainya.
+  // Document numbers are NOT guaranteed unique. Numbering discipline is real,
+  // but enforcing it here means refusing a register as it actually is: Gundih's
+  // VDRL uses `PRGG-VDR-KMI-IN-PSV-DOC-003` twice, and Petrogas' EDL — an EDL,
+  // where this rule was once thought safe — uses `WPP-IN-LAY-003` twice. What
+  // replaces the refusal is sight: the paste preview counts them before writing,
+  // and the workbench flags them afterwards.
 ]);
 ```
 
-- [ ] **Step 3: Hasilkan migrasinya dan baca isinya**
+- [x] **Step 3: Hasilkan migrasinya dan baca isinya**
 
 ```bash
 npx drizzle-kit generate
@@ -476,7 +479,7 @@ cat data/migrations/0005_*.sql
 
 Expected: berisi `DROP INDEX` (satu baris). **Kalau yang keluar `CREATE TABLE __new_documents` + `INSERT INTO ... SELECT` + `DROP TABLE`, JANGAN dijalankan** — itu bangun-ulang tabel, dan `PRAGMA foreign_keys=OFF` tidak berlaku di dalam transaksi drizzle, jadi `doc_stages` akan ikut terhapus. Ganti isi berkas `.sql` itu dengan satu baris `DROP INDEX \`documents_project_no_idx\`;` sebelum melanjutkan.
 
-- [ ] **Step 4: Jalankan dan hitung ulang**
+- [x] **Step 4: Jalankan dan hitung ulang**
 
 ```bash
 npx drizzle-kit migrate
@@ -485,7 +488,7 @@ node -e "const d=require('better-sqlite3')('data/report.db');for(const t of ['do
 
 Expected: ketiga angkanya sama persis dengan Step 1.
 
-- [ ] **Step 5: Buktikan index-nya benar hilang**
+- [x] **Step 5: Buktikan index-nya benar hilang**
 
 ```bash
 node -e "const d=require('better-sqlite3')('data/report.db');console.log(d.prepare(\"select name from sqlite_master where type='index' and name like 'documents%'\").all())"
@@ -493,7 +496,7 @@ node -e "const d=require('better-sqlite3')('data/report.db');console.log(d.prepa
 
 Expected: `documents_project_no_idx` tidak ada lagi; dua index lainnya tetap.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rm data/report.db.before-0005
