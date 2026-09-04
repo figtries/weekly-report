@@ -6,6 +6,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { STAGE_ORDER } from './register-shared';
+import { writeSeed, type SeedInput } from './register-seed';
 import type { DocStage, RegisterKind } from './schema';
 
 /**
@@ -291,6 +292,33 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
 
     refreshRegister();
     return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* ------------------------------------------------- building a new register */
+
+/**
+ * The list someone pasted, turned into a register.
+ *
+ * Until this existed the only way to fill a register was to run
+ * `scripts/import-edl.ts` — an importer written for one workbook — so the module
+ * worked for exactly one project: the one whose data somebody else had already
+ * imported.
+ *
+ * Client and contractor names are asked for here because a register has two
+ * sides and those sides are named. On the Petrogas EDL they ARE the column
+ * headings: "INDOTURBINE Submission" against "PETROGAS Response".
+ *
+ * The writing itself lives in `lib/register-seed.ts`, which imports nothing from
+ * Next and can therefore be proved by a script.
+ */
+export async function seedRegister(input: SeedInput): Promise<ActionResult> {
+  try {
+    const written = writeSeed(input);
+    refreshRegister();
+    return { ok: true, changed: written.documents };
   } catch (err) {
     return fail(err);
   }

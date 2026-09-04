@@ -529,7 +529,7 @@ Penulisnya dipisah dari action-nya supaya bisa diuji: `lib/doc-actions.ts` memak
   export async function seedRegister(input: SeedInput): Promise<ActionResult>
   ```
 
-- [ ] **Step 1: Tulis uji yang gagal**
+- [x] **Step 1: Tulis uji yang gagal**
 
 Buat `scripts/verify-register-seed.ts`:
 
@@ -540,17 +540,26 @@ Buat `scripts/verify-register-seed.ts`:
  *
  * Berjalan di atas salinan sementara, bukan `data/report.db`.
  *
- * Run: node scripts/verify-register-seed.ts
+ * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-register-seed.ts
  */
-import { copyFileSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import Database from 'better-sqlite3';
 
 const tmp = path.join(os.tmpdir(), `report-seed-${Date.now()}.db`);
-copyFileSync('data/report.db', tmp);
+
+// Disalin lewat `backup()`, BUKAN `copyFileSync`. Database ini berjalan dalam
+// mode WAL (lihat `lib/sqlite.ts`), jadi menyalin berkas utamanya saja akan
+// meninggalkan seluruh isi `-wal` — dan salinan itu adalah keadaan sebelum
+// migrasi terakhir.
+const source = new Database('data/report.db', { readonly: true });
+await source.backup(tmp);
+source.close();
+
 process.env.REPORT_DB_PATH = tmp;
 
-const { db, schema } = await import('../lib/sqlite.ts');
+const { db, schema, sqlite } = await import('../lib/sqlite.ts');
 const { writeSeed } = await import('../lib/register-seed.ts');
 const { eq, and } = await import('drizzle-orm');
 
@@ -635,7 +644,10 @@ check('menolak client kosong', threw, true);
 check('tidak ada yang tertulis', db.select().from(schema.documents)
   .where(eq(schema.documents.projectId, PROJECT)).all().length, before);
 
-rmSync(tmp, { force: true });
+// Ditutup dulu: Windows mengunci berkas database selama koneksinya hidup, dan
+// WAL meninggalkan dua berkas pendamping.
+sqlite.close();
+for (const suffix of ['', '-wal', '-shm']) rmSync(tmp + suffix, { force: true });
 if (failures.length) {
   console.log(`\n${failures.length} FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
@@ -643,15 +655,15 @@ if (failures.length) {
 console.log('\nall checks passed');
 ```
 
-- [ ] **Step 2: Jalankan supaya gagal**
+- [x] **Step 2: Jalankan supaya gagal**
 
 ```bash
-node scripts/verify-register-seed.ts
+node --import ./scripts/ts-resolve.mjs scripts/verify-register-seed.ts
 ```
 
 Expected: FAIL — `Cannot find module '../lib/register-seed.ts'`.
 
-- [ ] **Step 3: Tulis penulisnya**
+- [x] **Step 3: Tulis penulisnya**
 
 Buat `lib/register-seed.ts`:
 
@@ -792,15 +804,15 @@ export function writeSeed(input: SeedInput): { categories: number; documents: nu
 }
 ```
 
-- [ ] **Step 4: Jalankan sampai lulus**
+- [x] **Step 4: Jalankan sampai lulus**
 
 ```bash
-node scripts/verify-register-seed.ts
+node --import ./scripts/ts-resolve.mjs scripts/verify-register-seed.ts
 ```
 
 Expected: PASS. Kalau `kode unik` gagal, dua kategori bernama sama di induk berbeda ikut menabrak — perbaiki `codeFor`, bukan ujinya.
 
-- [ ] **Step 5: Bungkus jadi server action**
+- [x] **Step 5: Bungkus jadi server action**
 
 Di `lib/doc-actions.ts`, tepat setelah `addDocument` berakhir (sekitar baris 297), tambahkan:
 
@@ -833,7 +845,7 @@ Dan di kepala berkas, tambahkan importnya:
 import { writeSeed, type SeedInput } from './register-seed';
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/register-seed.ts lib/doc-actions.ts scripts/verify-register-seed.ts
@@ -1186,7 +1198,7 @@ Expected: `0`.
 Lalu jalankan dev server dan potret layar kosongnya. Karena `gundih` sudah berisi, buat proyek kosong untuk dilihat, atau tunjuk `REPORT_DB_PATH` ke salinan yang registernya dikosongkan:
 
 ```bash
-node -e "const fs=require('fs');fs.copyFileSync('data/report.db','data/empty.db');const d=require('better-sqlite3')('data/empty.db');d.exec(\"delete from documents where register='edl'; delete from doc_categories where register='edl';\")"
+node scripts/make-empty-db.mjs
 ```
 
 Jalankan dev dengan `REPORT_DB_PATH=data/empty.db`, lalu:
@@ -1853,7 +1865,7 @@ Expected: `0`. Kalau gagal dengan "Uncached data was accessed outside of `<Suspe
 - [ ] **Step 3: Perjalanan lengkap di database kosong**
 
 ```bash
-cp data/report.db data/report.db.keep
+node scripts/make-empty-db.mjs --all
 node -e "const d=require('better-sqlite3')('data/report.db');d.exec(\"delete from documents; delete from doc_categories; delete from doc_stage_weights;\")"
 ```
 
@@ -1867,7 +1879,7 @@ Jalankan dev, buka `/dokumen/36/data`, tempel `scripts/fixtures/petrogas-edl.tsv
 - kartu `WPP-IN-LAY-003` bertanda "number used twice"
 
 ```bash
-mv data/report.db.keep data/report.db
+# tidak ada yang dikembalikan: data/report.db tidak pernah disentuh
 ```
 
 - [ ] **Step 4: Potret dua ukuran, lalu lihat**

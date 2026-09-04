@@ -53,3 +53,6 @@ next-env.d.ts
 .env.local
 /.next-verify/
 .next-dev*.log
+
+# Kembaran database untuk melihat layar register kosong (scripts/make-empty-db.mjs)
+/data/empty.db*
