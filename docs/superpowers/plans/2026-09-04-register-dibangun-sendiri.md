@@ -1399,7 +1399,7 @@ git commit -m "A category can be added, renamed, and — when empty — removed"
 - Consumes: `addCategory`, `renameCategory`, `deleteCategory`, `deleteDocument` (Task 5).
 - Produces: tidak ada modul baru yang dikonsumsi task lain.
 
-- [ ] **Step 1: Tampilkan kategori kosong**
+- [x] **Step 1: Tampilkan kategori kosong**
 
 Di `components/dokumen/RegisterWorkbench.tsx`, ubah `walk` (baris 153-160):
 
@@ -1417,7 +1417,7 @@ Di `components/dokumen/RegisterWorkbench.tsx`, ubah `walk` (baris 153-160):
     };
 ```
 
-- [ ] **Step 2: Dialog kategori**
+- [x] **Step 2: Dialog kategori**
 
 Buat `components/dokumen/CategoryDialog.tsx`:
 
@@ -1501,7 +1501,7 @@ export function CategoryDialog({
 }
 ```
 
-- [ ] **Step 3: Pasang di workbench**
+- [x] **Step 3: Pasang di workbench**
 
 `components/ui/dropdown-menu.tsx` belum ada di repo ini. Ambil dulu — `shadcn add` aman, ia hanya menyentuh `components/ui/`:
 
@@ -1594,7 +1594,7 @@ Dan dialognya, di sebelah `<AddDocumentDialog … />` yang sudah ada:
   )}
 ```
 
-- [ ] **Step 4: Tandai nomor yang dipakai dua kali**
+- [x] **Step 4: Tandai nomor yang dipakai dua kali**
 
 Di `RegisterWorkbench.tsx`, hitung sekali dari `cards`:
 
@@ -1623,7 +1623,7 @@ Pada kartu dokumen, di sebelah nomornya:
   )}
 ```
 
-- [ ] **Step 5: Lihat hasilnya**
+- [x] **Step 5: Lihat hasilnya**
 
 ```bash
 npx next build > build.log 2>&1; echo $?
@@ -1633,7 +1633,7 @@ node scripts/shoot.mjs http://localhost:3000/dokumen/36/data /tmp/wb-390.png 390
 
 Expected build `0`. **Lihat gambarnya:** tombol Add group terlihat di kaki kolom kiri tanpa menutupi kartu terakhir; header grup tidak jadi berdesakan oleh tombol ketiga di 390px.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add components/dokumen/RegisterWorkbench.tsx components/dokumen/CategoryDialog.tsx

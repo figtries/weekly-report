@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, ChevronDown, ChevronRight, FilePlus2, Search, TriangleAlert } from 'lucide-react';
+import {
+  ArrowLeft, ChevronDown, ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search, TriangleAlert,
+} from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { deleteCategory } from '@/lib/doc-actions';
 import { DURATION, EASE } from '@/components/motion/Reveal';
 import { STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode } from '@/lib/register-shared';
 import type { RegisterKind } from '@/lib/schema';
@@ -18,6 +24,7 @@ import { RegisterWorklist } from './RegisterWorklist';
 
 // The one overlay left: adding a document. It loads on demand.
 const AddDocumentDialog = dynamic(() => import('./AddDocumentDialog').then((m) => m.AddDocumentDialog));
+const CategoryDialog = dynamic(() => import('./CategoryDialog').then((m) => m.CategoryDialog));
 
 /**
  * Where the register is worked on.
@@ -152,7 +159,10 @@ export function RegisterWorkbench({
     const out: Group[] = [];
     const walk = (node: RegisterNode, packageName: string) => {
       if (node.children.length === 0) {
-        if (node.documents > 0) out.push({ id: node.id, name: node.name, packageName, node });
+        // Zero-document groups appear too. `node.documents > 0` was right while
+        // a register could only arrive from an importer, but a group somebody
+        // just created is born empty — hiding it leaves nowhere to press Add.
+        out.push({ id: node.id, name: node.name, packageName, node });
         return;
       }
       // The heading is the group's immediate parent, not the band at the top.
@@ -166,9 +176,27 @@ export function RegisterWorkbench({
   const [query, setQuery] = useState('');
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [categoryDialog, setCategoryDialog] = useState<
+    | { mode: 'add'; parentId: string | null; parentName: string | null }
+    | { mode: 'rename'; id: string; name: string }
+    | null
+  >(null);
   // Phones have no empty right-hand column to fill, so the worklist is a place
   // you go rather than a place you land. Desktop never reads this.
   const [mobileWorklist, setMobileWorklist] = useState(false);
+
+  /**
+   * Numbers used more than once. The register accepts them — real ones are like
+   * that, and Petrogas' own EDL uses WPP-IN-LAY-003 twice — but accepting
+   * without saying so means people meet it when it is already a dispute.
+   */
+  const duplicateNumbers = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const list of Object.values(cards)) {
+      for (const d of list) if (d.docNo) seen.set(d.docNo, (seen.get(d.docNo) ?? 0) + 1);
+    }
+    return new Set([...seen].filter(([, n]) => n > 1).map(([no]) => no));
+  }, [cards]);
 
   const selected = groups.find((g) => g.id === selectedId) ?? null;
   const q = query.trim().toLowerCase();
@@ -377,6 +405,17 @@ export function RegisterWorkbench({
           {matchingGroups.length === 0 && (
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">No match.</p>
           )}
+
+          {/* At the foot of the column rather than beside the search box: this
+              is where you arrive after reading what is already there, and it
+              must not compete with the picker itself. */}
+          <Button
+            variant="outline"
+            className="h-11 w-full"
+            onClick={() => setCategoryDialog({ mode: 'add', parentId: null, parentName: null })}
+          >
+            <FolderPlus className="mr-1.5 h-4 w-4" /> Add group
+          </Button>
         </div>
       </aside>
 
@@ -431,6 +470,49 @@ export function RegisterWorkbench({
                 <Button variant="outline" className="h-11 shrink-0" onClick={() => setAdding(true)}>
                   <FilePlus2 className="mr-1.5 h-4 w-4" /> Add
                 </Button>
+                {/* ONE menu, for the group that is open — not one per card.
+                    The column can render every leaf of a 285-row register at
+                    once, and a Radix instance per row is 285 contexts, refs and
+                    portals. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost" size="icon" className="h-11 w-11 shrink-0"
+                      aria-label="Group actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem
+                      onSelect={() => setCategoryDialog({
+                        mode: 'rename', id: selected.id, name: selected.name,
+                      })}
+                    >
+                      Rename group
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setCategoryDialog({
+                        mode: 'add', parentId: selected.id, parentName: selected.name,
+                      })}
+                    >
+                      Add group inside
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={selected.node.documents > 0}
+                      onSelect={async () => {
+                        const result = await deleteCategory({
+                          projectId, register, categoryId: selected.id,
+                        });
+                        if (result.ok) { setSelectedId(null); setOpenDoc(null); }
+                      }}
+                    >
+                      {selected.node.documents > 0 ? 'Delete group — empty it first' : 'Delete group'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
@@ -509,6 +591,11 @@ export function RegisterWorkbench({
                           {doc.docNo
                             ? <span className="font-mono text-xs font-medium">{doc.docNo}</span>
                             : <span className="text-xs text-muted-foreground">no number</span>}
+                          {doc.docNo && duplicateNumbers.has(doc.docNo) && (
+                            <Badge className="bg-amber-100 font-normal text-amber-800">
+                              number used twice
+                            </Badge>
+                          )}
                           {doc.stage && (
                             <Badge variant="secondary" className="font-normal">{STAGE_LABEL[doc.stage]}</Badge>
                           )}
@@ -552,8 +639,21 @@ export function RegisterWorkbench({
                 );
               })}
 
+              {/* A group you just created lands here, and this line is the only
+                  thing telling you what comes next — so it is a control, not a
+                  grey sentence. Search that matches nothing keeps the plain
+                  line: there the answer is to change the search, not to add. */}
               {shown.length === 0 && (
-                <p className="py-10 text-center text-sm text-muted-foreground">No documents here.</p>
+                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-10 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {q === '' ? 'This group is empty.' : 'No documents match that search.'}
+                  </p>
+                  {q === '' && (
+                    <Button variant="outline" className="h-11" onClick={() => setAdding(true)}>
+                      <FilePlus2 className="mr-1.5 h-4 w-4" /> Add the first document
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -576,6 +676,22 @@ export function RegisterWorkbench({
           </div>
         )}
       </section>
+
+      {/* Outside the `adding` gate on purpose: a group is renamed, nested into
+          or deleted whether or not a document is being added. */}
+      {categoryDialog && (
+        <CategoryDialog
+          open
+          onOpenChange={(o) => { if (!o) setCategoryDialog(null); }}
+          projectId={projectId}
+          register={register}
+          editing={categoryDialog.mode === 'rename'
+            ? { id: categoryDialog.id, name: categoryDialog.name }
+            : undefined}
+          parentId={categoryDialog.mode === 'add' ? categoryDialog.parentId : null}
+          parentName={categoryDialog.mode === 'add' ? categoryDialog.parentName : null}
+        />
+      )}
 
       {adding && selected && (
         <AddDocumentDialog
