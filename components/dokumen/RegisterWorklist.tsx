@@ -68,6 +68,7 @@ export function RegisterWorklist({
   query,
   onOpen,
   compact = false,
+  tools,
   excludeCategoryId = null,
 }: {
   obstacles: Obstacle[];
@@ -77,6 +78,12 @@ export function RegisterWorklist({
   onOpen: (categoryId: string, documentId: string) => void;
   /** The short tail shown under a group's documents. */
   compact?: boolean;
+  /**
+   * Register-wide controls (import, export) shown at the far right of the
+   * heading. They belong to the register rather than to this list, so this
+   * component only makes room for them — it does not know what they do.
+   */
+  tools?: React.ReactNode;
   excludeCategoryId?: string | null;
 }) {
   const [kind, setKind] = useState<ObstacleKind | 'all'>('all');
@@ -109,18 +116,21 @@ export function RegisterWorklist({
 
   if (obstacles.length === 0) {
     return (
-      <div className="rounded-xl border bg-card p-8 text-center">
-        <p className="text-sm font-medium">Nothing is stuck.</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Every document in the register has gone out and come back clean.
-        </p>
+      <div className="flex flex-col gap-3">
+        {tools && <div className="flex justify-end">{tools}</div>}
+        <div className="rounded-xl border bg-card p-8 text-center">
+          <p className="text-sm font-medium">Nothing is stuck.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Every document in the register has gone out and come back clean.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={cn('flex flex-col gap-3', !compact && 'animate-enter')}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className={cn('font-semibold tracking-tight', compact ? 'text-sm' : 'text-base')}>
           {compact ? 'Other work waiting' : 'What needs work'}
         </h2>
@@ -129,6 +139,7 @@ export function RegisterWorklist({
             {obstacles.length} of {totalDocuments} open
           </span>
         )}
+        {tools && <div className="ml-auto">{tools}</div>}
       </div>
 
       {/* Filters only on the full panel: the tail under a group is six rows, and

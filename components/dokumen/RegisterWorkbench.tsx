@@ -21,6 +21,8 @@ import { cn } from '@/lib/utils';
 
 import { DocumentEditor } from './DocumentEditor';
 import { RegisterWorklist } from './RegisterWorklist';
+import { RegisterTools } from './RegisterTools';
+import { RegisterSeed } from './RegisterSeed';
 
 // The one overlay left: adding a document. It loads on demand.
 const AddDocumentDialog = dynamic(() => import('./AddDocumentDialog').then((m) => m.AddDocumentDialog));
@@ -142,6 +144,8 @@ export function RegisterWorkbench({
   obstacles,
   totalDocuments,
   weekNo,
+  clientName,
+  contractorName,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -152,6 +156,9 @@ export function RegisterWorkbench({
   totalDocuments: number;
   /** The week being reported. Every figure below is as it stood at its end. */
   weekNo: number;
+  /** Passed straight back on import so a file cannot blank them. */
+  clientName: string;
+  contractorName: string;
 }) {
   const reduced = useReducedMotion();
 
@@ -176,6 +183,10 @@ export function RegisterWorkbench({
   const [query, setQuery] = useState('');
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // The paste screen, opened over a register that already has documents. It is
+  // the same screen an empty register lands on — there is one way to build a
+  // register, not two that drift apart.
+  const [building, setBuilding] = useState(false);
   const [categoryDialog, setCategoryDialog] = useState<
     | { mode: 'add'; parentId: string | null; parentName: string | null }
     | { mode: 'rename'; id: string; name: string }
@@ -252,6 +263,28 @@ export function RegisterWorkbench({
   // has gone looking at the worklist.
   const columnHidden = selected !== null || mobileWorklist;
 
+  const tools = (
+    <RegisterTools
+      projectId={projectId}
+      register={register}
+      clientName={clientName}
+      contractorName={contractorName}
+      onPaste={() => setBuilding(true)}
+    />
+  );
+
+  if (building) {
+    return (
+      <RegisterSeed
+        projectId={projectId}
+        register={register}
+        clientName={clientName}
+        contractorName={contractorName}
+        onClose={() => setBuilding(false)}
+      />
+    );
+  }
+
   return (
     // On a wide screen this is a master–detail pane, not a page: it is exactly
     // as tall as the scroll port, and each column carries its own scroll. That
@@ -290,6 +323,9 @@ export function RegisterWorkbench({
             aria-label="Search documents"
           />
         </div>
+
+        {/* Phones only — see the note on `tools`. */}
+        <div className="lg:hidden">{tools}</div>
 
         {/* Phones only. On a wide screen the worklist is already open to the
             right of this column, and a band pointing at it would be furniture. */}
@@ -442,6 +478,10 @@ export function RegisterWorkbench({
               totalDocuments={totalDocuments}
               query={query}
               onOpen={openFromWorklist}
+              // Desktop only: on a phone the same row sits under the search
+              // box, where it is on the first screen instead of one tap inside
+              // the worklist.
+              tools={<div className="hidden lg:flex">{tools}</div>}
             />
           </div>
         ) : (

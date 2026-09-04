@@ -15,8 +15,9 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
   const shape = getRegisterShape(PROJECT_ID, 'edl');
   const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'edl', week) : null;
 
+  const parties = getRegisterParties(PROJECT_ID);
+
   if (!summary) {
-    const parties = getRegisterParties(PROJECT_ID);
     return (
       <RouteTransition id="dokumen-edl-data">
         <RegisterSeed
@@ -39,6 +40,8 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
       obstacles={getObstacles(PROJECT_ID, 'edl', week)}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
+      clientName={parties.clientName}
+      contractorName={parties.contractorName}
     />
     </RouteTransition>
   );

@@ -7,6 +7,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from './sqlite';
 import { STAGE_ORDER } from './register-shared';
 import { writeSeed, type SeedInput } from './register-seed';
+import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
 import type { DocStage, RegisterKind } from './schema';
 
 /**
@@ -50,6 +51,11 @@ function optionalDate(value: string, what: string): string | null {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function assertRegister(value: string): RegisterKind {
+  if (value !== 'edl' && value !== 'vdrl') throw new Error(`Unknown register "${value}"`);
+  return value;
 }
 
 function assertStage(value: string): DocStage {
@@ -319,6 +325,41 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
     const written = writeSeed(input);
     refreshRegister();
     return { ok: true, changed: written.documents };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * A workbook, read into the register.
+ *
+ * The file is turned into the same grid a paste produces (`lib/register-xlsx.ts`)
+ * and handed to the same writer, so there is one set of rules about what a
+ * category is and what a document is — not one for typing and another for
+ * Excel.
+ *
+ * A number that is already here updates its row instead of adding a second one,
+ * which is what makes importing next month's revision of the same list safe.
+ */
+export async function importRegisterFile(form: FormData): Promise<ActionResult> {
+  try {
+    const file = form.get('file');
+    if (!(file instanceof File)) throw new Error('No file was chosen');
+    if (file.size === 0) throw new Error('That file is empty');
+    if (file.size > 25 * 1024 * 1024) throw new Error('That file is larger than 25 MB');
+
+    const projectId = String(form.get('projectId') ?? '');
+    const register = assertRegister(String(form.get('register') ?? ''));
+    const clientName = String(form.get('clientName') ?? '');
+    const contractorName = String(form.get('contractorName') ?? '');
+
+    const grids = await readWorkbookGrids(Buffer.from(await file.arrayBuffer()));
+    const sheet = pickRegisterSheet(grids, register);
+    if (!sheet) throw new Error('That workbook has no sheets');
+
+    const written = writeSeed({ projectId, register, text: sheet.text, clientName, contractorName });
+    refreshRegister();
+    return { ok: true, changed: written.documents + written.updated };
   } catch (err) {
     return fail(err);
   }

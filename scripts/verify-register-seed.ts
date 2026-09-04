@@ -82,6 +82,23 @@ check('baris bobot', weights.length, 8);
 check('jumlah bobot', weights.reduce((a, w) => a + w.weight, 0), 100);
 check('IFR', weights.find((w) => w.stage === 'IFR')!.weight, 50);
 
+console.log('\nmengimpor berkas yang sama lagi tidak menggandakan apa pun');
+const twice = writeSeed({
+  projectId: PROJECT, register: 'edl', text,
+  clientName: 'PETROGAS (BASIN) LTD.', contractorName: 'PT. INDOTURBINE',
+});
+check('dokumen baru', twice.documents, 0);
+check('dokumen diperbarui', twice.updated, 131);
+check('kategori baru', twice.categories, 0);
+check('total dokumen tetap', db.select().from(schema.documents)
+  .where(and(eq(schema.documents.projectId, PROJECT), eq(schema.documents.register, 'edl'))).all().length, 131);
+check('nomor ganda tetap dua baris', db.select().from(schema.documents)
+  .where(and(eq(schema.documents.projectId, PROJECT), eq(schema.documents.docNo, 'WPP-IN-LAY-003'))).all().length, 2);
+const bothTitles = db.select().from(schema.documents)
+  .where(and(eq(schema.documents.projectId, PROJECT), eq(schema.documents.docNo, 'WPP-IN-LAY-003'))).all()
+  .map((d) => d.title).sort();
+check('judul keduanya tetap berbeda', bothTitles.join(' | '), 'Instrument Cable Layout | Instrument FGS Cable Layout');
+
 console.log('\nmenempel daftar kedua menambah ke kategori yang sama');
 const again = writeSeed({
   projectId: PROJECT, register: 'edl',

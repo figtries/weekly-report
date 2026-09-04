@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { seedRegister } from '@/lib/doc-actions';
+import { RegisterTools } from './RegisterTools';
 import { parseRegisterPaste, type ColumnMapping } from '@/lib/register-paste';
 import type { RegisterKind } from '@/lib/schema';
 
@@ -38,12 +39,18 @@ const FIELDS = [
 ] as const;
 
 export function RegisterSeed({
-  projectId, register, clientName, contractorName,
+  projectId, register, clientName, contractorName, onClose,
 }: {
   projectId: string;
   register: RegisterKind;
   clientName: string;
   contractorName: string;
+  /**
+   * Present when the screen was opened over a register that already has
+   * documents — then it is a thing you came to do and can leave again. Absent
+   * on an empty register, where there is nothing to go back to.
+   */
+  onClose?: () => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -66,16 +73,32 @@ export function RegisterSeed({
         projectId, register, text, mapping: override,
         clientName: client, contractorName: contractor,
       });
-      if (!result.ok) setError(result.error);
+      if (!result.ok) { setError(result.error); return; }
+      setText('');
+      onClose?.();
     });
   };
 
   return (
     <div className="animate-fade-in-up mx-auto flex max-w-3xl flex-col gap-5 pb-20">
-      <PageHeader section="Document Control" title={`Build the ${label}`}>
-        Paste the list you already have — from a spreadsheet, from a document, or typed
-        by hand. Nothing is written until you press the button at the bottom.
-      </PageHeader>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PageHeader section="Document Control" title={`Build the ${label}`} className="mb-0">
+          Paste the list you already have, or read it straight out of an Excel file.
+          Nothing is written until you press a button.
+        </PageHeader>
+        {/* Import belongs here too: this is the screen someone opens to build a
+            register, and a file is the other way to do exactly that. */}
+        {/* The names come from the fields below, as they stand right now — a
+            file carries neither, and inventing a fallback would write a
+            counterparty nobody agreed to. Left empty, the import says so. */}
+        <RegisterTools
+          projectId={projectId}
+          register={register}
+          clientName={client}
+          contractorName={contractor}
+          exportable={false}
+        />
+      </div>
 
       {/* ------------------------------------------------------- both sides */}
       <section className="animate-enter rounded-xl border bg-card p-4 sm:p-5">

@@ -307,6 +307,86 @@ export function getRegisterParties(projectId: string): {
   return { clientName: project?.clientName ?? '', contractorName: project?.contractorName ?? '' };
 }
 
+export interface ExportRow {
+  /** `A`, `A.1`, `A.1.1` for a group; a running number for a document. */
+  no: string;
+  docNo: string;
+  title: string;
+  kind: string;
+  isCategory: boolean;
+  stages: { stage: DocStage; submittedAt: string | null; submitTransmittal: string | null;
+    returnedAt: string | null; returnTransmittal: string | null; returnCode: string | null }[];
+}
+
+/**
+ * The register flattened for export, in the order it reads on screen.
+ *
+ * It lives here rather than in the route because the SQL belongs with the rest
+ * of the register's reads — and because the shape it produces is the shape the
+ * PASTE PARSER understands, which is what lets an exported file be edited in
+ * Excel and imported straight back.
+ */
+export function getRegisterExportRows(projectId: string, register: RegisterKind): ExportRow[] {
+  const loaded = loadRegister(projectId, register);
+  if (!loaded) return [];
+
+  const childrenOf = new Map<string | null, CategoryRow[]>();
+  for (const c of loaded.categories) {
+    const list = childrenOf.get(c.parentId) ?? [];
+    list.push(c);
+    childrenOf.set(c.parentId, list);
+  }
+  for (const list of childrenOf.values()) list.sort((a, b) => a.order - b.order);
+
+  const out: ExportRow[] = [];
+  let running = 0;
+
+  const walk = (nodes: CategoryRow[], path: number[]) => {
+    nodes.forEach((category, index) => {
+      const here = [...path, index + 1];
+      const [first, ...rest] = here;
+      out.push({
+        no: [String.fromCharCode(64 + first), ...rest.map(String)].join('.'),
+        // The name sits in the number column exactly as Gundih's and Petrogas'
+        // own sheets write it — first filled cell right of the outline code.
+        docNo: category.name,
+        title: '',
+        kind: '',
+        isCategory: true,
+        stages: [],
+      });
+
+      for (const doc of (loaded.docsByCategory.get(category.id) ?? []).sort((a, b) => a.order - b.order)) {
+        running += 1;
+        out.push({
+          no: String(running),
+          docNo: doc.docNo ?? '',
+          title: doc.title,
+          kind: doc.kind ?? '',
+          isCategory: false,
+          stages: (loaded.byDoc.get(doc.id) ?? [])
+            .filter((s) => s.submitted || s.returnedAt || s.returnCode)
+            .map((s) => ({
+              stage: s.stage,
+              submittedAt: s.submittedAt,
+              submitTransmittal: s.submitTransmittalId
+                ? loaded.transmittalNo.get(s.submitTransmittalId) ?? null : null,
+              returnedAt: s.returnedAt,
+              returnTransmittal: s.returnTransmittalId
+                ? loaded.transmittalNo.get(s.returnTransmittalId) ?? null : null,
+              returnCode: s.returnCode,
+            })),
+        });
+      }
+
+      walk(childrenOf.get(category.id) ?? [], here);
+    });
+  };
+
+  walk(childrenOf.get(null) ?? [], []);
+  return out;
+}
+
 /**
  * The stage weights as they stand, zeros included — the screen that edits them
  * needs every row, not just the ones that carry weight.
