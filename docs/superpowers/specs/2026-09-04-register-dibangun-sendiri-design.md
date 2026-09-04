@@ -135,8 +135,11 @@ dilewati.
 - **Kolom nomor dokumen**: rasio tertinggi nilai berbentuk kode
   (huruf besar, tanda hubung, angka).
 - **Kolom judul**: teks terpanjang rata-rata.
-- **Kolom jenis** (opsional): isinya `Doc`/`Dwg`. Ikut disimpan kalau ada;
-  `size`, `revision` dan `priority` juga, karena kolomnya sudah ada di tabel.
+- **Kolom jenis** (opsional): isinya `Doc`/`Dwg`. Ikut disimpan kalau ada,
+  karena ia yang menggerakkan hitungan lembar. `size`, `revision` dan
+  `priority` **tidak** ikut meski kolomnya ada di tabel: tebakan kolom untuk
+  ketiganya tidak cukup andal, dan salah tebak yang diam lebih buruk daripada
+  kolom yang kosong.
 
 Tempelan tanpa kolom outline jatuh ke aturan sederhana: **satu kolom berarti
 kategori, dua kolom berarti dokumen**; baris yang dimulai dengan pemisah adalah

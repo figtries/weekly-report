@@ -1,0 +1,209 @@
+										
+	ENGINEERING DELIVERABLE LIST (EDL)									
+	"PROVISION OF WALIO POWER PLANT (WPP) POWER GENERATION SERVICES PAKET-A"									
+	PETROGAS (BASIN) LTD. SORONG PAPUA BARAT									
+	REVISI-B3 (20-JUNI-2026)									
+	NO	DOCUMEN / DRAWING NO	DRAWING NO EXISTING	REV.	REV.	PRIORITAS	DESCRIPTION	SIZE	DOC	
+										
+										
+	A	GENERAL								
+	A.1	EXECUTION PLAN								
+	1	WPP-GN-DRE-001		A		PRIORITAS-1	Jadwal Pelaksanaan Pekerjaan (Master Schedule)	A4	1	Doc
+	2	WPP-GN-DRE-002				PRIORITAS-2	Weekly Progress Report (LIVE Report)	A4	1	Doc
+	3	WPP-GN-DRE-003		A		PRIORITAS-1	Master Document Register (MDR) (LIVE Document)	A4	1	Doc
+										
+	A.2	PROCEDURE								
+	A.2.1	General Prosedur								
+	4	WPP-GN-DGS-001		A		PRIORITAS-2	Prosedur Penomoran Dokumen	A4	1	Doc
+	5	WPP-GN-DGS-002		A		PRIORITAS-2	Prosedur Lifting & Lifting Plan	A4	1	Doc
+	6	WPP-GN-DGS-003				PRIORITAS-1	GTg Installation Procedure	A4	1	Doc
+	7	WPP-GN-DGS-004		B		PRIORITAS-2	Kreteria Design Project	A4	1	Doc
+	8	WPP-GN-DGS-005				PRIORITAS-2	Project Execution Plan	A4	1	Doc
+	9	WPP-GN-DGS-006				PRIORITAS-1	Hse Plan	A4	1	Doc
+	A.2.2	QA/QC Prosedur				PRIORITAS-2				
+	10	WPP-QA-DGS-006				PRIORITAS-2	Project Quality Plan	A4	1	Doc
+	11	WPP-QA-DGS-007				PRIORITAS-2	Inspection And Test Plan	A4	1	Doc
+	12	WPP-QA-DGS-008				PRIORITAS-1	NDT Procedure And NDT Personal for Piping	A4	1	Doc
+	13	WPP-QA-DGS-009				PRIORITAS-4	Manual VaLVe Testing Procedure	A4	1	Doc
+	14	WPP-QA-DGS-010				PRIORITAS-4	Pressure Test Procedure	A4	1	Doc
+	15	WPP-QA-DGS-011					Mobilisasi Plan Procedure	A4	1	Doc
+	A.2.3	Commisioning Prosedur				PRIORITAS-2				
+	16	WPP-COM-DGS-001				PRIORITAS-2	Precommisioning & Commisioning Procedure	A4	1	Doc
+	17	WPP-COM-DGS-002				PRIORITAS-2	Energize & Commissioning Prosedure	A4	1	Doc
+										
+	B	DETAIL ENGINEERING								
+	B.1	PROCESS								
+	B.1.1	Proces Study/report								
+	18	WPP-PC-DSY-001		B		PRIORITAS-1	Process Simulation Report	A4	1	Doc
+	19	WPP-PC-DSY-002		A		PRIORITAS-1	Hydraulic Calculation Report	A4	1	Doc
+	20	WPP-PC-DSY-004				PRIORITAS-1	HAZID & HAZOP Study Report	A4	1	Doc
+	21	WPP-PC-DSY-005				PRIORITAS-1	HAZID & HAZOP Close Out Report	A4	1	Doc
+										
+	B.1.2	Scehedule								
+	22	WPP-PC-DSC-001		A		PRIORITAS-1	Hazard Area Classification Schedule	A3	1	Dwg
+	B.1.3	Proces & Instrumentation Diagram				PRIORITAS-1				
+	23	WPP-PC-GST-001				PRIORITAS-1	P&ID Legend & Sysmbol (By Pertamina)	A3	1	Doc
+	24	WPP-PC-GPI-001				PRIORITAS-1	P&ID Fuel Gas Scrubber V-170 & V-190	A3	1	Doc
+	25	WPP-PC-GPI-002		1		PRIORITAS-1	P&ID Gas Turbine Generator GT#12	A3	1	Doc
+	26	WPP-PC-GPI-003		1		PRIORITAS-1	P&ID GAS TURBINE GENERATOR GT#14 & GT#15	A3	1	Doc
+	27	WPP-PC-GPI-004		B			P&ID Instrument Air System	A3		Doc
+										
+	B.2	CIVIL								
+	B.2.1	Civil Calculation								
+	28	WPP-CV-DCC-001				PRIORITAS-1	Calculation for Gas Turbine Generator M100 Foudantion	A4	1	Doc
+	29	WPP-CV-DCC-002		0			Calculation forGas Turbine Generator T60 Foudantion	A4	1	Doc
+	30	WPP-CV-DCC-003		1		PRIORITAS-2	Calculation for Transformer	A4	1	Doc
+`	31	WPP-CV-DCC-004		1			Calculation for Lube Oil Foundantion	A4	1	Doc
+	32	WPP-CV-DCC-005		0			Calculation for MV & LV PCR	A4	1	Doc
+	33	WPP-CV-DCC-006		B			Calculation for Pipe Support	A4	1	Doc
+	B.2.2	Civil Procedure	PPGJ-ELE-CAL-50.101			PRIORITAS-2				
+	34	WPP-CV-DGS-001	PPGJ-ELE-CAL-50.102	B		PRIORITAS-2	Civil Construction Method Procedure	A4	1	Doc
+	B.2.3	Civil Drawing	PPGJ-ELE-CAL-50.103			PRIORITAS-2				
+	35	WPP-CV-DST-001	PPGJ-ELE-CAL-50.502	0		PRIORITAS-2	Civil Standard Drawing	A3	1	Dwg
+	36	WPP-CV-GKP-002	PPGJ-ELE-CAL-50.502	1		PRIORITAS-2	Foundation Location Key Plan	A3	1	Dwg
+	37	WPP-CV-GIW-003		1			Filling Layout	A3	1	Dwg
+	38	WPP-CV-GEF-004	PPGJ-ELE-CAL-50.101	B		PRIORITAS-2	Gas Turbine Generator M100 Foundation Detail	A3	1	Dwg
+	39	WPP-CV-GEF-005	PPGJ-ELE-CAL-50.101	B		PRIORITAS-2	Gas Turbine Generator T60 Foudantion Detail	A3	1	Dwg
+	40	WPP-CV-GEF-006		B			Transformer Foundation Detail	A3	1	Dwg
+	41	WPP-CV-GEF-007		B			MV & LV PCR Foundation Detail	A3	1	Dwg
+	42	WPP-CV-GEF-008		B		PRIORITAS-1	Civil Drawing for Foundation Pipe Support Detail	A3	1	Dwg
+	43	WPP-CV-GEF-009		B		PRIORITAS-1	Steel Structure Pipe Support Detail	A3	1	Dwg
+	44	WPP-CV-GEF-010		B		PRIORITAS-1	Service Platform Foundation Detail	A3	1	Dwg
+	45	WPP-CV-GEF-011		A		PRIORITAS-1	Lube Oil Foundation Detail	A3	1	Dwg
+	46	WPP-CV-GEF-012		A		PRIORITAS-1	Slab Foundation Detail	A3	1	Dwg
+	47	WPP-CV-GEF-013		0		PRIORITAS-1	Lighting Pole Foundation Detail	A3	1	Dwg
+	48	WPP-CV-GEF-014		B		PRIORITAS-1	Drawing Crossing Road Detail	A3	1	Dwg
+	49	WPP-CV-GEF-015		0		PRIORITAS-1	Lifting Plan GTG Mars & Taurus	A3	1	Dwg
+	B.2.3	Civil Boq				PRIORITAS-1				
+	48	WPPP-CV-DMT-001		B		PRIORITAS-1	Civil Bill of Material	A4	1	Doc
+			PPGJ-ELE-DTS-50.503							
+	B.3	MECHANICAL				PRIORITAS-1				
+	B.3.1	Mechanical Datasheet	PPGJ-ELE-DTS-50.505			PRIORITAS-1				
+	49	WPP-ME-DDS-001		A			Mechanical Datasheet for Instrument Air Compressor	A4	1	Doc
+										
+	B.4	PIPING								
+	B.4.1	Piping Spesifikasi				PRIORITAS-3				
+	50	WPP-PG-DGS-001					Piping General Specification	A4	1	Doc
+	51	WPP-PG-DGS-002	PPGJ-ELE-CRT-50.501	A		PRIORITAS-2	Piping Material Class Specification	A4	1	Doc
+		Piping QA/QC								
+	B.4.2	Piping QA/QC								
+	52	WPP-PG-QA-002					NDE Equipment & Personnel Qualification list			
+	B.4.2	Piping Prosedur	PPGJ-ELE-DET-50.501							
+	53	WPP-PG-PRO-001	PPGJ-ELE-DET-50.503			PRIORITAS-2	Piping Fabrication, Inspection and Installation Procedure	A4	1	Doc
+	54	WPP-PG-PRO-002					Tie-In Procedure for Piping	A4	1	Doc
+	55	WPP-PG-PRO-003					WPS & PQR Procedure			
+	56	WPP-PG-PRO-004					NDT Procedure			
+	57	WPP-PG-PRO-006					Painting Procedure			
+	58	WPP-PG-PRO-007					Welding Procedure			
+	B.4.2	Piping Drawing	PPGJ-ELE-ACD-50.101-01			PRIORITAS-1				
+	59	WPP-PG-GKP-001		0			Key Plan Drawing	A3	1	Dwg
+	60	WPP-PG-GPL-002	PPGJ-ELE-SLD-50.101	0		PRIORITAS-1	General Plot Plan	A3	1	Dwg
+	61	WPP-PG-EQL-003	PPGJ-ELE-SLD-50.102	0		PRIORITAS-1	Equipment Layout Gas Turbine Generator	A3	1	Dwg
+	62	WPP-PG-GPP-004		A		PRIORITAS-1	Piping Plan and Section Gas Turbine Generator	A3	1	Dwg
+	63	WPP-PG-DST-005				PRIORITAS-1	Standard Drawing	A3	1	Dwg
+	64	WPP-PG-GIS-006		B		PRIORITAS-3	Isometric Drawing	A3	1	Dwg
+	B.4.3	Piping Boq	PPGJ-ELE-SLD-50.121-01 & 02			PRIORITAS-1				
+	65	WPP-PG-DMT-001		A		PRIORITAS-1	Piping Bill of Material	A4	1	Doc
+										
+	B.5	ELECTRICAL & INSTRUMENT				PRIORITAS-2				
+	B.5.1	Electrical Calculation & Study				PRIORITAS-3				
+	66	WPP-EL-DCC-001		A		PRIORITAS-3	Short Circuit Analysis Study	A4	1	Doc
+	67	WPP-EL-DCC-002		A		PRIORITAS-3	Load Flow Analysis Study	A4	1	Doc
+	68	WPP-EL-DCC-003		A		PRIORITAS-3	Protection Relay Setting Coordination Study	A4	1	Doc
+	69	WPP-EL-DCC-004		A		PRIORITAS-3	Transient Study	A4	1	Doc
+	70	WPP-EL-DCC-005					Electrical Cable Sizing	A4	1	Doc
+	71	WPP-EL-DCC-006		A			Electrical Load List	A4	1	Doc
+	72	WPP-EL-DCC-007		A			Grounding Study	A4	1	Doc
+	B.5.2	Electrical PHILOSOPHY	PPGJ-ELE-LAY-41.501			PRIORITAS-1				
+	73	WPP-EL-DSY-001		A		PRIORITAS-1	Load Shedding Philosopy	A4	1	Doc
+	74	WPP-EL-DGS-002		B		PRIORITAS-1	Specicification for Load Shedding & Monitoring Panel	A4	1	Doc
+	75	WPP-EL-DGS-003		B		PRIORITAS-1	Electrical protection trip table matrix	A4	1	Doc
+	76	WPP-EL-DGS-004		A		PRIORITAS-1	Electrical Protection and control philopsophy	A4	1	Doc
+	B.5.3	Electrical procedure								
+	76	WPP-EL-PRO-001	PPGJ-ELE-LAY-50.101			PRIORITAS-2	Electrical - Instrument Installation Procedure	A4	1	Doc
+	77	WPP-EL-PRO-002	PPGJ-ELE-LAY-41.101-01			PRIORITAS-2	Electrical Tie-In Procedure	A4	1	Doc
+	B.5.4	Electrical Datasheet				PRIORITAS-2				
+	78	WPP-EL-DDS-001	PPGJ-ELE-LAY-52.102-01	0		PRIORITAS-2	Datasheet for Transformer	A4	1	Doc
+	79	WPP-EL-DDS-002		B		PRIORITAS-2	Datasheet for Load Break Switch (LBS)	A4	1	Doc
+	80	WPP-EL-DDS-003		A			Datasheet for Disconnect Switch (DS)	A4	1	Doc
+	81	WPP-EL-DDS-004		A		PRIORITAS-2	Datasheet for Power Meter Panel	A4	1	Doc
+	82	WPP-EL-DDS-005		B			Datasheet for NGR	A4	1	Doc
+	83	WPP-EL-DDS-006		A			Datasheet for MV Junction Box	A4	1	Doc
+	84	WPP-EL-DDS-007		A			Datasheet for Power & Control cable	A4	1	Doc
+	B.5.5	Electrical & Instrument List	PPGJ-ELE-LAY-50.311			PRIORITAS-2				
+	83	WPP-EL-DIN-001	PPGJ-ELE-LAY-41.301-01	A		PRIORITAS-2	Electrical Power & Control Cable Schedule	A4	1	Doc
+	84	WPP-EL-DIN-002		A		PRIORITAS-2	Load Shedding IO List	A4	1	Doc
+	B.5.6	Electrical Drawing				PRIORITAS-2				
+	85	WPP-EL-HAZ-001		A			Overall Hazardous Area Classification	A3		Dwg
+	86	WPP-EL-GBD-002	PPGJ-ELE-LAY-50.401	A		PRIORITAS-3	Electrical Block Diagram System	A3		Dwg
+	87	WPP-EL-GCA-003		A		PRIORITAS-3	System Architecture Diagram Intergration Load Shedding	A3		Dwg
+							Single Line Diagram			
+	88	WPP-EL-GSL-004	PPGJ-ELE-LAY-50.403	0		PRIORITAS-3	Electrical Single Line Diagram Overall	A3		Dwg
+	89	WPP-EL-GSL-005	PPGJ-ELE-LAY-50.403	0		PRIORITAS-3	13.8kV Single Line Diagram	A3		Dwg
+	90	WPP-EL-GSL-006		0			0.48kV Single Line Diagram	A3		Dwg
+	91	WPP-EL-GSL-007		B			Power meter Monitoring Single Line Diagram	A3		Dwg
+	92	WPP-EL-GSL 008		A			Electrical Legend & Symbol			
+	93	WPP-EL-GSL 009					Power Distribution Panel Schedule			
+							Elementary & Connection Diagram			
+	93	WPP-EL-GED-010		A		PRIORITAS-1	LV MCC Schematic Diagram	A3	1	Dwg
+	94	WPP-EL-GED-011		A		PRIORITAS-1	MV MCC Schematic Diagram	A3	1	Dwg
+	95	WPP-EL-GED-012				PRIORITAS-2	Connection Diagram Turbine Control Panel TCP-GT#12	A3	1	Dwg
+	96	WPP-EL-GED-013				PRIORITAS-2	Connection Diagram Turbine Control Panel TCP-GT#14	A3	1	Dwg
+	97	WPP-EL-GED-014				PRIORITAS-2	Connection Diagram Turbine Control Panel TCP-GT#15	A3	1	Dwg
+	98	WPP-EL-GED-015		A		PRIORITAS-2	Interconnection Diagram MV Switchgear	A3	1	Dwg
+	99	WPP-EL-GED-016		A		PRIORITAS-2	Interconnection Diagram LV MCC/Switchgear	A3	1	Dwg
+	100	WPP-EL-GED-017		A			Connection Diagram Load Shedding System	A3		Dwg
+	101	WPP-EL-GED-018					Connection Diagram Batery Charger System	A3		Dwg
+	102	WPP-EL-GED-019					Electrical Lighting Wiring Diagram	A3		Dwg
+					Equipment Layout	PRIORITAS-1	Equipment Layout			
+	103	WPP-EL-GEL-025		A	Electrical Equipment Layout 13.8KV PCR	PRIORITAS-1	Electrical Equipment Layout 13.8KV PCR	A3		Dwg
+	104	WPP-EL-GEL-026		A	Electrical Equipment Layout 0.48KV PCR		Electrical Equipment Layout 0.48KV PCR	A3		Dwg
+			PPGJ-INS-SPC-50.001			PRIORITAS-3	Power Layout			
+	105	WPP-EL-GER-028	PPGJ-INS-SPC-50.002			PRIORITAS-3	Electrical Cable Rounting Layout	A3		Dwg
+							Lighting Layout			
+	106	WPP-EL-GLL-030				PRIORITAS-1	Electrical Lighting Layout Generator Area	A3		Dwg
+						PRIORITAS-1	Grounding & Lingtning layout			
+	107	WPP-EL-GGL-LAY-032		A		PRIORITAS-1	Electrical Overall grounding & Lightning Protection Layout	A3		Dwg
+	108	WPP-EL-GGL-LAY-033		A		PRIORITAS-1	Electrical Grounding layout	A3		Dwg
+						PRIORITAS-1	Detail Drawing			
+	109	WPP-EL-DET-035		A		PRIORITAS-1	Detail Drawing for Power Works	A3		Dwg
+	110	WPP-EL-DET-036				PRIORITAS-1	Detail Drawing for Cable Ladder Works	A3		Dwg
+	111	WPP-EL-DET-037		A		PRIORITAS-1	Detail Drawing For Grounding Works	A3		Dwg
+	112	WPP-EL-DET-038		A		PRIORITAS-1	Detail Drawing for Lifgting Works	A3		Dwg
+	113	WPP-EL-DET-039		A		PRIORITAS-1	Detail Drawing For Lighthing Protection	A3		Dwg
+						PRIORITAS-1				
+	B.5.7	Electrical Bill of Material				PRIORITAS-1				
+	114	WPP-EL-DMT-001					Electrical Bill of Material	A4		Doc
+			PPGJ-INS-PCD-50.010			PRIORITAS-3				
+	B.6	INSTRUMENT	PPGJ-INS-PCD-50.012			PRIORITAS-3				
+	B.6.1	Instrument Datasheet								
+	115	WPP-IN-DDS-001		B		PRIORITAS-1	Instrument Datasheet for Shutdown Valve	A4		Doc
+	116	WPP-IN-DDS-002		A		PRIORITAS-1	Instrument Datasheet for Metering System Flow Comp	A4		Doc
+	117	WPP-IN-DDS-003	PPGJ-INS-CED-50.002	B		PRIORITAS-2	Instrument Datasheet for Barton	A4		Doc
+	118	WPP-IN-DDS-004	PPGJ-INS-CED-50.002	B		PRIORITAS-2	Instrumnet Datasheet for PRV			
+	119	WPP-IN-DDS-005	PPGJ-INS-CED-50.002	A		PRIORITAS-2	Instrumnet Datasheet for Junction Box	A4		Doc
+	B.6.3	Instrument Drawing	PPGJ-INS-LST-50.032			PRIORITAS-2				
+							Block Diagram			
+	120	WPP-IN-GBD-001				PRIORITAS-3	Instrument Block Diagram	A3	2	Dwg
+							Hook Up			
+	121	WPP-IN-GIH-002		A		PRIORITAS-1	Instrument Hook - Up Drawing	A3	3	Dwg
+						PRIORITAS-1	Instrument Layout		3	
+	122	WPP-IN-LAY-003				PRIORITAS-3	Instrument Cable Layout	A3		Dwg
+						PRIORITAS-1	Instrument F&G Layout		18	
+	123	WPP-IN-LAY-003					Instrument FGS Cable Layout	A3		Dwg
+			PPGJ-INS-LOG-50.001			PRIORITAS-2	Wiring & Connection Diagram			
+	124	WPP-IN-GWI-004					Wiring Diagram & Connection Diagram	A3		Dwg
+	B.6.4	Instrument Bill of Material								
+	125	WPP-PTG-IN-DMT-001					Instrument Bill of Material	A4		Doc
+										
+										
+										
+	131									
+										
+										
+										
+										
+										
+										
+										
+										
