@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition, ViewTransition } from 'react';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Check, ChevronRight, FileSpreadsheet, Plus, X } from 'lucide-react';
 
+import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { Button } from '@/components/ui/button';
+import { DURATION, EASE } from '@/components/motion/Reveal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -68,6 +71,7 @@ export function RegisterBuilder({
   numbering?: { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
   onClose?: () => void;
 }) {
+  const reduced = useReducedMotion();
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -236,7 +240,7 @@ export function RegisterBuilder({
   );
 
   const namesCard = !hasDocuments && (
-    <section className="rounded-xl border bg-card p-4 sm:p-5">
+    <section className="animate-enter rounded-xl border bg-card p-4 sm:p-5">
       <h2 className="text-sm font-semibold">Who are the two sides?</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Asked once. One submits, the other responds.
@@ -278,7 +282,8 @@ export function RegisterBuilder({
     const sections = bands.flatMap((b) => b.sections.map((s) => ({ band: b.name, section: s.name })));
 
     return (
-      <div className="animate-fade-in-up mx-auto flex max-w-2xl flex-col gap-5 pb-24">
+      <ViewTransition key="numbering" enter="page-enter" exit="page-exit" default="none">
+      <div className="mx-auto flex max-w-2xl flex-col gap-5 pb-24">
         {onClose && (
           <Button variant="ghost" className="h-11 w-fit px-2" onClick={onClose}>
             <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to the register
@@ -296,7 +301,7 @@ export function RegisterBuilder({
           </p>
         </header>
 
-        <section className="rounded-xl border bg-card p-4 sm:p-5">
+        <section className="animate-enter rounded-xl border bg-card p-4 sm:p-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="prefix">Project code</Label>
             <Input
@@ -344,7 +349,7 @@ export function RegisterBuilder({
           </div>
         </section>
 
-        <details className="rounded-xl border bg-card p-4 sm:p-5">
+        <details className="animate-enter stagger-1 rounded-xl border bg-card p-4 sm:p-5">
           <summary className="cursor-pointer text-sm font-semibold">
             Adjust the discipline codes
           </summary>
@@ -378,6 +383,7 @@ export function RegisterBuilder({
           </Button>
         </div>
       </div>
+      </ViewTransition>
     );
   }
 
@@ -419,7 +425,8 @@ export function RegisterBuilder({
     });
 
     return (
-      <div className="animate-fade-in-up mx-auto flex max-w-4xl flex-col gap-5 pb-28">
+      <ViewTransition key="section" enter="page-enter" exit="page-exit" default="none">
+      <div className="mx-auto flex max-w-4xl flex-col gap-5 pb-28">
         {fileField}
         <Button variant="ghost" className="h-11 w-fit px-2" onClick={() => setView({ name: 'sections' })}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> All sections
@@ -435,12 +442,18 @@ export function RegisterBuilder({
           </p>
         </header>
 
-        {groups.map((group) => {
+        {groups.map((group, groupIndex) => {
           const rows = rowsOf(group);
           const filled = rows.filter((r) => r.title.trim() !== '').length;
 
           return (
-            <section key={group} className="rounded-xl border bg-card p-4 sm:p-5">
+            <section
+              key={group}
+              className={cn(
+                'animate-enter rounded-xl border bg-card p-4 sm:p-5',
+                groupIndex < 8 && `stagger-${Math.min(groupIndex + 1, 8)}`,
+              )}
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">{group}</h2>
                 <span className="text-sm tabular-nums text-muted-foreground">
@@ -459,15 +472,22 @@ export function RegisterBuilder({
                     <span />
                   </div>
 
+                  <AnimatePresence initial={false}>
                   {rows.map((row, index) => (
                     // One row, two shapes. On a phone it is a card — number and
                     // kind on one line, title beneath — because four full-width
                     // fields in a column give no clue where one document ends
                     // and the next begins. On a wide screen the same elements
                     // sit in the four columns named above.
-                    <div
+                    <m.div
                       key={row.id}
-                      className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg border bg-background p-2 sm:grid-cols-[13rem_1fr_6.5rem_2.75rem] sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
+                      // A row is something the user just added or removed, so it
+                      // gets the interaction duration, not an arrival's.
+                      initial={reduced ? false : { opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: DURATION, ease: EASE }}
+                      className="grid grid-cols-[1fr_auto_auto] items-center gap-2 overflow-hidden rounded-lg border bg-background p-2 sm:grid-cols-[13rem_1fr_6.5rem_2.75rem] sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
                     >
                       <Input
                         className="h-11 font-mono text-xs sm:col-start-1 sm:row-start-1"
@@ -522,8 +542,9 @@ export function RegisterBuilder({
                       >
                         <X className="h-4 w-4" />
                       </Button>
-                    </div>
+                    </m.div>
                   ))}
+                  </AnimatePresence>
                 </div>
               )}
 
@@ -555,6 +576,7 @@ export function RegisterBuilder({
           </Button>
         </div>
       </div>
+      </ViewTransition>
     );
   }
 
@@ -565,7 +587,8 @@ export function RegisterBuilder({
     const ready = plan.counts.documents > 0 && named;
 
     return (
-      <div className="animate-fade-in-up mx-auto flex max-w-3xl flex-col gap-5 pb-24">
+      <ViewTransition key="paste" enter="page-enter" exit="page-exit" default="none">
+      <div className="mx-auto flex max-w-3xl flex-col gap-5 pb-24">
         {fileField}
         <Button
           variant="ghost" className="h-11 w-fit px-2"
@@ -668,13 +691,15 @@ export function RegisterBuilder({
           </Button>
         </div>
       </div>
+      </ViewTransition>
     );
   }
 
   /* ------------------------------------------------------ the section list */
 
   return (
-    <div className="animate-fade-in-up mx-auto flex max-w-3xl flex-col gap-5 pb-24">
+    <ViewTransition key="sections" enter="page-enter" exit="page-exit" default="none">
+    <div className="mx-auto flex max-w-3xl flex-col gap-5 pb-24">
       {fileField}
 
       {onClose && (
@@ -708,7 +733,7 @@ export function RegisterBuilder({
             {band.name}
           </p>
 
-          {band.sections.map((section) => {
+          {band.sections.map((section, sectionIndex) => {
             const n = countIn(band.name, section.name);
             return (
               <button
@@ -719,6 +744,10 @@ export function RegisterBuilder({
                 })}
                 className={cn(
                   'flex items-center gap-3 rounded-xl border bg-card px-4 py-3.5 text-left transition-colors duration-300 ease-ios hover:bg-muted/60',
+                  // The cascade stops at 8, as everywhere else: past that the
+                  // delay costs more than the arrival is worth.
+                  'animate-enter',
+                  sectionIndex < 8 && `stagger-${Math.min(sectionIndex + 1, 8)}`,
                   n > 0 && 'border-foreground/20',
                 )}
               >
@@ -778,8 +807,10 @@ export function RegisterBuilder({
 
       <div className="sticky bottom-0 -mx-3 mt-2 flex flex-wrap items-center gap-3 border-t bg-background/95 px-3 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:px-4">
         <span className="text-sm tabular-nums">
-          <span className="font-semibold">{totals.documents}</span> document
-          {totals.documents === 1 ? '' : 's'} in {totals.groups} group
+          <span className="font-semibold">
+            <AnimatedNumber value={totals.documents} decimals={0} />
+          </span>{' '}
+          document{totals.documents === 1 ? '' : 's'} in {totals.groups} group
           {totals.groups === 1 ? '' : 's'}
         </span>
         <Button
@@ -791,6 +822,7 @@ export function RegisterBuilder({
         </Button>
       </div>
     </div>
+    </ViewTransition>
   );
 }
 
