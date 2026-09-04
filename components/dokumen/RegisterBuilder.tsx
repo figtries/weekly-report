@@ -57,15 +57,21 @@ function documentsFrom(text: string): { docNo: string | null; title: string }[] 
 }
 
 export function RegisterBuilder({
-  projectId, register, clientName, contractorName, hasDocuments, existingSections, onClose,
+  projectId, register, clientName, contractorName, hasDocuments, existingSections = [], onClose,
 }: {
   projectId: string;
   register: RegisterKind;
   clientName: string;
   contractorName: string;
   hasDocuments: boolean;
-  /** Sections already in the register, so they appear beside the ready-made ones. */
-  existingSections: { band: string; section: string; groups: string[] }[];
+  /**
+   * Sections already in the register, so they appear beside the ready-made
+   * ones. Optional, and defaulted: a half-swapped dev bundle once rendered this
+   * component with the prop missing and the whole page died on a spread of
+   * undefined. A builder with no existing sections is a correct thing to show;
+   * a crash is not.
+   */
+  existingSections?: { band: string; section: string; groups: string[] }[];
   onClose?: () => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
