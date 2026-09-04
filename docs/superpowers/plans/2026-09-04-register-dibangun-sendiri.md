@@ -53,7 +53,7 @@ Fungsi murni yang mengubah teks menjadi rencana register. Tidak menyentuh databa
   export function parseRegisterPaste(text: string, override?: Partial<ColumnMapping>): PastePlan
   ```
 
-- [ ] **Step 1: Tulis uji yang gagal**
+- [x] **Step 1: Tulis uji yang gagal**
 
 Buat `scripts/verify-register-paste.ts`:
 
@@ -149,7 +149,7 @@ if (failures.length) {
 console.log('\nall checks passed');
 ```
 
-- [ ] **Step 2: Jalankan supaya gagal**
+- [x] **Step 2: Jalankan supaya gagal**
 
 ```bash
 node scripts/verify-register-paste.ts
@@ -157,7 +157,7 @@ node scripts/verify-register-paste.ts
 
 Expected: FAIL — `Cannot find module '../lib/register-paste.ts'`.
 
-- [ ] **Step 3: Tulis parsernya**
+- [x] **Step 3: Tulis parsernya**
 
 Buat `lib/register-paste.ts`:
 
@@ -408,7 +408,7 @@ export function parseRegisterPaste(text: string, override?: Partial<ColumnMappin
 }
 ```
 
-- [ ] **Step 4: Jalankan sampai lulus**
+- [x] **Step 4: Jalankan sampai lulus**
 
 ```bash
 node scripts/verify-register-paste.ts
@@ -418,7 +418,7 @@ Expected: PASS, semua baris `ok`, ditutup `all checks passed`.
 
 Kalau `kolom judul` meleset ke kolom lain, cetak dulu `plan.columns` dan lihat contoh isinya sebelum mengubah aturan tebakan — jangan mengubah angka di uji supaya cocok dengan hasil.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/register-paste.ts scripts/verify-register-paste.ts scripts/fixtures/petrogas-edl.tsv
