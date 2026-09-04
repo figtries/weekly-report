@@ -1,5 +1,5 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
+import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
@@ -32,11 +32,13 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
     const parties = getRegisterParties(PROJECT_ID);
     return (
       <RouteTransition id="dokumen-edl-summary">
-        <RegisterSeed
+        <RegisterBuilder
           projectId={PROJECT_ID}
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
+
+          hasDocuments={false}
         />
       </RouteTransition>
     );

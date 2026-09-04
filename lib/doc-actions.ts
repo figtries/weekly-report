@@ -330,38 +330,36 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
   }
 }
 
+export type ReadFileResult =
+  | { ok: true; text: string; sheet: string; sheets: string[] }
+  | { ok: false; error: string };
+
 /**
- * A workbook, read into the register.
+ * A workbook, read into the SAME text a paste produces — and nothing more.
  *
- * The file is turned into the same grid a paste produces (`lib/register-xlsx.ts`)
- * and handed to the same writer, so there is one set of rules about what a
- * category is and what a document is — not one for typing and another for
- * Excel.
- *
- * A number that is already here updates its row instead of adding a second one,
- * which is what makes importing next month's revision of the same list safe.
+ * It deliberately does not write. The first version wrote the moment a file was
+ * chosen, which meant picking the wrong file put another project's register
+ * into this one before anyone could see what was in it. Reading and writing are
+ * now two separate presses with the preview between them, exactly as pasting
+ * has always been: one path, one confirmation.
  */
-export async function importRegisterFile(form: FormData): Promise<ActionResult> {
+export async function readRegisterFile(form: FormData): Promise<ReadFileResult> {
   try {
     const file = form.get('file');
     if (!(file instanceof File)) throw new Error('No file was chosen');
     if (file.size === 0) throw new Error('That file is empty');
     if (file.size > 25 * 1024 * 1024) throw new Error('That file is larger than 25 MB');
 
-    const projectId = String(form.get('projectId') ?? '');
     const register = assertRegister(String(form.get('register') ?? ''));
-    const clientName = String(form.get('clientName') ?? '');
-    const contractorName = String(form.get('contractorName') ?? '');
-
     const grids = await readWorkbookGrids(Buffer.from(await file.arrayBuffer()));
     const sheet = pickRegisterSheet(grids, register);
     if (!sheet) throw new Error('That workbook has no sheets');
+    if (sheet.rows === 0) throw new Error(`The sheet "${sheet.name}" is empty`);
 
-    const written = writeSeed({ projectId, register, text: sheet.text, clientName, contractorName });
-    refreshRegister();
-    return { ok: true, changed: written.documents + written.updated };
+    return { ok: true, text: sheet.text, sheet: sheet.name, sheets: grids.map((g) => g.name) };
   } catch (err) {
-    return fail(err);
+    const message = err instanceof Error ? err.message : 'That file could not be read';
+    return { ok: false, error: message };
   }
 }
 

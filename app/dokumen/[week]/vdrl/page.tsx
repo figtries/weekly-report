@@ -1,5 +1,5 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
+import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
@@ -27,11 +27,13 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
     const parties = getRegisterParties(PROJECT_ID);
     return (
       <RouteTransition id="dokumen-vdrl-summary">
-        <RegisterSeed
+        <RegisterBuilder
           projectId={PROJECT_ID}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
+
+          hasDocuments={false}
         />
       </RouteTransition>
     );

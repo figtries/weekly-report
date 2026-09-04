@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { DocumentEditor } from './DocumentEditor';
 import { RegisterWorklist } from './RegisterWorklist';
 import { RegisterTools } from './RegisterTools';
-import { RegisterSeed } from './RegisterSeed';
+import { RegisterBuilder } from './RegisterBuilder';
 
 // The one overlay left: adding a document. It loads on demand.
 const AddDocumentDialog = dynamic(() => import('./AddDocumentDialog').then((m) => m.AddDocumentDialog));
@@ -263,23 +263,16 @@ export function RegisterWorkbench({
   // has gone looking at the worklist.
   const columnHidden = selected !== null || mobileWorklist;
 
-  const tools = (
-    <RegisterTools
-      projectId={projectId}
-      register={register}
-      clientName={clientName}
-      contractorName={contractorName}
-      onPaste={() => setBuilding(true)}
-    />
-  );
+  const tools = <RegisterTools register={register} onAdd={() => setBuilding(true)} />;
 
   if (building) {
     return (
-      <RegisterSeed
+      <RegisterBuilder
         projectId={projectId}
         register={register}
         clientName={clientName}
         contractorName={contractorName}
+        hasDocuments={totalDocuments > 0}
         onClose={() => setBuilding(false)}
       />
     );

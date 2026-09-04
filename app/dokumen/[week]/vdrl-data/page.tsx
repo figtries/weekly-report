@@ -1,5 +1,5 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { RegisterSeed } from '@/components/dokumen/RegisterSeed';
+import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import {
   getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
@@ -20,11 +20,13 @@ export default async function VdrlDataPage({ params }: { params: Promise<{ week:
   if (!summary) {
     return (
       <RouteTransition id="dokumen-vdrl-data">
-        <RegisterSeed
+        <RegisterBuilder
           projectId={PROJECT_ID}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
+
+          hasDocuments={false}
         />
       </RouteTransition>
     );
