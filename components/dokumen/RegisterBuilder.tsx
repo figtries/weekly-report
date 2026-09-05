@@ -15,6 +15,7 @@ import { parseRegisterPaste, type ColumnMapping } from '@/lib/register-paste';
 import {
   defaultRule, disciplineFor, nextNumber, type NumberingRule,
 } from '@/lib/register-numbering';
+import { outlineCode } from '@/lib/register-outline';
 import { templateFor, type TemplateBand } from '@/lib/register-template';
 import type { RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
@@ -94,12 +95,17 @@ export function RegisterBuilder({
 
   /** The ready-made shape, plus what this register already has, plus additions. */
   const bands = useMemo(() => {
-    const merged: TemplateBand[] = templateFor(register).map((b) => ({
+    // Its own type, not an intersection with TemplateBand: intersecting the
+    // two leaves `sections.find()` resolving to the template's element type,
+    // which has no `cleared` on it.
+    interface WorkingSection { name: string; groups: string[]; cleared?: boolean }
+    interface Working { name: string; sections: WorkingSection[] }
+    const merged: Working[] = templateFor(register).map((b) => ({
       name: b.name,
       sections: b.sections.map((s) => ({ ...s, groups: [...s.groups] })),
     }));
 
-    const findBand = (name: string) => {
+    const findBand = (name: string): Working => {
       let band = merged.find((b) => b.name.toLowerCase() === name.toLowerCase());
       if (!band) { band = { name, sections: [] }; merged.push(band); }
       return band;
@@ -112,10 +118,26 @@ export function RegisterBuilder({
       }))),
     ];
 
+    // A section the register already fills keeps ITS OWN groups and drops the
+    // ready-made ones. Merging both listed "General Procedure" beside "General
+    // Prosedur" — the same group twice, in two spellings — and the suggestion
+    // is worth nothing next to what the project actually calls things.
+    const filled = new Set(
+      existingSections.filter((r) => r.groups.length > 0)
+        .map((r) => `${r.band.toLowerCase()}|${r.section.toLowerCase()}`),
+    );
+
     for (const row of rows) {
       const band = findBand(row.band);
       let section = band.sections.find((s) => s.name.toLowerCase() === row.section.toLowerCase());
       if (!section) { section = { name: row.section, groups: [] }; band.sections.push(section); }
+      // No cleverness about which of the two spellings is better: a section
+      // the register already fills starts from empty and takes only its own.
+      if (filled.has(`${row.band.toLowerCase()}|${row.section.toLowerCase()}`)
+        && !section.cleared) {
+        section.groups = [];
+        section.cleared = true;
+      }
       for (const g of row.groups) {
         if (!section.groups.some((x) => x.toLowerCase() === g.toLowerCase())) section.groups.push(g);
       }
@@ -391,6 +413,13 @@ export function RegisterBuilder({
 
   if (view.name === 'section') {
     const groups = view.groups.length > 0 ? view.groups : [view.section];
+    // Where this section sits in the shape, so its code reads the same here as
+    // it will in the export and in any spreadsheet made from it.
+    const bandIndex = bands.findIndex((b) => b.name === view.band);
+    const sectionIndex = bands[bandIndex]?.sections.findIndex((x) => x.name === view.section) ?? -1;
+    const sectionCode = bandIndex >= 0 && sectionIndex >= 0
+      ? outlineCode([bandIndex + 1, sectionIndex + 1])
+      : '';
     const pathOf = (group: string) => (view.groups.length > 0
       ? `${view.band}${SEP}${view.section}${SEP}${group}`
       : `${view.band}${SEP}${view.section}`);
@@ -433,8 +462,13 @@ export function RegisterBuilder({
         </Button>
 
         <header>
-          <p className="text-xs font-semibold tracking-wide text-chart-1">{view.band}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{view.section}</h1>
+          <p className="text-xs font-semibold tracking-wide text-chart-1">
+            {outlineCode([bandIndex + 1])} · {view.band}
+          </p>
+          <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-2xl font-semibold tracking-tight">
+            {sectionCode && <span className="font-mono text-base text-muted-foreground">{sectionCode}</span>}
+            {view.section}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Type the title. The number is written for you and can be changed. Press Enter for
             the next one — or paste a whole list of titles into a title box and each line
@@ -455,7 +489,14 @@ export function RegisterBuilder({
               )}
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold">{group}</h2>
+                <h2 className="flex items-baseline gap-2 text-sm font-semibold">
+                  {sectionCode && view.groups.length > 0 && (
+                    <span className="font-mono text-xs font-normal text-muted-foreground">
+                      {`${sectionCode}.${groupIndex + 1}`}
+                    </span>
+                  )}
+                  {group}
+                </h2>
                 <span className="text-sm tabular-nums text-muted-foreground">
                   {filled} document{filled === 1 ? '' : 's'}
                 </span>
@@ -727,9 +768,14 @@ export function RegisterBuilder({
 
       {namesCard}
 
-      {bands.map((band) => (
+      {bands.map((band, bandIndex) => (
         <section key={band.name} className="flex flex-col gap-2">
-          <p className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          {/* The outline code is shown, not hidden, because it IS the register's
+              structure: `B` a heading, `B.1` a section, `B.1.1` a group. The
+              same codes come out of the export and go back in through an
+              import, so what someone builds here is what a spreadsheet shows. */}
+          <p className="flex items-baseline gap-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <span className="font-mono normal-case text-foreground">{outlineCode([bandIndex + 1])}</span>
             {band.name}
           </p>
 
@@ -753,6 +799,9 @@ export function RegisterBuilder({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {outlineCode([bandIndex + 1, sectionIndex + 1])}
+                    </span>
                     <p className="text-sm font-medium">{section.name}</p>
                     <span className="font-mono text-xs text-muted-foreground">
                       {rule.prefix || 'PROJECT'}-{disciplineFor(section.name, rule)}-…
@@ -760,7 +809,7 @@ export function RegisterBuilder({
                   </div>
                   {section.groups.length > 0 && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {section.groups.join(' · ')}
+                      {section.groups.map((g, i) => `${outlineCode([bandIndex + 1, sectionIndex + 1, i + 1])} ${g}`).join(' · ')}
                     </p>
                   )}
                 </div>
@@ -785,6 +834,12 @@ export function RegisterBuilder({
           />
         </section>
       ))}
+
+      <AddNameCard
+        label="Add a heading"
+        placeholder="e.g. CONSTRUCTION"
+        onAdd={(name) => setExtraBands((soFar) => [...soFar, { name, sections: [] }])}
+      />
 
       <div className="flex flex-wrap gap-x-5 gap-y-2 px-1 text-sm text-muted-foreground">
         <button

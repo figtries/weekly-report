@@ -39,6 +39,7 @@ import {
 } from './register-shared';
 import type { DocStage, RegisterKind } from './schema';
 import { detectPrefix, type NumberingRule } from './register-numbering';
+import { outlineCode } from './register-outline';
 
 export * from './register-shared';
 
@@ -394,9 +395,8 @@ export function getRegisterExportRows(projectId: string, register: RegisterKind)
   const walk = (nodes: CategoryRow[], path: number[]) => {
     nodes.forEach((category, index) => {
       const here = [...path, index + 1];
-      const [first, ...rest] = here;
       out.push({
-        no: [String.fromCharCode(64 + first), ...rest.map(String)].join('.'),
+        no: outlineCode(here),
         // The name sits in the number column exactly as Gundih's and Petrogas'
         // own sheets write it — first filled cell right of the outline code.
         docNo: category.name,

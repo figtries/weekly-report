@@ -145,6 +145,10 @@ function fromGrid(rows: RawRow[], m: ColumnMapping): Build {
       // sheet EDL itu kolom yang sama dengan nomor dokumen.
       const name = row.cells.slice(m.outline! + 1).find((c) => c !== '') ?? '';
       if (!name) { problems.push({ line: row.line, message: 'Category has no name' }); continue; }
+      // THE RULE, and there is no other: the number of parts in the outline
+      // code IS the depth. `B` is a heading, `B.1` a section, `B.1.1` a
+      // group, and a plain running number below them is a document. See
+      // `lib/register-outline.ts` — the export writes the same shape back.
       const depth = key.split('.').length;
       const category: PasteCategory = { name, depth, documents: [] };
       stack.length = Math.min(stack.length, depth - 1);
