@@ -100,7 +100,20 @@ repo dan hanya ditegakkan di sini.
     dibangun.** Itu setengah kerumitan MS Project dan nyaris tidak dipakai di
     proyek EPC seukuran ini.
 
-## Delapan keputusan
+## Pembagian yang menjelaskan seluruh spec ini
+
+Kalimat penggunanya, 5 September 2026, dan ia lebih tajam daripada apa pun yang
+ditulis sebelumnya di dokumen ini:
+
+> *"planing itu kan rencana kita, pasti di projects ini kita planing kan. nah di
+> data overall baru kita input yg actual."*
+
+**Projects adalah tempat merencanakan. Data Overall adalah tempat memasukkan
+kenyataan.** Sheet di layar ini tidak pernah menerima satu angka progress pun —
+ia menerima pekerjaan, durasi, tanggal dan harga. Itu juga yang menjawab kenapa
+kolom di sheet ada enam dan bukan tujuh: kolom progress tidak berada di sini.
+
+## Dua belas keputusan
 
 Disetujui pengguna satu per satu, 5 September 2026.
 
@@ -202,6 +215,62 @@ login "per orang" belum berarti apa-apa), dan **id proyek pada semua rute**
 (`/p/[id]/weekly/…` — paling benar dan paling ramah cache, tapi mengganti nama
 tiap rute di aplikasi). Menaruh bacaannya di satu fungsi membuat perpindahan itu,
 kalau nanti diambil, menyentuh satu berkas dan bukan empat puluh halaman.
+
+**9. Sheet mengedit rencana AKTIF; yang Kontraktual tidak bisa disentuh dari
+sini.** Keduanya rencana — bedanya siapa yang boleh mengubah. Kontraktual adalah
+yang ditandatangani di kontrak, beku, dan ia bahan pembuktian perpanjangan waktu;
+sebuah garis klaim yang bisa diedit dari layar penyuntingan tidak bernilai apa
+pun. Aktif adalah revisi terakhir yang disepakati, dan itulah yang dipakai
+bekerja.
+
+Di Gundih keduanya hampir identik — **satu baris dari 285** yang berbeda,
+`1.4.4.4 Overhaul Centaur 40 at NTP`: Kontraktual 3 Agu → 30 Okt 2026, Aktif
+18 Jun → 30 Okt 2026, dimajukan 46 hari dengan tanggal selesai yang sama. Kecil,
+tapi persis jenis perbedaan yang jadi isi berkas klaim.
+
+Tidak ada sakelar Kontraktual/Aktif di layar ini. Melihat keduanya berdampingan,
+dan memindahkan Aktif menjadi Kontraktual baru ketika klien menyetujui revisi,
+adalah papan 18.
+
+**10. Sheet menyimpan sendiri, dan punya Undo.** Sel yang diubah tersimpan
+~1 detik setelah orang berhenti mengetik — pola yang sudah dipakai Data Overall
+(autosave 1200ms, lihat `AGENTS.md`), dan satu layar yang berperilaku beda
+sendiri justru yang membuat orang kehilangan pekerjaannya, karena kebiasaan dari
+layar sebelah terbawa ke sini. Kegagalan menyimpan menandai barisnya, tidak
+melempar dialog — dialog yang gagal berulang akan berputar selamanya.
+
+Undo wajib, bukan tambahan: keputusan 6 membuat satu tindakan menyentuh puluhan
+baris sekaligus, dan tanpa undo satu-satunya jalan pulang adalah menyunting
+puluhan baris lagi.
+
+**11. Kelima kotak angka di kepala halaman dibuang.** `Projects` · `Contract
+value` · `Earned so far` · `Deferred` · `Reports held` — kelimanya analitik
+lintas-proyek, tiga di antaranya sedang menampilkan "—". Jumlah kartu di layar
+sudah mengatakan ada berapa proyek.
+
+**12. Wizard `/setup` hilang dari layar; sheet ini penggantinya.** Tab Setup
+dihapus dan `/setup` tidak ditautkan dari mana pun. Sheet mengerjakan WBS, harga
+dan jadwal sekaligus di satu tempat alih-alih lima langkah. Kodenya
+(`SetupWizard.tsx` 668 baris, `PlanCurvePreview.tsx` 120 baris) **dibiarkan dulu,
+belum dihapus** — kalau ternyata ada yang belum tercakup, ia masih bisa dibaca.
+Menghapusnya adalah pekerjaan terpisah setelah sheet terbukti.
+
+Yang ditolak: menyimpannya sebagai tautan cadangan dari halaman proyek. Dua jalan
+untuk pekerjaan yang sama, dan yang satu menulis ke `db.json` sementara yang lain
+ke SQLite — itu cara tercepat membuat dua tempat menyimpan angka yang berbeda.
+
+## Keputusan kecil yang diambil sendiri
+
+Dinyatakan supaya bisa dibantah, bukan supaya dianggap final.
+
+| | |
+|---|---|
+| Sisip/hapus baris di tengah | kode `#` di bawahnya dinomori ulang otomatis — kode itu hasil, bukan ketikan |
+| Memindahkan baris | tarik pegangan di kiri baris, atau `Alt+↑/↓` |
+| Membuat induk | sebuah baris menjadi induk ketika baris di bawahnya di-indent, persis MS Project |
+| Tombol Milestone | di menu `⋯` baris, bukan kolom sendiri — kolom ketujuh yang kosong 95% waktu adalah pemborosan lebar |
+| Warna batang Gantt | abu-abu gelap netral. Biru dan merah sudah punya arti tetap (aktual vs rencana); memakainya di planner, yang belum punya aktual, merusak arti itu ketika laporan mingguan tersambung |
+| Baris yang melewati tanggal selesai proyek | batangnya ditandai, tidak diblokir — jadwal boleh salah dulu, orang yang membetulkan |
 
 ## Bentuk layar
 
