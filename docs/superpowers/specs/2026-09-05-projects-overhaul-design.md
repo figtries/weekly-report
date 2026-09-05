@@ -141,11 +141,19 @@ Yang ditolak: kartu berisi persentase progress — proyek yang baru dibuat tampi
 0% dan terlihat rusak padahal hanya kosong, dan itu persis cacat yang membuat
 draf pertama ditolak.
 
-**3. Membuat proyek adalah dialog tiga isian, lalu langsung masuk sheet.** Nama
-· Klien · Tanggal mulai. Tidak lebih. Tanggal mulai diminta karena baris pertama
-harus punya tempat mendarat di kalender. **Tanggal selesai proyek tidak
-diminta** — ia dihitung dari pekerjaan terjauh, dan itu pembalikan yang disengaja
-terhadap cara orang biasa mengisi formulir.
+**3. Membuat proyek adalah dialog empat isian, lalu langsung masuk sheet.** Nama
+· Klien · Tanggal mulai · Tanggal selesai. Tidak lebih.
+
+Tanggal selesai diminta — dan itu koreksi terhadap draf sebelumnya, yang
+menghitungnya dari pekerjaan terjauh. Alasannya praktis, dari penggunanya:
+*"biar enak pas bikin."* Yang dibelinya nyata: Gantt punya bentangan sejak baris
+pertama diketik alih-alih tumbuh dari nol, baris-baris `weeks` bisa langsung
+dibangkitkan, dan setiap pekerjaan yang melewati tanggal selesai proyek bisa
+ditandai saat itu juga.
+
+Yang dihitung sekarang bukan tanggal selesainya, melainkan **selisihnya**:
+"pekerjaan terjauh selesai 24 Mei, target kontrak 14 Mei — lewat 10 hari." Itu
+kalimat yang berguna; sebuah tanggal yang muncul sendiri tanpa pembanding tidak.
 
 **4. Sheet-nya enam kolom, plus satu yang muncul belakangan.**
 
@@ -206,7 +214,8 @@ mustahil di atasnya. Tanggal hanya ada di `node_schedules` (570 baris).
 Ikutannya: penunjuk proyek aktif pindah ke tabel baru `app_state` dan dibaca
 lewat satu fungsi `getActiveProjectId()`; `PROJECT_ID = 'gundih'` yang ditulis
 tangan di empat berkas dicabut, sehingga **Document Control ikut berpindah
-proyek** — itu cacat yang tayang hari ini.
+proyek** — itu cacat yang tayang hari ini. Empat tujuan lainnya menyusul lewat
+penerjemah; lihat bagian "Seluruh aplikasi ikut berpindah proyek".
 
 Yang ditolak, dengan alasannya: **cookie per-browser** (bacaan dinamis; di bawah
 `cacheComponents: true` ia memaksa `<Suspense>` mengelilingi setiap bacaan di
@@ -290,6 +299,14 @@ legacyJsonId: text('legacy_json_id'),  // SEMENTARA — mati saat papan 08-14 se
 
 // wbs_nodes bertambah satu
 isMilestone: integer('is_milestone', { mode: 'boolean' }).notNull().default(false),
+
+// projects juga menampung kepala laporan yang dituntut ProjectInfo — lubang 2
+// yang ditemukan spike. Semuanya teks, semuanya nullable.
+workLocation:     text('work_location'),
+documentNoWeekly: text('document_no_weekly'),
+documentNoDaily:  text('document_no_daily'),
+signatureLeft:    text('signature_left'),   // JSON {company,name}
+signatureRight:   text('signature_right'),
 ```
 
 `isMilestone` dibutuhkan karena keputusan 3: milestone adalah sifat baris, bukan
@@ -306,17 +323,83 @@ Backfill sekali jalan: `gundih.legacy_json_id = 'p-utama'` dan
 WBS, 0 minggu, sisa uji coba) **tidak dibawa**; datanya tetap utuh di sana, ia
 hanya tidak ikut pindah.
 
-## Halaman lama selama masa transisi
+## Seluruh aplikasi ikut berpindah proyek — lewat satu penerjemah
 
-Dashboard, Weekly, Daily dan Klaim membaca `readDb()` → proyek aktif di
-`db.json`. Mereka tidak tahu ada penunjuk baru. Kalau dibiarkan, membuka proyek
-baru akan membuat halaman-halaman itu **tetap menampilkan angka Gundih** di bawah
-sidebar yang menyebut proyek lain — bencana yang paling aplikasi ini takutkan.
+Ini yang diminta pengguna, dan kalimatnya menentukan bentuk seluruh bagian ini:
+proyek dibuat di Projects, lalu **Dashboard, Weekly Progress (beserta Data
+Overall), Daily, Reports dan Document Control semuanya membaca proyek itu.**
+Ganti proyek, kelimanya ikut pindah.
 
-Mereka membaca `legacy_json_id`: ada isinya berarti aman, `null` berarti
-tampilkan satu panel — *"Proyek [X] belum punya laporan mingguan"* — dengan dua
-tombol nyata: **Buka jadwalnya** dan **Kembali ke Gundih**. Bukan halaman rusak,
-bukan angka orang lain, bukan spanduk peringatan di atas angka yang salah.
+Halangannya: dari kelima itu hanya Document Control yang sudah di SQLite. Empat
+sisanya membaca `db.json` — **24 berkas**, 21 di antaranya halaman atau layout,
+di atas **2.561 baris** lib yang berbicara dalam bentuk data lama (`analysis`
+1015 · `mutations` 500 · `actions` 300 · `rollup` 289 · `types` 287 · `progress`
+124 · `scurve` 46).
+
+**Penyelesaiannya satu fungsi, bukan dua puluh satu halaman.** Sebuah penerjemah
+menyusun bentuk `Database` yang lama dari SQLite untuk proyek mana pun. Setiap
+halaman dan setiap baris lib itu berjalan apa adanya — mereka tidak perlu tahu
+datanya sekarang datang dari mana. `readDb()` yang memanggilnya, jadi titik
+sentuhnya satu.
+
+### Ini sudah dibuktikan, bukan diperkirakan
+
+Sebuah spike menyusun `wbsItems` dan `weeks[].leafData` dari SQLite, lalu
+menjalankannya lewat `computeRollup` + `promoteNestedSpkContracts` +
+`computeGrandTotal` — mesin yang sama persis yang dipakai halaman-halaman itu:
+
+```
+W43 lewat penerjemah        tercatat benar di AGENTS.md
+aktual        80,0365   →   80,04     cocok
+target        75,3686   →   75,37     cocok
+deviasi       +4,6678   →   +4,67     cocok
+bobot        100,0000   →   100,000   cocok
+285 baris WBS · 60 minggu, keduanya utuh
+```
+
+### Dan penerjemah ini memperbaiki angka yang sedang tayang
+
+Perbandingan yang sama terhadap `db.json` meleset jauh — dan yang keliru adalah
+`db.json`:
+
+```
+minggu    SQLite    db.json
+    30    60,6358   60,2570
+    36    68,1985   70,1389   ← yang tampil di aplikasi hari ini
+    37    68,5129   67,1913   ← TURUN dari 70,14; progress mundur
+    43    80,0365   67,1913   ← beku tujuh minggu
+```
+
+`db.json` berhenti di minggu 36 dan ekornya tidak koheren: minggu 37 lebih kecil
+daripada minggu 36. Itu mustahil, ia sudah ada di sana sekarang, dan ia hilang
+sendiri begitu Gundih dibaca lewat penerjemah.
+
+### Empat lubang yang ditemukan spike, dan penambalannya
+
+1. **`progressMethod: 'linked'` tidak ada di bentuk lama.** Dipetakan ke
+   `lumpsum` — benar secara makna: angkanya sudah dihitung register dokumen, dan
+   bentuk lama memang tinggal membacanya.
+2. **`ProjectInfo` menuntut kolom yang tidak dipunyai `projects`** —
+   `workLocation`, `documentNoWeekly`, `documentNoDaily`, `signatureLeft`,
+   `signatureRight`, `weekAnchorEndDate`. Semuanya teks kepala laporan.
+   Ditambahkan sebagai kolom nullable; `weekAnchorEndDate` diturunkan dari
+   `weeks` kalau kosong.
+3. **`daily`, `catalogs` dan `photoMeta` belum punya tabel di SQLite.** Diambil
+   dari kembaran JSON lewat `legacy_json_id` selama ada, dan **kosong** untuk
+   proyek baru — yang memang jawaban benar buat proyek yang belum pernah punya
+   laporan harian. Ini utang yang jatuh tempo di papan 14.
+4. **`targetWF` harus diturunkan per leaf per minggu.** Versi spike memanggil
+   `planCurve` di dalam perulangan, yang O(n²); yang asli menghitung deret tiap
+   leaf sekali lalu membacanya per minggu.
+
+### Utangnya disebut terang-terangan
+
+Penerjemah adalah lapisan yang bisa berbohong: kalau ia salah sedikit, setiap
+halaman salah sedikit. Karena itu ia dijaga oleh satu uji yang keras —
+angka Gundih lewat penerjemah harus tetap 80,0365 / 75,3686 / 100,0000 — dan ia
+**dirancang untuk mati**. Halaman dipindahkan ke SQLite satu per satu di papan
+08–14; ketika yang terakhir pindah, penerjemah dan `legacy_json_id` dihapus
+bersama-sama.
 
 ## Urutan membangun
 
@@ -326,14 +409,17 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
 1. **Fondasi** — `app_state`, `getActiveProjectId()`, empat `PROJECT_ID` dicabut,
    `/portfolio` dialihkan ke `/projects`. Titik berhenti: Document Control ikut
    berpindah proyek.
-2. **Layar pertama** — `/projects`, kartu + mini-Gantt, cari, arsip, dialog
+2. **Penerjemah** — satu fungsi, dipanggil `readDb()`, dijaga uji 80,0365 /
+   75,3686 / 100,0000. Titik berhenti: kelima tujuan ikut berpindah proyek, dan
+   ekor `db.json` yang tidak koheren di minggu 37+ hilang dengan sendirinya.
+3. **Layar pertama** — `/projects`, kartu + mini-Gantt, cari, arsip, dialog
    proyek baru. Titik berhenti: proyek bisa dibuat dan dilihat.
-3. **Sheet** — enam kolom, tiga rupa baris, Tab/Shift+Tab, segitiga
+4. **Sheet** — enam kolom, tiga rupa baris, Tab/Shift+Tab, segitiga
    durasi/mulai/selesai. Titik berhenti: Samberah 47 baris bisa diketik utuh.
-4. **Gantt** — batang sebaris dengan barisnya, pemisah yang bisa ditarik, tab di
+5. **Gantt** — batang sebaris dengan barisnya, pemisah yang bisa ditarik, tab di
    ponsel. Titik berhenti: Gundih 285 baris tergambar.
-5. **Tempel dari Excel.** Titik berhenti: 285 baris masuk sekali duduk.
-6. **Penebak rantai + pratinjau pergeseran.** Titik berhenti: keputusan 5 dan 6
+6. **Tempel dari Excel.** Titik berhenti: 285 baris masuk sekali duduk.
+7. **Penebak rantai + pratinjau pergeseran.** Titik berhenti: keputusan 5 dan 6
    berjalan.
 
 ## Yang TIDAK dibangun
@@ -349,8 +435,12 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
   perbaikan.
 - **Wizard `/setup` tidak ditulis ulang.** Ia dibiarkan utuh dan masih menulis ke
   `db.json`; ia berhenti jadi tab tingkat atas. Penggantinya adalah sheet ini.
-- **Halaman v1 tidak dipindahkan ke SQLite.** Mereka hanya mendapat panel di
-  bagian sebelumnya.
+- **Halaman v1 tidak ditulis ulang di atas SQLite.** Mereka tetap membaca bentuk
+  data lama; yang berubah cuma dari mana bentuk itu datang. Menulis ulangnya
+  adalah papan 08–14, dan itulah yang nanti membunuh penerjemah.
+- **Tabel `daily`, `catalogs` dan `photoMeta` tidak dibuat di SQLite.** Selama
+  belum ada, keduanya diambil dari kembaran JSON dan kosong untuk proyek baru.
+  Jatuh tempo di papan 14.
 
 ## Verifikasi
 
@@ -364,18 +454,28 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
 3. **Samberah diketik ulang utuh** — 47 baris, empat tingkat, tiga milestone —
    dan durasi yang keluar cocok dengan PDF-nya pada kedelapan baris yang sudah
    diverifikasi di atas.
-4. **Angka Gundih tidak bergerak**: W43 tetap aktual 80,04% / rencana 75,37%,
-   bobot tetap tutup di 100,000000.
+4. **Penerjemah dijaga sebuah uji tetap** (`scripts/verify-adapter.ts`, dijalankan
+   `node --import ./scripts/ts-resolve.mjs`): Gundih lewat penerjemah, masuk
+   `computeRollup` + `promoteNestedSpkContracts` + `computeGrandTotal`, harus
+   keluar **80,0365 aktual · 75,3686 target · +4,6678 deviasi · 100,0000 bobot**
+   pada W43, dengan 285 baris dan 60 minggu utuh. Ini pagar terpenting seluruh
+   pekerjaan: penerjemah yang meleset sedikit membuat setiap halaman meleset
+   sedikit, diam-diam.
 5. **Gambar, bukan teks** — `scripts/shoot.mjs` pada `/projects`,
-   `/projects/gundih` (sheet + Gantt), dialog proyek baru, dan panel transisi;
-   desktop dan 390px; lalu benar-benar dilihat. Browser pane di lingkungan ini
-   tidak pernah melakukan komposit, jadi `computer{action:"screenshot"}` selalu
-   gagal.
-6. **Berpindah proyek benar-benar memindahkan Document Control** — jadikan proyek
-   kedua aktif, buka `/dokumen`, pastikan yang muncul register proyek itu (atau
-   `EmptyRegister`-nya), bukan 454 dokumen Gundih.
+   `/projects/gundih` (sheet + Gantt), dialog proyek baru, dan Dashboard proyek
+   baru; desktop dan 390px; lalu benar-benar dilihat. Browser pane di lingkungan
+   ini tidak pernah melakukan komposit, jadi `computer{action:"screenshot"}`
+   selalu gagal.
+6. **Kelima tujuan benar-benar ikut berpindah** — jadikan proyek kedua aktif,
+   lalu buka Dashboard, Weekly Progress, Daily, Reports dan Document Control satu
+   per satu. Kelimanya harus menunjukkan proyek itu (atau keadaan kosongnya),
+   tidak satu pun boleh menampilkan angka atau dokumen Gundih.
 7. **Menghapus proyek aktif tidak mengosongkan aplikasi** — penunjuknya jatuh ke
    proyek berikutnya.
+8. **Angka Gundih di layar naik, bukan bergerak liar.** Sebelum: minggu 36
+   berbunyi 70,14% lalu minggu 37 turun ke 67,19%. Sesudah: deret naik monoton
+   sampai 80,04% di minggu 43. Perubahan ini disengaja — catat, jangan
+   diperlakukan sebagai regresi.
 
 ## Dokumen yang ikut diperbarui — setelah spec ini disetujui
 
