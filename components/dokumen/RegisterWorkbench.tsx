@@ -336,7 +336,7 @@ export function RegisterWorkbench({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-tight">
-            {register === 'edl' ? 'Engineering Deliverable List' : 'Vendor Deliverable Register'}
+            {register === 'edl' ? 'Engineering Drawing List' : 'Vendor Drawing Register List'}
           </p>
           <p className="text-xs tabular-nums text-muted-foreground">
             {totalDocuments} document{totalDocuments === 1 ? '' : 's'} · week {weekNo}

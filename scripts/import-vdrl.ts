@@ -1,5 +1,5 @@
 /**
- * Loads the Vendor Deliverable Register List into the v2 database.
+ * Loads the Vendor Drawing Register List into the v2 database.
  *
  * Same tables as the EDL, told apart by `register: 'vdrl'` — one engine, one
  * write path, one log. Scoped deletes throughout, so running this never

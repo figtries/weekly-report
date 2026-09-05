@@ -1,5 +1,5 @@
 /**
- * Reads the Vendor Deliverable Register List into plain data.
+ * Reads the Vendor Drawing Register List into plain data.
  *
  * Same chain as the EDL — IFR → RE-IFR → IFA → RE-IFA → AFC → RE-AFC1/2 →
  * AS-BUILT, each with plan, submission, transmittal both ways and a return

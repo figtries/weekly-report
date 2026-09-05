@@ -142,8 +142,8 @@ export function RegisterBuilder({
   const named = client.trim() !== '' && contractor.trim() !== '';
   const label = register === 'edl' ? 'EDL' : 'VDRL';
   const longLabel = register === 'edl'
-    ? 'Engineering Deliverable List'
-    : 'Vendor Deliverable Register';
+    ? 'Engineering Drawing List'
+    : 'Vendor Drawing Register List';
 
   /* --------------------------------------------------------- numbering */
 

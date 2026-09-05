@@ -968,7 +968,7 @@ export function RegisterSeed({
   const plan = useMemo(() => parseRegisterPaste(text, override), [text, override]);
   const wide = plan.mapping.outline !== null;
   const ready = plan.counts.documents > 0 && client.trim() !== '' && contractor.trim() !== '';
-  const label = register === 'edl' ? 'Engineering Deliverable List' : 'Vendor Deliverable Register';
+  const label = register === 'edl' ? 'Engineering Drawing List' : 'Vendor Drawing Register List';
 
   const submit = () => {
     setError(null);

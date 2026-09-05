@@ -1,5 +1,5 @@
 /**
- * Loads the Engineering Deliverable List into the v2 database.
+ * Loads the Engineering Drawing List into the v2 database.
  *
  * Runs after `import-gundih.ts`, because the register hangs off the project
  * that script creates.

@@ -1,5 +1,5 @@
 /**
- * Reads the Engineering Deliverable List into plain data.
+ * Reads the Engineering Drawing List into plain data.
  *
  * The register is the second progress engine, and it runs on the same
  * arithmetic as the physical WBS: a weight, then stage weights, then a
