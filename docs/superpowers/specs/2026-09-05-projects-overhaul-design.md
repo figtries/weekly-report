@@ -1,301 +1,282 @@
-# Projects sebagai tumpuan pertama — desain
+# Projects — desain
 
-Tanggal: 5 September 2026 · Cabang: `v2-foundation` · Papan nomor 16 (irisan A)
+Tanggal: 5 September 2026 · Cabang: `v2-foundation` · Papan 16 + 17
 
-## Tujuan
+## Draf pertama ditolak — ini alasannya, supaya tidak diulang
 
-Projects harus jadi tempat pertama yang orang buka: menyimpan proyek, memilih
-salah satunya, dan membuat yang baru. Hari ini tidak satu pun dari ketiganya
-berjalan benar.
+Draf pertama hari ini merancang `/projects` sebagai daftar proyek dengan dua
+tampilan: Kartu dan **Angka** — tabel lintas-proyek berisi Rencana · Aktual ·
+Deviasi · Tertunda · Perkiraan selesai · Status. Ditolak penggunanya dengan
+kalimat yang tepat sasaran: *"kek beda bgt, portofolio la apa la, g usah."*
 
-`/portfolio` bukan tempat mengurus proyek — ia laporan **tentang** proyek. Tabel
-uang sembilan kolom untuk dibaca direksi, dengan tombol Switch dan Delete
-dijejalkan ke satu sel yang menempel di tepi kanan, dan Setup sebagai tab
-tetangga seolah ia tempat sejajar. Tidak ada arsip, tidak ada pencarian, tidak
-ada duplikat, tidak ada tanda kapan sebuah proyek terakhir disentuh, dan tidak
-ada satu halaman pun yang menjawab "proyek ini isinya apa".
+Ia benar. Tabel itu warisan `/portfolio`, dan `/portfolio` adalah laporan
+**tentang** proyek. Model mentalnya bukan itu. Model mentalnya **Microsoft
+Project**: layar pertama berisi proyek-proyekmu, ada tombol tambah, dan
+proyeknya **dibangun di situ juga**. Tidak ada dasbor portofolio di MS Project,
+dan tidak ada di sini.
 
-Dan memilih proyek hanya memindahkan setengah aplikasi: `PROJECT_ID = 'gundih'`
-ditulis tangan di empat berkas, jadi Document Control tetap menampilkan Gundih
-apa pun yang dipilih.
+Konsekuensinya: analitik lintas-proyek dibuang seluruhnya dari pekerjaan ini,
+dan papan 16 (project management) bergabung dengan papan 17 (planner) — karena
+"tambah proyek lalu bangun proyeknya di situ" **adalah** planner. Pagar
+pekerjaannya digeser, bukan dihapus; lihat bagian terakhir.
 
-Yang dibangun di irisan A: halaman daftar yang benar, halaman rumah per proyek,
-alur membuat proyek yang menghasilkan proyek hidup, dan satu penunjuk proyek
-aktif yang diikuti seluruh aplikasi.
+## Data acuan kedua: Samberah
 
-## Konsepnya: Microsoft Project, dikurangi yang jelek
+`Jasa Pengadaan Instrument dan Control System PHSS Unit C-4500 Samberah
+REV1.pdf` — dibaca 5 September 2026. Diberikan pengguna sebagai **gambaran,
+bukan barang yang harus dibangun**.
 
-Ditetapkan bersama pengguna 5 September 2026. Yang membuat MS Project kuat
-adalah gagasannya — pekerjaan punya urutan, dan urutan itu yang menentukan kapan
-proyek selesai. Yang membuatnya dibenci adalah tiga hal spesifik, dan ketiganya
-bisa dibuang:
+Ia **ekspor Microsoft Project asli**: legenda di kaki halaman memuat daftar tipe
+task MS Project lengkap — Task, Split, Milestone, Summary, Project Summary,
+External Tasks, External Milestone, Inactive Task, Inactive Summary, Inactive
+Milestone, Manual Task, Duration-only, Manual Summary Rollup, Manual Summary,
+Start-only, Finish-only, Critical, Critical Split, Deadline, Progress, Manual
+Progress. Ini rujukan yang lebih jujur daripada Gundih untuk pekerjaan ini,
+justru karena ia keluar dari alat yang sedang kita tiru.
 
-1. **Semua tautan harus digambar tangan lebih dulu**, dan sebelum itu selesai ia
-   tidak memberi apa-apa. Dibalik: **aplikasi yang menebak, orang yang
-   mengiyakan.** Datanya sudah bercerita — di Gundih `1.3.1.2.1.3.2` PO Unprice
-   selesai 11 Jan 2026 dan `1.3.1.2.1.3.3` Manufacturing Process mulai 12 Jan,
-   satu induk, menempel persis. Rantai itu sudah ada di kepala orang yang
-   menyusun jadwal; ia hanya tidak pernah dituliskan sebagai hubungan.
-   Pertanyaannya berbentuk kalimat: *"Manufacturing Process sepertinya menunggu
-   PO Unprice. Betul?"* → Iya / Bukan.
-2. **Pergeseran terjadi diam-diam** dan tidak ada yang tahu apa yang barusan
-   berubah. Dibalik: **tidak ada yang berjalan sebelum akibatnya dilihat.**
-   "6 pekerjaan ikut mundur. Selesai proyek 15 Des → 24 Des." Terapkan atau
-   batal.
-3. **Tampilannya spreadsheet berisi baris kecil-kecil.** Ini sudah jadi aturan di
-   repo ini: ringkasan dulu, baru turun ke detail.
+Yang ditemukan:
 
-**Keputusan 15 pada papan v2 — "Planner has NO dependencies" — dicabut.** Ia
-dikunci 27 Agustus 2026 dengan alasan jadwal Gundih tidak memakai satu pun relasi
-FS/SS. Alasan itu masih benar sebagai pembacaan data, tapi kesimpulannya salah:
-relasi itu tidak ada **sebagai kolom**, ia ada **sebagai tanggal yang menempel**.
-Mesin dependency-nya sendiri adalah irisan C, bukan pekerjaan ini — yang dicabut
-sekarang adalah larangannya, supaya sesi lain tidak membangun di atas aturan yang
-sudah mati. `AGENTS.md`, memori blueprint, dan artefak rencana diperbarui
-**setelah spec ini disetujui** — bukan bersama commit ini, supaya aturan repo
-tidak terlanjur berubah kalau desainnya masih direvisi.
+- **Sheet-nya lima kolom**: `ID · Task Name · Duration · Start · Finish`. Tidak
+  ada bobot, tidak ada harga, tidak ada persen. Itu seluruh papan tulisnya.
+- **47 baris, outline empat tingkat**: `1` → `1.1` → `1.1.1` → `1.1.1.1`.
+  Bandingkan Gundih: 285 baris, 218 leaf, 67 cabang.
+- **Durasi adalah hari kalender, kedua ujung ikut dihitung.** Diverifikasi
+  aritmatis pada delapan baris, delapan-delapannya cocok:
 
-## Keadaan hari ini — dibaca 5 September 2026
+  ```
+  1        502 days → 502    1.1.1.3   30 days →  30
+  1.1      449 days → 449    1.1.2.2  120 day  → 120
+  1.1.1    330 day  → 330    1.1.2.3    7 days →   7
+  1.1.1.2  10 mons  → 300    1.3.2.1    6 days →   6
+  ```
 
-### Dua penyimpanan berjalan berdampingan, dan Gundih ada di dua-duanya
+  Itu persis rumus `inclusiveDays()` yang **sudah ada** di
+  `lib/plan-curve.ts:23`. Konvensi waktu berkas ini sudah sama dengan aplikasi
+  ini; tidak ada yang perlu dikarang. `10 mons` = 300 hari, jadi satuan "bulan"
+  di berkas ini bernilai 30 hari.
+- **`0 days` berarti milestone.** Tiga baris: dua "PO Issuance" dan "FINISH".
+- **Baris induk dihitung, bukan diketik.** `1.1 Procurement Material 449 days`
+  adalah bentangan anak-anaknya; `1 Jasa Pengadaan… 502 days` bentangan
+  semuanya.
+- **Rantai muncul lagi — proyek berbeda, pola sama.** `1.1.1.2` Fabrication
+  selesai Sab 24/10/26, `1.1.1.3` Shipment mulai Min 25/10/26. `1.3.1.1` selesai
+  31/03/27, `1.3.1.2` mulai 01/04/27. Ini bukti kedua, dari berkas yang bukan
+  milik kita, bahwa hubungan antar-pekerjaan memang ada — ia hanya ditulis
+  sebagai tanggal yang menempel.
+- **Tapi tidak semuanya rantai.** `1.3.2.1.1`, `.3` dan `.8` sama-sama mulai
+  12/04/27. Penebak harus bisa membedakan *menyambung* dari *berbarengan*.
+- **Ada jeda yang disengaja.** `1.1.2.2` selesai 08/03/27, `1.1.2.3` baru mulai
+  16/03/27 — tujuh hari kosong. Penebak tidak boleh memaksa semua jadi
+  sambung-menyambung rapat.
 
-| | `data/db.json` | `data/report.db` (SQLite v2) |
-|---|---|---|
-| proyek | 2 — `p-utama` (Gundih), `pmtmlf3jfnec1` ("adasd") | 1 — `gundih` |
-| baris WBS | 285 | 285 (`wbs_nodes`) |
-| **tanggal per baris** | **tidak ada** | 570 (`node_schedules`) |
-| baseline | — | 2 (`gundih:contractual`, `gundih:active`) |
-| unit pelaporan | tidak ada | 4 (`is_reporting_unit`) |
-| minggu | 60 | 60 (`weeks`) |
-| progress per leaf | di `weeks[].leafData` | 7.568 (`leaf_progress`) |
-| dokumen | — | 454 dok · 512 tahap · 108 transmittal · 119 kategori |
+## Konsepnya: otak MS Project, muka kita sendiri
 
-`db.json` menghidupi Dashboard, Weekly, Daily, Klaim, Portfolio dan Setup.
-SQLite hanya menghidupi Document Control dan importer.
+Ditetapkan pengguna 5 September 2026: *"kek ms project tapi jangan look-nya
+sama, kita bikin versi kita, ambil dari shadcn, animasi semuanya framer-motion,
+dan kita benahin apa yang MS Project jelek dan susah dipakai."*
 
-**Planner dan Gantt mustahil di atas `db.json`.** `WbsItem` (`lib/types.ts:19`)
-berisi kode, deskripsi, bobot, volume, satuan, urutan — dan tidak satu pun
-tanggal. Tidak ada yang bisa digambar sebagai batang di kalender. Fakta tunggal
-inilah yang memaksa keputusan 3 di bawah.
+Sebelas hal yang diperbaiki. Nomor 1–6 adalah keputusan; 7–11 sudah jadi aturan
+repo dan hanya ditegakkan di sini.
 
-### Angka-angkanya selamat pindah ke SQLite
+1. **Toggle "Auto vs Manually Scheduled" tidak ada.** Ini sakelar paling
+   membingungkan di MS Project: dua baris yang kelihatan sama berperilaku
+   berbeda, dan tidak ada di layar yang mengatakan kenapa. Kita tidak punya
+   mode. Semua baris berlaku sama.
+2. **Baris ringkasan selalu dihitung, tidak pernah bisa diketik.** Di MS Project
+   kamu bisa mengetik durasi pada baris ringkasan; ia diam-diam berhenti
+   menjumlahkan anaknya, dan sejak itu jadwalnya berbohong. Di sini sel
+   ringkasan bukan input — ia teks hasil hitungan.
+3. **Milestone adalah sakelar, bukan "ketik 0 hari".** `0 days` adalah cara MS
+   Project menuliskannya, bukan cara orang memikirkannya. Barisnya punya tombol
+   Milestone; durasinya jadi nol karena ia milestone, bukan sebaliknya.
+4. **Satu satuan durasi: hari kalender.** `10 mons` di sebelah `330 day` di
+   sebelah `502 days` adalah ladang ranjau — apalagi karena "hari" di MS Project
+   bisa berarti hari kerja tergantung kalender proyek. Kita simpan hari, selalu.
+   Mengetik "10 bulan" diterima dan langsung diterjemahkan jadi 300 hari **di
+   depan mata**, bukan disimpan sebagai satuan lain.
+5. **Menautkan pekerjaan tidak digambar tangan.** Aplikasi menebak dari tanggal
+   yang sudah ada dan bertanya dengan kalimat: *"Shipment sepertinya menunggu
+   Fabrication & RTS. Betul?"* → Iya / Bukan. Tidak ada panah yang ditarik,
+   tidak ada dialog Predecessors/Lag/Type. Penebak harus membedakan menyambung
+   (24/10 → 25/10) dari berbarengan (tiga baris mulai 12/04) dan tidak memaksa
+   jeda tujuh hari jadi rapat.
+6. **Tidak ada yang bergeser diam-diam.** Setiap pergeseran menampilkan
+   akibatnya lebih dulu — *"6 pekerjaan ikut mundur. Selesai proyek 15 Des → 24
+   Des"* — lalu Terapkan atau Batal, dan bisa dibatalkan sesudahnya.
+7. **Baris setinggi ≥44px dan benar di 390px.** MS Project tidak punya versi
+   ponsel sama sekali.
+8. **Indent/outdent di Tab / Shift+Tab**, dengan tombol yang kelihatan di
+   sampingnya — bukan disembunyikan di ribbon.
+9. **Elemen dari shadcn, gerak dari framer-motion.** Dengan satu pengecualian
+   yang sudah dibuktikan: **animasi masuk saat halaman dimuat adalah keyframe
+   CSS**, karena `motion.div` menuliskan `initial` ke HTML dari server dan
+   layarnya kosong sampai hidrasi selesai (diukur 30 Agustus 2026). Di layar ini
+   pengecualian itu nyaris tidak menggigit — hampir semua gerak di sheet dipicu
+   state setelah halaman hidup: baris berpindah tingkat, batang Gantt memanjang,
+   panel pratinjau masuk.
+10. **Radix per layar, bukan per baris.** Sheet ini persis perulangan yang bisa
+    melebihi 20 baris — 47 di Samberah, 285 di Gundih. Di dalam baris:
+    `<input>` / `<select>` native berbaju kelas shadcn. Satu DropdownMenu untuk
+    seluruh sheet, disetir id baris yang sedang aktif.
+11. **Kalender kerja, hari libur, resource leveling, dan levelling delay tidak
+    dibangun.** Itu setengah kerumitan MS Project dan nyaris tidak dipakai di
+    proyek EPC seukuran ini.
 
-Diverifikasi dengan query langsung, bukan diperkirakan:
+## Delapan keputusan
+
+Disetujui pengguna satu per satu, 5 September 2026.
+
+**1. Layar pertama adalah daftar proyek, dan tidak ada analitik di sana.** Tidak
+ada Rencana/Aktual/Deviasi/Tertunda/Perkiraan/Status. Yang ada: judul, tombol
+**Proyek baru**, kotak cari, dan kartu-kartu.
+
+**2. Kartu proyek menggambar garis waktunya sendiri.** Nama, klien, dan sebuah
+**mini-Gantt**: bentangan proyek digambar kecil dengan garis "hari ini"
+melintasinya. Sekali lihat: mana yang belum mulai, mana yang berjalan, mana yang
+seharusnya sudah selesai. MS Project tidak punya ini — di sana proyek hanyalah
+nama berkas. Tanggalnya toh sudah ada, jadi ini keuntungan besar dengan usaha
+kecil.
+
+Yang ditolak: kartu berisi persentase progress — proyek yang baru dibuat tampil
+0% dan terlihat rusak padahal hanya kosong, dan itu persis cacat yang membuat
+draf pertama ditolak.
+
+**3. Membuat proyek adalah dialog tiga isian, lalu langsung masuk sheet.** Nama
+· Klien · Tanggal mulai. Tidak lebih. Tanggal mulai diminta karena baris pertama
+harus punya tempat mendarat di kalender. **Tanggal selesai proyek tidak
+diminta** — ia dihitung dari pekerjaan terjauh, dan itu pembalikan yang disengaja
+terhadap cara orang biasa mengisi formulir.
+
+**4. Sheet-nya enam kolom, plus satu yang muncul belakangan.**
 
 ```
-SUM(leaf_progress.cum_progress_pct × wbs_nodes.bobot) / 100   →  W43 = 80,0365%
-SUM(wbs_nodes.bobot) WHERE is_leaf                            →  100,000000
+#   Nama pekerjaan          Durasi   Mulai       Selesai     Harga    [Bobot %]
+1   Jasa Pengadaan …        502 hari 29/12/2025  14/05/2027  —        —
+1.1   Procurement Material  449 hari 29/12/2025  22/03/2027  —        —
+1.1.1.1 PO Issuance         milestone 29/12/2025 29/12/2025  —        —
 ```
 
-80,04% adalah angka aktual W43 yang sama dengan yang dicatat `AGENTS.md` untuk
-importer nomor 06. Kurva rencana datang dari `lib/plan-curve.ts`, yang fungsinya
-murni (`planCurve(leaves, weekEndsISO)`) dan tidak tahu-menahu soal penyimpanan —
-ia cukup disuapi `node_schedules` + `wbs_nodes.bobot` + `weeks.end_date`. Jadi
-tampilan Angka tidak perlu dikorbankan.
+`#` adalah kode outline, dihasilkan dari tingkat dan urutan — tidak diketik.
+Nama pekerjaan menempel (pinned) saat sheet digeser mendatar. **Bobot tidak
+muncul sampai ada satu harga terisi**, dan Harga boleh kosong selamanya tanpa
+peringatan apa pun: menyusun jadwal dan memberi harga adalah dua pekerjaan, dan
+kolom kosong yang diberi tanda seru terbaca sebagai "kamu belum selesai".
 
-### Gundih adalah empat SPK, bukan satu kontrak
+**Nilai kontrak tidak punya kotak isian sendiri.** Ia jumlah seluruh harga baris,
+dan Bobot adalah `harga baris ÷ jumlah itu × 100` — persis `lib/setup.ts` hari
+ini. Itulah yang membuat bobot tutup di 100 karena konstruksi, bukan karena
+keberuntungan, dan itu sebabnya `applySetup` di `lib/mutations.ts` menghitung
+ulang alih-alih menerima bobot dari klien.
 
-```
-SPK-002  WBS 1.2        418.400,00
-SPK-003  WBS 1.3      2.821.067,281925
-SPK-004  WBS 1.4      1.837.809,00
-SPK-007  WBS 1.4.4      842.723,72448
-                     ─────────────────
-                      5.920.000,006405   = projects.contract_value, persis
-```
+**5. Durasi, Mulai dan Selesai ketiganya bisa diketik; yang terakhir diketik
+menang.** Isi Mulai + Durasi → Selesai dihitung. Ubah Selesai → Durasi dihitung.
+Sel yang ikut berubah **berkedip sekali** supaya terlihat aplikasi melakukan apa.
+Alasannya: orang lapangan berpikir "ini 5 hari", orang kontrak berpikir "ini
+harus kelar 30 April", dan keduanya benar. Memaksa satu arah membuat separuh
+pengguna menghitung sendiri di kepala sebelum mengetik.
 
-`unit_contract_value` sudah terisi benar pada keempat unit. `unit_contract_no`
-**kosong pada keempatnya** — importer tidak pernah mengisinya. Sementara
-`projects.contract_no` memuat keempat nomor sebagai satu string dipisah koma:
-`002/PPC60000/2025-SO, 003/PPC60000/2025-SO, 004/PPC60000/2025-SO,
-007/PPC62300/2025-SO`. Pasangannya mekanis — angka depan nomor cocok dengan angka
-label SPK.
+Yang ditolak: hanya tanggal yang bisa diketik (durasi jadi angka mati, padahal
+begitulah orang menyusun jadwal), dan hanya durasi (cara MS Project asli —
+tetapi sebelum rantainya ada, baris baru tidak punya tempat di kalender sama
+sekali, dan itu justru menghancurkan menit pertama).
 
-### Dua cacat yang sudah tayang hari ini
+**6. Gantt menempel di kanan sheet, dipisah garis yang bisa ditarik.** Baris dan
+batangnya sebaris, jadi mengetik durasi langsung terlihat memanjangkan batangnya.
+Di 390px pembelahan itu mustahil, jadi di ponsel ia jatuh menjadi dua tab:
+**Daftar** dan **Jadwal**. Lebar pemisahnya diingat di `localStorage` —
+kenyamanan per-orang, bukan keadaan yang harus bertahan.
 
-1. **Mata uang Gundih adalah USD** (`projects.currency = 'USD'`), sementara
-   `app/portfolio/page.tsx` mencetak nilainya lewat `formatRupiah()`. Kontrak
-   $5,92 juta tampil sebagai "Rp 5.920.000".
-2. **Document Control tidak ikut berpindah proyek.** `PROJECT_ID = 'gundih'`
-   ditulis tangan di `app/dokumen/[week]/layout.tsx:8`,
-   `app/dokumen/[week]/summary/page.tsx:11`,
-   `app/dokumen/[week]/data/page.tsx:10` dan
-   `app/api/register/export/route.ts:24`.
+**7. Baris masuk dengan diketik atau ditempel dari Excel.** Menempel satu blok:
+aplikasi membaca kode WBS di kolom pertama dan menyusun tingkatannya sendiri.
+Jalur ini sudah terbukti di repo — register dokumen dibangun persis begitu 4
+September (`lib/register-paste.ts`), dan itulah yang membuat 132 dokumen masuk
+sekali duduk. Tanpa jalur tempel, 285 baris Gundih tidak akan pernah bisa diuji
+di layar ini.
 
-### Tidak ada autentikasi sama sekali
+Yang ditunda: "salin dari proyek lain". Ia pintu yang paling sering dipakai
+perusahaan dengan pekerjaan berulang, tapi ia pekerjaan sendiri — menyalin
+pohon, bobot dan jadwal sambil membuang progress dan dokumennya.
 
-Tidak ada `next-auth`, tidak ada session, tidak ada `auth()`. Tabel `users` dan
-`memberships` sama-sama 0 baris. Karena itu "Tim & peran" — yang ikut dipilih
-pengguna sebagai isi subpage — **ditunda**: tanpa login ia hanya daftar nama yang
-tidak menjaga apa pun. Itu papan nomor 22.
+**8. SQLite jadi sumber tunggal daftar proyek.** Ini satu-satunya keputusan draf
+pertama yang bertahan utuh, karena ia dipaksa data dan bukan oleh cara
+memandang: `WbsItem` di `db.json` (`lib/types.ts:19`) berisi kode, deskripsi,
+bobot, volume, satuan, urutan — **dan tidak satu pun tanggal**. Sheet dan Gantt
+mustahil di atasnya. Tanggal hanya ada di `node_schedules` (570 baris).
 
-## Sepuluh keputusan
+Ikutannya: penunjuk proyek aktif pindah ke tabel baru `app_state` dan dibaca
+lewat satu fungsi `getActiveProjectId()`; `PROJECT_ID = 'gundih'` yang ditulis
+tangan di empat berkas dicabut, sehingga **Document Control ikut berpindah
+proyek** — itu cacat yang tayang hari ini.
 
-Semuanya disetujui pengguna satu per satu, 5 September 2026.
-
-**1. Projects adalah lapisan sendiri.** Mengklik proyek tidak melempar orang ke
-Dashboard; ia masuk ke rumah proyek itu.
-
-```
-/projects            daftar — cari, buat, pilih, arsipkan
-/projects/[id]       rumah satu proyek — ikhtisar + pengaturan
-```
-
-Irisan B dan C menambah tab di bawah `/projects/[id]/`: `planner`, `timeline`,
-`baseline`. Rutenya dibentuk sekarang supaya tidak ada yang dibongkar nanti.
-
-**2. `/portfolio` dialihkan ke `/projects`, dan tabel uangnya jadi tampilan kedua
-di sana.** Satu halaman, dua cara memandang, satu sakelar: **Kartu** (bawaan —
-untuk memilih dan mengurus) dan **Angka** (tabel lintas-proyek untuk dibaca
-direksi). Dua halaman yang sama-sama mengaku "daftar proyek" adalah masalah yang
-sedang diperbaiki, bukan pola yang diteruskan. Redirect dipakai, bukan
-penghapusan, supaya tautan yang sudah beredar tidak mati. Tab `PROJECT_TABS`
-(`Portfolio | Setup`) dihapus — Setup adalah tindakan pada satu proyek, bukan
-tetangga daftar proyek.
-
-**3. SQLite jadi sumber tunggal daftar proyek.** Penunjuk proyek aktif pindah ke
-tabel baru `app_state`, dan dibaca lewat **satu** fungsi `getActiveProjectId()`.
-
-Yang ditolak dan alasannya:
-
-- **Cookie per-browser** — membaca cookie adalah bacaan dinamis; di bawah
-  `cacheComponents: true` ia memaksa `<Suspense>` mengelilingi setiap bacaan di
-  aplikasi. Tembok itu sudah ditabrak dua kali (lihat `AGENTS.md`). Dan tanpa
-  login, "per orang" belum berarti apa-apa.
-- **Id proyek pada semua rute** (`/p/[id]/weekly/…`) — paling benar dan paling
-  ramah cache, tapi itu mengganti nama tiap rute di aplikasi. Menaruh bacaannya
-  di satu fungsi membuat perpindahan itu, kalau nanti diambil, menyentuh satu
-  berkas dan bukan empat puluh halaman.
-
-**4. Membuka bukan memilih.** `/projects/[id]` boleh diintip bebas; yang
-memindahkan seluruh aplikasi hanya tombol **"Buka proyek ini"**. Penunjuknya
-global dan belum ada login — kalau sekadar melihat proyek tetangga ikut
-memindahkan konteks orang yang sedang mengisi laporan, itu jebakan.
-
-**5. Kartu proyek menyeimbangkan identitas dan angka.** Separuh atas: nama utuh,
-klien, kontrak, nilai + mata uang, rentang tanggal. Separuh bawah: batang
-aktual-vs-rencana, minggu ke-N dari M, deviasi. Kartu **tidak pernah** mencetak
-empat nomor SPK berjejer: satu kontrak ditulis nomornya, lebih dari satu ditulis
-`4 SPK` dan nomor lengkapnya tinggal di halaman proyek. Dua koreksi yang menyertainya,
-keduanya soal kebenaran:
-
-- Di 390px separuh angka menjadi **satu jalur mendatar** yang rapat; di desktop ia
-  melebar jadi tiga kolom. Kartu setinggi dua blok penuh hanya memuat satu
-  setengah kartu per layar ponsel.
-- Proyek yang belum disiapkan **tidak menampilkan 0,00% merah**. Separuh angkanya
-  diganti "Belum disiapkan → Siapkan sekarang", satu kontrol yang bisa ditekan.
-  Proyek baru harus terlihat *kosong*, bukan *rusak* — itulah yang terjadi pada
-  "adasd" hari ini.
-
-**6. Proyek punya banyak SPK, dan nilai proyek adalah jumlahnya.** Blok Kontrak
-menjadi daftar: tiap SPK dengan nomor, nilai, dan node WBS tempatnya menempel.
-`contract_value` **dihitung** dari jumlah `unit_contract_value`, tidak diketik —
-filosofi yang sama dengan bobot yang diturunkan dari harga BOQ. Sebuah backfill
-sekali jalan memecah string koma itu ke `unit_contract_no`; hasilnya
-**ditampilkan untuk dicek manusia sebelum ditulis**, karena pencocokan
-002→SPK-002 adalah heuristik khas Gundih, bukan aturan umum.
-
-**7. Membuat proyek adalah satu layar, enam isian.** Nama · klien · kontraktor ·
-mulai · selesai · mata uang. Bukan wizard bertahap. Cukup untuk membangkitkan
-baris-baris `weeks` dari tanggalnya, sehingga proyeknya langsung hidup: bisa
-dibuka, bisa dinavigasi, dan kurva rencananya bisa diturunkan begitu WBS-nya ada.
-WBS, harga dan baseline tidak diminta di sini — itu Planner, irisan B, dan
-halaman proyeklah yang mengatakan "lanjutkan di sini".
-
-**Nilai kontrak juga tidak diminta**, dan itu konsekuensi langsung keputusan 6:
-nilai proyek adalah jumlah SPK-nya, jadi ia lahir kosong dan terisi sendiri
-begitu SPK pertama ditambahkan di halaman proyek. Proyek baru menampilkan "—",
-bukan "Rp 0" — nol adalah pernyataan, kosong adalah kejujuran.
-
-Yang ditolak: satu kotak nama saja (menghasilkan "adasd" — proyek tanpa tanggal
-tidak bisa punya minggu, tidak bisa punya kurva, tidak bisa dibuka jadi apa-apa)
-dan wizard 5 langkah (menulis ulang editor WBS + harga BOQ di atas SQLite
-sekarang, yang membengkakkan irisan A jadi dua kali lipat).
-
-**8. Halaman v1 mendapat panel jujur, bukan angka orang lain.** Kolom sementara
-`legacy_json_id` pada `projects`; Gundih diisi `'p-utama'`, proyek baru mana pun
-`null`. Dashboard, Weekly, Daily dan Klaim membacanya: ada isinya berarti aman,
-`null` berarti tampilkan panel — *"Proyek [X] belum punya laporan mingguan"* —
-dengan dua tombol nyata: **Susun WBS proyek ini** dan **Kembali ke Gundih**.
-
-Yang ditolak: menampilkan angka Gundih di bawah spanduk peringatan (menaruh angka
-salah di layar dan berharap orang membaca spanduknya), dan meredupkan entri
-sidebar (aplikasi yang separuhnya mati, tanpa memberi tahu apa yang harus
-dilakukan). Aturan repo ini berlaku: yang diam terbaca sebagai hilang, jadi
-keadaan kosong harus punya kontrol yang bisa ditekan.
-
-Kolom itu **mati** ketika papan 08–14 selesai. Ia ditandai demikian di schema.
-
-**9. "adasd" tidak dibawa.** SQLite mulai dengan Gundih saja. Datanya tetap utuh
-di `db.json` — tidak ada yang dihapus, ia hanya tidak ikut pindah.
-
-**10. Document Control ikut berpindah proyek.** Keempat `PROJECT_ID = 'gundih'`
-diganti `getActiveProjectId()`. Proyek tanpa dokumen jatuh ke `EmptyRegister` yang
-sudah ada, yang sejak 4 September sudah menawarkan jalan membangun register
-sendiri, bukan perintah terminal.
+Yang ditolak, dengan alasannya: **cookie per-browser** (bacaan dinamis; di bawah
+`cacheComponents: true` ia memaksa `<Suspense>` mengelilingi setiap bacaan di
+aplikasi — tembok yang sudah ditabrak dua kali, lihat `AGENTS.md`; dan tanpa
+login "per orang" belum berarti apa-apa), dan **id proyek pada semua rute**
+(`/p/[id]/weekly/…` — paling benar dan paling ramah cache, tapi mengganti nama
+tiap rute di aplikasi). Menaruh bacaannya di satu fungsi membuat perpindahan itu,
+kalau nanti diambil, menyentuh satu berkas dan bukan empat puluh halaman.
 
 ## Bentuk layar
 
-### `/projects` — daftar
+### `/projects` — layar pertama
 
-Dari atas: judul + tombol **Proyek baru** · kotak cari (nama, klien, no. kontrak)
-· sakelar **Kartu / Angka**.
+Judul · tombol **Proyek baru** · kotak cari (nama, klien) · kartu-kartu.
 
-**Tampilan Kartu.** Proyek yang sedang terbuka selalu paling atas dan ditandai
-jelas — bukan chip abu-abu kecil seperti sekarang. Sisanya urut terakhir
-disentuh. Arsip disembunyikan di balik tautan `Arsip (n)`. Tiap kartu punya
-tombol **Buka proyek ini** dan menu `⋯`: Ganti nama · Duplikat · Arsipkan ·
-Hapus. Belum ada proyek sama sekali → satu kartu besar "Bikin proyek pertama",
-bukan tabel kosong.
+Kartu: nama utuh · klien · mini-Gantt dengan garis hari ini · rentang tanggal ·
+menu `⋯` (Ganti nama · Arsipkan · Hapus). Proyek yang sedang jadi proyek aktif
+aplikasi ditandai jelas. Arsip disembunyikan di balik tautan `Arsip (n)`
+(`projects.archived_at` sudah ada, tinggal dipakai).
 
-**Tampilan Angka.** Kolomnya: Proyek · Minggu · Rencana · Aktual · Deviasi ·
-Tertunda · Perkiraan selesai · Nilai kontrak · Status. Semuanya dari SQLite:
-aktual dari agregat di atas, rencana dari `lib/plan-curve.ts`, tertunda = deviasi
-× nilai kontrak, perkiraan selesai dari laju beberapa minggu terakhir (deret
-aktual per minggu keluar dari satu `GROUP BY`, sudah diuji). Nilai dicetak dengan
-mata uang proyeknya, bukan diasumsikan rupiah.
+Belum ada proyek sama sekali → satu kartu besar "Bikin proyek pertama".
 
-Pilihan tampilan diingat di `localStorage` — kenyamanan per-orang, bukan keadaan
-yang harus bertahan.
+### `/projects/[id]` — sheet + Gantt
 
-### `/projects/[id]` — rumah proyek
+Kepala tipis: nama proyek · rentang tanggal (dihitung) · jumlah baris · tombol
+**Jadikan proyek aktif** kalau ia belum aktif.
 
-Lima blok:
+Tombol itu ada — dan sengaja kecil — karena penunjuknya global dan belum ada
+login: kalau sekadar membuka proyek tetangga ikut memindahkan konteks orang yang
+sedang mengisi laporan, itu jebakan. Membuka adalah menyunting jadwalnya;
+menjadikannya aktif adalah mengarahkan sisa aplikasi ke sana.
 
-1. **Kepala** — nama utuh · klien · chip "Sedang dibuka" atau tombol "Buka proyek
-   ini".
-2. **Keadaan** — Minggu 43 dari 60 · aktual 80,04% vs rencana 75,37% · deviasi ·
-   batang. Aktual biru `--chart-1`, rencana merah `--chart-2`, seperti di seluruh
-   aplikasi.
-3. **Identitas & kontrak** — klien, kontraktor, prefix nomor dokumen, mulai,
-   selesai, durasi; lalu daftar SPK dengan nomor, nilai dan node WBS-nya, dan
-   jumlahnya sebagai nilai proyek. Bisa diedit di tempat.
-4. **Isi proyek** — 285 baris WBS (218 leaf, 67 cabang) · 4 unit pelaporan ·
-   2 baseline · 454 dokumen · 60 minggu. Ini yang membuat orang percaya proyeknya
-   berisi, dan tiap baris menjadi pintu ke irisan B dan C. Keseluruhan 285 node
-   berjadwal di **kedua** baseline — itulah 570 baris `node_schedules`, bukan
-   sebagian yang berjadwal dan sebagian tidak.
-5. **Pengaturan** — ganti nama · duplikat · arsipkan · hapus, dengan konfirmasi
-   yang **menyebut apa yang ikut hilang** ("285 baris WBS, 454 dokumen, 60 minggu
-   progress"), bukan "Yakin?".
+Badan: sheet di kiri, Gantt di kanan, pemisah yang bisa ditarik. Di bawah 768px:
+tab **Daftar** / **Jadwal**.
 
-### Proyek baru
+Baris punya tiga rupa: **pekerjaan** (leaf, semua sel bisa diketik),
+**ringkasan** (punya anak — durasi/mulai/selesai jadi teks hasil hitungan, tebal),
+dan **milestone** (durasi nol, digambar wajik di Gantt).
 
-Satu layar, enam isian, satu tombol Simpan. Sesudahnya: langsung ke
-`/projects/[id]` proyek itu, sudah terbuka, dengan blok Isi proyek yang jujur
-kosong dan menunjuk ke langkah berikutnya.
+Sebuah baris ringkasan juga bisa ditandai **unit pelaporan** — SPK / Paket / Lot
+/ Area, labelnya kata si klien. Ini bukan tambahan yang dikarang: `isReportingUnit`
+sudah ada di `lib/schema.ts:95`, empat baris Gundih memakainya (`1.2` SPK-002,
+`1.3` SPK-003, `1.4` SPK-004, `1.4.4` SPK-007), dan seluruh mesin laporan
+berdiri di atasnya — menandai sebuah node menormalkan subtree-nya ke 100 dan
+memberinya bagiannya sendiri di PDF. Sheet yang tidak bisa menandainya akan
+menghasilkan proyek yang **tidak akan pernah bisa** mencetak laporan Pertamina,
+jadi ia bagian dari kelengkapan layar ini, bukan perluasannya. Bentuknya sama
+dengan Milestone: satu sakelar pada baris, plus satu kotak label.
+
+Unit bisa bersarang — SPK-007 duduk di `1.4.4` di dalam cabang `1.4` milik
+SPK-004, dan keduanya tetap berdiri sendiri di laporan. Aturannya sudah tertulis
+di `AGENTS.md`: bobot sebuah unit adalah subtree-nya **dikurangi** unit mana pun
+di dalamnya; tanpa pengurangan itu totalnya mencapai 114%.
+
+### Panel pratinjau pergeseran
+
+Muncul saat sebuah pergeseran menyentuh baris lain. Isinya kalimat, bukan tabel:
+berapa pekerjaan ikut bergeser, tanggal selesai proyek dari-ke, dan daftar yang
+terpengaruh (dibatasi enam, sisanya dihitung). Dua tombol: Terapkan · Batal.
 
 ## Perubahan data
 
-Ketiganya jenis migrasi yang aman — satu tabel baru dan dua kolom nullable, yang
-di SQLite menjadi `CREATE TABLE` dan `ALTER TABLE ADD COLUMN`. Yang berbahaya
-adalah migrasi yang **membangun ulang** tabel yang sudah ada; itu yang menyeret
-357 baris `doc_stages` ikut terhapus pada Agustus 2026. Tetap salin
-`data/report.db` sebelum `drizzle-kit migrate`, dan hitung baris anaknya
-sesudahnya.
+Jenis migrasi yang aman — satu tabel baru dan kolom-kolom nullable, yang di
+SQLite menjadi `CREATE TABLE` dan `ALTER TABLE ADD COLUMN`. Yang berbahaya adalah
+migrasi yang **membangun ulang** tabel yang sudah ada; itu yang menyeret 357
+baris `doc_stages` ikut terhapus pada Agustus 2026. Tetap salin `data/report.db`
+sebelum `drizzle-kit migrate`, dan hitung baris anaknya sesudahnya.
 
 ```ts
-// tabel baru — satu baris, penunjuk proyek yang sedang terbuka
+// tabel baru — satu baris, penunjuk proyek aktif aplikasi
 export const appState = sqliteTable('app_state', {
   id: text('id').primaryKey().default('singleton'),
   activeProjectId: text('active_project_id')
@@ -304,61 +285,108 @@ export const appState = sqliteTable('app_state', {
 });
 
 // projects bertambah dua kolom
-updatedAt:    text('updated_at'),      // urutan "terakhir disentuh" di daftar
+updatedAt:    text('updated_at'),      // urutan "terakhir disentuh"
 legacyJsonId: text('legacy_json_id'),  // SEMENTARA — mati saat papan 08-14 selesai
+
+// wbs_nodes bertambah satu
+isMilestone: integer('is_milestone', { mode: 'boolean' }).notNull().default(false),
 ```
 
-`onDelete: 'set null'` dipilih sengaja: menghapus proyek yang sedang terbuka
-membuat penunjuknya kosong, dan `getActiveProjectId()` jatuh ke proyek pertama
-yang tidak terarsip — persis perilaku `activeProject()` di `lib/workspace.ts:52`
-hari ini, yang menolak membiarkan aplikasi jadi kosong.
+`isMilestone` dibutuhkan karena keputusan 3: milestone adalah sifat baris, bukan
+akibat durasi nol. Tanpa kolom itu, satu pekerjaan yang kebetulan berdurasi satu
+hari tidak bisa dibedakan dari sebuah titik.
 
-Backfill sekali jalan: `gundih.legacy_json_id = 'p-utama'`,
-`app_state.active_project_id = 'gundih'`, dan keempat `unit_contract_no` diisi
-dari string koma **setelah hasilnya dicetak dan disetujui**.
+`onDelete: 'set null'` disengaja: menghapus proyek aktif membuat penunjuknya
+kosong, dan `getActiveProjectId()` jatuh ke proyek pertama yang tidak terarsip —
+persis perilaku `activeProject()` di `lib/workspace.ts:52` hari ini, yang menolak
+membiarkan aplikasi jadi kosong.
 
-## Yang TIDAK dibangun di irisan A
+Backfill sekali jalan: `gundih.legacy_json_id = 'p-utama'` dan
+`app_state.active_project_id = 'gundih'`. Proyek `"adasd"` di `db.json` (0 baris
+WBS, 0 minggu, sisa uji coba) **tidak dibawa**; datanya tetap utuh di sana, ia
+hanya tidak ikut pindah.
 
-Pagar ini bagian dari desain. Papan v2 ada justru untuk mencegah pekerjaan
-menyebar.
+## Halaman lama selama masa transisi
 
-- Editor WBS, harga BOQ → bobot, mulai/selesai per baris, Gantt — **irisan B**
-  (papan 17).
-- Deteksi rantai, geser-dengan-pratinjau, baseline berversi — **irisan C**
-  (papan 18 + dependency).
-- Login, tim dan peran — **papan 22**. Tidak ada autentikasi untuk dibangun di
-  atasnya.
-- Wizard `/setup` **tidak ditulis ulang**. Ia dibiarkan utuh dan masih menulis ke
-  `db.json`; ia hanya berhenti jadi tab tingkat atas dan ditautkan dari halaman
-  proyek. Penggantinya adalah irisan B.
-- Halaman v1 **tidak dipindahkan** ke SQLite. Mereka mendapat panel keputusan 8
-  dan tidak lebih.
+Dashboard, Weekly, Daily dan Klaim membaca `readDb()` → proyek aktif di
+`db.json`. Mereka tidak tahu ada penunjuk baru. Kalau dibiarkan, membuka proyek
+baru akan membuat halaman-halaman itu **tetap menampilkan angka Gundih** di bawah
+sidebar yang menyebut proyek lain — bencana yang paling aplikasi ini takutkan.
+
+Mereka membaca `legacy_json_id`: ada isinya berarti aman, `null` berarti
+tampilkan satu panel — *"Proyek [X] belum punya laporan mingguan"* — dengan dua
+tombol nyata: **Buka jadwalnya** dan **Kembali ke Gundih**. Bukan halaman rusak,
+bukan angka orang lain, bukan spanduk peringatan di atas angka yang salah.
+
+## Urutan membangun
+
+Papan 16 dan 17 memang bergabung, dan itu lebih besar dari satu nomor. Supaya
+tetap ada yang bisa dipegang di tiap titik berhenti:
+
+1. **Fondasi** — `app_state`, `getActiveProjectId()`, empat `PROJECT_ID` dicabut,
+   `/portfolio` dialihkan ke `/projects`. Titik berhenti: Document Control ikut
+   berpindah proyek.
+2. **Layar pertama** — `/projects`, kartu + mini-Gantt, cari, arsip, dialog
+   proyek baru. Titik berhenti: proyek bisa dibuat dan dilihat.
+3. **Sheet** — enam kolom, tiga rupa baris, Tab/Shift+Tab, segitiga
+   durasi/mulai/selesai. Titik berhenti: Samberah 47 baris bisa diketik utuh.
+4. **Gantt** — batang sebaris dengan barisnya, pemisah yang bisa ditarik, tab di
+   ponsel. Titik berhenti: Gundih 285 baris tergambar.
+5. **Tempel dari Excel.** Titik berhenti: 285 baris masuk sekali duduk.
+6. **Penebak rantai + pratinjau pergeseran.** Titik berhenti: keputusan 5 dan 6
+   berjalan.
+
+## Yang TIDAK dibangun
+
+- **Analitik lintas-proyek** — Rencana/Aktual/Deviasi/Tertunda/Perkiraan/Status.
+  Dibuang dari pekerjaan ini seluruhnya. Tempatnya nanti di papan 19.
+- **Baseline berversi** (Kontraktual terkunci vs Aktif) — papan 18.
+- **Login, tim dan peran** — papan 22. Tidak ada autentikasi untuk dibangun di
+  atasnya: tidak ada `next-auth`, tidak ada session, `users` dan `memberships`
+  sama-sama 0 baris.
+- **"Salin dari proyek lain"** — keputusan 7.
+- **Kalender kerja, hari libur, resource leveling** — nomor 11 di daftar
+  perbaikan.
+- **Wizard `/setup` tidak ditulis ulang.** Ia dibiarkan utuh dan masih menulis ke
+  `db.json`; ia berhenti jadi tab tingkat atas. Penggantinya adalah sheet ini.
+- **Halaman v1 tidak dipindahkan ke SQLite.** Mereka hanya mendapat panel di
+  bagian sebelumnya.
 
 ## Verifikasi
 
 1. **`next build` hijau**, ditulis ke berkas lalu `echo $?` — jangan pernah lewat
-   pipe, karena `next build | grep` melaporkan exit code grep. `cacheComponents`
-   adalah bahaya nyata di sini: `app/layout.tsx` membaca daftar proyek, jadi jalur
-   baca yang baru **harus** tetap ter-cache atau setiap rute di aplikasi gagal
-   build di `/_not-found`.
+   pipe, karena `next build | grep` melaporkan exit code grep. `app/layout.tsx`
+   membaca daftar proyek, jadi jalur baca yang baru **harus** tetap ter-cache
+   atau setiap rute gagal build di `/_not-found`.
 2. **Hitung baris anak sesudah migrasi**: `doc_stages` 512 · `documents` 454 ·
    `leaf_progress` 7.568 · `node_schedules` 570 · `wbs_nodes` 285 · `weeks` 60.
-   Angka yang sama sebelum dan sesudah, atau migrasinya dibatalkan.
-3. **Angka tidak bergerak**: W43 tetap aktual 80,04% / rencana 75,37%, dan bobot
-   tetap tutup di 100,000000.
-4. **Gambar, bukan teks** — `scripts/shoot.mjs` pada `/projects`,
-   `/projects/gundih`, layar proyek baru, dan panel keputusan 8; desktop dan
-   390px; lalu benar-benar dilihat. Browser pane di lingkungan ini tidak pernah
-   melakukan komposit, jadi `computer{action:"screenshot"}` selalu gagal.
-5. **Berpindah proyek benar-benar memindahkan Document Control** — buka proyek
-   kedua, lalu `/dokumen`, dan pastikan yang muncul register proyek itu (atau
+   Sama sebelum dan sesudah, atau migrasinya dibatalkan.
+3. **Samberah diketik ulang utuh** — 47 baris, empat tingkat, tiga milestone —
+   dan durasi yang keluar cocok dengan PDF-nya pada kedelapan baris yang sudah
+   diverifikasi di atas.
+4. **Angka Gundih tidak bergerak**: W43 tetap aktual 80,04% / rencana 75,37%,
+   bobot tetap tutup di 100,000000.
+5. **Gambar, bukan teks** — `scripts/shoot.mjs` pada `/projects`,
+   `/projects/gundih` (sheet + Gantt), dialog proyek baru, dan panel transisi;
+   desktop dan 390px; lalu benar-benar dilihat. Browser pane di lingkungan ini
+   tidak pernah melakukan komposit, jadi `computer{action:"screenshot"}` selalu
+   gagal.
+6. **Berpindah proyek benar-benar memindahkan Document Control** — jadikan proyek
+   kedua aktif, buka `/dokumen`, pastikan yang muncul register proyek itu (atau
    `EmptyRegister`-nya), bukan 454 dokumen Gundih.
-6. **Menghapus proyek yang sedang terbuka tidak mengosongkan aplikasi** —
-   penunjuknya jatuh ke proyek berikutnya.
+7. **Menghapus proyek aktif tidak mengosongkan aplikasi** — penunjuknya jatuh ke
+   proyek berikutnya.
 
-## Dokumen yang ikut diperbarui
+## Dokumen yang ikut diperbarui — setelah spec ini disetujui
 
-`AGENTS.md` (keputusan "Planner tanpa dependency" dicabut; papan 16 ditandai
-jalan), memori blueprint, dan artefak rencana
-`https://claude.ai/code/artifact/d3dfeed6-8a05-4ba8-87f5-2affe3da7c47` —
-diterbitkan dengan URL itu sebagai `url`, atau yang tercipta duplikat.
+Keputusan papan nomor 15, *"Planner has NO dependencies"*, **dicabut**. Ia
+dikunci 27 Agustus 2026 karena jadwal Gundih tidak memakai satu pun relasi FS/SS.
+Benar sebagai pembacaan kolom, salah sebagai kesimpulan: relasinya ada sebagai
+**tanggal yang menempel**, dan Samberah — berkas yang bukan milik kita —
+membuktikannya untuk kedua kalinya.
+
+`AGENTS.md`, memori blueprint, dan artefak rencana
+`https://claude.ai/code/artifact/d3dfeed6-8a05-4ba8-87f5-2affe3da7c47`
+diperbarui setelah spec ini disetujui — bukan sebelum, supaya aturan repo tidak
+terlanjur berubah kalau desainnya masih direvisi. Artefak diterbitkan dengan URL
+itu sebagai `url`, atau yang tercipta duplikat.
