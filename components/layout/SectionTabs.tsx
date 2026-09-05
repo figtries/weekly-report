@@ -89,9 +89,6 @@ export default function SectionTabs({
   );
 }
 
-/** Setup and Portfolio used to own permanent sidebar slots; they live here now. */
-export const PROJECT_TABS: SectionTab[] = [
-  { href: '/settings', label: 'Katalog' },
-  { href: '/portfolio', label: 'Portfolio' },
-  { href: '/setup', label: 'Setup' },
-];
+// The Projects section has no tab row. "Portfolio | Setup" was never two
+// sibling places: Setup is an action on ONE project, and the sheet on the
+// project page replaces it outright.

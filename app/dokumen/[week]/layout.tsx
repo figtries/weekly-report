@@ -2,13 +2,27 @@ import { RegisterTabs } from '@/components/dokumen/RegisterTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb, getLatestWeek } from '@/lib/data';
 import { getRegisterWeeks } from '@/lib/register';
+import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'Document Control' };
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about.
+ *
+ * Until now this was the literal string 'gundih', written by hand in four
+ * files, so choosing a project moved the rest of the app and left Document
+ * Control behind on someone else's register. It is read per request, never
+ * at module scope: a module-level read is evaluated once at import and would
+ * go stale the moment anyone switched project.
+ */
+function activeProjectId(): string {
+  // Empty is a real answer — no project means no register, and the screens
+  // already know how to render nothing.
+  return getActiveProjectId() ?? '';
+}
 
 export function generateStaticParams() {
-  return getRegisterWeeks(PROJECT_ID).map((w) => ({ week: String(w.weekNo) }));
+  return getRegisterWeeks(activeProjectId()).map((w) => ({ week: String(w.weekNo) }));
 }
 
 /**
@@ -34,7 +48,7 @@ export default async function DocumentControlLayout({
   params: Promise<{ week: string }>;
 }) {
   const { week } = await params;
-  const weeks = getRegisterWeeks(PROJECT_ID).map((w) => w.weekNo);
+  const weeks = getRegisterWeeks(activeProjectId()).map((w) => w.weekNo);
   const db = await getDb();
 
   return (

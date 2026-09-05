@@ -4,31 +4,39 @@ import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
 } from '@/lib/register';
+import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'VDRL Data' };
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about — read per request, never at module scope.
+ * A module-level read is evaluated once at import and goes stale the moment
+ * anyone switches project. See lib/projects.ts.
+ */
+function activeProjectId(): string {
+  return getActiveProjectId() ?? '';
+}
 
 /** The same working screen, pointed at what the vendors owe us. */
 export default async function VdrlDataPage({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const shape = getRegisterShape(PROJECT_ID, 'vdrl');
-  const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'vdrl', week) : null;
+  const shape = getRegisterShape(activeProjectId(), 'vdrl');
+  const summary = shape.documents > 0 ? getRegisterSummary(activeProjectId(), 'vdrl', week) : null;
 
-  const parties = getRegisterParties(PROJECT_ID);
+  const parties = getRegisterParties(activeProjectId());
 
   if (!summary) {
     return (
       <RouteTransition id="dokumen-vdrl-data">
         <RegisterBuilder
-          projectId={PROJECT_ID}
+          projectId={activeProjectId()}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
 
           hasDocuments={false}
           existingSections={[]}
-          numbering={getNumbering(PROJECT_ID, 'vdrl')}
+          numbering={getNumbering(activeProjectId(), 'vdrl')}
         />
       </RouteTransition>
     );
@@ -37,16 +45,16 @@ export default async function VdrlDataPage({ params }: { params: Promise<{ week:
   return (
     <RouteTransition id="dokumen-vdrl-data">
     <RegisterWorkbench
-      projectId={PROJECT_ID}
+      projectId={activeProjectId()}
       register="vdrl"
-      tree={getRegisterTree(PROJECT_ID, 'vdrl', week)}
-      cards={getRegisterCards(PROJECT_ID, 'vdrl', week)}
-      obstacles={getObstacles(PROJECT_ID, 'vdrl', week)}
+      tree={getRegisterTree(activeProjectId(), 'vdrl', week)}
+      cards={getRegisterCards(activeProjectId(), 'vdrl', week)}
+      obstacles={getObstacles(activeProjectId(), 'vdrl', week)}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
-      numbering={getNumbering(PROJECT_ID, 'vdrl')}
+      numbering={getNumbering(activeProjectId(), 'vdrl')}
     />
     </RouteTransition>
   );

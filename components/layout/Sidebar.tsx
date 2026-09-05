@@ -14,7 +14,7 @@ import {
   Files,
   LayoutDashboard,
   Menu,
-  Scale,
+  FolderKanban,
   Settings,
   X,
   type LucideIcon,
@@ -59,7 +59,7 @@ const DESTINATIONS: Destination[] = [
     label: 'Weekly Progress',
     icon: Activity,
     href: (w) => `/weekly/${w}/overall`,
-    match: (p) => WEEKLY_PROGRESS.some((k) => p.endsWith(`/${k}`)),
+    match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
     warm: (w) => WEEKLY_PROGRESS.map((k) => `/weekly/${w}/${k}`),
   },
   {
@@ -73,7 +73,10 @@ const DESTINATIONS: Destination[] = [
     label: 'Reports',
     icon: FileText,
     href: (w) => `/weekly/${w}/summary`,
-    match: (p) => WEEKLY_REPORT.some((k) => p.endsWith(`/${k}`)),
+    // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
+    // named `summary` and `detail` too, so a bare endsWith lit Reports as well
+    // on every /dokumen page — two destinations highlighted at once.
+    match: (p) => WEEKLY_REPORT.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
     warm: (w) => WEEKLY_REPORT.map((k) => `/weekly/${w}/${k}`),
   },
   {
@@ -84,10 +87,13 @@ const DESTINATIONS: Destination[] = [
     warm: (w) => [`/dokumen/${w}/summary`, `/dokumen/${w}/data`],
   },
   {
-    label: 'Claims',
-    icon: Scale,
-    href: () => '/klaim',
-    match: (p) => p.startsWith('/klaim'),
+    // Where a project is kept, created and planned. It is the app's first
+    // screen: everything below reads whichever project is open here.
+    label: 'Projects',
+    icon: FolderKanban,
+    href: () => '/projects',
+    match: (p) => p.startsWith('/projects') || p.startsWith('/portfolio'),
+    warm: () => ['/projects'],
   },
 ];
 
@@ -97,7 +103,7 @@ const SETTINGS: Destination = {
   // Setup and Portfolio live as tabs inside Settings — a project is configured
   // a handful of times, and until now they cost two permanent menu slots.
   href: () => '/settings',
-  match: (p) => p.startsWith('/settings') || p.startsWith('/setup') || p.startsWith('/portfolio'),
+  match: (p) => p.startsWith('/settings'),
 };
 
 const itemClass = (active: boolean) =>
@@ -239,7 +245,7 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
               </div>
 
               {projects.length > 0 && (
-                <div className="mb-3">
+                <div className="px-4 pt-3">
                   <ProjectSwitcher projects={projects} />
                 </div>
               )}

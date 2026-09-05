@@ -65,6 +65,53 @@ export const projects = sqliteTable('projects', {
   finishDate: text('finish_date'),
   createdAt: now(),
   archivedAt: text('archived_at'),
+
+  /** Drives "last touched" order on /projects. Written by every project mutation. */
+  updatedAt: text('updated_at'),
+
+  /**
+   * TEMPORARY, and it is meant to die.
+   *
+   * Dashboard, Weekly, Daily and Klaim still speak the old JSON `Database`
+   * shape. `lib/legacy-adapter.ts` builds that shape from these tables, but
+   * three of its fields — `daily`, `catalogs`, `photoMeta` — have no tables
+   * here yet, so for a project that HAS a db.json twin they are read across
+   * from it. Null means no twin, which is the normal case for every project
+   * made in the app: those fields come back empty, and empty is the right
+   * answer for a project that has never had a daily report.
+   *
+   * Delete this column when board items 08-14 move those pages onto SQLite.
+   */
+  legacyJsonId: text('legacy_json_id'),
+
+  /* Report-header text the old `ProjectInfo` demands and this table lacked. */
+  workLocation: text('work_location'),
+  documentNoWeekly: text('document_no_weekly'),
+  documentNoDaily: text('document_no_daily'),
+  /** JSON `{ company, name }` — a signature block is two strings, never a relation. */
+  signatureLeft: text('signature_left'),
+  signatureRight: text('signature_right'),
+});
+
+/**
+ * Which project the app is looking at. One row, forever.
+ *
+ * A cookie would give each browser its own, which is the honest answer once
+ * there are logins — but reading cookies is a dynamic read, and under
+ * `cacheComponents: true` that forces `<Suspense>` around every read in the
+ * app. This repo has hit that wall twice. A single synchronous row prerenders
+ * like everything else here.
+ *
+ * `set null` on delete is deliberate: deleting the open project empties the
+ * pointer rather than dangling it, and `getActiveProjectId()` falls through to
+ * the first unarchived project. The app is never left with nothing to show.
+ */
+export const appState = sqliteTable('app_state', {
+  id: text('id').primaryKey().default('singleton'),
+  activeProjectId: text('active_project_id').references(() => projects.id, {
+    onDelete: 'set null',
+  }),
+  updatedAt: text('updated_at'),
 });
 
 /* -------------------------------------------------------------------- WBS */
@@ -91,6 +138,14 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
   order: integer('sort_order').notNull().default(0),
   depth: integer('depth').notNull().default(0),
   isLeaf: integer('is_leaf', { mode: 'boolean' }).notNull().default(false),
+
+  /**
+   * A point in time rather than a span. MS Project writes this as a duration of
+   * `0 days`, which is how the file stores it, not how anyone thinks about it —
+   * so here it is a property of the row and the zero duration follows from it.
+   * Without the flag a one-day task is indistinguishable from a milestone.
+   */
+  isMilestone: integer('is_milestone', { mode: 'boolean' }).notNull().default(false),
 
   /* reporting unit — SPK / Paket / Lot / Area, the label is the client's word */
   isReportingUnit: integer('is_reporting_unit', { mode: 'boolean' }).notNull().default(false),

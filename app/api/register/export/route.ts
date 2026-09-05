@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 
 import { getRegisterExportRows } from '@/lib/register';
 import type { RegisterKind } from '@/lib/schema';
+import { getActiveProjectId } from '@/lib/projects';
 
 /**
  * The register, out as a workbook — in the shape the importer reads back.
@@ -21,12 +22,25 @@ import type { RegisterKind } from '@/lib/schema';
 // what makes this handler per-request, and the register read beneath it is a
 // synchronous SQLite query, which needs no Suspense boundary of its own.
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about.
+ *
+ * Until now this was the literal string 'gundih', written by hand in four
+ * files, so choosing a project moved the rest of the app and left Document
+ * Control behind on someone else's register. It is read per request, never
+ * at module scope: a module-level read is evaluated once at import and would
+ * go stale the moment anyone switched project.
+ */
+function activeProjectId(): string {
+  // Empty is a real answer — no project means no register, and the screens
+  // already know how to render nothing.
+  return getActiveProjectId() ?? '';
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const register = (url.searchParams.get('register') === 'vdrl' ? 'vdrl' : 'edl') as RegisterKind;
-  const rows = getRegisterExportRows(PROJECT_ID, register);
+  const rows = getRegisterExportRows(activeProjectId(), register);
 
   const workbook = new ExcelJS.Workbook();
 

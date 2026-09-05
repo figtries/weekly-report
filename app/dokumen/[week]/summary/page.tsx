@@ -5,10 +5,24 @@ import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
   getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
 } from '@/lib/register';
+import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'EDL Summary' };
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about.
+ *
+ * Until now this was the literal string 'gundih', written by hand in four
+ * files, so choosing a project moved the rest of the app and left Document
+ * Control behind on someone else's register. It is read per request, never
+ * at module scope: a module-level read is evaluated once at import and would
+ * go stale the moment anyone switched project.
+ */
+function activeProjectId(): string {
+  // Empty is a real answer — no project means no register, and the screens
+  // already know how to render nothing.
+  return getActiveProjectId() ?? '';
+}
 
 /**
  * The EDL, read as of the week in the address.
@@ -25,28 +39,28 @@ const PROJECT_ID = 'gundih';
  */
 export default async function EdlSummaryPage({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const shape = getRegisterShape(PROJECT_ID, 'edl');
-  const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'edl', week) : null;
+  const shape = getRegisterShape(activeProjectId(), 'edl');
+  const summary = shape.documents > 0 ? getRegisterSummary(activeProjectId(), 'edl', week) : null;
 
   if (!summary) {
-    const parties = getRegisterParties(PROJECT_ID);
+    const parties = getRegisterParties(activeProjectId());
     return (
       <RouteTransition id="dokumen-edl-summary">
         <RegisterBuilder
-          projectId={PROJECT_ID}
+          projectId={activeProjectId()}
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
 
           hasDocuments={false}
           existingSections={[]}
-          numbering={getNumbering(PROJECT_ID, 'edl')}
+          numbering={getNumbering(activeProjectId(), 'edl')}
         />
       </RouteTransition>
     );
   }
 
-  const tree = getRegisterTree(PROJECT_ID, 'edl', week);
+  const tree = getRegisterTree(activeProjectId(), 'edl', week);
   // A and B are the sheet's own two bands; what a controller works in is the
   // level below — General, Procedure, Process, Mechanical, Electrical, Instrument.
   const groups = tree.flatMap((root) => (root.children.length > 0 ? root.children : [root]));
@@ -56,18 +70,18 @@ export default async function EdlSummaryPage({ params }: { params: Promise<{ wee
     <SummaryScreen
       summary={summary}
       groups={groups}
-      obstacles={getObstacles(PROJECT_ID, 'edl', week)}
-      movement={getWeekMovement(PROJECT_ID, 'edl', week)}
-      bridge={getEngineeringBridge(PROJECT_ID, week)}
+      obstacles={getObstacles(activeProjectId(), 'edl', week)}
+      movement={getWeekMovement(activeProjectId(), 'edl', week)}
+      bridge={getEngineeringBridge(activeProjectId(), week)}
       groupNoun="disciplines"
       groupsTitle="By discipline"
     />
 
     <div className="mt-6">
       <StageWeightsCard
-        projectId={PROJECT_ID}
+        projectId={activeProjectId()}
         register="edl"
-        weights={getStageWeights(PROJECT_ID, 'edl')}
+        weights={getStageWeights(activeProjectId(), 'edl')}
       />
     </div>
     </RouteTransition>

@@ -1,132 +1,59 @@
-'use client';
-
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { createProjectAction, deleteProjectAction, switchProjectAction } from '@/lib/actions';
+import { ChevronRight } from 'lucide-react';
+import { PressLink, pressMotion } from '@/components/motion/Press';
 import type { ProjectSummary } from '@/lib/workspace';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 /**
- * Switching between projects.
+ * Which project you are looking at — and the way to the page that manages
+ * them. It answers one question all day ("whose numbers are these?") and
+ * offers one action: go to Projects.
  *
- * A plain `<select>`, not a Radix dropdown: this sits in the sidebar on every
- * page including the phone layout, and on iOS a native select opens the system
- * picker — which is both faster and the control people already know.
+ * It used to be a native `<select>` laid over this card. On iOS that opens
+ * the system picker, which was the point — but on desktop it drops an
+ * unstyleable white list over the page, with a 100-character project name
+ * rendered as one unwrapped blue bar. There is no CSS for that list; a
+ * `<select>` is only ever as good as the platform draws it. So switching
+ * moved to Projects, where a project is a row with room for its name, its
+ * customer and its numbers — which is a better place to choose from than a
+ * 191px strip anyway.
+ *
+ * No `'use client'`: nothing here holds state. It renders inside the
+ * sidebar, which is already a client component.
  */
 export default function ProjectSwitcher({ projects }: { projects: ProjectSummary[] }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const active = projects.find((p) => p.isActive) ?? projects[0];
+  if (!active) return null;
 
-  const active = projects.find((p) => p.isActive);
-
-  function switchTo(id: string) {
-    if (id === active?.id) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await switchProjectAction(id);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      // Week numbers don't carry across projects, so land on the new project's
-      // own current week rather than keeping a week that may not exist there.
-      router.push('/');
-    });
-  }
-
-  function create() {
-    setError(null);
-    startTransition(async () => {
-      const res = await createProjectAction(name);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setName('');
-      setAdding(false);
-      router.push('/setup');
-    });
-  }
-
-  function remove(id: string, label: string) {
-    if (!confirm(`Delete project “${label}” and all of its data? This cannot be undone.`)) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await deleteProjectAction(id);
-      if (!res.ok) setError(res.error);
-      else router.push('/');
-    });
-  }
+  const others = projects.length - 1;
+  const subtitle =
+    active.customer ||
+    (active.totalWeeks > 0 ? `Week ${active.currentWeek} of ${active.totalWeeks}` : 'Not set up yet');
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1.5">
-        <select
-          value={active?.id ?? ''}
-          onChange={(e) => switchTo(e.target.value)}
-          disabled={pending}
-          aria-label="Select project"
-          className="h-8 min-w-0 flex-1 truncate rounded-md border bg-background px-2 text-xs outline-none transition-colors duration-150 ease-ios focus:border-primary/60 disabled:opacity-50"
-        >
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => setAdding((v) => !v)}
-          disabled={pending}
-          aria-label="Add project"
-          title="Add project"
-          className="flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors duration-150 ease-ios hover:bg-muted hover:text-foreground disabled:opacity-50"
-        >
-          +
-        </button>
-      </div>
+    <PressLink
+      href="/projects"
+      {...pressMotion}
+      aria-label={`${active.name} — go to Projects`}
+      className="flex min-h-14 items-center gap-2.5 rounded-xl border bg-background px-2.5 py-2 shadow-sm transition-colors duration-300 ease-ios hover:border-chart-1/40 hover:bg-muted/40"
+    >
+      <span
+        aria-hidden
+        className="grid size-9 shrink-0 place-items-center rounded-lg bg-chart-1/10 text-sm font-semibold uppercase text-chart-1"
+      >
+        {active.name.trim().charAt(0) || '?'}
+      </span>
 
-      {adding && (
-        <div className="animate-fade-in-up space-y-1.5 rounded-md border bg-card p-2">
-          <Input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()}
-            placeholder="New project name"
-            className="h-8 text-xs"
-          />
-          <div className="flex gap-1.5">
-            <Button size="sm" className="h-7 flex-1 text-xs" onClick={create} disabled={pending || !name.trim()}>
-              Buat &amp; setup
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs"
-              onClick={() => setAdding(false)}
-              disabled={pending}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
+          {active.name}
+        </span>
+        <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+          {/* When there is somewhere to switch TO, say so — otherwise the card
+              is a signpost pointing at a page with one row on it. */}
+          {others > 0 ? `${subtitle} · +${others} more` : subtitle}
+        </span>
+      </span>
 
-      {active && projects.length > 1 && (
-        <button
-          onClick={() => remove(active.id, active.name)}
-          disabled={pending}
-          className="text-[11px] text-muted-foreground underline-offset-2 transition-colors duration-150 ease-ios hover:text-destructive hover:underline disabled:opacity-50"
-        >
-          Delete this project
-        </button>
-      )}
-
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
-    </div>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </PressLink>
   );
 }

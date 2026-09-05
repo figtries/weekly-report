@@ -1,11 +1,19 @@
+import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb } from '@/lib/data';
 import { getCatalogs } from '@/lib/catalogs';
 import CatalogEditor from '@/components/settings/CatalogEditor';
 import { EngineeringSource } from '@/components/settings/EngineeringSource';
-import SectionTabs, { PROJECT_TABS } from '@/components/layout/SectionTabs';
 import { getDisciplineLinks, getRegisterSummary } from '@/lib/register';
+import { getActiveProjectId } from '@/lib/projects';
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about — read per request, never at module scope.
+ * A module-level read is evaluated once at import and goes stale the moment
+ * anyone switches project. See lib/projects.ts.
+ */
+function activeProjectId(): string {
+  return getActiveProjectId() ?? '';
+}
 
 export const metadata = { title: 'Project Settings' };
 
@@ -14,14 +22,14 @@ export default async function SettingsPage() {
   const cat = getCatalogs(db);
   // Left at its own last movement rather than a chosen week: this decides where
   // a number comes from, so what matters is what the register currently knows.
-  const edl = getRegisterSummary(PROJECT_ID, 'edl');
-  const disciplines = edl ? getDisciplineLinks(PROJECT_ID) : [];
+  const edl = getRegisterSummary(activeProjectId(), 'edl');
+  const disciplines = edl ? getDisciplineLinks(activeProjectId()) : [];
 
   return (
-    <div className="mx-auto max-w-3xl animate-fade-in-up px-3 py-5 sm:p-6 lg:p-8">
-      <SectionTabs tabs={PROJECT_TABS} className="mb-5" />
+    <RouteTransition id="settings">
+    <div className="mx-auto max-w-3xl px-3 py-5 sm:p-6 lg:p-8">
 
-      <header className="mb-6">
+      <header className="mb-6 animate-enter">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Settings</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           The lists below belong to this project, not to the app. Another project keeps its own —
@@ -33,7 +41,7 @@ export default async function SettingsPage() {
       <div className="space-y-4">
         {edl && disciplines.length > 0 && (
           <EngineeringSource
-            projectId={PROJECT_ID}
+            projectId={activeProjectId()}
             disciplines={disciplines}
             registerDate={edl.evidenceDate}
           />
@@ -44,5 +52,6 @@ export default async function SettingsPage() {
         <CatalogEditor catalogKey="crew" entries={cat.crew} />
       </div>
     </div>
+    </RouteTransition>
   );
 }

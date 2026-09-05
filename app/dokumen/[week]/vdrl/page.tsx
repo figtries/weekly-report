@@ -5,10 +5,18 @@ import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
   getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
 } from '@/lib/register';
+import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'VDRL Summary' };
 
-const PROJECT_ID = 'gundih';
+/**
+ * The project this screen is about — read per request, never at module scope.
+ * A module-level read is evaluated once at import and goes stale the moment
+ * anyone switches project. See lib/projects.ts.
+ */
+function activeProjectId(): string {
+  return getActiveProjectId() ?? '';
+}
 
 /**
  * The vendor register, read the same way and telling a different story.
@@ -20,22 +28,22 @@ const PROJECT_ID = 'gundih';
  */
 export default async function VdrlSummaryPage({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const shape = getRegisterShape(PROJECT_ID, 'vdrl');
-  const summary = shape.documents > 0 ? getRegisterSummary(PROJECT_ID, 'vdrl', week) : null;
+  const shape = getRegisterShape(activeProjectId(), 'vdrl');
+  const summary = shape.documents > 0 ? getRegisterSummary(activeProjectId(), 'vdrl', week) : null;
 
   if (!summary) {
-    const parties = getRegisterParties(PROJECT_ID);
+    const parties = getRegisterParties(activeProjectId());
     return (
       <RouteTransition id="dokumen-vdrl-summary">
         <RegisterBuilder
-          projectId={PROJECT_ID}
+          projectId={activeProjectId()}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
 
           hasDocuments={false}
           existingSections={[]}
-          numbering={getNumbering(PROJECT_ID, 'vdrl')}
+          numbering={getNumbering(activeProjectId(), 'vdrl')}
         />
       </RouteTransition>
     );
@@ -46,9 +54,9 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
     <SummaryScreen
       summary={summary}
       // Vendor packages are the top level here — one card per package.
-      groups={getRegisterTree(PROJECT_ID, 'vdrl', week)}
-      obstacles={getObstacles(PROJECT_ID, 'vdrl', week)}
-      movement={getWeekMovement(PROJECT_ID, 'vdrl', week)}
+      groups={getRegisterTree(activeProjectId(), 'vdrl', week)}
+      obstacles={getObstacles(activeProjectId(), 'vdrl', week)}
+      movement={getWeekMovement(activeProjectId(), 'vdrl', week)}
       groupNoun="packages"
       groupsTitle="By vendor package"
       foldEmptyGroups
@@ -56,9 +64,9 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
 
     <div className="mt-6">
       <StageWeightsCard
-        projectId={PROJECT_ID}
+        projectId={activeProjectId()}
         register="vdrl"
-        weights={getStageWeights(PROJECT_ID, 'vdrl')}
+        weights={getStageWeights(activeProjectId(), 'vdrl')}
       />
     </div>
     </RouteTransition>
