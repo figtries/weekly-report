@@ -69,7 +69,10 @@ export function writeDraft(
 ): SeedResult {
   const categories: PasteCategory[] = [];
   for (const group of input.groups) {
-    if (group.documents.length === 0) continue;
+    // A path with no documents is NOT skipped: it is a heading, a section or a
+    // group somebody created deliberately, and a register is built structure
+    // first. Dropping them meant "Add a heading" wrote nothing at all — the
+    // name lived on the screen until the page was left.
     group.path.forEach((name, depth) => {
       categories.push({
         name,
@@ -80,17 +83,24 @@ export function writeDraft(
       });
     });
   }
-  return writeCategories({ ...input, text: '' }, categories);
+  return writeCategories({ ...input, text: '' }, categories, { allowEmpty: true });
 }
 
-function writeCategories(input: SeedInput, categories: PasteCategory[]): SeedResult {
+function writeCategories(
+  input: SeedInput,
+  categories: PasteCategory[],
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
+): SeedResult {
   const clientName = input.clientName.trim();
   const contractorName = input.contractorName.trim();
   if (!clientName) throw new Error('Client name is required');
   if (!contractorName) throw new Error('Contractor name is required');
 
   const total = categories.reduce((n, c) => n + c.documents.length, 0);
-  if (total === 0) throw new Error('Nothing to add — no documents were given');
+  // Structure on its own is a real thing to save; a pasted list with no
+  // documents in it is not.
+  if (total === 0 && !allowEmpty) throw new Error('Nothing to add — no documents were given');
+  if (categories.length === 0) throw new Error('Nothing to add');
 
   return db.transaction((tx) => {
     tx.update(schema.projects)

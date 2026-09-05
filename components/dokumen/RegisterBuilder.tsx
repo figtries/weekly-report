@@ -111,6 +111,12 @@ export function RegisterBuilder({
       return band;
     };
 
+    // Every added heading is registered FIRST, sections or not. Reaching them
+    // only through their sections meant a heading created on its own produced
+    // no row at all, so it never entered the shape and never appeared — while
+    // the count at the bottom cheerfully said "1 new heading".
+    for (const band of extraBands) findBand(band.name);
+
     const rows = [
       ...existingSections,
       ...extraBands.flatMap((b) => b.sections.map((s) => ({
@@ -145,6 +151,26 @@ export function RegisterBuilder({
 
     return merged;
   }, [register, existingSections, extraBands]);
+
+  /**
+   * Headings, sections and groups added in this sitting, as paths.
+   *
+   * They are saved even with nothing inside them. A register is built structure
+   * first — someone lays out the shape, then fills it, often on another day —
+   * and until this existed "Add a heading" wrote nothing at all: the name lived
+   * on the screen until the page was left.
+   */
+  const structurePaths = useMemo(() => {
+    const out: string[][] = [];
+    for (const band of extraBands) {
+      if (band.sections.length === 0) { out.push([band.name]); continue; }
+      for (const section of band.sections) {
+        if (section.groups.length === 0) { out.push([band.name, section.name]); continue; }
+        for (const group of section.groups) out.push([band.name, section.name, group]);
+      }
+    }
+    return out;
+  }, [extraBands]);
 
   const totals = useMemo(() => {
     let documents = 0;
@@ -203,7 +229,7 @@ export function RegisterBuilder({
   const saveDraft = () => {
     setError(null);
     start(async () => {
-      const groups = Object.entries(draft)
+      const filledGroups = Object.entries(draft)
         .map(([path, rows]) => ({
           path: path.split(SEP),
           documents: rows
@@ -211,6 +237,17 @@ export function RegisterBuilder({
             .map((r) => ({ docNo: r.docNo.trim() || null, title: r.title.trim() })),
         }))
         .filter((g) => g.documents.length > 0);
+
+      // Structure first, so a heading exists before the group beneath it, then
+      // the groups that carry documents. A path already carrying documents is
+      // not sent twice.
+      const written = new Set(filledGroups.map((g) => g.path.join(SEP)));
+      const groups = [
+        ...structurePaths
+          .filter((path) => !written.has(path.join(SEP)))
+          .map((path) => ({ path, documents: [] })),
+        ...filledGroups,
+      ];
 
       const result = await addFromDraft({
         projectId, register, groups, clientName: client, contractorName: contractor,
@@ -867,10 +904,16 @@ export function RegisterBuilder({
           </span>{' '}
           document{totals.documents === 1 ? '' : 's'} in {totals.groups} group
           {totals.groups === 1 ? '' : 's'}
+          {structurePaths.length > 0 && (
+            <span className="text-muted-foreground">
+              {' · '}
+              {structurePaths.length} added to the structure
+            </span>
+          )}
         </span>
         <Button
           className="ml-auto h-11"
-          disabled={totals.documents === 0 || !named || pending}
+          disabled={(totals.documents === 0 && structurePaths.length === 0) || !named || pending}
           onClick={saveDraft}
         >
           {pending ? 'Saving…' : 'Save to the register'}

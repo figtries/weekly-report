@@ -25,7 +25,7 @@ source.close();
 process.env.REPORT_DB_PATH = tmp;
 
 const { db, schema, sqlite } = await import('../lib/sqlite.ts');
-const { writeSeed } = await import('../lib/register-seed.ts');
+const { writeSeed, writeDraft } = await import('../lib/register-seed.ts');
 const { and, eq } = await import('drizzle-orm');
 
 const failures: string[] = [];
@@ -123,6 +123,40 @@ try {
 check('menolak client kosong', threw, true);
 check('tidak ada yang tertulis', db.select().from(schema.documents)
   .where(eq(schema.documents.projectId, PROJECT)).all().length, before);
+
+console.log('\nstruktur kosong tetap tersimpan — judul besar, judul utama, sub judul');
+const structure = writeDraft({
+  projectId: PROJECT,
+  register: 'edl',
+  clientName: 'PETROGAS (BASIN) LTD.',
+  contractorName: 'PT. INDOTURBINE',
+  groups: [
+    { path: ['CONSTRUCTION'], documents: [] },
+    { path: ['CONSTRUCTION', 'PIPING WORKS'], documents: [] },
+    { path: ['CONSTRUCTION', 'PIPING WORKS', 'Isometric Drawing'], documents: [] },
+  ],
+});
+check('kategori baru', structure.categories, 3);
+check('dokumen baru', structure.documents, 0);
+
+const made = db.select().from(schema.docCategories)
+  .where(and(eq(schema.docCategories.projectId, PROJECT), eq(schema.docCategories.register, 'edl'))).all();
+const heading = made.find((c) => c.name === 'CONSTRUCTION')!;
+const sectionRow = made.find((c) => c.name === 'PIPING WORKS')!;
+const groupRow = made.find((c) => c.name === 'Isometric Drawing')!;
+check('judul besar tanpa induk', heading.parentId, null);
+check('judul utama di bawah judul besar', sectionRow.parentId, heading.id);
+check('sub judul di bawah judul utama', groupRow.parentId, sectionRow.id);
+
+console.log('\nmenambahkan struktur yang sama lagi tidak menggandakan');
+const structureAgain = writeDraft({
+  projectId: PROJECT,
+  register: 'edl',
+  clientName: 'PETROGAS (BASIN) LTD.',
+  contractorName: 'PT. INDOTURBINE',
+  groups: [{ path: ['CONSTRUCTION', 'PIPING WORKS', 'Isometric Drawing'], documents: [] }],
+});
+check('kategori baru', structureAgain.categories, 0);
 
 console.log('\nregister Gundih yang sudah ada tidak ikut tersentuh');
 check('dokumen gundih', db.select().from(schema.documents)
