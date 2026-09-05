@@ -20,54 +20,31 @@ dan papan 16 (project management) bergabung dengan papan 17 (planner) — karena
 "tambah proyek lalu bangun proyeknya di situ" **adalah** planner. Pagar
 pekerjaannya digeser, bukan dihapus; lihat bagian terakhir.
 
-## Data acuan kedua: Samberah
+## Bentuk sheet MS Project
 
-`Jasa Pengadaan Instrument dan Control System PHSS Unit C-4500 Samberah
-REV1.pdf` — dibaca 5 September 2026. Diberikan pengguna sebagai **gambaran,
-bukan barang yang harus dibangun**.
-
-Ia **ekspor Microsoft Project asli**: legenda di kaki halaman memuat daftar tipe
-task MS Project lengkap — Task, Split, Milestone, Summary, Project Summary,
-External Tasks, External Milestone, Inactive Task, Inactive Summary, Inactive
-Milestone, Manual Task, Duration-only, Manual Summary Rollup, Manual Summary,
-Start-only, Finish-only, Critical, Critical Split, Deadline, Progress, Manual
-Progress. Ini rujukan yang lebih jujur daripada Gundih untuk pekerjaan ini,
-justru karena ia keluar dari alat yang sedang kita tiru.
-
-Yang ditemukan:
+Penggunanya menunjukkan sebuah ekspor Microsoft Project **sebagai gambaran, bukan
+sebagai bahan**. Tidak ada datanya yang masuk ke aplikasi ini, tidak ada bagiannya
+yang jadi syarat lulus, dan tidak ada proyeknya yang perlu bisa dibuat ulang. Yang
+diambil cuma bentuknya — dan bentuk itu sudah jadi milik MS Project sejak lama:
 
 - **Sheet-nya lima kolom**: `ID · Task Name · Duration · Start · Finish`. Tidak
   ada bobot, tidak ada harga, tidak ada persen. Itu seluruh papan tulisnya.
-- **47 baris, outline empat tingkat**: `1` → `1.1` → `1.1.1` → `1.1.1.1`.
-  Bandingkan Gundih: 285 baris, 218 leaf, 67 cabang.
-- **Durasi adalah hari kalender, kedua ujung ikut dihitung.** Diverifikasi
-  aritmatis pada delapan baris, delapan-delapannya cocok:
+- **Outline bertingkat** — `1` → `1.1` → `1.1.1` → `1.1.1.1` — dan kodenya
+  dihasilkan dari tingkat dan urutan, bukan diketik.
+- **`0 days` berarti milestone.**
+- **Baris induk dihitung, bukan diketik** — durasinya bentangan anak-anaknya.
+- **Durasi ditulis campur satuan** (`days` di sebelah `mons`), dan itu salah satu
+  sumber kebingungan yang dibuang di sini; lihat perbaikan nomor 4.
+- **Hubungan antar-pekerjaan terlihat sebagai tanggal yang menempel** — satu baris
+  selesai, baris berikutnya mulai besoknya. Tapi tidak semuanya begitu: sebagian
+  mulai berbarengan, sebagian punya jeda yang disengaja. Penebak rantai harus bisa
+  membedakan ketiganya, dan ini bukti kedua — di luar Gundih — bahwa rantainya
+  memang ada, hanya tidak pernah dituliskan sebagai hubungan.
 
-  ```
-  1        502 days → 502    1.1.1.3   30 days →  30
-  1.1      449 days → 449    1.1.2.2  120 day  → 120
-  1.1.1    330 day  → 330    1.1.2.3    7 days →   7
-  1.1.1.2  10 mons  → 300    1.3.2.1    6 days →   6
-  ```
-
-  Itu persis rumus `inclusiveDays()` yang **sudah ada** di
-  `lib/plan-curve.ts:23`. Konvensi waktu berkas ini sudah sama dengan aplikasi
-  ini; tidak ada yang perlu dikarang. `10 mons` = 300 hari, jadi satuan "bulan"
-  di berkas ini bernilai 30 hari.
-- **`0 days` berarti milestone.** Tiga baris: dua "PO Issuance" dan "FINISH".
-- **Baris induk dihitung, bukan diketik.** `1.1 Procurement Material 449 days`
-  adalah bentangan anak-anaknya; `1 Jasa Pengadaan… 502 days` bentangan
-  semuanya.
-- **Rantai muncul lagi — proyek berbeda, pola sama.** `1.1.1.2` Fabrication
-  selesai Sab 24/10/26, `1.1.1.3` Shipment mulai Min 25/10/26. `1.3.1.1` selesai
-  31/03/27, `1.3.1.2` mulai 01/04/27. Ini bukti kedua, dari berkas yang bukan
-  milik kita, bahwa hubungan antar-pekerjaan memang ada — ia hanya ditulis
-  sebagai tanggal yang menempel.
-- **Tapi tidak semuanya rantai.** `1.3.2.1.1`, `.3` dan `.8` sama-sama mulai
-  12/04/27. Penebak harus bisa membedakan *menyambung* dari *berbarengan*.
-- **Ada jeda yang disengaja.** `1.1.2.2` selesai 08/03/27, `1.1.2.3` baru mulai
-  16/03/27 — tujuh hari kosong. Penebak tidak boleh memaksa semua jadi
-  sambung-menyambung rapat.
+Satu hal teknis ikut terbukti sambil membacanya: durasi MS Project adalah **hari
+kalender dengan kedua ujung ikut dihitung**, yang persis rumus `inclusiveDays()`
+di `lib/plan-curve.ts:23`. Jadi tidak ada konvensi waktu baru yang perlu
+dikarang.
 
 ## Konsepnya: otak MS Project, muka kita sendiri
 
@@ -89,17 +66,18 @@ repo dan hanya ditegakkan di sini.
 3. **Milestone adalah sakelar, bukan "ketik 0 hari".** `0 days` adalah cara MS
    Project menuliskannya, bukan cara orang memikirkannya. Barisnya punya tombol
    Milestone; durasinya jadi nol karena ia milestone, bukan sebaliknya.
-4. **Satu satuan durasi: hari kalender.** `10 mons` di sebelah `330 day` di
-   sebelah `502 days` adalah ladang ranjau — apalagi karena "hari" di MS Project
-   bisa berarti hari kerja tergantung kalender proyek. Kita simpan hari, selalu.
-   Mengetik "10 bulan" diterima dan langsung diterjemahkan jadi 300 hari **di
-   depan mata**, bukan disimpan sebagai satuan lain.
+4. **Satu satuan durasi: hari kalender.** MS Project mencampur `days`, `wks` dan
+   `mons` dalam satu kolom, dan "hari" di sana bisa berarti hari KERJA tergantung
+   kalender proyek — dua ladang ranjau bertumpuk. Kita simpan hari kalender,
+   selalu. Mengetik "10 bulan" diterima dan langsung diterjemahkan jadi 300 hari
+   **di depan mata**, bukan disimpan sebagai satuan lain.
 5. **Menautkan pekerjaan tidak digambar tangan.** Aplikasi menebak dari tanggal
-   yang sudah ada dan bertanya dengan kalimat: *"Shipment sepertinya menunggu
-   Fabrication & RTS. Betul?"* → Iya / Bukan. Tidak ada panah yang ditarik,
-   tidak ada dialog Predecessors/Lag/Type. Penebak harus membedakan menyambung
-   (24/10 → 25/10) dari berbarengan (tiga baris mulai 12/04) dan tidak memaksa
-   jeda tujuh hari jadi rapat.
+   yang sudah ada dan bertanya dengan kalimat: *"Pengiriman sepertinya menunggu
+   Fabrikasi. Betul?"* → Iya / Bukan. Tidak ada panah yang ditarik, tidak ada
+   dialog Predecessors/Lag/Type. Penebak harus membedakan tiga hal: **menyambung**
+   (satu selesai, berikutnya mulai besoknya), **berbarengan** (beberapa baris
+   mulai di hari yang sama), dan **jeda yang disengaja** (ada hari kosong di
+   antaranya). Yang ketiga tidak boleh dipaksa jadi rapat.
 6. **Tidak ada yang bergeser diam-diam.** Setiap pergeseran menampilkan
    akibatnya lebih dulu — *"6 pekerjaan ikut mundur. Selesai proyek 15 Des → 24
    Des"* — lalu Terapkan atau Batal, dan bisa dibatalkan sesudahnya.
@@ -115,7 +93,7 @@ repo dan hanya ditegakkan di sini.
    state setelah halaman hidup: baris berpindah tingkat, batang Gantt memanjang,
    panel pratinjau masuk.
 10. **Radix per layar, bukan per baris.** Sheet ini persis perulangan yang bisa
-    melebihi 20 baris — 47 di Samberah, 285 di Gundih. Di dalam baris:
+    melebihi 20 baris — 285 di Gundih. Di dalam baris:
     `<input>` / `<select>` native berbaju kelas shadcn. Satu DropdownMenu untuk
     seluruh sheet, disetir id baris yang sedang aktif.
 11. **Kalender kerja, hari libur, resource leveling, dan levelling delay tidak
@@ -158,10 +136,10 @@ kalimat yang berguna; sebuah tanggal yang muncul sendiri tanpa pembanding tidak.
 **4. Sheet-nya enam kolom, plus satu yang muncul belakangan.**
 
 ```
-#   Nama pekerjaan          Durasi   Mulai       Selesai     Harga    [Bobot %]
-1   Jasa Pengadaan …        502 hari 29/12/2025  14/05/2027  —        —
-1.1   Procurement Material  449 hari 29/12/2025  22/03/2027  —        —
-1.1.1.1 PO Issuance         milestone 29/12/2025 29/12/2025  —        —
+#         Nama pekerjaan     Durasi     Mulai       Selesai     Harga  [Bobot %]
+1         Proyek             502 hari   29/12/2025  14/05/2027  —      —
+1.1         Pengadaan        449 hari   29/12/2025  22/03/2027  —      —
+1.1.1.1       Terbit PO      milestone  29/12/2025  29/12/2025  —      —
 ```
 
 `#` adalah kode outline, dihasilkan dari tingkat dan urutan — tidak diketik.
@@ -415,7 +393,8 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
 3. **Layar pertama** — `/projects`, kartu + mini-Gantt, cari, arsip, dialog
    proyek baru. Titik berhenti: proyek bisa dibuat dan dilihat.
 4. **Sheet** — enam kolom, tiga rupa baris, Tab/Shift+Tab, segitiga
-   durasi/mulai/selesai. Titik berhenti: Samberah 47 baris bisa diketik utuh.
+   durasi/mulai/selesai. Titik berhenti: sebuah proyek empat tingkat berisi
+   pekerjaan dan milestone bisa diketik utuh dari nol, dan durasinya benar.
 5. **Gantt** — batang sebaris dengan barisnya, pemisah yang bisa ditarik, tab di
    ponsel. Titik berhenti: Gundih 285 baris tergambar.
 6. **Tempel dari Excel.** Titik berhenti: 285 baris masuk sekali duduk.
@@ -451,9 +430,11 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
 2. **Hitung baris anak sesudah migrasi**: `doc_stages` 512 · `documents` 454 ·
    `leaf_progress` 7.568 · `node_schedules` 570 · `wbs_nodes` 285 · `weeks` 60.
    Sama sebelum dan sesudah, atau migrasinya dibatalkan.
-3. **Samberah diketik ulang utuh** — 47 baris, empat tingkat, tiga milestone —
-   dan durasi yang keluar cocok dengan PDF-nya pada kedelapan baris yang sudah
-   diverifikasi di atas.
+3. **Sebuah proyek diketik dari nol** — empat tingkat outline, beberapa
+   milestone, beberapa pekerjaan biasa — lalu durasi yang keluar diperiksa
+   terhadap `inclusiveDays()`: mengetik Mulai + Durasi harus menghasilkan Selesai
+   yang sama dengan mengetik Mulai + Selesai lalu membaca Durasi. Segitiga
+   keputusan 5 harus tertutup dari ketiga arah.
 4. **Penerjemah dijaga sebuah uji tetap** (`scripts/verify-adapter.ts`, dijalankan
    `node --import ./scripts/ts-resolve.mjs`): Gundih lewat penerjemah, masuk
    `computeRollup` + `promoteNestedSpkContracts` + `computeGrandTotal`, harus
@@ -482,8 +463,8 @@ tetap ada yang bisa dipegang di tiap titik berhenti:
 Keputusan papan nomor 15, *"Planner has NO dependencies"*, **dicabut**. Ia
 dikunci 27 Agustus 2026 karena jadwal Gundih tidak memakai satu pun relasi FS/SS.
 Benar sebagai pembacaan kolom, salah sebagai kesimpulan: relasinya ada sebagai
-**tanggal yang menempel**, dan Samberah — berkas yang bukan milik kita —
-membuktikannya untuk kedua kalinya.
+**tanggal yang menempel** — dan pola itu muncul lagi di ekspor MS Project mana
+pun yang dibaca, bukan cuma di Gundih.
 
 `AGENTS.md`, memori blueprint, dan artefak rencana
 `https://claude.ai/code/artifact/d3dfeed6-8a05-4ba8-87f5-2affe3da7c47`
