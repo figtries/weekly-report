@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
 import { cn } from '@/lib/utils';
-import type { ProjectSummary } from '@/lib/workspace';
+import type { ProjectCard } from '@/lib/projects';
 
 /**
  * Six destinations, not twelve.
@@ -192,7 +192,7 @@ function Brand({ compact }: { compact?: boolean }) {
   );
 }
 
-function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects: ProjectSummary[] }) {
+function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects: ProjectCard[] }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -282,7 +282,7 @@ export default function Sidebar({
   projects,
 }: {
   currentWeek: number;
-  projects: ProjectSummary[];
+  projects: ProjectCard[];
 }) {
   return (
     <>

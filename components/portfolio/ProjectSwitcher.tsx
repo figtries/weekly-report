@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { PressLink, pressMotion } from '@/components/motion/Press';
-import type { ProjectSummary } from '@/lib/workspace';
+import type { ProjectCard } from '@/lib/projects';
 
 /**
  * Which project you are looking at — and the way to the page that manages
@@ -19,14 +19,17 @@ import type { ProjectSummary } from '@/lib/workspace';
  * No `'use client'`: nothing here holds state. It renders inside the
  * sidebar, which is already a client component.
  */
-export default function ProjectSwitcher({ projects }: { projects: ProjectSummary[] }) {
+export default function ProjectSwitcher({ projects }: { projects: ProjectCard[] }) {
   const active = projects.find((p) => p.isActive) ?? projects[0];
   if (!active) return null;
 
   const others = projects.length - 1;
+  // No week number here any more. The list now comes from SQLite, where "which
+  // week is it" is a question about today's date — and this renders in the root
+  // layout, which prerenders into the static shell, so a clock read here would
+  // be frozen at build time and drift further from the truth every day.
   const subtitle =
-    active.customer ||
-    (active.totalWeeks > 0 ? `Week ${active.currentWeek} of ${active.totalWeeks}` : 'Not set up yet');
+    active.clientName || (active.rowCount > 0 ? `${active.rowCount} rows` : 'Not planned yet');
 
   return (
     <PressLink

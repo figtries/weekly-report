@@ -4,7 +4,8 @@ import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
-import { getDb, getLatestWeek, getProjects } from "@/lib/data";
+import { getDb, getLatestWeek } from "@/lib/data";
+import { listProjects } from "@/lib/projects";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,7 +25,10 @@ export default async function RootLayout({
   // getDb is 'use cache' (tag: 'db'), so the sidebar's week-scoped sub-links
   // stay part of the static shell and refresh when the current week changes.
   const db = await getDb();
-  const projects = await getProjects();
+  // From SQLite, not db.json: the sidebar must name the project the rest of
+  // the app is actually pointed at, or the app disagrees with itself in the
+  // one place a user looks to check. Synchronous, so it still prerenders.
+  const projects = listProjects();
   const currentWeek = getLatestWeek(db) || 1;
   return (
     // data-scroll-behavior lets Next.js suspend smooth scrolling during route
