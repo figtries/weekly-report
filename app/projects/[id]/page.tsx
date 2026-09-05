@@ -1,27 +1,26 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CalendarRange, FileText, Layers, Milestone, Rows3, Wallet } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
+import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
+import { getSheet } from '@/lib/sheet';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
 // is enough — this route resolves per id without it.
 
 /**
- * A project's own home.
+ * A project, and the plan it holds.
  *
- * Two jobs, and the second is the one that does not exist anywhere else in the
- * app: it says what the project actually CONTAINS. A project that reads "285
- * work breakdown rows · 4 reporting units · 454 documents" is one you can
- * believe in; a name and a percentage is not.
- *
- * The schedule sheet — the six-column MS Project surface with its Gantt — lands
- * in this page next. It is deliberately not faked here: an empty grid pretending
- * to be an editor is worse than a sentence saying where it will be.
+ * The page is a full-height column rather than a scrolling document: the sheet
+ * and its Gantt each need their own scroller, and a page that scrolls as well
+ * gives you three, which is the surest way to lose a row you were looking at.
+ * The chrome above is deliberately thin — a header, one line of facts — because
+ * the plan is what people came for.
  */
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   // `params` is a runtime read. Under `cacheComponents` awaiting it in the page
@@ -42,6 +41,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   if (!project) notFound();
 
   const contents = getProjectContents(id);
+  const sheet = getSheet(id);
   const isOpen = getActiveProjectId() === id;
 
   const money =
@@ -53,77 +53,76 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
         }).format(project.contractValue)
       : null;
 
-  const dates =
-    project.startDate && project.finishDate
-      ? `${fmt(project.startDate)} — ${fmt(project.finishDate)}`
-      : 'No dates set';
-
   const facts = [
-    { icon: Rows3, label: 'Work breakdown rows', value: contents.wbsRows, sub: `${contents.leaves} of them measurable` },
-    { icon: Layers, label: 'Reporting units', value: contents.reportingUnits, sub: 'SPK, packages, lots' },
-    { icon: CalendarRange, label: 'Scheduled rows', value: contents.scheduledRows, sub: `across ${contents.baselines} baselines` },
-    { icon: Milestone, label: 'Reporting weeks', value: contents.weeks, sub: dates },
-    { icon: FileText, label: 'Documents', value: contents.documents, sub: 'in the register' },
-    { icon: Wallet, label: 'Contract value', value: money ?? '—', sub: money ? project.currency : 'no prices entered yet' },
-  ];
+    `${contents.wbsRows} rows`,
+    `${contents.leaves} measurable`,
+    contents.reportingUnits ? `${contents.reportingUnits} reporting units` : null,
+    `${contents.weeks} weeks`,
+    contents.documents ? `${contents.documents} documents` : null,
+    // Said as a count rather than hidden: pricing is a separate job from
+    // scheduling, and this is how far along it is.
+    sheet.pricedRows ? `${sheet.pricedRows} priced` : 'no prices yet',
+    money,
+  ].filter(Boolean);
 
   return (
     <RouteTransition id="project-home">
-      <div className="mx-auto max-w-5xl px-3 py-5 sm:p-6 lg:p-8">
-        <Link
-          href="/projects"
-          className="animate-fade-in-up inline-flex h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          All projects
-        </Link>
-
-        <header className="animate-enter mt-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
-              {project.name}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {project.clientName || 'No client named yet'}
-              {project.contractorName ? ` · ${project.contractorName}` : ''}
-            </p>
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="animate-enter shrink-0 border-b px-3 py-3 sm:px-6">
+          <Link
+            href="/projects"
+            className="inline-flex h-8 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-3.5" />
+            All projects
+          </Link>
+          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">
+                {project.name}
+              </h1>
+              <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                <span>{project.clientName || 'No client named yet'}</span>
+                {facts.map((f) => (
+                  <span key={f as string}>· {f}</span>
+                ))}
+              </p>
+            </div>
+            <OpenProjectButton id={id} isOpen={isOpen} />
           </div>
-          <OpenProjectButton id={id} isOpen={isOpen} />
         </header>
 
-        <dl className="animate-enter stagger-1 mt-6 grid grid-cols-2 gap-2.5 lg:grid-cols-3">
-          {facts.map((f) => (
-            <div key={f.label} className="rounded-xl border bg-card p-3.5">
-              <dt className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <f.icon className="size-3.5" />
-                {f.label}
-              </dt>
-              <dd className="mt-1.5 text-xl font-semibold tabular-nums">{f.value}</dd>
-              <dd className="mt-0.5 text-[11px] text-muted-foreground">{f.sub}</dd>
-            </div>
-          ))}
-        </dl>
-
-        {/* Said plainly rather than mocked up. The sheet is the next thing
-            built here, and a dead grid would only teach people to distrust it. */}
-        <section className="animate-enter stagger-2 mt-4 rounded-xl border border-dashed bg-card p-6">
-          <h2 className="text-sm font-semibold">The schedule sheet goes here</h2>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Six columns — row, task, duration, start, finish, price — with the Gantt beside them and
-            a divider you can drag. Type any of duration, start or finish and the other two follow.
-            It is being built next; nothing about this project is lost in the meantime.
-          </p>
-        </section>
+        {sheet.rows.length === 0 ? (
+          <EmptyPlan />
+        ) : (
+          <ScheduleSheet
+            rows={sheet.rows}
+            spanStart={sheet.spanStart}
+            spanFinish={sheet.spanFinish}
+            currency={project.currency}
+          />
+        )}
       </div>
     </RouteTransition>
   );
 }
 
-function fmt(isoDate: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(Date.parse(`${isoDate}T00:00:00Z`));
+/**
+ * A new project lands here, and this is the whole first impression. It says
+ * what to do rather than showing an empty grid — an editor with no rows in it
+ * looks broken, and looking broken is what the old flow did.
+ */
+function EmptyPlan() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="animate-enter max-w-md text-center">
+        <p className="text-sm font-semibold">No work planned yet</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          This is where the plan goes: one row per piece of work, with a duration and dates, and a
+          bar for each one on the right. Adding rows and pasting a breakdown out of Excel are being
+          built next — the project itself is already real and keeps everything you give it.
+        </p>
+      </div>
+    </div>
+  );
 }
