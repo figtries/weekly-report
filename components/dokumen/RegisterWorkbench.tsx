@@ -323,12 +323,27 @@ export function RegisterWorkbench({
     //
     // Phones keep the ordinary page: one column there, and it should scroll
     // like anything else.
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3 sm:gap-4">
       {/* ALWAYS here, whatever is open. It used to live inside the worklist,
           which meant opening a group took it off the screen and there was no
           way back to it — the one thing a person hunts for when they want to
-          add something. A row of its own cannot be replaced by anything. */}
-      <div className="flex items-center justify-end">{tools}</div>
+          add something. A row of its own cannot be replaced by anything.
+
+          It carries the register's own name and size on the left, because a
+          row holding nothing but two right-aligned buttons reads as a band of
+          empty space with something stranded in the corner. Paired, it is a
+          toolbar: what you are looking at, and what you can do to it. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-tight">
+            {register === 'edl' ? 'Engineering Deliverable List' : 'Vendor Deliverable Register'}
+          </p>
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {totalDocuments} document{totalDocuments === 1 ? '' : 's'} · week {weekNo}
+          </p>
+        </div>
+        {tools}
+      </div>
 
     <div className="pb-4 lg:grid lg:h-[calc(100dvh_-_15rem)] lg:grid-cols-[minmax(260px,340px)_1fr] lg:gap-6 lg:pb-0">
       {/* ------------------------------------------------------- categories */}
@@ -581,7 +596,11 @@ export function RegisterWorkbench({
                 {selected.node.plan !== null && (
                   <Figure label="plan" value={selected.node.plan} className="text-red-500" />
                 )}
-                <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                {/* Beside the figures, not flung to the far edge. `ml-auto`
+                    pushed these to the right margin and left a hole across the
+                    middle of the card at any width above a phone; read as one
+                    line they are a sentence about the same group. */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   {TREND[selected.node.trend] && (
                     <span
                       className={cn(
