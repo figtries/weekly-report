@@ -142,6 +142,7 @@ export default function GanttChart({
   selectedId,
   onSelect,
   styles = DEFAULT_BAR_STYLES,
+  range,
 }: {
   rows: SheetRow[];
   spanStart: string | null;
@@ -152,6 +153,12 @@ export default function GanttChart({
   onSelect: (id: string) => void;
   /** The project's ordered rule list. Falls back to the defaults. */
   styles?: BarStyle[];
+  /**
+   * The window of rows the sheet has mounted. The surface stays FULL height —
+   * every bar is placed at `index × rowH`, so the height is what keeps the two
+   * panes on the same line — and only the bars inside the window are built.
+   */
+  range?: { start: number; end: number };
 }) {
   const [todayX, setTodayX] = useState<number | null>(null);
   // Read after mount, never at render: a server component prerenders into the
@@ -234,6 +241,11 @@ export default function GanttChart({
   }
 
   const bodyH = rows.length * rowH;
+  // The slice that gets built, with its offset kept so `i` is still the row's
+  // real position on the surface.
+  const from = range ? Math.max(0, range.start) : 0;
+  const to = range ? Math.min(rows.length, range.end) : rows.length;
+  const shown = rows.slice(from, to);
 
   return (
     <div ref={paneRef} className="relative" style={{ width }}>
@@ -289,7 +301,8 @@ export default function GanttChart({
             not hidden by it, and drawn independently of them so a row that has
             a promised date but no plan yet still shows the promise. MS Project
             puts an arrow here; so does this, pointing down at the day. */}
-        {rows.map((r, i) => {
+        {shown.map((r, k) => {
+          const i = k + from;
           if (!r.targetDate) return null;
           const x = daysBetween(spanStart, r.targetDate) * scale;
           if (x < -8 || x > width + 8) return null;
@@ -322,7 +335,8 @@ export default function GanttChart({
             are hatched over the bar's tail, so the eye reads how far rather than
             only that. Drawn when the matched RULE asks for hatching — it is a
             property of the rule now, not of the code. */}
-        {rows.map((r, i) => {
+        {shown.map((r, k) => {
+          const i = k + from;
           if (r.daysLate == null || !r.targetDate || !r.finishDate) return null;
           if (!resolveBar(r, styles, today).hatched) return null;
           const x = daysBetween(spanStart, r.targetDate) * scale;
@@ -344,7 +358,8 @@ export default function GanttChart({
           );
         })}
 
-        {rows.map((r, i) => {
+        {shown.map((r, k) => {
+          const i = k + from;
           if (!r.startDate || !r.finishDate) return null;
           const x = daysBetween(spanStart, r.startDate) * scale;
           const y = i * rowH;

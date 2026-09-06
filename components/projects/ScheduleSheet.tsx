@@ -59,13 +59,13 @@ const HEAD_H = 36;
 // every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
 // window, which is what "the Gantt is cut off" meant.
 const SPLIT_KEY = 'figtries:sheet-split-ratio';
-// The sheet's nine columns come to 39.75rem, plus eight 6px gaps and 12px of
-// padding either side: 708px before anything starts scrolling. The default is
-// that width where the window allows it and a share of the window where it does
-// not — a fixed ratio cut the price column off at 1240px and wasted half the
-// timeline at 1920, and 634 (the eight-column figure) clipped Weight the moment
-// Target arrived.
-const SHEET_NATURAL = 712;
+// The eight fixed columns come to 30.75rem, plus eight 6px gaps and 12px of
+// padding either side: 564px of furniture. The default leaves the NAME about
+// 225px on top of that, which is what "Detail Engineering" needs — at 712 the
+// name was down to its 8rem floor and every branch read "Detail…". The divider
+// still moves; this is only where it starts. A fixed ratio instead of a width
+// cut the price column off at 1240px and wasted half the timeline at 1920.
+const SHEET_NATURAL = 792;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
 
@@ -76,7 +76,7 @@ const MIN_PANE = 300;
 // carries the structure — and the full code is one tap away in the row panel.
 const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.25rem]';
 const GRID_LG =
-  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_4.5rem_5rem_3.25rem_2.25rem]';
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.25rem_4.25rem_4.25rem_5rem_3.25rem_2.25rem]';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
@@ -148,6 +148,14 @@ export default function ScheduleSheet({
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
+  // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
+  const [range, setRange] = useState({ start: 0, end: 60 });
+  // Declared here rather than beside the mirror below, because the window
+  // arithmetic reads the scroller's own height.
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(0);
   const [, startTransition] = useTransition();
 
@@ -167,7 +175,33 @@ export default function ScheduleSheet({
   const ganttStart = projectStart ?? spanStart;
   const ganttFinish = projectFinish ?? spanFinish;
 
+  /**
+   * Search keeps the OUTLINE, not just the hits.
+   *
+   * A flat list of matching leaves is unreadable in a plan six levels deep —
+   * "IFR" appears forty times and every one of them looks identical without the
+   * branch above it. So a row survives if it matches or if anything under it
+   * does, and collapse is ignored while searching: hiding a hit inside a folded
+   * branch is the one thing a search must never do.
+   */
+  const term = query.trim().toLowerCase();
   const visible = useMemo(() => {
+    if (term.length >= 2) {
+      const hit = (r: SheetRow) =>
+        r.name.toLowerCase().includes(term) || r.code.includes(term) || r.wbsCode.toLowerCase().includes(term);
+      const keep = new Set<string>();
+      // Backwards, so a matched row can mark the ancestors already behind it.
+      const stack: SheetRow[] = [];
+      for (const r of rows) {
+        while (stack.length && stack[stack.length - 1].depth >= r.depth) stack.pop();
+        if (hit(r)) {
+          keep.add(r.id);
+          for (const a of stack) keep.add(a.id);
+        }
+        stack.push(r);
+      }
+      return rows.filter((r) => keep.has(r.id));
+    }
     if (collapsed.size === 0) return rows;
     const out: SheetRow[] = [];
     let hideBelow: number | null = null;
@@ -178,7 +212,49 @@ export default function ScheduleSheet({
       if (r.isSummary && collapsed.has(r.id)) hideBelow = r.depth;
     }
     return out;
-  }, [rows, collapsed]);
+  }, [rows, collapsed, term]);
+
+  const matchCount = useMemo(
+    () => (term.length >= 2 ? visible.filter((r) => r.name.toLowerCase().includes(term)).length : 0),
+    [visible, term]
+  );
+
+  /**
+   * Which rows are mounted, from the scroller's own position.
+   *
+   * OVERSCAN is generous on purpose: the two panes mirror each other's scroll,
+   * and a window that ends exactly at the fold shows a blank strip for one frame
+   * whenever a flick outruns the state update.
+   */
+  const OVERSCAN = 14;
+  const recomputeRange = useCallback((from?: HTMLDivElement | null) => {
+    // Whichever pane is actually scrolling, because below 768px the two take
+    // turns and the hidden one reports a height of zero — reading the sheet
+    // while the timeline is on screen windowed the chart down to fourteen bars.
+    const el =
+      from && from.clientHeight > 0
+        ? from
+        : (leftRef.current?.clientHeight ? leftRef.current : rightRef.current);
+    if (!el) return;
+    const first = Math.floor(el.scrollTop / ROW_H);
+    const fits = Math.ceil(el.clientHeight / ROW_H);
+    setRange((prev) => {
+      const start = Math.max(0, first - OVERSCAN);
+      const end = first + fits + OVERSCAN;
+      return prev.start === start && prev.end === end ? prev : { start, end };
+    });
+  }, []);
+
+  // A new filter or a fresh set of rows can leave the window pointing past the
+  // end of the list, which renders nothing at all.
+  useEffect(() => {
+    recomputeRange();
+  }, [recomputeRange, visible.length, pane]);
+
+  const windowed = useMemo(
+    () => visible.slice(range.start, Math.min(range.end, visible.length)),
+    [visible, range]
+  );
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
 
@@ -319,12 +395,10 @@ export default function ScheduleSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, selectedId, visible, structure]);
 
-  // Mirror the panes' vertical scroll. The guard stops the echo — setting one
-  // pane's scrollTop fires that pane's own handler.
-  const leftRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
   const syncing = useRef(false);
   const mirror = (from: 'l' | 'r') => () => {
+    // Every scroll of either pane recomputes the window, mirrored or not.
+    recomputeRange(from === 'l' ? leftRef.current : rightRef.current);
     if (syncing.current) return;
     const a = from === 'l' ? leftRef.current : rightRef.current;
     const b = from === 'l' ? rightRef.current : leftRef.current;
@@ -406,6 +480,9 @@ export default function ScheduleSheet({
         }
         pane={pane}
         setPane={setPane}
+        query={query}
+        onQuery={setQuery}
+        matchCount={matchCount}
         slot={
           <PasteRows
             projectId={projectId}
@@ -478,7 +555,7 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[44.5rem]">
+          <div className="min-w-[19rem] sm:min-w-[43.75rem]">
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -539,9 +616,15 @@ export default function ScheduleSheet({
               </div>
             )}
 
-            {visible.map((r) => (
+            {/* Only the window is mounted; the rows above and below it are two
+                spacers of exactly their own height, so the scrollbar and the
+                Gantt's absolute row positions both stay honest. */}
+            <div style={{ height: range.start * ROW_H }} aria-hidden />
+
+            {windowed.map((r) => (
               <Row
                 key={r.id}
+                highlight={term}
                 row={r}
                 currency={currency}
                 selected={r.id === selectedId}
@@ -567,6 +650,14 @@ export default function ScheduleSheet({
                 onEnter={() => structure(addRowAction(projectId, { afterNodeId: r.id }))}
               />
             ))}
+
+            <div
+              aria-hidden
+              style={{
+                height:
+                  Math.max(0, visible.length - Math.min(range.end, visible.length)) * ROW_H,
+              }}
+            />
           </div>
         </div>
 
@@ -583,6 +674,8 @@ export default function ScheduleSheet({
           onScroll={mirror('r')}
           className={`min-h-0 min-w-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
         >
+          {/* The FULL list, plus the window. The surface has to keep its true
+              height or every bar below the fold sits on the wrong line. */}
           <GanttChart
             rows={visible}
             spanStart={ganttStart}
@@ -592,6 +685,7 @@ export default function ScheduleSheet({
             selectedId={selectedId}
             onSelect={setSelectedId}
             styles={barStyles}
+            range={range}
           />
         </div>
       </div>
@@ -636,6 +730,7 @@ function Row({
   onMenu,
   onIndent,
   onEnter,
+  highlight,
 }: {
   row: SheetRow;
   currency: string;
@@ -650,6 +745,8 @@ function Row({
   onMenu: () => void;
   onIndent: (shift: boolean) => void;
   onEnter: () => void;
+  /** The live search term, marked inside the name. */
+  highlight?: string;
 }) {
   const locked = r.isSummary;
 
@@ -701,6 +798,7 @@ function Row({
           onCommit={(v) => onCommit('name', v)}
           onTab={onIndent}
           onEnterKey={onEnter}
+          highlight={highlight}
           className="truncate"
         />
         {r.isReportingUnit && (
@@ -856,6 +954,7 @@ function EditableCell({
   inputMode,
   onTab,
   onEnterKey,
+  highlight,
 }: {
   value: string;
   display?: string;
@@ -870,6 +969,8 @@ function EditableCell({
   onTab?: (shift: boolean) => void;
   /** Enter on a name adds the next row, so a plan can be typed without the mouse. */
   onEnterKey?: () => void;
+  /** The search term, marked inside the text while the cell is not being typed in. */
+  highlight?: string;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value, active]);
@@ -881,7 +982,7 @@ function EditableCell({
         onClick={onEdit}
         className={`block w-full truncate rounded px-1 py-1 text-left leading-[22px] decoration-dotted underline-offset-4 transition-colors hover:bg-background group-hover:underline ${className}`}
       >
-        {display ?? value}
+        <Marked text={display ?? value} term={highlight} />
       </button>
     );
   }
@@ -915,5 +1016,28 @@ function EditableCell({
       }}
       className={`w-full rounded border-2 border-foreground bg-background px-1 py-1 leading-[22px] outline-none ${className}`}
     />
+  );
+}
+
+/**
+ * The search term, marked where it appears.
+ *
+ * Filtering alone tells you which rows matched but not WHERE — in a name like
+ * "Detail Engineering Piping" a search for "pip" is invisible until it is
+ * painted. Case-insensitive, first occurrence only: a second mark in the same
+ * cell buys nothing and costs a render.
+ */
+function Marked({ text, term }: { text: string; term?: string }) {
+  if (!term || term.length < 2) return <>{text}</>;
+  const at = text.toLowerCase().indexOf(term.toLowerCase());
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded-[2px] bg-warn/25 text-foreground">
+        {text.slice(at, at + term.length)}
+      </mark>
+      {text.slice(at + term.length)}
+    </>
   );
 }

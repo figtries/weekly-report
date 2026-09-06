@@ -7,8 +7,10 @@ import {
   CornerDownRight,
   ListTree,
   Plus,
+  Search,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 
 import { pressMotion } from '@/components/motion/Press';
@@ -43,6 +45,9 @@ export default function SheetToolbar({
   pane,
   setPane,
   slot,
+  query,
+  onQuery,
+  matchCount,
 }: {
   rowCount: number;
   selected: SheetRow | null;
@@ -59,6 +64,10 @@ export default function SheetToolbar({
   setPane: (p: 'sheet' | 'gantt') => void;
   /** Paste-from-Excel sits here rather than being wired through six props. */
   slot?: React.ReactNode;
+  query: string;
+  onQuery: (q: string) => void;
+  /** How many rows carry the term themselves — the branches shown to reach them do not count. */
+  matchCount: number;
 }) {
   const has = selected !== null;
 
@@ -120,8 +129,35 @@ export default function SheetToolbar({
       />
 
       <span className="ml-auto flex items-center gap-2">
+        {/* A native input, not a component: the toolbar is already one row of
+            controls and this is the only one people type into. */}
+        <span className="relative">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            placeholder="Find a row"
+            aria-label="Find a row"
+            className="h-9 w-28 rounded-lg border bg-background pl-7 pr-6 text-xs outline-none transition-[width] duration-200 ease-ios focus:w-40 focus:border-foreground sm:w-36 sm:focus:w-56"
+          />
+          {query !== '' && (
+            <button
+              type="button"
+              onClick={() => onQuery('')}
+              aria-label="Clear the search"
+              className="absolute right-0.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </span>
         <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:inline">
-          {rowCount} rows
+          {query.trim().length >= 2
+            ? `${matchCount} of ${rowCount}`
+            : `${rowCount} rows`}
         </span>
         {/* Below 768px the two panes cannot share a screen, so they take turns. */}
         <span className="flex rounded-lg border p-0.5 md:hidden">
