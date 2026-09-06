@@ -150,8 +150,11 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
       value = node.price ?? 0;
     } else if (parentValue != null) {
       const siblings = kids.get(node.parentId ?? null) ?? [];
+      // A reporting-unit sibling is NOT taking money out of this parent — it
+      // carries its own contract. Subtracting it here under-allocated the
+      // parent by exactly that unit's value.
       const takenByPricedSiblings = siblings
-        .filter((s) => (s.price ?? 0) > 0 && !isTotalRow(s, priced, largest))
+        .filter((s) => (s.price ?? 0) > 0 && !s.isReportingUnit && !isTotalRow(s, priced, largest))
         .reduce((s, o) => s + (o.price ?? 0), 0);
       const remainder = Math.max(0, parentValue - takenByPricedSiblings);
       if (node.workstepFactor != null) {
@@ -221,9 +224,13 @@ export interface WeightChange {
  * the schedule already follows: nothing moves until its effect has been shown.
  */
 export function previewWeights(
-  nodes: WeightNode[]
+  nodes: WeightNode[],
+  signedValue?: number | null
 ): { result: WeightResult; changes: WeightChange[]; storedTotal: number } {
-  const result = deriveWeights(nodes);
+  // Weight is measured against the SIGNED contract when there is one. Against
+  // the sum of whatever has been typed so far, it would close at 100 by
+  // definition and could never reveal work that has no price on it yet.
+  const result = deriveWeights(nodes, signedValue ?? undefined);
   const changes: WeightChange[] = [];
   let storedTotal = 0;
 
@@ -244,7 +251,23 @@ export function previewWeights(
 /* ------------------------------------------------------- reading a project */
 
 export interface WeightSummary {
+  /**
+   * The SIGNED figure, typed when the project was created. Authoritative.
+   *
+   * It used to be derived from the sum of the prices, and that was backwards:
+   * a contract exists before a single WBS row does. Deriving it also deleted
+   * the most useful check this app can make — the gap between what was signed
+   * and what has been allocated — because the two were forced to be equal by
+   * construction.
+   */
   contractValue: number;
+  /** What the prices entered so far actually add up to. */
+  allocated: number;
+  /** Signed minus allocated. Positive means work still has no price on it. */
+  gap: number;
+  /** Sum of the reporting units' own values, and whether it reconciles. */
+  unitTotal: number;
+  unitCount: number;
   currency: string;
   /** Where the contract figure came from, in words, because a number nobody can trace is a number nobody trusts. */
   source: string;
@@ -260,20 +283,35 @@ export interface WeightSummary {
   pricedRows: number;
 }
 
-export function summariseWeights(nodes: WeightNode[], currency: string): WeightSummary {
-  const { result, changes, storedTotal } = previewWeights(nodes);
-  const units = nodes.filter((n) => n.isReportingUnit && n.unitContractValue != null);
+export function summariseWeights(
+  nodes: WeightNode[],
+  currency: string,
+  /** The signed contract value. Null means nobody has typed one yet. */
+  signedValue: number | null
+): WeightSummary {
+  const { result, changes, storedTotal } = previewWeights(nodes, signedValue);
+  const units = nodes.filter((n) => n.isReportingUnit);
+  const unitTotal = units.reduce((s, n) => s + (n.unitContractValue ?? 0), 0);
   const priced = nodes.filter((n) => (n.price ?? 0) > 0);
 
+  // What the prices actually add up to: the top-most priced rows, since a
+  // priced child sits inside its parent's figure rather than beside it.
+  const allocated = topLevelPricedTotal(nodes);
+  const contract = signedValue ?? allocated;
+
   return {
-    contractValue: result.contractValue,
+    contractValue: contract,
+    allocated,
+    gap: contract - allocated,
+    unitTotal,
+    unitCount: units.length,
     currency,
     source:
-      units.length > 0
-        ? `${units.length} reporting unit${units.length === 1 ? '' : 's'}`
+      signedValue != null
+        ? 'the signed contract'
         : priced.length > 0
-          ? 'the priced rows'
-          : 'nothing priced yet',
+          ? 'the priced rows — nothing signed has been entered'
+          : 'nothing entered yet',
     basis: result.basis,
     storedTotal,
     storedLeaves: nodes.filter((n) => n.isLeaf && n.bobot != null).length,
@@ -283,4 +321,45 @@ export function summariseWeights(nodes: WeightNode[], currency: string): WeightS
     wouldChange: changes.length,
     pricedRows: priced.length,
   };
+}
+
+/**
+ * What the prices add up to, without counting the same money twice.
+ *
+ * Only the TOP-MOST priced rows count: a priced child sits inside its parent's
+ * figure. Summing every price on Gundih gives 16,917,276 against a contract of
+ * 5,920,000 — the same money three times over. Total rows, which restate the
+ * whole contract on one line, are excluded for the same reason.
+ */
+export function topLevelPricedTotal(nodes: WeightNode[]): number {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const priced = nodes.filter((n) => (n.price ?? 0) > 0);
+  const largest = priced.length ? Math.max(...priced.map((n) => n.price ?? 0)) : 0;
+
+  let sum = 0;
+  for (const n of priced) {
+    if (isTotalRow(n, priced, largest)) continue;
+    // A REPORTING UNIT IS ITS OWN CONTRACT, even when it sits inside another
+    // one. SPK-007 lives at 1.4.4 inside SPK-004's 1.4, and 1.4's own price
+    // does NOT include it: 418,400 + 2,821,067.28 + 1,837,809 = 5,077,276, and
+    // only adding SPK-007's 842,723.72 reaches the signed 5,920,000.006405.
+    // Treating it as nested lost exactly that figure.
+    if (n.isReportingUnit) {
+      sum += n.price ?? 0;
+      continue;
+    }
+    let p = n.parentId;
+    let inside = false;
+    while (p) {
+      const a = byId.get(p);
+      if (!a) break;
+      if ((a.price ?? 0) > 0) {
+        inside = true;
+        break;
+      }
+      p = a.parentId;
+    }
+    if (!inside) sum += n.price ?? 0;
+  }
+  return sum;
 }

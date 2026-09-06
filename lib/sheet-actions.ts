@@ -71,7 +71,11 @@ export async function updateRowTextAction(
       if (!clean) throw new Error('A row needs a name');
       db.update(schema.wbsNodes).set({ deskripsi: clean }).where(eq(schema.wbsNodes.id, nodeId)).run();
     } else {
-      if (hasChildren(nodeId)) throw new Error('A summary row is priced by its children');
+      // A BRANCH MAY BE PRICED, and forbidding it was a contradiction this app
+      // held against itself: `lib/weights.ts` is built on a branch price being
+      // the value of everything under it, and 27 of Gundih's 37 priced nodes
+      // ARE branches. The sheet refused to type what the formula assumed and
+      // the data already did.
       const raw = value.replace(/[^0-9.-]/g, '');
       const n = raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a price');

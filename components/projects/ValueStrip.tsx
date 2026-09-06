@@ -41,13 +41,37 @@ export default function ValueStrip({
   return (
     <>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-2 text-[11px] sm:px-6">
+        {/* Three figures, not one. The contract is SIGNED; the allocation is what
+            the prices add up to; the gap between them is work nobody has priced
+            yet. Deriving the contract from the prices used to force them equal,
+            which deleted the most useful number on this screen. */}
         <span className="flex items-baseline gap-1.5">
           <span className="uppercase tracking-wider text-muted-foreground">Contract</span>
           <strong className="text-sm font-semibold tabular-nums">
             {summary.contractValue > 0 ? money(summary.contractValue) : '—'}
           </strong>
-          <span className="text-muted-foreground">from {summary.source}</span>
+          <span className="text-muted-foreground">{summary.source}</span>
         </span>
+
+        <span className="flex items-baseline gap-1.5">
+          <span className="uppercase tracking-wider text-muted-foreground">Allocated</span>
+          <strong className="tabular-nums">{money(summary.allocated)}</strong>
+          {Math.abs(summary.gap) >= 1 && (
+            <span className="flex items-center gap-1 rounded bg-warn/10 px-1.5 py-px font-medium text-warn">
+              <TriangleAlert className="size-3" />
+              {money(Math.abs(summary.gap))} {summary.gap > 0 ? 'unpriced' : 'over'}
+            </span>
+          )}
+        </span>
+
+        {summary.unitCount > 0 && (
+          <span className="flex items-baseline gap-1.5">
+            <span className="uppercase tracking-wider text-muted-foreground">
+              {summary.unitCount} units
+            </span>
+            <strong className="tabular-nums">{money(summary.unitTotal)}</strong>
+          </span>
+        )}
 
         <span className="flex items-baseline gap-1.5">
           <span className="uppercase tracking-wider text-muted-foreground">Weights</span>
@@ -55,20 +79,15 @@ export default function ValueStrip({
             {summary.storedTotal.toFixed(2)}%
           </strong>
           <span className="text-muted-foreground">
-            across {summary.storedLeaves} of {summary.leaves} rows
+            {summary.basis === 'boq'
+              ? 'value-based'
+              : summary.basis === 'even'
+                ? 'spread evenly — not value-based'
+                : `${summary.storedLeaves} of ${summary.leaves} rows`}
           </span>
-          {!closes && (
-            <span className="flex items-center gap-1 text-warn">
-              <TriangleAlert className="size-3" />
-              does not close at 100
-            </span>
-          )}
         </span>
 
         <span className="flex items-center gap-1.5 text-muted-foreground">
-          {summary.pricedRows > 0
-            ? `${summary.pricedRows} priced ${summary.pricedRows === 1 ? 'row' : 'rows'}`
-            : 'no prices yet — weights would spread evenly'}
           <CurrencyPicker projectId={projectId} currency={summary.currency} />
         </span>
 

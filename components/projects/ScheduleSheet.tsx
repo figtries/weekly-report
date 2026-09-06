@@ -55,7 +55,7 @@ const SPLIT_KEY = 'figtries:sheet-split-ratio';
 // the default is that width where the window allows it and a share of the
 // window where it does not — a fixed ratio cut the price column off at
 // 1240px and wasted half the timeline at 1920.
-const SHEET_NATURAL = 596;
+const SHEET_NATURAL = 634;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
 
@@ -65,7 +65,8 @@ const MIN_PANE = 300;
 // code needs ~60px and truncates to nonsense in less, while indentation already
 // carries the structure — and the full code is one tap away in the row panel.
 const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.25rem]';
-const GRID_LG = 'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_5rem_2.25rem]';
+const GRID_LG =
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_5rem_3.25rem_2.25rem]';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
@@ -409,7 +410,7 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[36rem]">
+          <div className="min-w-[19rem] sm:min-w-[38rem]">
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -420,6 +421,7 @@ export default function ScheduleSheet({
               <span className="hidden sm:block">Start</span>
               <span className="hidden sm:block">Finish</span>
               <span className="hidden text-right sm:block">Price</span>
+              <span className="hidden text-right sm:block">Weight</span>
               <span className="sr-only">Row actions</span>
             </div>
 
@@ -653,9 +655,7 @@ function Row({
       </div>
 
       <div className="hidden text-right tabular-nums sm:block">
-        {locked ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
+        {(() => (
           <EditableCell
             value={r.price == null ? '' : String(r.price)}
             // An empty price is not a warning. Scheduling and pricing are two
@@ -669,6 +669,17 @@ function Row({
             className="text-right text-[11px]"
             inputMode="decimal"
           />
+        ))()}
+      </div>
+
+      {/* Derived, never typed — and now visible. */}
+      <div className="hidden text-right tabular-nums sm:block">
+        {r.bobot == null ? (
+          <span className="text-[11px] text-muted-foreground">—</span>
+        ) : (
+          <span className="text-[11px] tabular-nums" title={`${r.bobot.toFixed(4)}% of the contract`}>
+            {r.bobot < 0.005 ? '<0.01' : r.bobot.toFixed(2)}%
+          </span>
         )}
       </div>
 

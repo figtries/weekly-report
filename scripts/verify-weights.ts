@@ -20,7 +20,13 @@
  */
 import Database from 'better-sqlite3';
 
-import { computeContractValue, deriveWeights, previewWeights, type WeightNode } from '../lib/weights.ts';
+import {
+  computeContractValue,
+  deriveWeights,
+  previewWeights,
+  summariseWeights,
+  type WeightNode,
+} from '../lib/weights.ts';
 
 const db = new Database('data/report.db', { readonly: true });
 
@@ -112,6 +118,33 @@ check(
   'a plan with no prices spreads evenly and says so',
   e.basis === 'even' && Math.abs(e.total - 100) < 1e-9,
   `basis ${e.basis}, total ${e.total.toFixed(6)} across ${e.leaves} leaves`
+);
+
+/* -------------------------------------------------- signed vs allocated (②) */
+
+const summary = summariseWeights(nodes, stored.c, stored.v);
+check(
+  'allocation reconciles with the signed contract',
+  Math.abs(summary.gap) < 0.01,
+  `signed ${summary.contractValue.toFixed(4)} − allocated ${summary.allocated.toFixed(4)} = ${summary.gap.toFixed(4)}`
+);
+check(
+  'a NESTED reporting unit counts as its own contract',
+  Math.abs(summary.unitTotal - summary.contractValue) < 0.01,
+  `SPK-007 sits inside SPK-004; treating its ${842723.72448.toFixed(2)} as nested lost exactly that from the total`
+);
+
+// Work with no price on it must SHOW as a gap, never be absorbed silently.
+const partlyPriced: WeightNode[] = [
+  { id: 'r', parentId: null, order: 0, price: null, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: false },
+  { id: 'a', parentId: 'r', order: 1, price: 400000, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: true },
+  { id: 'b', parentId: 'r', order: 2, price: null, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: true },
+];
+const partial = summariseWeights(partlyPriced, 'IDR', 1000000);
+check(
+  'unpriced work shows as a gap rather than being absorbed',
+  Math.abs(partial.gap - 600000) < 0.01,
+  `signed 1,000,000 with only 400,000 allocated → gap ${partial.gap.toFixed(0)}`
 );
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
