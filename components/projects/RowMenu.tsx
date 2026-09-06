@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
+import MoneyInput from '@/components/ui/MoneyInput';
 import {
   addRowAction,
   deleteRowAction,
@@ -145,14 +146,11 @@ export default function RowMenu({
             </label>
             <label className="col-span-2 text-[11px] font-medium text-muted-foreground">
               Price
-              <input
-                inputMode="decimal"
+              <MoneyInput
                 defaultValue={row.price == null ? '' : String(row.price)}
+                resetKey={row.id + String(row.price)}
                 placeholder="Leave empty until there is a BOQ"
-                onBlur={(e) =>
-                  e.target.value !== (row.price == null ? '' : String(row.price)) &&
-                  run(() => updateRowTextAction(row.id, 'price', e.target.value), true)
-                }
+                onCommit={(raw) => run(() => updateRowTextAction(row.id, 'price', raw), true)}
                 className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
               />
             </label>
@@ -271,10 +269,9 @@ export default function RowMenu({
             </label>
             <label className="block text-[11px] font-medium text-muted-foreground">
               Its own contract value
-              <input
-                inputMode="decimal"
-                value={unitValue}
-                onChange={(e) => setUnitValue(e.target.value)}
+              <MoneyInput
+                defaultValue={unitValue}
+                onValueChange={setUnitValue}
                 placeholder="Leave empty if not known yet"
                 className="mt-1 h-11 w-full rounded-lg border px-3 text-sm text-foreground outline-none focus:border-foreground"
               />

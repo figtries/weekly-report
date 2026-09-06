@@ -28,7 +28,7 @@ import {
 } from '@/lib/chains';
 import GanttChart, { GanttLegend, planColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, type BarStyle } from '@/lib/bar-styles';
-import { formatMoney } from '@/lib/currency';
+import { formatMoney, groupAmount, stripAmount } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
 import SheetToolbar from './SheetToolbar';
@@ -965,6 +965,7 @@ function Row({
             onEdit={() => onEdit('price')}
             onDone={onDone}
             onCommit={(v) => onCommit('price', v)}
+            group
             className="text-right text-[11px]"
             inputMode="decimal"
           />
@@ -1018,6 +1019,7 @@ function EditableCell({
   onTab,
   onEnterKey,
   highlight,
+  group,
 }: {
   value: string;
   display?: string;
@@ -1034,6 +1036,8 @@ function EditableCell({
   onEnterKey?: () => void;
   /** The search term, marked inside the text while the cell is not being typed in. */
   highlight?: string;
+  /** Money: group the digits as they are typed, and hand back a raw string. */
+  group?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value, active]);
@@ -1050,20 +1054,25 @@ function EditableCell({
     );
   }
 
+  // Money keeps its separators on screen and loses them on the way out, so
+  // every action that already strips them is untouched.
+  const shown = group ? groupAmount(draft) : draft;
+  const send = (v: string) => onCommit(group ? stripAmount(v) : v);
+
   return (
     <input
       autoFocus
       type={type}
       inputMode={inputMode}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
+      value={shown}
+      onChange={(e) => setDraft(group ? stripAmount(e.target.value) : e.target.value)}
       onBlur={() => {
-        onCommit(draft);
+        send(draft);
         onDone();
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
-          onCommit(draft);
+          send(draft);
           onDone();
           onEnterKey?.();
         }
@@ -1072,7 +1081,7 @@ function EditableCell({
           // Taken from the browser: Tab would walk to the next control, and in a
           // sheet shaped like an outline Tab means "one level in".
           e.preventDefault();
-          onCommit(draft);
+          send(draft);
           onDone();
           onTab(e.shiftKey);
         }

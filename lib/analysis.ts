@@ -1,5 +1,15 @@
-import { computeGrandTotal, computeRollup, flattenTree, type RollupNode } from './rollup';
+import {
+  computeGrandTotal,
+  computeRollup,
+  flattenTree,
+  promoteNestedSpkContracts,
+  type RollupNode,
+} from './rollup';
+import { hasRealQuantity } from './progress';
+import { weekOfDate } from './weeks';
+import { buildWorklist } from './worklist';
 import type { Database } from './types';
+import { toSi } from './currency';
 
 /**
  * The reading layer.
@@ -42,11 +52,19 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
   const meta = weekMap.get(week);
   if (!meta) return null;
 
+  // Promoted, like every other reader in the app. Grand totals happen to be
+  // invariant under the promotion — it moves a nested SPK subtree sideways
+  // rather than adding or dropping weight — so this changes no figure today.
+  // It closes the seam: a second way of building the tree is a second place for
+  // the numbers to drift apart, and that is exactly what `validateWeek` did
+  // until it was pulled onto the shared one.
   const totalAt = (w: number) => {
     const m = weekMap.get(w);
     if (!m) return null;
     const prev = weekMap.get(w - 1);
-    return computeGrandTotal(computeRollup(db.wbsItems, m.leafData, prev?.leafData ?? null));
+    return computeGrandTotal(
+      promoteNestedSpkContracts(computeRollup(db.wbsItems, m.leafData, prev?.leafData ?? null))
+    );
   };
 
   const gt = totalAt(week);
@@ -146,10 +164,30 @@ export function findLaggards(
 
 export type FindingLevel = 'error' | 'warn' | 'ok';
 
+/** One offending row, so the screen can list what failed instead of describing it. */
+export interface FindingRow {
+  label: string;
+  /** Already formatted — what "the problem" is differs per check. */
+  value: string;
+  /**
+   * Where the item sits, as its last two ancestors. A WBS legitimately carries
+   * the same description under several parents — "RTS" and "Material On Site"
+   * each appear more than once on Gundih — so a bare label leaves six
+   * identical-looking rows and no way to tell which one failed.
+   */
+  trail?: string;
+}
+
 export interface Finding {
   level: FindingLevel;
   title: string;
   detail: string;
+  /**
+   * The rows that failed this check. The detail line used to carry the worst
+   * three glued into a sentence, which reads as prose and cannot be scanned,
+   * clicked or counted.
+   */
+  rows?: FindingRow[];
 }
 
 export interface ValidationResult {
@@ -161,12 +199,43 @@ export interface ValidationResult {
 }
 
 /**
+ * Where a leaf sits, as its last two ancestors: 'Electrical › Busduct'.
+ *
+ * Built from the SAME promoted tree the Update screen walks, so a row named
+ * here can be found there. Without it the evidence lists read as six copies of
+ * "RTS" — the WBS carries that description under several parents.
+ */
+function trailIndex(roots: RollupNode[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const visit = (node: RollupNode, trail: string[]) => {
+    if (node.children.length > 0) {
+      const next = [...trail, node.deskripsi];
+      node.children.forEach((c) => visit(c, next));
+      return;
+    }
+    // The outermost ancestor is the project itself, identical on every row.
+    out.set(node.id, trail.slice(1).slice(-2).join(' › '));
+  };
+  roots.forEach((r) => visit(r, []));
+  return out;
+}
+
+/**
  * The checks a senior would run before signing.
  *
  * These are not cosmetic: week 36 of the seeded project carries six leaves
  * whose progress moved backwards — one from 100% to 0% — and the current app
  * prints them without a word. A gate is what makes it safe to hand the app to
  * someone new.
+ *
+ * THE GATE READS THE SAME TREE AND THE SAME QUEUE AS STEP ①. It used to build
+ * its own `computeRollup` without `promoteNestedSpkContracts`, so the screen
+ * that judges the week walked a different WBS from the screen that fills it in
+ * — the two only agreed because Gundih's weights land on exactly 100. And it
+ * never opened the schedule at all, which meant the three things step ① puts
+ * on someone's Friday could all be left undone and this screen would still say
+ * "ready to issue". `buildWorklist` here is the same call the Update page and
+ * the step badges make, so the counts cannot drift apart.
  */
 export function validateWeek(db: Database, week: number): ValidationResult {
   const findings: Finding[] = [];
@@ -176,8 +245,24 @@ export function validateWeek(db: Database, week: number): ValidationResult {
     return { findings: [], errors: 0, warnings: 0, canIssue: false };
   }
   const prev = weekMap.get(week - 1);
-  const roots = computeRollup(db.wbsItems, meta.leafData, prev?.leafData ?? null);
+  const roots = promoteNestedSpkContracts(
+    computeRollup(db.wbsItems, meta.leafData, prev?.leafData ?? null)
+  );
   const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const trails = trailIndex(roots);
+  const currentWeek = db.project.currentWeek;
+  const worklist = buildWorklist({
+    roots,
+    schedule: db.schedule,
+    week,
+    changeLog: db.changeLog,
+  });
+
+  // EVERY CHECK REPORTS, PASS OR FAIL. It used to push a finding only when
+  // something was wrong, so the screen could show what had broken but never
+  // what had been looked at — and "what does this check?" had no answer
+  // anywhere in the app. A checklist that only ever shows failures is not a
+  // checklist, it is an error log.
 
   // 1. Physical work cannot un-happen.
   const backwards = leaves
@@ -185,92 +270,277 @@ export function validateWeek(db: Database, week: number): ValidationResult {
     .map((n) => ({ n, drop: n.prevProgressPct - n.curProgressPct }))
     .sort((a, b) => b.drop * b.n.bobot - a.drop * a.n.bobot);
 
-  if (backwards.length) {
-    const worst = backwards
-      .slice(0, 3)
-      .map((b) => `${shortName(b.n.deskripsi)} ${round(b.n.prevProgressPct)}→${round(b.n.curProgressPct)}%`)
-      .join(', ');
-    findings.push({
-      level: 'error',
-      title: `${backwards.length} items went backwards`,
-      detail: `${worst}${backwards.length > 3 ? `, and ${backwards.length - 3} more` : ''}. Physical work cannot un-happen.`,
-    });
-  }
+  findings.push(
+    backwards.length
+      ? {
+          level: 'error',
+          title: `${backwards.length} ${backwards.length === 1 ? 'item has' : 'items have'} gone backwards`,
+          detail:
+            'Work that was reported as done is now reported as less done. One of the two weeks is wrong.',
+          rows: backwards.map(({ n }) => ({
+            label: n.deskripsi,
+            value: `${round(n.prevProgressPct)}% → ${round(n.curProgressPct)}%`,
+            trail: trails.get(n.id),
+          })),
+        }
+      : {
+          level: 'ok',
+          title: 'No item has gone backwards',
+          detail: 'Every item is at least where it was last week.',
+        }
+  );
 
   // 2. Weights must close.
   const total = leaves.reduce((s, n) => s + n.bobot, 0);
-  if (Math.abs(total - 100) > 0.01) {
-    findings.push({
-      level: 'error',
-      title: `Weights total ${fmtPct(total)}, not 100%`,
-      detail: 'While the weights do not close, every percentage in this report is on the wrong scale.',
-    });
-  } else {
-    findings.push({
-      level: 'ok',
-      title: 'Weights total 100.00%',
-      detail: `All ${leaves.length} leaf items add up, with no weight left dangling.`,
-    });
-  }
+  findings.push(
+    Math.abs(total - 100) > 0.01
+      ? {
+          level: 'error',
+          title: `Weights total ${fmtPct(total)}, not 100%`,
+          detail:
+            'While the weights do not close, every percentage in this report is on the wrong scale.',
+        }
+      : {
+          level: 'ok',
+          title: 'Weights total 100.00%',
+          detail: `All ${leaves.length} leaf items add up, with no weight left dangling.`,
+        }
+  );
 
-  // 3. Weeks must not go backwards at project level either.
-  if (prev) {
-    const gt = computeGrandTotal(roots);
-    if (gt.thisWeekProgressPct < -0.001) {
-      findings.push({
-        level: 'error',
-        title: 'Weekly progress is negative',
-        detail: `This week records ${fmtPct(gt.thisWeekProgressPct)} — a signed report must not go backwards.`,
-      });
-    }
-  }
+  // 3. What step ① asked for must actually have been answered.
+  //
+  // This is the join between the two screens. The queue on the Update page is
+  // built from the schedule — items whose span covers this week — and an item
+  // counts as dealt with once something is recorded against it, because "no
+  // progress" is a legitimate answer. So an item still in `due` here is not a
+  // slow item, it is an UNANSWERED one, and a report printed over it carries a
+  // hole rather than a bad number. That is why this one blocks.
+  findings.push(
+    !worklist.hasSchedule
+      ? {
+          level: 'warn',
+          title: 'This project has no schedule',
+          detail:
+            'Without a start and finish week per item the app cannot say what was due, so nothing on this page can be checked against the plan.',
+        }
+      : worklist.due.length > 0
+        ? {
+            // BLOCKING FROM THE CURRENT WEEK FORWARD ONLY. An item counts as
+            // answered by its entry in the change log, and a week imported
+            // from a workbook carries none by construction — so weeks 1-35 of
+            // the seeded project would sit permanently red over work that was
+            // in fact done and issued months ago. A closed week still lists
+            // the gap; it just does not pretend the gap can still be filled.
+            level: week >= currentWeek ? 'error' : 'warn',
+            title: `${worklist.due.length} ${worklist.due.length === 1 ? 'item is' : 'items are'} due this week and unanswered`,
+            detail:
+              week >= currentWeek
+                ? 'The schedule puts these in this week and nothing has been recorded against them. Recording "no progress" is an answer — leaving them untouched is not.'
+                : `Week ${week} is already closed, so this is flagged rather than blocked — the schedule put these here and the app holds no record of anyone answering them.`,
+            rows: worklist.due.map((e) => ({
+              label: e.node.deskripsi,
+              value:
+                e.behindPct > 0.05
+                  ? `${fmtPct(e.behindPct)} behind`
+                  : `week ${e.weekOfSpan} of ${e.spanWeeks}`,
+              trail: trails.get(e.node.id),
+            })),
+          }
+        : worklist.done.length > 0
+          ? {
+              level: 'ok',
+              title: 'Everything due this week has been answered',
+              detail: `${worklist.done.length} ${worklist.done.length === 1 ? 'item was' : 'items were'} scheduled for week ${week}, and all of them were recorded.`,
+            }
+          : {
+              level: 'ok',
+              title: 'Nothing was scheduled for this week',
+              detail: `No item's span covers week ${week}, so step ① had nothing to hand over.`,
+            }
+  );
 
-  // 4. Progress that is only ever a round number is progress that was guessed.
+  // 4. Items the queue deliberately leaves out.
+  //
+  // `buildWorklist` keeps these off the Update screen on purpose — at W43
+  // there are 44 of them, which is a project problem rather than a Friday
+  // to-do list — and that screen's warning sends people HERE to review them.
+  // Until this check existed, that button led to a page that never mentioned
+  // them.
+  findings.push(
+    worklist.stuck.length > 0
+      ? {
+          level: 'warn',
+          title: `${worklist.stuck.length} ${worklist.stuck.length === 1 ? 'item is' : 'items are'} past their finish date and still open`,
+          detail:
+            'Their scheduled finish has gone by while they are short of 100%. They need a revised date or a reason, not a number typed into this week.',
+          rows: worklist.stuck.map((s) => ({
+            label: s.node.deskripsi,
+            value: `${round(s.pct)}% · ${s.weeksLate}w late`,
+            trail: trails.get(s.node.id),
+          })),
+        }
+      : {
+          level: 'ok',
+          title: 'Nothing is past its finish date',
+          detail: 'Every item whose scheduled finish has passed is complete.',
+        }
+  );
+
+  // 5. Weeks must not go backwards at project level either — and a week that
+  //    did not move at all is not a pass. The old check only ever errored on a
+  //    negative, so weeks 38-60 of the seeded project each read "The project
+  //    total moved forward · 0.00% added", a title arguing with its own number.
+  const gt = computeGrandTotal(roots);
+  findings.push(
+    prev && gt.thisWeekProgressPct < -0.001
+      ? {
+          level: 'error',
+          title: 'The project total went down this week',
+          detail: `This week records ${fmtPct(gt.thisWeekProgressPct)} — a signed report must not go backwards.`,
+        }
+      : prev && gt.thisWeekProgressPct < 0.001
+        ? {
+            level: 'warn',
+            title: 'Nothing moved this week',
+            detail: `The total is unchanged from week ${week - 1}, at ${fmtPct(gt.curProgressPct)}. A flat week is allowed, but the report has to say why.`,
+          }
+        : {
+            level: 'ok',
+            title: 'The project total moved forward',
+            detail: prev
+              ? `${fmtPct(gt.thisWeekProgressPct)} added since week ${week - 1}.`
+              : 'First week — nothing to compare against yet.',
+          }
+  );
+
+  // 6. A week nobody has reported yet is not a week you can issue.
+  //
+  // Future weeks are materialised with the last reported figures carried
+  // forward, so they render perfectly and say nothing. Without this the app
+  // offered to print week 60 of a project standing at week 36.
+  findings.push(
+    currentWeek > 0 && week > currentWeek
+      ? {
+          level: 'warn',
+          title: `Week ${week} is ahead of the current week (${currentWeek})`,
+          detail:
+            'Its figures are carried forward from the last reported week, not measured. Set it as current once its actuals are in.',
+        }
+      : {
+          level: 'ok',
+          title:
+            week === currentWeek
+              ? 'This is the current reporting week'
+              : `Week ${week} has already been reported`,
+          detail:
+            week === currentWeek
+              ? 'Its figures are the ones being reported now.'
+              : `The project has since moved on to week ${currentWeek}.`,
+        }
+  );
+
+  // 7. Progress that is only ever a round number is progress that was guessed.
   const rounded = leaves.filter((n) => Math.abs(n.curProgressPct % 5) < 0.0001).length;
   const roundedShare = leaves.length ? (rounded / leaves.length) * 100 : 0;
-  if (roundedShare > 80) {
-    findings.push({
-      level: 'warn',
-      title: `${fmtPct(roundedShare)} of progress values are multiples of 5`,
-      detail:
-        'Numbers that are always round are estimates, not measurements. Items with a real quantity produce numbers that are not round.',
-    });
-  }
-
-  // 5. Hours spent with nothing to show.
-  const daily = db.daily.filter((d) => d.date);
-  const hoursLogged = daily.reduce(
-    (s, d) => s + d.manHours.reduce((a, m) => a + m.todayHours + m.previousHours, 0),
-    0
+  findings.push(
+    roundedShare > 80
+      ? {
+          level: 'warn',
+          title: `${fmtPct(roundedShare)} of progress values are multiples of 5`,
+          detail:
+            'Numbers that are always round are estimates, not measurements. Anything actually counted produces figures that are not round.',
+        }
+      : {
+          level: 'ok',
+          title: 'Progress figures do not look guessed',
+          detail: `${fmtPct(roundedShare)} of them are multiples of 5, which is a normal share.`,
+        }
   );
-  const stalled = leaves.filter((n) => n.curProgressPct === 0).length;
-  if (hoursLogged > 0 && stalled > 0) {
-    findings.push({
-      level: 'warn',
-      title: 'Hours are being spent on items that have not moved',
-      detail: `${fmtNum(hoursLogged)} cumulative hours recorded while ${stalled} items sit at 0%.`,
-    });
-  }
 
-  // 6. Setup completeness — the root cause behind most of the above.
-  const quantified = db.wbsItems.filter(
-    (i) => i.vol !== null && i.satuan && i.satuan.toLowerCase() !== 'ls'
-  ).length;
-  if (quantified === 0) {
-    findings.push({
-      level: 'warn',
-      title: 'No item carries a quantity',
-      detail:
-        'Every item is lumpsum, so no progress figure can be checked again on site.',
-    });
-  }
-  if (!db.project.contractValue) {
-    findings.push({
-      level: 'warn',
-      title: 'Contract value is not filled in',
-      detail: 'Without it the report can only speak in percentages — not in money a board will read.',
-    });
-  }
+  // 8. Hours spent with nothing to show.
+  //
+  // BOTH HALVES ARE THIS WEEK'S. This check used to sum `todayHours` AND
+  // `previousHours` across every daily report the project has ever filed —
+  // `previousHours` is the running total the daily form carries forward, so the
+  // same hours were counted again on every report, and the 138,556 it produced
+  // was then held against ONE week's zero-percent items. Week 1 was warned
+  // using week 36's hours.
+  const anchor = db.project.weekAnchorEndDate;
+  const hoursThisWeek = anchor
+    ? db.daily
+        .filter((d) => d.date && weekOfDate(anchor, d.date) === week)
+        .reduce((s, d) => s + d.manHours.reduce((a, m) => a + m.todayHours, 0), 0)
+    : 0;
+  // And "has not moved" means an item the schedule says should already be
+  // underway. A leaf at 0% whose start week is still ahead of us is not idle,
+  // it is simply not due — counting those made the warning fire on almost every
+  // project from week one.
+  const startWeekOf = new Map((db.schedule ?? []).map((s) => [s.leafId, s.startWeek]));
+  const stalled = leaves.filter(
+    (n) =>
+      n.curProgressPct === 0 &&
+      (!worklist.hasSchedule || (startWeekOf.get(n.id) ?? Infinity) <= week)
+  );
+  findings.push(
+    hoursThisWeek > 0 && stalled.length > 0
+      ? {
+          level: 'warn',
+          title: 'Hours are being spent on items that have not moved',
+          detail: `${fmtNum(hoursThisWeek)} hours were booked in week ${week} while ${stalled.length} items that should be underway sit at 0%. Either the hours or the progress is wrong.`,
+          // Every one of them, not a sample: the UI does the capping, and
+          // truncating twice made "and 2 more" appear under a sentence that had
+          // just said 40.
+          rows: stalled.map((n) => ({
+            label: n.deskripsi,
+            value: '0%',
+            trail: trails.get(n.id),
+          })),
+        }
+      : {
+          level: 'ok',
+          title: 'Hours and progress agree',
+          detail:
+            hoursThisWeek > 0
+              ? `${fmtNum(hoursThisWeek)} hours booked in week ${week}, and nothing that should be underway is sitting at 0%.`
+              : `No hours were recorded against week ${week}, so there is nothing to disagree with.`,
+        }
+  );
+
+  // 9. Setup completeness — the root cause behind most of the above.
+  //
+  // `hasRealQuantity` rather than a hand-rolled `satuan !== 'ls'`: every seeded
+  // item is stored as `vol: 1, satuan: 'Ls'`, and the naive test also misses
+  // 'Lot' and a zero volume. See AGENTS.md — this exact duplication is what
+  // rewrote a leaf that had sat at 100% for 27 weeks.
+  const quantified = db.wbsItems.filter(hasRealQuantity).length;
+  findings.push(
+    quantified === 0
+      ? {
+          level: 'warn',
+          title: 'No item carries a quantity',
+          detail:
+            'Every item is lumpsum, so no progress figure here can be checked again on site.',
+        }
+      : {
+          level: 'ok',
+          title: `${quantified} items carry a real quantity`,
+          detail: 'Their percentages come from something countable rather than from an opinion.',
+        }
+  );
+
+  findings.push(
+    !db.project.contractValue
+      ? {
+          level: 'warn',
+          title: 'Contract value is not filled in',
+          detail: 'Without it the report can only speak in percentages — not in money a board will read.',
+        }
+      : {
+          level: 'ok',
+          title: 'Contract value is set',
+          detail: 'Earned value and the deferred figure can be stated in rupiah.',
+        }
+  );
 
   const errors = findings.filter((f) => f.level === 'error').length;
   const warnings = findings.filter((f) => f.level === 'warn').length;
@@ -384,12 +654,24 @@ function forecastSentence(health: ProjectHealth): string {
 // Formatting — one place, so every screen says the number the same way
 // ---------------------------------------------------------------------------
 
+/**
+ * Numbers on SCREEN group the SI way — three digits at a time, separated by a
+ * narrow no-break space, never a comma or a dot. `5.000` is five thousand in
+ * Jakarta and five in London; a space cannot be misread by either. The decimal
+ * marker stays a point, which is the rule this app was already locked to.
+ *
+ * `/print/*` is deliberately untouched and does not import these: the printed
+ * report is the client's own signed deliverable in the client's own format, and
+ * formats its numbers inline with `en-US`. See AGENTS.md.
+ */
 export function fmtPct(n: number, digits = 2): string {
-  return `${n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+  return `${toSi(n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits }))}%`;
 }
 
 export function fmtNum(n: number, digits = 0): string {
-  return n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return toSi(
+    n.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  );
 }
 
 /** Rupiah at meeting scale: nobody reads twelve digits off a slide. */
@@ -668,7 +950,9 @@ export function buildPortfolio(
     const validation = validateWeek(db, week);
     const prev = db.weeks.find((w) => w.week === week - 1);
     const meta = db.weeks.find((w) => w.week === week)!;
-    const roots = computeRollup(db.wbsItems, meta.leafData, prev?.leafData ?? null);
+    const roots = promoteNestedSpkContracts(
+      computeRollup(db.wbsItems, meta.leafData, prev?.leafData ?? null)
+    );
     const laggards = findLaggards(roots, health.contractValue, 1);
 
     const approvals = db.approvals ?? [];

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import DateField from '@/components/ui/DateField';
+import MoneyInput from '@/components/ui/MoneyInput';
 import { CURRENCIES } from '@/lib/currency';
 
 /**
@@ -53,6 +54,8 @@ export default function NewProjectDialog() {
   const [start, setStart] = useState('');
   const [finish, setFinish] = useState('');
   const [value, setValue] = useState('');
+  // Bumped by reset(), which is how MoneyInput is told to clear itself.
+  const [valueSeed, setValueSeed] = useState(0);
   const [currency, setCurrency] = useState('IDR');
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +74,7 @@ export default function NewProjectDialog() {
     setStart('');
     setFinish('');
     setValue('');
+    setValueSeed((n) => n + 1);
     setError(null);
   }
 
@@ -159,13 +163,12 @@ export default function NewProjectDialog() {
                     <div className="grid grid-cols-[1fr_5.5rem] gap-2">
                       <div className="space-y-1">
                         <Label htmlFor="np-value">Contract value</Label>
-                        <Input
+                        <MoneyInput
                           id="np-value"
-                          inputMode="decimal"
-                          value={value}
-                          onChange={(e) => setValue(e.target.value)}
+                          resetKey={valueSeed}
+                          onValueChange={setValue}
                           placeholder="Not signed yet? Leave it"
-                          className="h-11"
+                          className="h-11 w-full rounded-md border bg-transparent px-3 py-1 text-base shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
                         />
                       </div>
                       <div className="space-y-1">
