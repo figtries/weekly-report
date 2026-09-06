@@ -233,22 +233,36 @@ peran (papan 22) · impor-ekspor Excel dua arah (papan 20).
 ## Urutan membangun
 
 Disusun supaya tiap titik berhenti meninggalkan sesuatu yang bisa dipegang.
+**Kedelapannya selesai 6 September 2026**, satu commit per langkah.
 
-1. **Bereskan kontradiksinya.** Satu sumber nilai kontrak; harga boleh di cabang;
-   `weightBasis` dibaca atau dihapus; bobot ditampilkan per baris. Titik berhenti:
-   tidak ada dua layar yang menampilkan angka berbeda untuk hal yang sama.
-2. **Uang bisa diisi.** Nilai kontrak di dialog proyek baru; nilai SPK di baris
-   unit; kedua persamaan ② dijaga dan selisihnya ditampilkan. Titik berhenti:
-   sebuah proyek baru bisa punya nilai kontrak yang benar.
-3. **Identitas proyek bisa diisi.** Kontraktor, no. kontrak, lokasi, prefix
-   dokumen — `updateProjectFieldAction` berhenti jadi kode mati. Titik berhenti:
-   Document Control proyek baru bisa menomori dokumennya.
-4. **Tanggal target** sebagai kolom sendiri, dengan penandaan yang melewatinya.
-5. **Tempel dari Excel.** Titik berhenti: 285 baris Gundih masuk sekali duduk.
-6. **Bar styles.** Mesin aturan, set bawaan, penyunting daftar.
-7. **Virtualisasi + pencarian di sheet.**
-8. **Penebak rantai + pratinjau pergeseran**, dan bersamanya kondisi `Critical`
-   di bar styles serta peringatan minggu terdampak dari ④.
+1. **Bereskan kontradiksinya.** — selesai (`1f9d9f3`). Satu sumber nilai kontrak;
+   harga boleh di cabang; bobot tampil per baris. Bonus: SPK-007 yang bersarang
+   tadinya hilang 842.723,72 dari alokasi.
+2. **Uang bisa diisi.** — selesai (`40a5f42`). Nilai kontrak + mata uang di
+   dialog proyek baru; nilai SPK di baris unit; selisih tampil sebagai angka.
+3. **Identitas proyek bisa diisi.** — selesai (`40a5f42`). Kontraktor, no.
+   kontrak, lokasi, prefix dokumen. Panel di-portal ke body: header memakai
+   `.animate-enter`, dan transform di leluhur bikin `position: fixed` mengacu ke
+   header — panelnya kebuka di `top: -333`.
+4. **Tanggal target.** — selesai (`0a77b71`). `wbs_nodes.target_date`, migrasi
+   0008. Satu-satunya tanggal yang boleh diketik di baris ringkasan, karena ia
+   janji dan bukan pengamatan. Di Gantt: panah ke bawah + ekor arsir sepanjang
+   keterlambatannya.
+5. **Tempel dari Excel.** — selesai (`aab327a`). 285 baris Gundih masuk sekali
+   duduk, nama/kedalaman/kode/harga identik. Parser murni di `lib/paste.ts`,
+   `scripts/verify-paste.ts` 15/15.
+6. **Bar styles.** — selesai (`87b5260`). Daftar berurutan per proyek, migrasi
+   0009. "Warna = paket" jadi aturan bawaan, bukan hukum. `Critical` disimpan
+   di tipe tapi belum ditawarkan sampai langkah 8.
+7. **Virtualisasi + pencarian.** — selesai (`3965d8c`). 7.980 → 1.175 simpul
+   DOM, 2.162 → 218 tombol. Cat pertama TIDAK berubah (732 → 804 ms pada CPU 4×,
+   masih di dalam sebaran antar-jalan): biaya memuat layar ini memang bukan
+   jumlah baris, melainkan bundle-nya. Yang dibeli virtualisasi ada SESUDAH
+   memuat — Collapse all 61 ms, satu ketukan pencarian 191 ms.
+8. **Penebak rantai + pratinjau pergeseran.** — selesai (`da5eff4`). Rantai
+   ditebak dari tanggal, tidak pernah disimpan; 167 tautan di 285 baris.
+   `Critical` hidup; 11 dari 218 leaf berapung nol. Peringatan minggu terdampak
+   dari ④ muncul setelah suntingan mendarat, bukan sebelumnya.
 
 ## Verifikasi
 

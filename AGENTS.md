@@ -268,8 +268,9 @@ FASE 4 — yang mengisi laporan
 14 Form Harian → draft ringkasan mingguan
 15 Modul Document Control  selesai   EDL + VDRL · 5 layar · per minggu · jalur menulis · tautan
 FASE 5 — membuat proyek dari nol
-16 Project management
-17 Planner (WBS · bobot dari BOQ · Gantt lihat-saja)
+16 Project management        selesai   bikin · pilih · arsip · hapus · identitas
+17 Planner                   selesai   WBS · harga · tanggal · target · Gantt
+                                       tempel dari Excel · bar styles · rantai
 18 Baseline berversi
 FASE 6 — dashboard yang berpikir
 19 Dashboard bulanan                   ahead · outstanding · warning · problem
@@ -278,6 +279,15 @@ FASE 7 — setelah isinya terbukti
 21 Penyusun blok laporan
 22 Login dan peran
 ```
+
+Papan 16 dan 17 selesai 6 September 2026 dalam delapan langkah; rencananya, tiap
+keputusan dan tiap angka yang diukur ada di
+`docs/superpowers/specs/2026-09-06-projects-redesign.md`. Yang paling mengikat
+kode: rantai antar-pekerjaan DITEBAK dari tanggal dan tidak pernah disimpan
+(`lib/chains.ts`), warna batang datang dari daftar aturan berurutan per proyek
+dan bukan dari kode (`lib/bar-styles.ts`), dan tanggal target adalah janji —
+satu-satunya tanggal yang boleh diketik di baris ringkasan, dan ia tidak pernah
+menggeser apa pun.
 
 Papan ini disusun ulang 27 Agustus 2026 setelah data sumber dibaca baris demi
 baris. Rencana lengkapnya — alasan tiap urutan, tujuh belas temuan pada workbook
@@ -302,10 +312,71 @@ kurva dan satu durasi untuk seluruh aplikasi; setiap halaman harus benar di
 iPhone, Android, Windows dan desktop, diverifikasi dengan gambar pada 390px dan
 desktop; dan aplikasi ini dipakai orang berumur 22 sampai 60, jadi kontras
 tinggi, target sentuh ≥44px, dan tidak ada informasi yang hanya muncul saat
-hover. Dua pengecualian sudah dijelaskan di tempat lain dalam berkas ini dan
-keduanya soal kebenaran, bukan selera: baris tabel yang bisa melebihi ~20 memakai
-kelas shadcn dengan elemen native di dalamnya, dan `/print/*` tidak memakai
-framer-motion karena Puppeteer memotret tanpa menunggu animasi.
+hover. Tiga pengecualian, ketiganya soal kebenaran dan bukan selera: baris tabel
+yang bisa melebihi ~20 memakai kelas shadcn dengan elemen native di dalamnya;
+`/print/*` tidak memakai framer-motion karena Puppeteer memotret tanpa menunggu
+animasi; dan **animasi masuk saat halaman dimuat adalah keyframe CSS, bukan
+framer-motion**.
+
+Yang ketiga dibuktikan 30 Agustus 2026. `motion.div` menuliskan prop `initial`-nya
+ke dalam HTML dari server: Overall Summary mengirim enam elemen dengan
+`opacity: 0` dan Detail Progress dua, sehingga tidak ada yang terlihat sampai
+JavaScript-nya selesai diunduh, diurai dan dihidrasi — lalu semuanya muncul
+sekaligus. Diukur di Chrome headless dengan CPU ditahan 4×, tiga detik pertama
+halaman itu di `next dev` hanya kebagian sepuluh frame animasi dengan jeda satu
+detik di tengahnya. Menukar pustakanya bolak-balik tidak mengubah jumlah frame di
+luar variasi antar-jalan, jadi biayanya memang bukan pustaka itu — markup yang
+disembunyikan sampai hidrasi itulah masalahnya. Keyframe CSS ada di cat pertama,
+berjalan di compositor, dan selesai dengan benar meski bundle-nya tidak pernah
+tiba. framer-motion tetap dipakai untuk gerak yang dipicu state setelah halaman
+hidup. Angkanya tetap satu tempat: `MOTION` di `lib/design.ts`, dicerminkan oleh
+`--ease-out-expo` dan durasi di `.animate-fade-in-up` / `.animate-level-*` pada
+`globals.css` — ubah satu, ubah yang lain. Alasan lengkapnya ada di
+`components/motion/Reveal.tsx`.
+
+**Masuk halaman punya SATU SKALA, bukan satu kelas.** Tiga ukuran, dan yang
+membedakan adalah seberapa besar bendanya: `.animate-fade-in-up` (8px/0,26s)
+untuk yang kebetulan muncul — centang di dalam tombol, spanduk galat, satu
+baris; `.animate-enter` (16px/0,42s, `MOTION.enter`) untuk SEKSI yang datang,
+yaitu yang dibungkus `Reveal`; dan `.animate-rise-in` (18px/0,7s) untuk satu
+permukaan hero. Jeda antar-saudara ditulis sebagai kelas `.stagger-1`…`.stagger-8`,
+bukan `style={{ animationDelay }}` di tiga puluh berkas. Berhenti di 8 karena
+apa pun yang lebih jauh dari itu ada di bawah lipatan, dan bawah lipatan bukan
+milik jeda.
+
+**Di bawah lipatan memakai `ScrollReveal`, dan URUTANNYA adalah fiturnya.**
+Komponen itu tidak pernah mengirim status tersembunyi di HTML server: dia
+menyembunyikan elemen hanya SETELAH observer memastikan elemen itu benar-benar
+di bawah lipatan. Ponsel yang tidak pernah menerima bundle merender halaman
+utuh, dan orang yang menggulir lebih cepat daripada hidrasi tidak pernah
+melihat kartu lenyap di bawah jarinya. Dua jebakan sudah dibayar: aplikasi ini
+tidak menggulir dokumen — `<main>` yang menggulir, dan di laporan mingguan ada
+scroller kedua di dalamnya — jadi observer harus BERAKAR pada scroller-nya,
+karena `rootMargin` tidak bisa menembus klip leluhur; dan `rootMargin` atasnya
+dibuka lebar (`10000px`) supaya yang sudah terlewati tetap terhitung
+berpotongan, sebab observer hanya melapor saat status potongan BERUBAH dan
+elemen yang dilompati viewport tidak pernah dilaporkan sama sekali — pemulihan
+posisi scroll melakukan itu setiap kali. Jangan pasang di dalam `.map()` yang
+bisa melebihi ~20 baris.
+
+**Perpindahan rute: `RouteTransition`, dan TIDAK ADA `app/template.tsx`.**
+Template di akar me-remount seluruh subtree tiap navigasi — itu memang gunanya —
+sehingga pindah dari Summary ke Detail ikut merobohkan
+`app/weekly/[week]/layout.tsx`: week picker, stepper dan seluruh baris tab
+dihancurkan lalu dibangun ulang di antara dua tab minggu yang sama, dan badge
+"Current" mengulang `animate-pop-in`-nya tiap kali. Sekarang batasnya dipasang
+tangan: layout seksi membungkus dirinya dengan id tetap (`weekly`), tiap halaman
+membungkus akarnya dengan id sendiri (`weekly-summary`), dan React melihat
+pertukaran berkunci sehingga kelas `enter`/`exit` benar-benar terpakai.
+Penggantinya sempat berupa client component yang memanggil `usePathname()`, dan
+itu gagal build persis seperti peringatan di atas — di bawah `cacheComponents`
+pathname adalah bacaan tak-ter-cache, dan membacanya di root layout memblokir
+setiap rute; build mati di `/print/daily/[date]`. Halaman sudah tahu dirinya
+halaman apa, jadi id-nya dioper dan komponennya tetap server component.
+Animasinya sendiri hanya opacity: yang bergerak saat pindah rute adalah kartu-
+kartu di dalamnya, bukan satu lempeng abu-abu — dan sebuah transform pada
+snapshot sebesar Detail Progress justru cara paling cepat membuatnya tersendat
+di ponsel.
 
 **The four decisions that constrain code the most.** A reporting unit is a
 FLAGGED WBS NODE, never a hierarchy level — and units nest, so a unit's weight
