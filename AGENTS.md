@@ -289,6 +289,30 @@ dan bukan dari kode (`lib/bar-styles.ts`), dan tanggal target adalah janji —
 satu-satunya tanggal yang boleh diketik di baris ringkasan, dan ia tidak pernah
 menggeser apa pun.
 
+**Warna yang tidak bisa membedakan bukan warna.** Dikunci 6 September 2026
+setelah dibuktikan pada proyek berisi lima baris: `assignColorGroups` memakai
+baris teratas sebagai "paket" tanpa memeriksa apakah baris itu cabang, jadi
+empat baris teratas — tiga di antaranya leaf — dapat empat warna berbeda, satu
+warna per baris. Sekarang sebuah paket harus CABANG, dan prinsip yang sama
+dipakai di `pruneStyles`: aturan yang cocok dengan SEMUA baris atau TIDAK SATU
+pun dibuang dari daftar, karena merah di setiap batang tidak mengatakan apa-apa
+dan satu baris di legenda yang tidak menunjuk apa pun lebih buruk lagi. Aturan
+yang ditulis tangan tidak pernah dipangkas — itu keputusan orangnya.
+
+**Dua daftar siap pakai, dan proyeknya boleh memilih sendiri.** `TYPE_PRESET`
+mewarnai menurut APA baris itu (ringkasan, milestone, kritis merah seperti MS
+Project, lewat target, belum berjadwal); `PACKAGE_PRESET` mewarnai menurut SPK
+tempat baris itu berada. `projects.bar_preset` NULL berarti aplikasi yang
+memilih — punya paket, pakai warna paket; belum, pakai warna jenis — sehingga
+menandai SPK kedua memindahkannya sendiri. Baris di `bar_styles` selalu menang
+di atas keduanya.
+
+**Baris beranak tidak pernah milestone.** Flag itu dipasang saat baris masih
+leaf dan basi begitu ada yang di-indent ke bawahnya; `renumber()` di
+`lib/sheet-structure.ts` — satu-satunya jalan yang dilewati setiap perubahan
+struktur — sekarang menghapusnya, dan salinan renumber di `lib/paste-actions.ts`
+melakukan hal yang sama.
+
 Papan ini disusun ulang 27 Agustus 2026 setelah data sumber dibaca baris demi
 baris. Rencana lengkapnya — alasan tiap urutan, tujuh belas temuan pada workbook
 asli, dan struktur ketiga berkas sebagai rujukan importer — ada di

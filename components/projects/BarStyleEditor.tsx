@@ -3,23 +3,26 @@
 import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check as CheckIcon, Plus, RotateCcw, Trash2 } from 'lucide-react';
 
 import { MOTION } from '@/lib/design';
 import {
   CONDITIONS,
   PAINTS,
+  PRESETS,
   SHAPES,
   type BarCondition,
   type BarPaint,
+  type BarPreset,
   type BarShape,
   type BarStyle,
 } from '@/lib/bar-styles';
 import {
   addBarStyleAction,
+  customiseBarStylesAction,
   deleteBarStyleAction,
   moveBarStyleAction,
-  resetBarStylesAction,
+  setBarPresetAction,
   updateBarStyleAction,
 } from '@/lib/bar-style-actions';
 import { paintSwatch } from './GanttChart';
@@ -43,7 +46,9 @@ import { paintSwatch } from './GanttChart';
 export default function BarStyleEditor({
   projectId,
   styles,
-  customised,
+  source,
+  auto,
+  pruned,
   units,
   onChanged,
   open,
@@ -51,8 +56,12 @@ export default function BarStyleEditor({
 }: {
   projectId: string;
   styles: BarStyle[];
-  /** False while the project is still reading through the defaults. */
-  customised: boolean;
+  /** Which of the three lists this plan is reading. */
+  source: 'custom' | BarPreset;
+  /** True when nobody chose and the plan picked for itself. */
+  auto: boolean;
+  /** Rules left out because they could not tell this plan's rows apart. */
+  pruned: string[];
   /** Reporting units, for the "inside a package" condition. */
   units: { id: string; name: string }[];
   onChanged: () => void;
@@ -103,18 +112,62 @@ export default function BarStyleEditor({
             <div className="shrink-0 border-b p-4">
               <h2 className="text-sm font-semibold">Bar styles</h2>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Each line says how a bar is drawn when it fits. The app reads down the list and
-                stops at the first line that fits, so a rule higher up wins — put lateness above
-                packages if lateness is what you want to see first.
+                What the colours on the timeline mean. Pick one of the two ready-made answers, or
+                write your own list.
               </p>
-              {!customised && (
-                <p className="mt-2 rounded-lg bg-muted p-2 text-[11px] text-muted-foreground">
-                  This project is using the standard list. Changing anything makes it its own.
+
+              {/* The choice comes FIRST, because "why is everything a different
+                  colour" is the question people arrive with, and the answer is
+                  which of these is switched on — not any single rule below. */}
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {PRESETS.map((preset) => (
+                  <Choice
+                    key={preset.key}
+                    active={source === preset.key}
+                    disabled={pending}
+                    title={preset.label}
+                    help={preset.help}
+                    onClick={() => run(() => setBarPresetAction(projectId, preset.key))}
+                  />
+                ))}
+                <Choice
+                  active={source === 'custom'}
+                  disabled={pending}
+                  title="My own rules"
+                  help="Start from whichever list is showing and change it line by line."
+                  onClick={() => run(() => customiseBarStylesAction(projectId))}
+                />
+              </div>
+
+              {auto && (
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Chosen from the plan itself:{' '}
+                  <strong className="font-medium text-foreground">
+                    {source === 'package'
+                      ? 'this one has packages, so the colours follow them'
+                      : 'this one has no packages yet, so the colours follow what each row is'}
+                  </strong>
+                  . Mark a second package and it moves across on its own — until you pick one
+                  here, and then it stays picked.
+                </p>
+              )}
+
+              {pruned.length > 0 && (
+                <p className="mt-2 rounded-lg bg-muted p-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Left out of this plan: <strong className="text-foreground">{pruned.join(', ')}</strong>{' '}
+                  — every row would have matched, and a colour every row shares tells you nothing.
+                  It comes back as soon as it separates something.
                 </p>
               )}
             </div>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-auto p-4">
+              {source !== 'custom' && (
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Read down the list; the first line that describes a bar is the one that draws it.
+                  Changing anything here makes this list the project&apos;s own.
+                </p>
+              )}
               {styles.map((s, i) => {
                 const cond = CONDITIONS.find((c) => c.key === s.condition);
                 return (
@@ -282,15 +335,16 @@ export default function BarStyleEditor({
                 <Plus className="size-4" />
                 Add a rule
               </button>
-              {customised && (
+              {(source === 'custom' || !auto) && (
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => run(() => resetBarStylesAction(projectId))}
+                  onClick={() => run(() => setBarPresetAction(projectId, null))}
                   className="flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                  title="Hand the choice back to the app"
                 >
                   <RotateCcw className="size-4" />
-                  Back to standard
+                  Let the app choose
                 </button>
               )}
               <button
@@ -306,6 +360,38 @@ export default function BarStyleEditor({
       )}
     </AnimatePresence>,
     document.body
+  );
+}
+
+function Choice({
+  active,
+  disabled,
+  title,
+  help,
+  onClick,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  title: string;
+  help: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || active}
+      aria-pressed={active}
+      className={`rounded-xl border p-2.5 text-left transition-colors disabled:opacity-100 ${
+        active ? 'border-foreground bg-muted' : 'hover:border-muted-foreground'
+      }`}
+    >
+      <span className="flex items-center gap-1.5 text-xs font-semibold">
+        {active && <CheckIcon className="size-3.5 shrink-0" />}
+        {title}
+      </span>
+      <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{help}</span>
+    </button>
   );
 }
 

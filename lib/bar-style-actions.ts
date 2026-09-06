@@ -5,7 +5,16 @@ import { revalidatePath } from 'next/cache';
 import { asc, eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { DEFAULT_BAR_STYLES, type BarCondition, type BarPaint, type BarShape } from './bar-styles';
+import {
+  PRESETS,
+  pickPreset,
+  type BarCondition,
+  type BarPaint,
+  type BarPreset,
+  type BarShape,
+  type BarStyle,
+} from './bar-styles';
+import { getSheet } from './sheet';
 
 /**
  * Editing the bar-style list.
@@ -29,6 +38,23 @@ function fail(err: unknown): { ok: false; error: string } {
 
 type Writer = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/**
+ * The list this project is reading right now, whichever of the three it is.
+ *
+ * An edit has to copy THAT list in, not a fixed one: a project on "by package"
+ * whose first edit seeded the type list would have every bar change colour the
+ * moment someone renamed a rule.
+ */
+function activeStyles(projectId: string): BarStyle[] {
+  const project = db
+    .select({ barPreset: schema.projects.barPreset })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  const key: BarPreset = project?.barPreset ?? pickPreset(getSheet(projectId).rows);
+  return (PRESETS.find((p) => p.key === key) ?? PRESETS[0]).styles;
+}
+
 function materialise(projectId: string, tx: Writer) {
   const existing = db
     .select({ id: schema.barStyles.id })
@@ -38,7 +64,7 @@ function materialise(projectId: string, tx: Writer) {
   if (existing.length > 0) return;
   tx.insert(schema.barStyles)
     .values(
-      DEFAULT_BAR_STYLES.map((s, i) => ({
+      activeStyles(projectId).map((s, i) => ({
         id: `bs${Date.now().toString(36)}${i}${randomUUID().slice(0, 4)}`,
         projectId,
         order: i,
@@ -193,7 +219,7 @@ export async function deleteBarStyleAction(
   }
 }
 
-/** Back to the defaults, which is simply having no rows of one's own again. */
+/** Back to a ready-made list, which is simply having no rows of one's own again. */
 export async function resetBarStylesAction(projectId: string): Promise<StyleResult> {
   try {
     db.delete(schema.barStyles).where(eq(schema.barStyles.projectId, projectId)).run();
@@ -204,12 +230,55 @@ export async function resetBarStylesAction(projectId: string): Promise<StyleResu
 }
 
 /**
- * A `default:*` id names a POSITION in the default list, not a row. Once the
- * defaults have been copied in, that position is the row at the same index.
+ * Choose a ready-made list, or hand the choice back to the app.
+ *
+ * Picking one DROPS any hand-written rules, because that is what picking a
+ * different list means — and the editor asks first, since those rules cannot be
+ * got back.
+ *
+ * `null` means "you decide": the plan picks for itself from then on, and keeps
+ * picking, so a plan that gains its second SPK moves to package colours without
+ * anyone going back to this screen.
+ */
+export async function setBarPresetAction(
+  projectId: string,
+  preset: BarPreset | null
+): Promise<StyleResult> {
+  try {
+    if (preset !== null && !PRESETS.some((p) => p.key === preset)) {
+      throw new Error('That is not a list this app knows');
+    }
+    db.transaction((tx) => {
+      tx.delete(schema.barStyles).where(eq(schema.barStyles.projectId, projectId)).run();
+      tx.update(schema.projects)
+        .set({ barPreset: preset })
+        .where(eq(schema.projects.id, projectId))
+        .run();
+    });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Copy whatever list is showing into the project, so it can be edited. */
+export async function customiseBarStylesAction(projectId: string): Promise<StyleResult> {
+  try {
+    db.transaction((tx) => materialise(projectId, tx));
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * A `type:*` or `package:*` id names a POSITION in a ready-made list, not a
+ * row. Once that list has been copied in, the position is the row at the same
+ * index — a generated row id never contains a colon.
  */
 function resolveId(projectId: string, styleId: string): string | null {
-  if (!styleId.startsWith('default:')) return styleId;
-  const index = DEFAULT_BAR_STYLES.findIndex((s) => s.id === styleId);
+  if (!styleId.includes(':')) return styleId;
+  const index = activeStyles(projectId).findIndex((s) => s.id === styleId);
   if (index < 0) return null;
   const rows = db
     .select({ id: schema.barStyles.id })

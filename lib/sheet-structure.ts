@@ -87,7 +87,13 @@ function renumber(projectId: string, tx: Writer = db) {
     else kids.set(n.parentId ?? null, [n]);
   }
 
-  const flat: { id: string; order: number; depth: number; code: string; isLeaf: boolean }[] = [];
+  const flat: {
+    id: string;
+    order: number;
+    depth: number;
+    code: string;
+    isLeaf: boolean;
+  }[] = [];
   let seq = 0;
   const walk = (parentId: string | null, depth: number, prefix: string) => {
     (kids.get(parentId) ?? []).forEach((n, i) => {
@@ -109,7 +115,19 @@ function renumber(projectId: string, tx: Writer = db) {
   }
   for (const f of flat) {
     tx.update(schema.wbsNodes)
-      .set({ order: f.order, depth: f.depth, wbsCode: f.code, isLeaf: f.isLeaf })
+      .set({
+        order: f.order,
+        depth: f.depth,
+        wbsCode: f.code,
+        isLeaf: f.isLeaf,
+        // A ROW WITH CHILDREN IS NOT A MILESTONE — decision ①, and this is the
+        // one place every structural change passes through, so it is the only
+        // place that can enforce it. The flag is set while a row is still a
+        // leaf and goes stale the moment something is indented under it;
+        // nothing used to clear it, and the plan drew a point in time that
+        // spanned four months of work.
+        ...(f.isLeaf ? {} : { isMilestone: false }),
+      })
       .where(eq(schema.wbsNodes.id, f.id))
       .run();
   }

@@ -68,6 +68,8 @@ export function paintColor(paint: BarPaint, row: SheetRow): string {
   switch (paint) {
     case 'unit':
       return planColor(row.colorGroup);
+    case 'foreground':
+      return 'var(--foreground)';
     case 'warn':
       return 'var(--warn)';
     case 'danger':
@@ -86,6 +88,8 @@ export function paintSwatch(paint: BarPaint): string {
   switch (paint) {
     case 'unit':
       return 'var(--plan-1)';
+    case 'foreground':
+      return 'var(--foreground)';
     case 'warn':
       return 'var(--warn)';
     case 'danger':

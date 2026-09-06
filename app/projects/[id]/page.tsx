@@ -47,7 +47,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const contents = getProjectContents(id);
   const sheet = getSheet(id);
   const weights = getWeightSummary(id);
-  const bars = getBarStyles(id);
+  const bars = getBarStyles(id, sheet.rows);
   const weeks = getWeekSpans(id);
   const isOpen = getActiveProjectId() === id;
 
@@ -109,7 +109,9 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           currency={project.currency}
           projectId={id}
           barStyles={bars.styles}
-          barStylesCustomised={bars.customised}
+          barStyleSource={bars.source}
+          barStyleAuto={bars.auto}
+          barStylePruned={bars.pruned}
           weeks={weeks}
         />
       </div>

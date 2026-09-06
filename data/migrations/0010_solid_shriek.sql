@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `bar_preset` text;

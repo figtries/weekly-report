@@ -258,7 +258,16 @@ function renumberProject(projectId: string, tx: Writer) {
   }
   for (const f of flat) {
     tx.update(schema.wbsNodes)
-      .set({ order: f.order, depth: f.depth, wbsCode: f.code, isLeaf: f.isLeaf })
+      .set({
+        order: f.order,
+        depth: f.depth,
+        wbsCode: f.code,
+        isLeaf: f.isLeaf,
+        // Same rule as lib/sheet-structure.ts: a row with children cannot be a
+        // milestone. A pasted block can easily make a parent out of a row the
+        // workbook marked as one.
+        ...(f.isLeaf ? {} : { isMilestone: false }),
+      })
       .where(eq(schema.wbsNodes.id, f.id))
       .run();
   }

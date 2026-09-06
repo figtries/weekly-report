@@ -293,11 +293,13 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
     // everything the same; go one level down instead.
     const roots = rows.filter((r) => r.depth === 0);
     const level = roots.length === 1 ? rows.filter((r) => r.depth === 1) : roots;
-    // Fewer than three branches is not a grouping, it is one colour per row —
-    // noise wearing the costume of meaning. Colour says WHICH PACKAGE, and a
-    // plan with no packages has nothing for it to say, so everything stays
-    // neutral until there is something to distinguish.
-    anchors = level.length >= 3 ? level : [];
+    // A package is a BRANCH. This used to count rows, so a plan of four
+    // top-level rows — three of them ordinary tasks — was handed four separate
+    // hues, one per row, and colour stopped meaning anything at all. A leaf is
+    // a job, not a package, and colouring it as one is the "noise wearing the
+    // costume of meaning" this guard was written to prevent.
+    const branches = level.filter((r) => r.isSummary);
+    anchors = branches.length >= 3 ? branches : [];
   }
 
   const groupOf = new Map<string, number>();

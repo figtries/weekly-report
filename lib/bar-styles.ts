@@ -15,10 +15,10 @@
  * Pure — no database, no React, so `scripts/verify-bar-styles.ts` runs the real
  * project through it.
  */
-import type { BarCondition, BarPaint, BarShape } from './schema';
+import type { BarCondition, BarPaint, BarPreset, BarShape } from './schema';
 import type { SheetRow } from './sheet';
 
-export type { BarCondition, BarPaint, BarShape };
+export type { BarCondition, BarPaint, BarPreset, BarShape };
 
 export interface BarStyle {
   id: string;
@@ -43,21 +43,21 @@ export interface ResolvedBar {
 }
 
 /**
- * The list a project has before anybody configures anything.
+ * Colour by WHAT A ROW IS — MS Project's own default, and ours for any plan
+ * that has no packages to colour by.
  *
- * Read as prose, top to bottom: a late bar is amber whatever else it is; a
- * milestone is a diamond; a summary is a bracket; a row nobody has scheduled is
- * grey and hollow; everything else is its package's colour. That is exactly the
- * behaviour this app had hard-coded, written down as rules so it can be argued
- * with.
+ * Read it as prose, top to bottom: late is amber whatever else it is; work on
+ * the critical path is red; a milestone is a black diamond and a summary a
+ * black bracket, exactly as every planner in this industry already reads them;
+ * a row nobody has scheduled is grey; everything else is a blue bar.
  *
- * `past_target` sits at the top with `shape: 'auto'` on purpose — a late summary
- * is still a bracket, in amber. Shape and paint are separate axes, and only
- * paint is worth overriding for lateness.
+ * Red for critical is the thirty-year convention and it is kept, even though
+ * red elsewhere in this app means an error. A planner reads a red bar without
+ * looking at the key, and that is worth more than internal tidiness.
  */
-export const DEFAULT_BAR_STYLES: BarStyle[] = [
+export const TYPE_PRESET: BarStyle[] = [
   {
-    id: 'default:past-target',
+    id: 'type:past-target',
     order: 0,
     label: 'Past its target date',
     condition: 'past_target',
@@ -68,7 +68,85 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
     enabled: true,
   },
   {
-    id: 'default:milestone',
+    id: 'type:critical',
+    order: 1,
+    label: 'On the critical path',
+    condition: 'critical',
+    conditionValue: null,
+    paint: 'danger',
+    shape: 'auto',
+    hatched: false,
+    enabled: true,
+  },
+  {
+    id: 'type:milestone',
+    order: 2,
+    label: 'Milestone',
+    condition: 'milestone',
+    conditionValue: null,
+    paint: 'foreground',
+    shape: 'diamond',
+    hatched: false,
+    enabled: true,
+  },
+  {
+    id: 'type:summary',
+    order: 3,
+    label: 'Summary',
+    condition: 'summary',
+    conditionValue: null,
+    paint: 'foreground',
+    shape: 'bracket',
+    hatched: false,
+    enabled: true,
+  },
+  {
+    id: 'type:unscheduled',
+    order: 4,
+    label: 'Not scheduled yet',
+    condition: 'unscheduled',
+    conditionValue: null,
+    paint: 'muted',
+    shape: 'auto',
+    hatched: false,
+    enabled: true,
+  },
+  {
+    id: 'type:task',
+    order: 5,
+    label: 'Work',
+    condition: 'always',
+    conditionValue: null,
+    paint: 'plan-5',
+    shape: 'bar',
+    hatched: false,
+    enabled: true,
+  },
+];
+
+/**
+ * Colour by WHICH PACKAGE a row belongs to — SPK-002, SPK-003 and so on.
+ *
+ * The same shapes, and the same amber for lateness, but the fill says which
+ * contract the work sits under. On a plan of hundreds of rows split across four
+ * SPK this is the reading that matters, and it is what Gundih wants. It is
+ * nonsense on a plan with no packages, which is why `pickPreset` will not hand
+ * it to one.
+ */
+export const PACKAGE_PRESET: BarStyle[] = [
+  {
+    id: 'package:past-target',
+    order: 0,
+    label: 'Past its target date',
+    condition: 'past_target',
+    conditionValue: null,
+    paint: 'warn',
+    shape: 'auto',
+    hatched: true,
+    enabled: true,
+  },
+  {
+    id: 'package:milestone',
     order: 1,
     label: 'Milestone',
     condition: 'milestone',
@@ -79,7 +157,7 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
     enabled: true,
   },
   {
-    id: 'default:summary',
+    id: 'package:summary',
     order: 2,
     label: 'Summary',
     condition: 'summary',
@@ -90,7 +168,7 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
     enabled: true,
   },
   {
-    id: 'default:unscheduled',
+    id: 'package:unscheduled',
     order: 3,
     label: 'Not scheduled yet',
     condition: 'unscheduled',
@@ -101,7 +179,7 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
     enabled: true,
   },
   {
-    id: 'default:task',
+    id: 'package:task',
     order: 4,
     label: 'Work',
     condition: 'always',
@@ -112,6 +190,69 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
     enabled: true,
   },
 ];
+
+export const PRESETS: {
+  key: BarPreset;
+  label: string;
+  help: string;
+  styles: BarStyle[];
+}[] = [
+  {
+    key: 'type',
+    label: 'By what it is',
+    help: 'Summary, milestone, critical, late — the way MS Project colours a plan.',
+    styles: TYPE_PRESET,
+  },
+  {
+    key: 'package',
+    label: 'By package',
+    help: 'Each SPK gets its own colour, so a long plan reads as a few streams.',
+    styles: PACKAGE_PRESET,
+  },
+];
+
+/** Kept as a name because plenty of code says "the default list". */
+export const DEFAULT_BAR_STYLES = TYPE_PRESET;
+
+/**
+ * Which list a plan gets when nobody has chosen one.
+ *
+ * Two or more packages actually assigned to rows, and colour has something to
+ * say about packages; anything less and it does not. That is the same test used
+ * everywhere else here: a colour that cannot distinguish is not a colour, it is
+ * decoration. This is also what makes the choice move on its own — mark a second
+ * SPK and the plan changes over, because at that moment it started being true.
+ */
+export function pickPreset(rows: { colorGroup: number }[]): BarPreset {
+  const groups = new Set(rows.map((r) => r.colorGroup).filter((g) => g >= 0));
+  return groups.size >= 2 ? 'package' : 'type';
+}
+
+/**
+ * Drop the rules that cannot tell this plan's rows apart.
+ *
+ * A four-row plan where every row is on the critical path is not four red bars
+ * worth of information; it is one fact about the whole plan, said four times.
+ * The rule is skipped and the row falls through to the next line that fits — so
+ * a small plan reads as ordinary work rather than as an emergency.
+ *
+ * Only conditions that CLASSIFY are pruned. `always` matching everything is the
+ * point of it.
+ */
+export function pruneStyles(
+  rows: SheetRow[],
+  styles: BarStyle[],
+  today: string
+): BarStyle[] {
+  const classifying: BarCondition[] = ['critical', 'in_progress', 'unpriced', 'unscheduled'];
+  const candidates = rows.filter((r) => !r.isSummary);
+  if (candidates.length === 0) return styles;
+  return styles.filter((s) => {
+    if (!classifying.includes(s.condition)) return true;
+    const hits = candidates.filter((r) => matches(s, r, today)).length;
+    return hits > 0 && hits < candidates.length;
+  });
+}
 
 /**
  * Every condition, with the sentence the editor shows and whether it takes a
@@ -145,6 +286,7 @@ export const CONDITIONS: {
 
 export const PAINTS: { key: BarPaint; label: string }[] = [
   { key: 'unit', label: 'Package colour' },
+  { key: 'foreground', label: 'Black' },
   { key: 'warn', label: 'Amber' },
   { key: 'danger', label: 'Red' },
   { key: 'ok', label: 'Green' },

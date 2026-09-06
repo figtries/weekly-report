@@ -61,6 +61,8 @@ export const projects = sqliteTable('projects', {
   contractValue: real('contract_value'),
   currency: text('currency').notNull().default('IDR'),
   weightBasis: text('weight_basis').$type<WeightBasis>().notNull().default('boq'),
+  /** null = let the app choose from the plan. See BarPreset. */
+  barPreset: text('bar_preset').$type<BarPreset>(),
   startDate: text('start_date'),
   finishDate: text('finish_date'),
   createdAt: now(),
@@ -240,11 +242,23 @@ export type BarCondition =
  */
 export type BarPaint =
   | 'unit'
+  | 'foreground'
   | 'warn'
   | 'danger'
   | 'ok'
   | 'muted'
   | 'plan-1' | 'plan-2' | 'plan-3' | 'plan-4' | 'plan-5' | 'plan-6';
+
+/**
+ * Which ready-made list a project is reading, when it has no rules of its own.
+ *
+ * `type` colours by what a row IS — MS Project's own default. `package` colours
+ * by which SPK it belongs to, which is what a plan like Gundih wants. NULL means
+ * nobody has chosen, and the app picks from the data: a plan with packages gets
+ * package colours, a plan without gets type colours, and marking a second SPK
+ * moves it across on its own.
+ */
+export type BarPreset = 'type' | 'package';
 
 /** `auto` keeps the shape the row's kind already implies — bracket, bar, diamond. */
 export type BarShape = 'auto' | 'bar' | 'bracket' | 'diamond';

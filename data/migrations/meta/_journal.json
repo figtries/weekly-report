@@ -71,6 +71,13 @@
       "when": 1788690244011,
       "tag": "0009_cute_tag",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788706055629,
+      "tag": "0010_solid_shriek",
+      "breakpoints": true
     }
   ]
 }

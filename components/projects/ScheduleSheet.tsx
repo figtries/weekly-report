@@ -26,8 +26,8 @@ import {
   type ShiftPreview as Shift,
   type WeekSpan,
 } from '@/lib/chains';
-import GanttChart, { GanttLegend, planColor } from './GanttChart';
-import { DEFAULT_BAR_STYLES, type BarStyle } from '@/lib/bar-styles';
+import GanttChart, { GanttLegend, paintColor } from './GanttChart';
+import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
 import { formatMoney, groupAmount, stripAmount } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
@@ -142,7 +142,9 @@ export default function ScheduleSheet({
   currency,
   projectId,
   barStyles = DEFAULT_BAR_STYLES,
-  barStylesCustomised = false,
+  barStyleSource = 'type',
+  barStyleAuto = true,
+  barStylePruned = [],
   weeks = [],
 }: {
   rows: SheetRow[];
@@ -152,9 +154,11 @@ export default function ScheduleSheet({
   projectFinish: string | null;
   currency: string;
   projectId: string;
-  /** The project's ordered rule list; the defaults until someone edits it. */
+  /** The project's ordered rule list; a ready-made one until someone edits it. */
   barStyles?: BarStyle[];
-  barStylesCustomised?: boolean;
+  barStyleSource?: 'custom' | BarPreset;
+  barStyleAuto?: boolean;
+  barStylePruned?: string[];
   /** Reporting weeks and their status, for the affected-weeks warning. */
   weeks?: WeekSpan[];
 }) {
@@ -174,6 +178,11 @@ export default function ScheduleSheet({
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
   // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
   const [range, setRange] = useState({ start: 0, end: 60 });
+  // Read after mount, never at render: this page prerenders into the static
+  // shell, so a build-time clock would drift a day further from the truth every
+  // day and "running today" would quietly stop being true.
+  const [today, setToday] = useState('');
+  useEffect(() => setToday(new Date().toISOString().slice(0, 10)), []);
   // Declared here rather than beside the mirror below, because the window
   // arithmetic reads the scroller's own height.
   const leftRef = useRef<HTMLDivElement>(null);
@@ -296,6 +305,19 @@ export default function ScheduleSheet({
     [rows]
   );
   const chainLinks = useMemo(() => inferChains(chainNodes), [chainNodes]);
+
+  /**
+   * The colour a row's bar came out, so the sheet can use the SAME one.
+   *
+   * The stripe beside each outline code used to read `planColor(colorGroup)`
+   * directly, which meant it kept saying "which package" while the timeline had
+   * moved on to saying "critical" or "summary" — two colours for one row, in
+   * two panes six inches apart. It asks the rule engine now, like the chart.
+   */
+  const paintOf = useCallback(
+    (row: SheetRow) => paintColor(resolveBar(row, barStyles, today).paint, row),
+    [barStyles, today]
+  );
   const nameById = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
 
   const patch = useCallback((rowId: string, next: Partial<SheetRow>) => {
@@ -578,7 +600,7 @@ export default function ScheduleSheet({
           <span
             aria-hidden
             className="h-3.5 w-1 shrink-0 rounded-full"
-            style={{ background: planColor(selected.colorGroup) }}
+            style={{ background: paintOf(selected) }}
           />
           <span className="shrink-0 tabular-nums text-muted-foreground">{selected.code}</span>
           <span className="truncate font-medium">{selected.name}</span>
@@ -726,6 +748,7 @@ export default function ScheduleSheet({
                 onMenu={() => setMenuRow(r)}
                 onIndent={(shift) => structure(shift ? outdentRowAction(r.id) : indentRowAction(r.id))}
                 onEnter={() => structure(addRowAction(projectId, { afterNodeId: r.id }))}
+                paint={paintOf(r)}
               />
             ))}
 
@@ -780,7 +803,9 @@ export default function ScheduleSheet({
       <BarStyleEditor
         projectId={projectId}
         styles={barStyles}
-        customised={barStylesCustomised}
+        source={barStyleSource}
+        auto={barStyleAuto}
+        pruned={barStylePruned}
         // Only the units this plan actually has, and by ID — a rule that says
         // "inside SPK-007" has to survive another unit being marked above it.
         units={rows
@@ -809,6 +834,7 @@ function Row({
   onIndent,
   onEnter,
   highlight,
+  paint,
 }: {
   row: SheetRow;
   currency: string;
@@ -825,6 +851,8 @@ function Row({
   onEnter: () => void;
   /** The live search term, marked inside the name. */
   highlight?: string;
+  /** Whatever colour the rule engine gave this row's bar. */
+  paint: string;
 }) {
   const locked = r.isSummary;
 
@@ -842,7 +870,7 @@ function Row({
         <span
           aria-hidden
           className="h-4 w-1 shrink-0 rounded-full"
-          style={{ background: planColor(r.colorGroup) }}
+          style={{ background: paint }}
         />
         <span className="hidden sm:inline">{r.code}</span>
       </span>
@@ -865,7 +893,7 @@ function Row({
             aria-label="Milestone"
             title="Milestone"
             className="size-2 shrink-0 rotate-45 rounded-[1px]"
-            style={{ background: planColor(r.colorGroup) }}
+            style={{ background: paint }}
           />
         )}
         <EditableCell
