@@ -49,7 +49,27 @@ export interface SheetRow {
   childCount: number;
   /** True when the dates are the span of children rather than this row's own. */
   isSummary: boolean;
+  /**
+   * Which colour group the row's bar belongs to, or -1 for none.
+   *
+   * Colour here does a job rather than decorating: it says WHICH PACKAGE a bar
+   * belongs to, so a plan of hundreds of rows can be read as a handful of
+   * streams running alongside each other. The group is the nearest reporting
+   * unit above the row — SPK-002, SPK-003 and so on — because that is the
+   * division the client's own report is built from. A project with no units
+   * falls back to its top-level branches.
+   *
+   * Rows outside every group keep -1 and are drawn neutral. Groups are assigned
+   * in document order and never cycled: past the palette's length they become
+   * -1 too, rather than repeating a hue and claiming two packages are one.
+   */
+  colorGroup: number;
+  /** The group's name, for the legend. Only set on the row that starts it. */
+  groupLabel: string | null;
 }
+
+/** Fixed order, never cycled. A plan with more groups than this shows the rest neutral. */
+export const MAX_COLOR_GROUPS = 6;
 
 export interface Sheet {
   rows: SheetRow[];
@@ -143,6 +163,8 @@ export function getSheet(projectId: string): Sheet {
         durationDays: null,
         childCount: (childrenOf.get(n.id) ?? []).length,
         isSummary: hasChildren,
+        colorGroup: -1,
+        groupLabel: null,
       });
       if (n.price != null && n.price > 0) pricedRows += 1;
 
@@ -168,6 +190,7 @@ export function getSheet(projectId: string): Sheet {
   }
 
   const span = walk(null, 0, '');
+  assignColorGroups(rows, nodes);
 
   return {
     rows,
@@ -178,4 +201,53 @@ export function getSheet(projectId: string): Sheet {
     spanFinish: span.finish,
     pricedRows,
   };
+}
+
+/**
+ * Paint each row with the package it belongs to.
+ *
+ * The grouping is the nearest REPORTING UNIT above a row, because that is the
+ * division the client's report is already built from — colouring by depth or by
+ * position would draw a rainbow that means nothing. A project that has marked
+ * no units yet falls back to its top-level branches, which is the same idea one
+ * level up.
+ *
+ * Groups are numbered in document order and never cycled. Beyond the palette a
+ * row goes neutral instead of repeating a hue, because a repeated hue says two
+ * packages are the same package.
+ */
+function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: string | null }[]) {
+  const parentOf = new Map(nodes.map((n) => [n.id, n.parentId ?? null]));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  let anchors = rows.filter((r) => r.isReportingUnit);
+  if (anchors.length === 0) {
+    // No units marked. Use the top-level branches — but if the whole plan hangs
+    // off one root, that root is the plan itself and colouring it paints
+    // everything the same; go one level down instead.
+    const roots = rows.filter((r) => r.depth === 0);
+    anchors = roots.length === 1 ? rows.filter((r) => r.depth === 1) : roots;
+  }
+
+  const groupOf = new Map<string, number>();
+  anchors.forEach((a, i) => {
+    if (i < MAX_COLOR_GROUPS) groupOf.set(a.id, i);
+  });
+
+  for (const row of rows) {
+    let cursor: string | null = row.id;
+    while (cursor) {
+      const g = groupOf.get(cursor);
+      if (g !== undefined) {
+        row.colorGroup = g;
+        break;
+      }
+      cursor = parentOf.get(cursor) ?? null;
+    }
+  }
+
+  for (const a of anchors.slice(0, MAX_COLOR_GROUPS)) {
+    const row = byId.get(a.id);
+    if (row) row.groupLabel = row.unitLabel || row.name;
+  }
 }

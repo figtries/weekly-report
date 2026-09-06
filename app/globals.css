@@ -48,6 +48,27 @@
   --chart-3: #10b981; /* done    — emerald-500 */
   --chart-4: #f59e0b; /* at risk — amber-500 */
   --chart-5: #94a3b8; /* dormant — slate-400 */
+
+  /* PLAN GROUPS — the Gantt's categorical palette, and it is deliberately NOT
+     --chart-1..5. Those five already mean actual, plan, done, at risk and
+     dormant everywhere else in this app; reusing them here would have a bar
+     colour claim a measurement that the planner does not make.
+
+     Six hues, fixed order, never cycled: a seventh group is drawn neutral
+     rather than repeating a colour and claiming two packages are one. Every
+     value below passed the six checks (lightness band, chroma floor, adjacent
+     CVD separation, normal-vision floor, contrast >= 3:1 on this surface).
+
+     No dark-mode steps on purpose. The -400 and -500 ramps both FAILED the
+     lightness band against the dormant dark surface, and this app is light by
+     decision — whoever turns dark on validates these then rather than shipping
+     colours nobody checked. */
+  --plan-1: #4f46e5; /* indigo-600  */
+  --plan-2: #0d9488; /* teal-600    */
+  --plan-3: #c026d3; /* fuchsia-600 */
+  --plan-4: #ea580c; /* orange-600  */
+  --plan-5: #0284c7; /* sky-600     */
+  --plan-6: #65a30d; /* lime-600    */
   /* VERDICT — the only two colours allowed to say whether the news is good.
      Kept apart from the chart ramp on purpose: --chart-1/2 answer "which line
      is this", these answer "is this all right". Every ahead/behind figure and
@@ -103,6 +124,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-plan-1: var(--plan-1);
+  --color-plan-2: var(--plan-2);
+  --color-plan-3: var(--plan-3);
+  --color-plan-4: var(--plan-4);
+  --color-plan-5: var(--plan-5);
+  --color-plan-6: var(--plan-6);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-bad: var(--bad);
@@ -1343,3 +1370,31 @@ a:active {
     opacity: 1;
   }
 }
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */
+
+/* rescan */

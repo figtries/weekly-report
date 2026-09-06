@@ -2,82 +2,69 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Undo2 } from 'lucide-react';
+import { m } from 'framer-motion';
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
 import { updateRowDatesAction, updateRowTextAction } from '@/lib/sheet-actions';
-import { addRowAction, indentRowAction, outdentRowAction } from '@/lib/sheet-structure';
+import {
+  addRowAction,
+  deleteRowAction,
+  indentRowAction,
+  outdentRowAction,
+} from '@/lib/sheet-structure';
+import GanttChart, { GanttLegend, planColor } from './GanttChart';
 import RowMenu from './RowMenu';
+import SheetToolbar from './SheetToolbar';
 
 /**
- * The schedule sheet, and the Gantt beside it.
+ * The schedule sheet, and the timeline beside it.
  *
- * Five decisions hold this file together. Four of them are things Microsoft
- * Project does that people trip over; the fifth is how the two panes stay in
- * step.
+ * **A row is SELECTED, and the toolbar acts on it.** Everything used to hide
+ * behind a `⋯` per row, so the answer to "how do I put a task under this one"
+ * was invisible until you went hunting. Selection plus a visible toolbar is how
+ * every outliner works, and it is the single change that makes this learnable.
  *
- * **Rows are divs on a CSS grid, not a `<table>`.** This was measured, not
- * preferred: with `height: 40px` on a `<tr>`, Chrome produced rows of 60, 60
- * and 68px against 28px of content — the specified height was added to the
- * content rather than acting as a floor, and the result varied row by row. A
- * Gantt bar is placed by arithmetic (`index × ROW_H`), so rows that are not
- * exactly ROW_H tall make every bar below the first one wrong, and wrong by
- * more the further down you look. One grid template is shared by the header and
- * every row, which also keeps the columns aligned without `table-fixed`.
+ * **Rows are divs on a CSS grid, not a `<table>`.** Measured, not preferred:
+ * `height` on a `<tr>` was ADDED to the content rather than acting as a floor,
+ * producing rows of 60, 60 and 68px against 28px of content. A Gantt bar is
+ * placed by `index × ROW_H`, so rows that are not exactly ROW_H tall put every
+ * bar below the first progressively out of line.
  *
  * **One input exists at a time.** 285 rows × six columns is seventeen hundred
- * form controls. Cells are text until clicked; the clicked cell becomes a
- * native `<input>` and hands it back on blur. That is the repo's Radix rule
- * taken seriously — the cost is mounted instances, not the library.
+ * form controls. A cell is text until you enter it; the active one becomes a
+ * native `<input>` and hands it back on blur.
  *
  * **A summary row has no inputs at all.** Its dates are its children's span,
- * computed on read. In MS Project you can type over that, it quietly stops
- * rolling up, and the plan starts lying.
+ * computed on read — the one MS Project behaviour deliberately removed, because
+ * there you can type over a summary and it quietly stops rolling up.
  *
- * **The divider is draggable**, because how much sheet versus how much calendar
- * you want depends on what you are doing, and it is the one control everyone
- * recognises from MS Project. Below 768px the two panes cannot share a screen,
- * so they become two tabs instead.
- *
- * **Every edit is undoable.** A schedule change touches rows you are not
- * looking at, and a sheet with no way back is a sheet people are afraid to type
- * in.
+ * **Motion is framer-motion because it is state-triggered** — presses, panels,
+ * a bar changing length. Entry-on-load animation stays CSS keyframes; see
+ * `components/motion/Reveal.tsx` for why.
  */
 
-const ROW_H = 36;
-const HEAD_H = 34;
-// Days-to-pixels is chosen per plan, not fixed. At a constant 3px/day a
-// three-day project drew nine pixels of bar across a thousand-pixel pane, and a
-// five-year one would need scrolling for a week. ~1200px of timeline is the
-// target; the clamps stop a one-day plan filling the screen with a single block
-// and a decade-long one collapsing into a smear.
-const TARGET_PX = 1200;
-function pxPerDay(days: number): number {
-  if (days <= 0) return 8;
-  return Math.min(24, Math.max(1.5, TARGET_PX / days));
-}
-const MS_PER_DAY = 86_400_000;
-// Sized against the widest real content: an outline code six levels deep
-// (1.2.1.2.1.1), a date as 'dd MMM yy', and a price in a currency symbol.
-// Everything left over goes to the name, which is the column people read.
-const GRID = '5.25rem minmax(9rem,1fr) 4rem 4.75rem 4.75rem 5.5rem 2.5rem';
+const ROW_H = 44;
+const HEAD_H = 36;
 const SPLIT_KEY = 'figtries:sheet-split';
 
-function utc(iso: string): number {
-  const [y, m, d] = iso.split('-').map(Number);
-  return Date.UTC(y, m - 1, d);
-}
-function daysBetween(a: string, b: string): number {
-  return Math.round((utc(b) - utc(a)) / MS_PER_DAY);
-}
+// Under 640px only the outline, the name, the duration and the row menu fit;
+// dates and price move into the row's own panel. Above it, the full sheet.
+// Under 640px the first column is the colour chip alone. A six-level outline
+// code needs ~60px and truncates to nonsense in less, while indentation already
+// carries the structure — and the full code is one tap away in the row panel.
+const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.5rem]';
+const GRID_LG = 'sm:grid-cols-[5.25rem_minmax(9rem,1fr)_4rem_4.75rem_4.75rem_5.5rem_2.5rem]';
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
+  const [y, mo, d] = iso.split('-').map(Number);
   return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: 'short',
     year: '2-digit',
     timeZone: 'UTC',
-  }).format(utc(iso));
+  }).format(Date.UTC(y, mo - 1, d));
 }
 
 type Field = 'name' | 'duration' | 'start' | 'finish' | 'price';
@@ -99,40 +86,38 @@ export default function ScheduleSheet({
   rows: SheetRow[];
   spanStart: string | null;
   spanFinish: string | null;
-  /** The contract window. The timeline is drawn against this, not against
-   *  whichever rows happen to exist — otherwise a plan with two rows in it
-   *  shows a two-day calendar. */
   projectStart: string | null;
   projectFinish: string | null;
   currency: string;
   projectId: string;
 }) {
-  // A row may legitimately sit outside the contract window; the Gantt widens
-  // rather than clipping it, because that is exactly the row worth seeing.
-  const ganttStart = projectStart ?? spanStart;
-  const ganttFinish = projectFinish ?? spanFinish;
+  const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ rowId: string; field: Field } | null>(null);
   const [undoStack, setUndoStack] = useState<Edit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
-  const [splitPx, setSplitPx] = useState(780);
+  const [splitPx, setSplitPx] = useState(720);
   const [, startTransition] = useTransition();
 
   useEffect(() => setRows(initialRows), [initialRows]);
 
-  // Per-viewer convenience, so localStorage rather than the database — and
-  // wrapped, because a private window can throw on read.
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(SPLIT_KEY));
       if (Number.isFinite(saved) && saved >= 360) setSplitPx(saved);
     } catch {
-      /* no stored preference is a fine answer */
+      /* a private window can throw; no stored preference is a fine answer */
     }
   }, []);
+
+  // A row may legitimately sit outside the contract window; the timeline widens
+  // rather than clipping it, because that is exactly the row worth seeing.
+  const ganttStart = projectStart ?? spanStart;
+  const ganttFinish = projectFinish ?? spanFinish;
 
   const visible = useMemo(() => {
     if (collapsed.size === 0) return rows;
@@ -146,6 +131,8 @@ export default function ScheduleSheet({
     }
     return out;
   }, [rows, collapsed]);
+
+  const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
 
   const patch = useCallback((rowId: string, next: Partial<SheetRow>) => {
     setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, ...next } : r)));
@@ -167,8 +154,8 @@ export default function ScheduleSheet({
   /**
    * Send one cell. Optimistic for text, because a sheet that waits for the
    * server before showing your own keystroke feels broken on a slow line — and
-   * a failure puts the old value straight back rather than leaving a lie on
-   * screen. Dates are not guessed at locally: the server owns the triangle.
+   * a failure puts the old value straight back. Dates are not guessed at
+   * locally: the server owns the duration/start/finish triangle.
    */
   const commit = useCallback(
     (row: SheetRow, field: Field, raw: string, recordUndo = true) => {
@@ -207,15 +194,11 @@ export default function ScheduleSheet({
   );
 
   /**
-   * Structural edits — add, indent, outdent, move, delete.
-   *
-   * These are NOT optimistic and NOT on the undo stack, unlike a cell. Adding a
-   * row renumbers the whole outline and can reshape every row below it, so
-   * guessing the result locally would mean reimplementing the server's tree walk
-   * in the browser and then hoping the two agree. `router.refresh()` re-reads
-   * the sheet instead, which is one round trip and always right.
+   * Structural edits are NOT optimistic and NOT on the undo stack. Adding a row
+   * renumbers the whole outline and can reshape every row below it; guessing
+   * that locally means reimplementing the server's tree walk in the browser and
+   * hoping the two agree. One refresh is always right.
    */
-  const router = useRouter();
   const structure = useCallback(
     (p: Promise<{ ok: boolean; error?: string }>) => {
       setError(null);
@@ -243,16 +226,37 @@ export default function ScheduleSheet({
     });
   }, [commit]);
 
+  // Keyboard: move with the arrows, act with Tab, undo with Ctrl+Z. Ignored
+  // while a cell is being typed into, where those keys belong to the input.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
+        return;
+      }
+      const typing =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement;
+      if (typing || !selectedId) return;
+
+      const i = visible.findIndex((r) => r.id === selectedId);
+      if (e.key === 'ArrowDown' && i < visible.length - 1) {
+        e.preventDefault();
+        setSelectedId(visible[i + 1].id);
+      }
+      if (e.key === 'ArrowUp' && i > 0) {
+        e.preventDefault();
+        setSelectedId(visible[i - 1].id);
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        structure(e.shiftKey ? outdentRowAction(selectedId) : indentRowAction(selectedId));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo]);
+  }, [undo, selectedId, visible, structure]);
 
   // Mirror the panes' vertical scroll. The guard stops the echo — setting one
   // pane's scrollTop fires that pane's own handler.
@@ -276,13 +280,13 @@ export default function ScheduleSheet({
     e.preventDefault();
     const shell = shellRef.current;
     if (!shell) return;
-    const move = (ev: PointerEvent) => {
-      const next = Math.min(
-        Math.max(ev.clientX - shell.getBoundingClientRect().left, 360),
-        shell.clientWidth - 240
+    const move = (ev: PointerEvent) =>
+      setSplitPx(
+        Math.min(
+          Math.max(ev.clientX - shell.getBoundingClientRect().left, 360),
+          shell.clientWidth - 240
+        )
       );
-      setSplitPx(next);
-    };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
@@ -299,27 +303,71 @@ export default function ScheduleSheet({
     window.addEventListener('pointerup', up);
   };
 
+  const anchor = selectedId ?? rows.at(-1)?.id ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Toolbar
+      <SheetToolbar
         rowCount={rows.length}
+        selected={selected}
         canUndo={undoStack.length > 0}
         onUndo={undo}
-        onAdd={() => structure(addRowAction(projectId, { afterNodeId: rows.at(-1)?.id ?? null }))}
-        pane={pane}
-        setPane={setPane}
+        onAdd={() => structure(addRowAction(projectId, { afterNodeId: anchor }))}
+        onAddChild={() =>
+          selectedId && structure(addRowAction(projectId, { afterNodeId: selectedId, asChild: true }))
+        }
+        onIndent={() => selectedId && structure(indentRowAction(selectedId))}
+        onOutdent={() => selectedId && structure(outdentRowAction(selectedId))}
+        onDelete={() => selectedId && structure(deleteRowAction(selectedId))}
         allCollapsed={collapsed.size > 0}
         onToggleAll={() =>
           setCollapsed((c) =>
             c.size > 0 ? new Set() : new Set(rows.filter((r) => r.isSummary).map((r) => r.id))
           )
         }
+        pane={pane}
+        setPane={setPane}
       />
 
+      {/* Which row the toolbar is about to act on.
+          Without this the toolbar was a set of buttons with an invisible
+          subject — and on the mobile Timeline tab, where no names are drawn at
+          all, tapping a bar gave no sign of what you had touched. */}
+      {selected ? (
+        <m.div
+          key={selected.id}
+          initial={{ opacity: 0, y: -3 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+          className="flex shrink-0 items-center gap-2 border-b bg-muted/60 px-3 py-1.5 text-[11px]"
+        >
+          <span
+            aria-hidden
+            className="h-3.5 w-1 shrink-0 rounded-full"
+            style={{ background: planColor(selected.colorGroup) }}
+          />
+          <span className="shrink-0 tabular-nums text-muted-foreground">{selected.code}</span>
+          <span className="truncate font-medium">{selected.name}</span>
+          <span className="ml-auto hidden shrink-0 tabular-nums text-muted-foreground sm:block">
+            {selected.isMilestone
+              ? fmtDate(selected.startDate)
+              : selected.durationDays != null
+                ? `${selected.durationDays} d · ${fmtDate(selected.startDate)} → ${fmtDate(selected.finishDate)}`
+                : 'no dates yet'}
+          </span>
+        </m.div>
+      ) : (
+        <GanttLegend rows={rows} />
+      )}
+
       {error && (
-        <p className="animate-fade-in-up shrink-0 border-b bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <m.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="shrink-0 border-b bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
           {error}
-        </p>
+        </m.p>
       )}
 
       <div ref={shellRef} className="flex min-h-0 flex-1">
@@ -331,27 +379,37 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[34rem]">
+          <div className="min-w-[19rem] sm:min-w-[34rem]">
             <div
-              className="sticky top-0 z-20 grid items-center gap-x-2 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-              style={{ gridTemplateColumns: GRID, height: HEAD_H }}
+              className={`sticky top-0 z-20 grid items-center gap-x-2 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
+              style={{ height: HEAD_H }}
             >
-              <span>#</span>
+              <span className="hidden sm:inline">#</span>
               <span>Task name</span>
-              <span className="text-right">Duration</span>
-              <span>Start</span>
-              <span>Finish</span>
-              <span className="text-right">Price</span>
+              <span className="text-right">Days</span>
+              <span className="hidden sm:block">Start</span>
+              <span className="hidden sm:block">Finish</span>
+              <span className="hidden text-right sm:block">Price</span>
               <span className="sr-only">Row actions</span>
             </div>
 
             {visible.length === 0 && (
-              <div className="animate-enter p-8 text-center">
+              <div className="animate-enter px-6 py-10 text-center">
                 <p className="text-sm font-semibold">Nothing planned yet</p>
                 <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                  Add the first row, then Tab to put a row under another one. Dates and a price go
-                  in the columns beside it, and its bar appears on the right.
+                  Add the first row, then use <kbd className="rounded border px-1">Tab</kbd> to put a
+                  row underneath another. Dates and a price go in the columns beside it, and a bar
+                  appears on the right.
                 </p>
+                <m.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => structure(addRowAction(projectId, {}))}
+                  className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-lg bg-foreground px-4 text-sm font-medium text-background"
+                >
+                  <Plus className="size-4" />
+                  Add the first row
+                </m.button>
               </div>
             )}
 
@@ -360,6 +418,8 @@ export default function ScheduleSheet({
                 key={r.id}
                 row={r}
                 currency={currency}
+                selected={r.id === selectedId}
+                onSelect={() => setSelectedId(r.id)}
                 collapsed={collapsed.has(r.id)}
                 onToggle={() =>
                   setCollapsed((c) => {
@@ -370,7 +430,10 @@ export default function ScheduleSheet({
                   })
                 }
                 editing={editing?.rowId === r.id ? editing.field : null}
-                onEdit={(field) => setEditing({ rowId: r.id, field })}
+                onEdit={(field) => {
+                  setSelectedId(r.id);
+                  setEditing({ rowId: r.id, field });
+                }}
                 onDone={() => setEditing(null)}
                 onCommit={(field, value) => commit(r, field, value)}
                 onMenu={() => setMenuRow(r)}
@@ -386,7 +449,7 @@ export default function ScheduleSheet({
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize the sheet"
-          className="hidden w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-foreground md:block"
+          className="hidden w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-200 hover:bg-foreground md:block"
         />
 
         <div
@@ -394,10 +457,14 @@ export default function ScheduleSheet({
           onScroll={mirror('r')}
           className={`min-h-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
         >
-          <Gantt
+          <GanttChart
             rows={visible}
             spanStart={ganttStart}
             spanFinish={ganttFinish}
+            rowH={ROW_H}
+            headH={HEAD_H}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
           />
         </div>
       </div>
@@ -414,77 +481,11 @@ export default function ScheduleSheet({
   );
 }
 
-function Toolbar({
-  rowCount,
-  canUndo,
-  onUndo,
-  onAdd,
-  pane,
-  setPane,
-  allCollapsed,
-  onToggleAll,
-}: {
-  rowCount: number;
-  canUndo: boolean;
-  onUndo: () => void;
-  onAdd: () => void;
-  pane: 'sheet' | 'gantt';
-  setPane: (p: 'sheet' | 'gantt') => void;
-  allCollapsed: boolean;
-  onToggleAll: () => void;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
-      <span className="mr-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-        {rowCount} rows
-      </span>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-2.5 text-xs font-medium text-background"
-      >
-        <Plus className="size-3.5" />
-        Add row
-      </button>
-      <button
-        type="button"
-        onClick={onToggleAll}
-        className="h-9 rounded-lg px-2.5 text-xs font-medium hover:bg-muted"
-      >
-        {allCollapsed ? 'Expand all' : 'Collapse all'}
-      </button>
-      <button
-        type="button"
-        onClick={onUndo}
-        disabled={!canUndo}
-        title="Undo (Ctrl+Z)"
-        className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium hover:bg-muted disabled:opacity-40"
-      >
-        <Undo2 className="size-3.5" />
-        Undo
-      </button>
-
-      <div className="ml-auto flex rounded-lg border p-0.5 md:hidden">
-        {(['sheet', 'gantt'] as const).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPane(p)}
-            className={`h-9 rounded-md px-3 text-xs font-medium ${
-              pane === p ? 'bg-foreground text-background' : 'text-muted-foreground'
-            }`}
-          >
-            {p === 'sheet' ? 'List' : 'Timeline'}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Row({
   row: r,
   currency,
+  selected,
+  onSelect,
   collapsed,
   onToggle,
   editing,
@@ -497,6 +498,8 @@ function Row({
 }: {
   row: SheetRow;
   currency: string;
+  selected: boolean;
+  onSelect: () => void;
   collapsed: boolean;
   onToggle: () => void;
   editing: Field | null;
@@ -511,12 +514,22 @@ function Row({
 
   return (
     <div
-      className={`grid items-center gap-x-2 border-b px-3 hover:bg-muted/40 ${
-        r.isSummary ? 'font-semibold' : ''
-      }`}
-      style={{ gridTemplateColumns: GRID, height: ROW_H }}
+      onMouseDown={onSelect}
+      className={`group grid items-center gap-x-2 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
+        selected ? 'bg-muted' : 'hover:bg-muted/50'
+      } ${r.isSummary ? 'font-semibold' : ''}`}
+      style={{ height: ROW_H }}
     >
-      <span className="truncate text-[11px] tabular-nums text-muted-foreground">{r.code}</span>
+      <span className="flex items-center gap-1.5 truncate text-[11px] tabular-nums text-muted-foreground">
+        {/* The row's own colour, so the sheet and the timeline read as one thing
+            rather than two lists that happen to be side by side. */}
+        <span
+          aria-hidden
+          className="h-4 w-1 shrink-0 rounded-full"
+          style={{ background: planColor(r.colorGroup) }}
+        />
+        <span className="hidden sm:inline">{r.code}</span>
+      </span>
 
       <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: r.depth * 12 }}>
         {r.isSummary ? (
@@ -524,18 +537,19 @@ function Row({
             type="button"
             onClick={onToggle}
             aria-label={collapsed ? `Expand ${r.name}` : `Collapse ${r.name}`}
-            className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
+            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-background"
           >
             {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
           </button>
         ) : (
-          <span className="size-5 shrink-0" aria-hidden />
+          <span className="size-6 shrink-0" aria-hidden />
         )}
         {r.isMilestone && (
           <span
             aria-label="Milestone"
-            className="size-2 shrink-0 rotate-45 bg-foreground"
             title="Milestone"
+            className="size-2 shrink-0 rotate-45 rounded-[1px]"
+            style={{ background: planColor(r.colorGroup) }}
           />
         )}
         <EditableCell
@@ -549,7 +563,7 @@ function Row({
           className="truncate"
         />
         {r.isReportingUnit && (
-          <span className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="shrink-0 rounded bg-background px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground ring-1 ring-border">
             {r.unitLabel || 'Unit'}
           </span>
         )}
@@ -559,11 +573,11 @@ function Row({
         {locked ? (
           <span className="text-muted-foreground">{r.durationDays ?? '—'}</span>
         ) : r.isMilestone ? (
-          <span className="text-[11px] text-muted-foreground">milestone</span>
+          <span className="text-[11px] text-muted-foreground">—</span>
         ) : (
           <EditableCell
             value={r.durationDays == null ? '' : String(r.durationDays)}
-            display={r.durationDays == null ? '—' : `${r.durationDays} d`}
+            display={r.durationDays == null ? '—' : String(r.durationDays)}
             active={editing === 'duration'}
             onEdit={() => onEdit('duration')}
             onDone={onDone}
@@ -574,7 +588,7 @@ function Row({
         )}
       </div>
 
-      <div className="tabular-nums">
+      <div className="hidden tabular-nums sm:block">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || '—'}</span>
         ) : (
@@ -591,7 +605,7 @@ function Row({
         )}
       </div>
 
-      <div className="tabular-nums">
+      <div className="hidden tabular-nums sm:block">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || '—'}</span>
         ) : (
@@ -608,7 +622,7 @@ function Row({
         )}
       </div>
 
-      <div className="text-right tabular-nums">
+      <div className="hidden text-right tabular-nums sm:block">
         {locked ? (
           <span className="text-muted-foreground">—</span>
         ) : (
@@ -636,13 +650,14 @@ function Row({
         )}
       </div>
 
-      {/* Always drawn, never on hover: there is no hover on a phone, and this
-          app's rule is that no information or control lives there. */}
+      {/* Always drawn, never hover-only: there is no hover on a phone, and this
+          app's rule is that no control lives there. On small screens it is also
+          the only way to the dates and the price. */}
       <button
         type="button"
         onClick={onMenu}
         aria-label={`Actions for row ${r.code}`}
-        className="grid size-8 place-items-center justify-self-end rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="grid size-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-background hover:text-foreground"
       >
         <MoreHorizontal className="size-4" />
       </button>
@@ -651,8 +666,12 @@ function Row({
 }
 
 /**
- * Text until clicked, a native input while it is. Enter and blur commit,
- * Escape abandons — the behaviour of every spreadsheet anyone has used.
+ * Text until you enter it, a native input while you are in it.
+ *
+ * The dotted underline on row hover is the discoverability fix for editing: a
+ * cell that looks like plain text tells nobody it can be typed in, and "click
+ * the number" was the second thing people could not guess after "how do I add a
+ * row".
  */
 function EditableCell({
   value,
@@ -676,7 +695,7 @@ function EditableCell({
   className?: string;
   type?: 'text' | 'date';
   inputMode?: 'numeric' | 'decimal';
-  /** Tab indents the row, Shift+Tab outdents it — MS Project's own shortcut. */
+  /** Tab indents the row, Shift+Tab outdents it — the outliner convention. */
   onTab?: (shift: boolean) => void;
   /** Enter on a name adds the next row, so a plan can be typed without the mouse. */
   onEnterKey?: () => void;
@@ -689,7 +708,7 @@ function EditableCell({
       <button
         type="button"
         onClick={onEdit}
-        className={`block w-full rounded px-1 text-left leading-[22px] hover:bg-muted ${className}`}
+        className={`block w-full truncate rounded px-1 py-1 text-left leading-[22px] decoration-dotted underline-offset-4 transition-colors hover:bg-background group-hover:underline ${className}`}
       >
         {display ?? value}
       </button>
@@ -715,162 +734,15 @@ function EditableCell({
         }
         if (e.key === 'Escape') onDone();
         if (e.key === 'Tab' && onTab) {
-          // Taken from the browser: Tab would otherwise walk to the next cell,
-          // and in a sheet this shape Tab means "one level in".
+          // Taken from the browser: Tab would walk to the next control, and in a
+          // sheet shaped like an outline Tab means "one level in".
           e.preventDefault();
           onCommit(draft);
           onDone();
           onTab(e.shiftKey);
         }
       }}
-      className={`w-full rounded border border-foreground bg-background px-1 leading-[22px] outline-none ${className}`}
+      className={`w-full rounded border-2 border-foreground bg-background px-1 py-1 leading-[22px] outline-none ${className}`}
     />
-  );
-}
-
-/** Bars placed by arithmetic, which only works because every row is exactly ROW_H. */
-function Gantt({
-  rows,
-  spanStart,
-  spanFinish,
-}: {
-  rows: SheetRow[];
-  spanStart: string | null;
-  spanFinish: string | null;
-}) {
-  const [todayX, setTodayX] = useState<number | null>(null);
-
-  // The plan's own window: the project's dates, widened if a row runs outside
-  // them. A bar that sits past the contract finish must still be drawable —
-  // that is exactly the row someone needs to see.
-  const start = spanStart;
-  const end = useMemo(() => {
-    const last = rows.reduce<string | null>(
-      (acc, r) => (r.finishDate && (!acc || r.finishDate > acc) ? r.finishDate : acc),
-      null
-    );
-    if (!spanFinish) return last;
-    if (!last) return spanFinish;
-    return last > spanFinish ? last : spanFinish;
-  }, [rows, spanFinish]);
-
-  const scale = start && end ? pxPerDay(daysBetween(start, end) + 1) : 8;
-  const width = start && end ? Math.max((daysBetween(start, end) + 1) * scale, 240) : 240;
-
-  const months = useMemo(() => {
-    if (!start || !end) return [];
-    const out: { key: string; x: number; label: string }[] = [];
-    const first = new Date(utc(start));
-    const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
-    const stop = utc(end);
-    for (let i = 0; i < 400 && cursor.getTime() <= stop; i++) {
-      const x = ((cursor.getTime() - utc(start)) / MS_PER_DAY) * scale;
-      out.push({
-        key: cursor.toISOString().slice(0, 7),
-        // The month containing the start begins before it — pin its label to
-        // the edge instead of dropping it, or a short plan shows no month at all.
-        x: Math.max(0, x),
-        label: new Intl.DateTimeFormat('en-GB', {
-          month: 'short',
-          year: '2-digit',
-          timeZone: 'UTC',
-        }).format(cursor),
-      });
-      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-    }
-    // Two labels closer than their own width collide, and the first one is
-    // pinned to the edge so it collides most often. Drop the crowded one rather
-    // than draw them on top of each other.
-    return out.filter((m, i) => i === 0 || m.x - out[i - 1].x >= 46);
-  }, [start, end, scale]);
-
-  const bodyH = rows.length * ROW_H;
-
-  useEffect(() => {
-    if (!start) return;
-    // Today comes from the browser: a server component prerenders into the
-    // static shell, so a build-time clock would drift a day further from the
-    // truth every day, silently.
-    const x = ((Date.now() - utc(start)) / MS_PER_DAY) * scale;
-    setTodayX(x >= 0 && x <= width ? x : null);
-  }, [start, scale, width]);
-
-  if (!spanStart) {
-    return (
-      <p className="p-6 text-xs text-muted-foreground">
-        No dates yet — give a row a start and a finish and its bar appears here.
-      </p>
-    );
-  }
-
-  return (
-    <div className="relative" style={{ width }}>
-      {/* Exactly HEAD_H so the first bar lines up with the first row. */}
-      <div className="sticky top-0 z-20 border-b bg-card" style={{ height: HEAD_H }}>
-        {months.map((m) => (
-          <span
-            key={m.key}
-            className="absolute top-0 border-l pl-1 text-[10px] text-muted-foreground"
-            style={{ left: m.x, lineHeight: `${HEAD_H}px` }}
-          >
-            {m.label}
-          </span>
-        ))}
-      </div>
-
-      <div className="relative" style={{ height: bodyH }}>
-        {months.map((m) => (
-          <span
-            key={m.key}
-            aria-hidden
-            className="absolute top-0 w-px bg-border"
-            style={{ left: m.x, height: bodyH }}
-          />
-        ))}
-
-        {todayX !== null && (
-          <span
-            aria-hidden
-            className="absolute top-0 z-10 w-0.5 bg-foreground/70"
-            style={{ left: todayX, height: bodyH }}
-          />
-        )}
-
-        {rows.map((r, i) => {
-          if (!r.startDate || !r.finishDate) return null;
-          const x = daysBetween(start!, r.startDate) * scale;
-          const y = i * ROW_H;
-
-          if (r.isMilestone) {
-            return (
-              <span
-                key={r.id}
-                title={`${r.name} · ${fmtDate(r.startDate)}`}
-                className="absolute size-2.5 rotate-45 bg-foreground"
-                style={{ left: x - 5, top: y + ROW_H / 2 - 5 }}
-              />
-            );
-          }
-
-          const w = Math.max((daysBetween(r.startDate, r.finishDate) + 1) * scale, 3);
-          // A summary is thin and dark, a task fuller and lighter — the visual
-          // grammar MS Project uses, so the shape of a plan is recognisable to
-          // anyone who has ever seen one.
-          return (
-            <span
-              key={r.id}
-              title={`${r.name} · ${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays} d`}
-              className={`absolute rounded-sm ${r.isSummary ? 'bg-foreground' : 'bg-muted-foreground'}`}
-              style={{
-                left: x,
-                width: w,
-                top: y + (r.isSummary ? ROW_H / 2 - 2 : ROW_H / 2 - 6),
-                height: r.isSummary ? 5 : 12,
-              }}
-            />
-          );
-        })}
-      </div>
-    </div>
   );
 }

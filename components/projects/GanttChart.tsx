@@ -1,0 +1,276 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+import type { SheetRow } from '@/lib/sheet';
+
+/**
+ * The timeline.
+ *
+ * **Colour does a job here, it does not decorate.** A bar's hue says which
+ * PACKAGE it belongs to — SPK-002, SPK-003 and so on — so a plan of hundreds of
+ * rows reads as a handful of streams running alongside each other instead of a
+ * wall of identical grey. The grouping comes from the reporting units the report
+ * is already built from (see `assignColorGroups`), the hues are assigned in
+ * fixed order and never cycled, and a seventh group goes neutral rather than
+ * repeating a colour and claiming two packages are one.
+ *
+ * The palette is `--plan-1..6`, deliberately separate from `--chart-1..5`, which
+ * already mean actual / plan / done / at risk / dormant elsewhere in this app.
+ * All six passed the lightness, chroma, CVD-separation, normal-vision and
+ * contrast checks against this surface.
+ *
+ * **Identity is never colour alone.** Every bar is direct-labelled by its own
+ * row in the sheet on the same line, shape separates the three kinds (summary
+ * bracket, task bar, milestone diamond), and a legend names each group.
+ *
+ * **Days-to-pixels is chosen per plan.** At a fixed 3px/day a three-day project
+ * drew nine pixels of bar across a thousand-pixel pane.
+ */
+
+const MS_PER_DAY = 86_400_000;
+const TARGET_PX = 1200;
+
+export const PLAN_COLORS = [
+  'var(--plan-1)',
+  'var(--plan-2)',
+  'var(--plan-3)',
+  'var(--plan-4)',
+  'var(--plan-5)',
+  'var(--plan-6)',
+];
+
+export function planColor(group: number): string {
+  return group >= 0 && group < PLAN_COLORS.length ? PLAN_COLORS[group] : 'var(--muted-foreground)';
+}
+
+function utc(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+function daysBetween(a: string, b: string): number {
+  return Math.round((utc(b) - utc(a)) / MS_PER_DAY);
+}
+function fmtDate(iso: string | null): string {
+  if (!iso) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: '2-digit',
+    timeZone: 'UTC',
+  }).format(utc(iso));
+}
+function pxPerDay(days: number): number {
+  if (days <= 0) return 8;
+  return Math.min(24, Math.max(1.5, TARGET_PX / days));
+}
+
+export default function GanttChart({
+  rows,
+  spanStart,
+  spanFinish,
+  rowH,
+  headH,
+  selectedId,
+  onSelect,
+}: {
+  rows: SheetRow[];
+  spanStart: string | null;
+  spanFinish: string | null;
+  rowH: number;
+  headH: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [todayX, setTodayX] = useState<number | null>(null);
+
+  const end = useMemo(() => {
+    const last = rows.reduce<string | null>(
+      (acc, r) => (r.finishDate && (!acc || r.finishDate > acc) ? r.finishDate : acc),
+      null
+    );
+    if (!spanFinish) return last;
+    if (!last) return spanFinish;
+    return last > spanFinish ? last : spanFinish;
+  }, [rows, spanFinish]);
+
+  const scale = spanStart && end ? pxPerDay(daysBetween(spanStart, end) + 1) : 8;
+  const width = spanStart && end ? Math.max((daysBetween(spanStart, end) + 1) * scale, 240) : 240;
+
+  const months = useMemo(() => {
+    if (!spanStart || !end) return [];
+    const out: { key: string; x: number; label: string }[] = [];
+    const first = new Date(utc(spanStart));
+    const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+    const stop = utc(end);
+    for (let i = 0; i < 400 && cursor.getTime() <= stop; i++) {
+      const x = ((cursor.getTime() - utc(spanStart)) / MS_PER_DAY) * scale;
+      out.push({
+        key: cursor.toISOString().slice(0, 7),
+        // The month containing the start begins before it — pin its label to the
+        // edge rather than dropping it, or a short plan shows no month at all.
+        x: Math.max(0, x),
+        label: new Intl.DateTimeFormat('en-GB', {
+          month: 'short',
+          year: '2-digit',
+          timeZone: 'UTC',
+        }).format(cursor),
+      });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    // Two labels closer than their own width collide, and the first is pinned to
+    // the edge so it collides most often.
+    return out.filter((m, i) => i === 0 || m.x - out[i - 1].x >= 46);
+  }, [spanStart, end, scale]);
+
+  useEffect(() => {
+    if (!spanStart) return;
+    // Today comes from the browser. A server component prerenders into the
+    // static shell, so a build-time clock would drift a day further from the
+    // truth every day, silently.
+    const x = ((Date.now() - utc(spanStart)) / MS_PER_DAY) * scale;
+    setTodayX(x >= 0 && x <= width ? x : null);
+  }, [spanStart, scale, width]);
+
+  if (!spanStart) {
+    return (
+      <p className="p-6 text-xs text-muted-foreground">
+        No dates yet — give a row a start and a finish and its bar appears here.
+      </p>
+    );
+  }
+
+  const bodyH = rows.length * rowH;
+
+  return (
+    <div className="relative" style={{ width }}>
+      <div
+        className="sticky top-0 z-20 border-b bg-card"
+        style={{ height: headH }}
+        aria-hidden
+      >
+        {months.map((m) => (
+          <span
+            key={m.key}
+            className="absolute top-0 border-l pl-1 text-[10px] font-medium text-muted-foreground"
+            style={{ left: m.x, lineHeight: `${headH}px` }}
+          >
+            {m.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="relative" style={{ height: bodyH }}>
+        {months.map((m) => (
+          <span
+            key={m.key}
+            aria-hidden
+            className="absolute top-0 w-px bg-border"
+            style={{ left: m.x, height: bodyH }}
+          />
+        ))}
+
+        {/* The selected row, lit on this side too — the two panes are one thing. */}
+        {selectedId &&
+          rows.map((r, i) =>
+            r.id === selectedId ? (
+              <span
+                key="sel"
+                aria-hidden
+                className="absolute left-0 right-0 bg-muted"
+                style={{ top: i * rowH, height: rowH }}
+              />
+            ) : null
+          )}
+
+        {todayX !== null && (
+          <span
+            aria-hidden
+            title="Today"
+            className="absolute top-0 z-10 w-0.5 bg-foreground/60"
+            style={{ left: todayX, height: bodyH }}
+          />
+        )}
+
+        {rows.map((r, i) => {
+          if (!r.startDate || !r.finishDate) return null;
+          const x = daysBetween(spanStart, r.startDate) * scale;
+          const y = i * rowH;
+          const color = planColor(r.colorGroup);
+          const title = r.isMilestone
+            ? `${r.name} · ${fmtDate(r.startDate)}`
+            : `${r.name} · ${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays} d`;
+
+          if (r.isMilestone) {
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onSelect(r.id)}
+                title={title}
+                aria-label={title}
+                className="absolute grid place-items-center"
+                style={{ left: x - 11, top: y, width: 22, height: rowH }}
+              >
+                <span className="size-2.5 rotate-45 rounded-[1px]" style={{ background: color }} />
+              </button>
+            );
+          }
+
+          const w = Math.max((daysBetween(r.startDate, r.finishDate) + 1) * scale, 3);
+
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onSelect(r.id)}
+              title={title}
+              aria-label={title}
+              className="absolute block"
+              style={{ left: x, top: y, width: w, height: rowH }}
+            >
+              {/* A summary is a thin bracket, a task a fuller rounded bar — the
+                  shape MS Project uses, so a plan is recognisable to anyone who
+                  has seen one, and identity never rests on colour alone. */}
+              <span
+                className="absolute left-0 rounded-[3px] transition-[width] duration-300 ease-ios"
+                style={{
+                  background: color,
+                  width: '100%',
+                  height: r.isSummary ? 5 : 12,
+                  top: r.isSummary ? rowH / 2 - 2 : rowH / 2 - 6,
+                  opacity: r.isSummary ? 1 : 0.9,
+                }}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Names every colour, so identity is never carried by hue alone. */
+export function GanttLegend({ rows }: { rows: SheetRow[] }) {
+  const groups = rows.filter((r) => r.groupLabel !== null);
+  if (groups.length < 2) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
+      {groups.map((g) => (
+        <span key={g.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            aria-hidden
+            className="size-2.5 rounded-[2px]"
+            style={{ background: planColor(g.colorGroup) }}
+          />
+          {g.groupLabel}
+        </span>
+      ))}
+      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span aria-hidden className="size-2 rotate-45 rounded-[1px] bg-muted-foreground" />
+        Milestone
+      </span>
+    </div>
+  );
+}

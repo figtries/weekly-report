@@ -22,7 +22,11 @@ import {
   outdentRowAction,
   setReportingUnitAction,
 } from '@/lib/sheet-structure';
-import { setMilestoneAction } from '@/lib/sheet-actions';
+import {
+  setMilestoneAction,
+  updateRowDatesAction,
+  updateRowTextAction,
+} from '@/lib/sheet-actions';
 
 /**
  * Everything you can do to a row, in one panel shared by the whole sheet.
@@ -52,7 +56,7 @@ export default function RowMenu({
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>('menu');
 
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, keepOpen = false) => {
     setError(null);
     startTransition(async () => {
       const res = await fn();
@@ -61,7 +65,11 @@ export default function RowMenu({
         return;
       }
       onChanged();
-      onClose();
+      // Structural actions close, because the row they acted on may not be
+      // where it was. Field edits stay open: people fill start, finish and
+      // price one after another, and a panel that shuts each time is a panel
+      // they have to reopen three times.
+      if (!keepOpen) onClose();
     });
   };
 
@@ -76,6 +84,51 @@ export default function RowMenu({
       >
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Row {row.code}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
+
+        {/* Dates live here on small screens because the sheet cannot show six
+            columns and a readable name at 390px. Above `sm` the columns are
+            back and this would be a second place to change the same thing. */}
+        {mode === 'menu' && !row.isSummary && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
+            <label className="text-[11px] font-medium text-muted-foreground">
+              Start
+              <input
+                type="date"
+                defaultValue={row.startDate ?? ''}
+                onBlur={(e) =>
+                  e.target.value !== (row.startDate ?? '') &&
+                  run(() => updateRowDatesAction(row.id, 'start', e.target.value), true)
+                }
+                className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+            <label className="text-[11px] font-medium text-muted-foreground">
+              Finish
+              <input
+                type="date"
+                defaultValue={row.finishDate ?? ''}
+                onBlur={(e) =>
+                  e.target.value !== (row.finishDate ?? '') &&
+                  run(() => updateRowDatesAction(row.id, 'finish', e.target.value), true)
+                }
+                className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+            <label className="col-span-2 text-[11px] font-medium text-muted-foreground">
+              Price
+              <input
+                inputMode="decimal"
+                defaultValue={row.price == null ? '' : String(row.price)}
+                placeholder="Leave empty until there is a BOQ"
+                onBlur={(e) =>
+                  e.target.value !== (row.price == null ? '' : String(row.price)) &&
+                  run(() => updateRowTextAction(row.id, 'price', e.target.value), true)
+                }
+                className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+          </div>
+        )}
 
         {mode === 'menu' && (
           <div className="mt-3 space-y-0.5">
