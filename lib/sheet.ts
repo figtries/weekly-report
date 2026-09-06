@@ -78,6 +78,17 @@ export interface SheetRow {
   colorGroup: number;
   /** The group's name, for the legend. Only set on the row that starts it. */
   groupLabel: string | null;
+  /**
+   * The nearest reporting unit at or above this row, by id, or null.
+   *
+   * `colorGroup` answers the same question as an index into a palette, which is
+   * fine for painting and useless for a rule: a bar style that says "inside
+   * SPK-007" must survive another unit being marked above it. This is the
+   * durable answer, and the one `lib/bar-styles.ts` matches on.
+   */
+  unitId: string | null;
+  /** That unit's label, for a rule editor to show without a second lookup. */
+  unitName: string | null;
 }
 
 /** Fixed order, never cycled. A plan with more groups than this shows the rest neutral. */
@@ -179,6 +190,8 @@ export function getSheet(projectId: string): Sheet {
         isSummary: hasChildren,
         colorGroup: -1,
         groupLabel: null,
+        unitId: null,
+        unitName: null,
       });
       if (n.price != null && n.price > 0) pricedRows += 1;
 
@@ -259,14 +272,29 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
     if (i < MAX_COLOR_GROUPS) groupOf.set(a.id, i);
   });
 
+  // Membership is tracked by ID as well as by palette index. The index is for
+  // painting and shifts whenever a unit is added above; the id is what a bar
+  // style rule stores, and it does not move.
+  const unitOf = new Map<string, { id: string; name: string }>();
+  for (const a of rows.filter((r) => r.isReportingUnit)) {
+    unitOf.set(a.id, { id: a.id, name: a.unitLabel || a.name });
+  }
+
   for (const row of rows) {
     let cursor: string | null = row.id;
+    let seenUnit = false;
     while (cursor) {
-      const g = groupOf.get(cursor);
-      if (g !== undefined) {
-        row.colorGroup = g;
-        break;
+      if (!seenUnit) {
+        const u = unitOf.get(cursor);
+        if (u) {
+          row.unitId = u.id;
+          row.unitName = u.name;
+          seenUnit = true;
+        }
       }
+      const g = groupOf.get(cursor);
+      if (g !== undefined && row.colorGroup === -1) row.colorGroup = g;
+      if (seenUnit && row.colorGroup !== -1) break;
       cursor = parentOf.get(cursor) ?? null;
     }
   }

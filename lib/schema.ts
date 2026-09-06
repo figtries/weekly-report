@@ -206,6 +206,77 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
   uniqueIndex('wbs_project_code_idx').on(t.projectId, t.wbsCode),
 ]);
 
+/* ------------------------------------------------------------- bar styles */
+
+/**
+ * What a condition can ask about a row. Everything here is answerable from data
+ * that actually exists today.
+ *
+ * `critical` is declared and NOT offered in the editor until the chain engine
+ * lands — a condition nothing can ever satisfy is worse than one that is
+ * missing, because it looks like a rule that simply never fires. `progress`
+ * is absent on purpose: how far along a row is lives in Data Overall, by our
+ * own decision, and the plan screen does not read it.
+ */
+export type BarCondition =
+  | 'always'
+  | 'summary'
+  | 'milestone'
+  | 'task'
+  | 'in_unit'
+  | 'past_target'
+  | 'unscheduled'
+  | 'in_progress'
+  | 'unpriced'
+  | 'weight_above'
+  | 'weight_below'
+  | 'critical';
+
+/**
+ * How a matching bar is drawn.
+ *
+ * `unit` is the important value: it means "the package's own colour", which is
+ * how "colour = package" survives as the DEFAULT RULE rather than as a law. A
+ * planner who wants lateness to outrank packages moves the past-target rule
+ * above it; nothing in the code has an opinion about which they should prefer.
+ */
+export type BarPaint =
+  | 'unit'
+  | 'warn'
+  | 'danger'
+  | 'ok'
+  | 'muted'
+  | 'plan-1' | 'plan-2' | 'plan-3' | 'plan-4' | 'plan-5' | 'plan-6';
+
+/** `auto` keeps the shape the row's kind already implies — bracket, bar, diamond. */
+export type BarShape = 'auto' | 'bar' | 'bracket' | 'diamond';
+
+/**
+ * An ORDERED list per project, first match wins.
+ *
+ * MS Project stacks bar styles and draws several at once; this does not, because
+ * a result you can predict is worth more than one you can layer. The order is
+ * the whole interface: move a rule up and it starts winning.
+ *
+ * A project with no rows here is not unstyled — `DEFAULT_BAR_STYLES` in
+ * lib/bar-styles.ts is the fallback, so nothing has to be seeded for a new
+ * project to read correctly. Rows appear the first time someone edits.
+ */
+export const barStyles = sqliteTable('bar_styles', {
+  id: id(),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  order: integer('sort_order').notNull().default(0),
+  label: text('label').notNull(),
+  condition: text('condition').$type<BarCondition>().notNull(),
+  /** The unit's node id for `in_unit`; the threshold for `weight_above`/`below`. */
+  conditionValue: text('condition_value'),
+  paint: text('paint').$type<BarPaint>().notNull().default('unit'),
+  shape: text('shape').$type<BarShape>().notNull().default('auto'),
+  /** Hatched over the bar's tail — how "past target" reads without losing the package colour. */
+  hatched: integer('hatched', { mode: 'boolean' }).notNull().default(false),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+}, (t) => [index('bar_styles_project_idx').on(t.projectId)]);
+
 /** A named step of a leaf that can't be measured in units. Weights sum to 100. */
 export const milestones = sqliteTable('milestones', {
   id: id(),

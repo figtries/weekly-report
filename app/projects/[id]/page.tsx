@@ -11,6 +11,7 @@ import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projec
 import { getSheet } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
 import ValueStrip from '@/components/projects/ValueStrip';
+import { getBarStyles } from '@/lib/bar-styles-read';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
@@ -46,6 +47,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const contents = getProjectContents(id);
   const sheet = getSheet(id);
   const weights = getWeightSummary(id);
+  const bars = getBarStyles(id);
   const isOpen = getActiveProjectId() === id;
 
   const facts = [
@@ -105,6 +107,8 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           projectFinish={project.finishDate}
           currency={project.currency}
           projectId={id}
+          barStyles={bars.styles}
+          barStylesCustomised={bars.customised}
         />
       </div>
     </RouteTransition>

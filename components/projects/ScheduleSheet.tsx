@@ -17,7 +17,9 @@ import {
   indentRowAction,
   outdentRowAction,
 } from '@/lib/sheet-structure';
+import BarStyleEditor from './BarStyleEditor';
 import GanttChart, { GanttLegend, planColor } from './GanttChart';
+import { DEFAULT_BAR_STYLES, type BarStyle } from '@/lib/bar-styles';
 import { formatMoney } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
@@ -121,6 +123,8 @@ export default function ScheduleSheet({
   projectFinish,
   currency,
   projectId,
+  barStyles = DEFAULT_BAR_STYLES,
+  barStylesCustomised = false,
 }: {
   rows: SheetRow[];
   spanStart: string | null;
@@ -129,6 +133,9 @@ export default function ScheduleSheet({
   projectFinish: string | null;
   currency: string;
   projectId: string;
+  /** The project's ordered rule list; the defaults until someone edits it. */
+  barStyles?: BarStyle[];
+  barStylesCustomised?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
@@ -140,6 +147,7 @@ export default function ScheduleSheet({
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
+  const [stylesOpen, setStylesOpen] = useState(false);
   const [shellWidth, setShellWidth] = useState(0);
   const [, startTransition] = useTransition();
 
@@ -448,7 +456,7 @@ export default function ScheduleSheet({
           </span>
         </m.div>
       ) : (
-        <GanttLegend rows={rows} />
+        <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} />
       )}
 
       {error && (
@@ -583,6 +591,7 @@ export default function ScheduleSheet({
             headH={HEAD_H}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            styles={barStyles}
           />
         </div>
       </div>
@@ -595,6 +604,20 @@ export default function ScheduleSheet({
           onChanged={() => router.refresh()}
         />
       )}
+
+      <BarStyleEditor
+        projectId={projectId}
+        styles={barStyles}
+        customised={barStylesCustomised}
+        // Only the units this plan actually has, and by ID — a rule that says
+        // "inside SPK-007" has to survive another unit being marked above it.
+        units={rows
+          .filter((r) => r.isReportingUnit)
+          .map((r) => ({ id: r.id, name: r.unitLabel || r.name }))}
+        open={stylesOpen}
+        onClose={() => setStylesOpen(false)}
+        onChanged={() => router.refresh()}
+      />
     </div>
   );
 }
