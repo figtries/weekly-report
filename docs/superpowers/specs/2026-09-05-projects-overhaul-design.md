@@ -1,3 +1,12 @@
+> **DIGANTIKAN 6 September 2026** oleh
+> `2026-09-06-projects-redesign.md`.
+>
+> Dokumen ini ditulis sebelum kodenya ada. Setelah dikirim, tiga kontradiksi
+> terbukti di kodenya sendiri — nilai kontrak punya dua sumber, sheet melarang
+> harga di cabang padahal rumusnya mengandalkannya, dan `weightBasis` tidak
+> pernah dibaca. Lima keputusan pokok diambil ulang di dokumen pengganti.
+> Disimpan apa adanya karena riwayat keputusannya masih berguna.
+
 # Projects — desain
 
 Tanggal: 5 September 2026 · Cabang: `v2-foundation` · Papan 16 + 17
