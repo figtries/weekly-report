@@ -1,5 +1,10 @@
-import { getDb } from '@/lib/data';
+import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { validateWeek } from '@/lib/analysis';
+import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 // Runtime prefetch (validated against the sample week) lets the router
 // prefetch each tab's full cached content — no skeleton flash between
@@ -19,19 +24,59 @@ export default async function WeeklyWeekLayout({
   params: Promise<{ week: string }>;
 }) {
   const { week } = await params;
+  const weekNo = Number(week);
+
+  // Covers Weekly Progress AND Reports — both live under this layout, so one
+  // guard serves five screens. The v1 pages read db.json while projects are
+  // chosen in SQLite; when the open project has no data here, saying so beats
+  // drawing another project's numbers. See lib/legacy-bridge.ts.
+  const open = getOpenProject();
+  if (open && !open.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+
   const db = await getDb();
   const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);
 
+  // The step counts. Both are read straight off data the section already
+  // computes for its own pages, so the header costs a cached rollup and no
+  // extra source of truth — a badge that disagreed with the screen it points
+  // at would be worse than no badge.
+  const rollup = await getCachedWeekRollup(weekNo);
+  const dueCount = rollup
+    ? buildWorklist({
+        roots: rollup.roots,
+        schedule: db.schedule,
+        week: weekNo,
+        changeLog: db.changeLog,
+      }).due.length
+    : 0;
+  const validation = validateWeek(db, weekNo);
+  const checkCount = validation.errors + validation.warnings;
+
   return (
+    // 'weekly' is stable across every tab and every week, so this boundary
+    // animates only on the way INTO the section and never between two tabs of
+    // it — which is the whole point of moving off the root template. Each page
+    // carries its own boundary inside the scroller below.
+    <RouteTransition id="weekly">
     <div className="flex h-full flex-col print:block print:h-auto">
-      <WeekTabs weeks={weeks} selectedWeek={Number(week)} projectCurrentWeek={db.project.currentWeek} />
+      <WeekTabs
+        weeks={weeks}
+        selectedWeek={weekNo}
+        projectCurrentWeek={db.project.currentWeek}
+        dueCount={dueCount}
+        checkCount={checkCount}
+      />
       {/* scrollbar-none: the global 10px classic scrollbar would otherwise
           reserve layout width on this scroller only (the header/print button
           sits outside it), pulling every card's right edge ~10px left of the
           print button. Hiding it keeps content full-width so the card edges
           line up flush with the print button — scrolling still works by
           touch/wheel. */}
+      {/* The tab change animates inside this scroller — each page wraps its own
+          root in a RouteTransition of its own — so WeekTabs above is not even
+          within the boundary that moves. */}
       <div className="flex-1 overflow-auto scrollbar-none print:overflow-visible">{children}</div>
     </div>
+    </RouteTransition>
   );
 }

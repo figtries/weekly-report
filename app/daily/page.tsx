@@ -1,5 +1,8 @@
+import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 function nextDateAfter(lastDate: string | undefined): string {
   if (!lastDate) return new Date().toISOString().slice(0, 10);
@@ -9,15 +12,22 @@ function nextDateAfter(lastDate: string | undefined): string {
 }
 
 export default async function DailyListPage() {
+  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
+  // project may have no data here at all. Saying so beats drawing another
+  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
+  const open = getOpenProject();
+  if (open && !open.hasLegacyData) return <NoLegacyData what="daily reports" />;
+
   const db = await getDb();
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
-  // Opacity-only entrance on the wrapper: the route view transition already
-  // moves the page and the list rows do their own staggered rise — a second
-  // translate here made every navigation read as two animations.
+  // No entrance on the wrapper at all: the RouteTransition fades this whole
+  // block on a navigation and the list rows do their own staggered rise, so a
+  // translate here would be a third animation on top of two.
   return (
-    <div className="p-4 sm:p-6 lg:p-8 animate-fade-in">
+    <RouteTransition id="daily">
+    <div className="p-4 sm:p-6 lg:p-8">
       <DailyReportsView
         reports={sorted.map((d) => ({
           date: d.date,
@@ -28,5 +38,6 @@ export default async function DailyListPage() {
         defaultDate={defaultDate}
       />
     </div>
+    </RouteTransition>
   );
 }

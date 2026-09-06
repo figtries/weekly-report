@@ -6,6 +6,7 @@ import { revalidateTag } from 'next/cache';
 import { redisConfigured, redisGet, redisSet } from './storage';
 import { activeProject, migrate, type StoredShape, type Workspace } from './workspace';
 import type { Database } from './types';
+import { assertLegacyWritable } from './legacy-bridge';
 
 const SOURCE_PATH = path.join(process.cwd(), 'data', 'db.json');
 const IS_VERCEL = !!process.env.VERCEL;
@@ -73,6 +74,13 @@ async function writeWorkspace(ws: Workspace): Promise<void> {
 
 /** Mutate the active project. Every existing caller keeps working unchanged. */
 export function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
+  // This edits whatever `db.json` calls active, which is not necessarily the
+  // project on screen: projects are chosen in SQLite now. Without the guard,
+  // saving a daily report while an app-made project is open would file it under
+  // Gundih — a write landing in the wrong project, silently. The screens above
+  // already refuse to render for such a project; this is the same rule enforced
+  // where the data actually changes.
+  assertLegacyWritable();
   return mutateWorkspace(async (ws) => mutator(activeProject(ws)));
 }
 

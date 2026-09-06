@@ -1,16 +1,27 @@
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { getDb } from '@/lib/data';
 import { claimableCauseLabels } from '@/lib/catalogs';
 import { buildDelayRegister, fmtNum } from '@/lib/analysis';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const metadata = { title: 'Delay Register' };
 
 export default async function KlaimPage() {
+  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
+  // project may have no data here at all. Saying so beats drawing another
+  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
+  const open = getOpenProject();
+  if (open && !open.hasLegacyData) return <NoLegacyData what="delay records" />;
+
   const db = await getDb();
   const reg = buildDelayRegister(db, claimableCauseLabels(db));
 
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in-up px-3 py-5 sm:p-6 lg:p-8">
-      <header className="mb-6">
+    <RouteTransition id="klaim">
+    <div className="mx-auto max-w-4xl px-3 py-5 sm:p-6 lg:p-8">
+      <header className="mb-6 animate-enter">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Delay Register</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Every non-effective hour ever recorded, added up across the weeks into material for an
@@ -40,8 +51,11 @@ export default async function KlaimPage() {
         ].map((s, i) => (
           <div
             key={s.l}
-            className="animate-fade-in-up rounded-lg border bg-card p-3"
-            style={{ animationDelay: `${i * 40}ms` }}
+            // 60ms apart, matching MOTION.stagger, so these four tiles cascade
+            // on the same beat as every other stagger in the app; the +1 keeps
+            // them one step behind the header above them.
+            className="animate-enter rounded-lg border bg-card p-3"
+            style={{ animationDelay: `${(i + 1) * 60}ms` }}
           >
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.l}</div>
             <div className="mt-1 text-xl font-semibold tabular-nums">{s.v}</div>
@@ -50,7 +64,10 @@ export default async function KlaimPage() {
         ))}
       </dl>
 
-      <section className="animate-fade-in-up overflow-hidden rounded-lg border bg-card">
+      {/* Below the fold on a phone, so it arrives when it is reached
+          rather than having already happened out of sight. */}
+      <ScrollReveal>
+      <section className="overflow-hidden rounded-lg border bg-card">
         <div className="border-b p-4 pb-3">
           <h2 className="text-sm font-semibold">By cause</h2>
           <p className="text-xs text-muted-foreground">
@@ -111,9 +128,10 @@ export default async function KlaimPage() {
           </div>
         )}
       </section>
+      </ScrollReveal>
 
       {reg.totalPhotos > 0 && (
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
+        <ScrollReveal className="mt-4 grid gap-2.5 sm:grid-cols-3">
           {[
             { l: "Photos stored", v: fmtNum(reg.totalPhotos), s: "across every daily report" },
             {
@@ -129,7 +147,7 @@ export default async function KlaimPage() {
               <div className="text-xs text-muted-foreground">{s2.s}</div>
             </div>
           ))}
-        </div>
+        </ScrollReveal>
       )}
 
       {!reg.photosVerifiable && (
@@ -144,5 +162,6 @@ export default async function KlaimPage() {
         </p>
       )}
     </div>
+    </RouteTransition>
   );
 }

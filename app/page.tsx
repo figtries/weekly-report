@@ -35,6 +35,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -68,6 +70,12 @@ export const metadata = { title: 'Dashboard' };
  * beside "Work spread" and again beside "Forecast".
  */
 export default async function DashboardPage() {
+  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
+  // project may have no data here at all. Saying so beats drawing another
+  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
+  const open = getOpenProject();
+  if (open && !open.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+
   const db = await getDb();
   const week = getLatestWeek(db) || 1;
   const rollup = await getCachedWeekRollup(week);
