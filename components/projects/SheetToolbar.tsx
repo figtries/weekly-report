@@ -42,6 +42,7 @@ export default function SheetToolbar({
   onToggleAll,
   pane,
   setPane,
+  slot,
 }: {
   rowCount: number;
   selected: SheetRow | null;
@@ -56,6 +57,8 @@ export default function SheetToolbar({
   onToggleAll: () => void;
   pane: 'sheet' | 'gantt';
   setPane: (p: 'sheet' | 'gantt') => void;
+  /** Paste-from-Excel sits here rather than being wired through six props. */
+  slot?: React.ReactNode;
 }) {
   const has = selected !== null;
 
@@ -69,6 +72,8 @@ export default function SheetToolbar({
         title="Add a row under the selected one"
         disabled={!has}
       />
+
+      {slot}
 
       <span className="mx-0.5 h-6 w-px bg-border" aria-hidden />
 

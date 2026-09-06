@@ -19,8 +19,10 @@ import {
 } from '@/lib/sheet-structure';
 import GanttChart, { GanttLegend, planColor } from './GanttChart';
 import { formatMoney } from '@/lib/currency';
+import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
 import SheetToolbar from './SheetToolbar';
+import { pressMotion } from '@/components/motion/Press';
 
 /**
  * The schedule sheet, and the timeline beside it.
@@ -396,6 +398,26 @@ export default function ScheduleSheet({
         }
         pane={pane}
         setPane={setPane}
+        slot={
+          <PasteRows
+            projectId={projectId}
+            afterNodeId={selectedId}
+            afterLabel={selected?.name ?? null}
+            onDone={() => router.refresh()}
+            trigger={(open) => (
+              <m.button
+                type="button"
+                onClick={open}
+                {...pressMotion}
+                title="Paste rows copied from a workbook"
+                className="flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios hover:bg-muted"
+              >
+                <ClipboardPaste className="size-4" />
+                <span className="hidden sm:inline">Paste</span>
+              </m.button>
+            )}
+          />
+        }
       />
 
       {/* Which row the toolbar is about to act on.
@@ -473,19 +495,39 @@ export default function ScheduleSheet({
               <div className="animate-enter px-6 py-10 text-center">
                 <p className="text-sm font-semibold">Nothing planned yet</p>
                 <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                  Add the first row, then use <kbd className="rounded border px-1">Tab</kbd> to put a
-                  row underneath another. Dates and a price go in the columns beside it, and a bar
-                  appears on the right.
+                  Paste the plan straight out of the workbook, or add the first row and use{' '}
+                  <kbd className="rounded border px-1">Tab</kbd> to put a row underneath another.
                 </p>
-                <m.button
-                  type="button"
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => structure(addRowAction(projectId, {}))}
-                  className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-lg bg-foreground px-4 text-sm font-medium text-background"
-                >
-                  <Plus className="size-4" />
-                  Add the first row
-                </m.button>
+                {/* Paste leads. Every plan that matters already exists somewhere
+                    else, and typing 285 rows is not a thing anyone will do. */}
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <PasteRows
+                    projectId={projectId}
+                    afterNodeId={null}
+                    afterLabel={null}
+                    onDone={() => router.refresh()}
+                    trigger={(open) => (
+                      <m.button
+                        type="button"
+                        onClick={open}
+                        {...pressMotion}
+                        className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-foreground px-4 text-sm font-medium text-background"
+                      >
+                        <ClipboardPaste className="size-4" />
+                        Paste from Excel
+                      </m.button>
+                    )}
+                  />
+                  <m.button
+                    type="button"
+                    {...pressMotion}
+                    onClick={() => structure(addRowAction(projectId, {}))}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-4 text-sm font-medium"
+                  >
+                    <Plus className="size-4" />
+                    Add the first row
+                  </m.button>
+                </div>
               </div>
             )}
 
