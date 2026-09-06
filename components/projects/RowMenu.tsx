@@ -54,6 +54,7 @@ export default function RowMenu({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
+  const [unitValue, setUnitValue] = useState('');
   const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>('menu');
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, keepOpen = false) => {
@@ -191,7 +192,11 @@ export default function RowMenu({
                 {row.isMilestone ? 'Not a milestone' : 'Make it a milestone'}
               </Item>
             )}
-            {row.isSummary && (
+            {/* Any row. The "summaries only" rule was never decided — it fell out
+                of how this menu was written. Gundih happens to mark four
+                branches, but an SPK whose whole scope is one line is a real
+                thing, and a prohibition with no reason is not a rule. */}
+            {
               <Item
                 icon={<Tag className="size-4" />}
                 onClick={() =>
@@ -203,7 +208,7 @@ export default function RowMenu({
               >
                 {row.isReportingUnit ? `Stop being ${row.unitLabel || 'a unit'}` : 'Make it a reporting unit'}
               </Item>
-            )}
+            }
 
             <Divider />
 
@@ -221,21 +226,45 @@ export default function RowMenu({
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              A reporting unit gets its own section in the report and its weights normalise to 100
-              inside it. The label is whatever the client calls it.
+              A reporting unit gets its own section in the report, and it is its own contract — even
+              when it sits inside another one. SPK-007 lives inside SPK-004 and its value is not
+              part of SPK-004&apos;s. The app keeps the units adding up to the contract, and says so
+              when they do not.
             </p>
-            <input
-              autoFocus
-              value={unitLabel}
-              onChange={(e) => setUnitLabel(e.target.value)}
-              placeholder="SPK-002, Package A, Lot 3…"
-              className="h-11 w-full rounded-lg border px-3 text-sm outline-none focus:border-foreground"
-            />
+            <label className="block text-[11px] font-medium text-muted-foreground">
+              Label
+              <input
+                autoFocus
+                value={unitLabel}
+                onChange={(e) => setUnitLabel(e.target.value)}
+                placeholder="SPK-002, Package A, Lot 3…"
+                className="mt-1 h-11 w-full rounded-lg border px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+            <label className="block text-[11px] font-medium text-muted-foreground">
+              Its own contract value
+              <input
+                inputMode="decimal"
+                value={unitValue}
+                onChange={(e) => setUnitValue(e.target.value)}
+                placeholder="Leave empty if not known yet"
+                className="mt-1 h-11 w-full rounded-lg border px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
             <div className="flex gap-2">
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => run(() => setReportingUnitAction(row.id, true, unitLabel))}
+                onClick={() =>
+                  run(() =>
+                    setReportingUnitAction(
+                      row.id,
+                      true,
+                      unitLabel,
+                      unitValue.trim() === '' ? null : Number(unitValue.replace(/[^0-9.]/g, ''))
+                    )
+                  )
+                }
                 className="h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
               >
                 {pending ? 'Saving…' : 'Mark as unit'}

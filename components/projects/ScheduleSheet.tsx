@@ -415,7 +415,12 @@ export default function ScheduleSheet({
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
             >
-              <span className="hidden sm:inline">#</span>
+              {/* `invisible`, not `hidden`. A display:none grid child leaves the
+                  grid entirely, so below `sm` this header shifted one column
+                  left and "Task name" was rendered into the 12px colour-stripe
+                  cell, where it read "T..". The rows never had that problem —
+                  their first cell, the stripe, is always in flow. */}
+              <span className="invisible sm:visible">#</span>
               <span>Task name</span>
               <span className="text-right">Days</span>
               <span className="hidden sm:block">Start</span>

@@ -5,11 +5,11 @@ import { ArrowLeft } from 'lucide-react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
+import ProjectDetails from '@/components/projects/ProjectDetails';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
 import { getSheet } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
-import { formatMoney } from '@/lib/currency';
 import ValueStrip from '@/components/projects/ValueStrip';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
@@ -48,10 +48,6 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const weights = getWeightSummary(id);
   const isOpen = getActiveProjectId() === id;
 
-  // The header used to print the stored column. It prints the DERIVED figure
-  // now, so the number at the top and the formula below it can never disagree.
-  const money = weights && weights.contractValue > 0 ? formatMoney(weights.contractValue, project.currency) : null;
-
   const facts = [
     `${contents.wbsRows} rows`,
     `${contents.leaves} measurable`,
@@ -61,12 +57,14 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
     // Said as a count rather than hidden: pricing is a separate job from
     // scheduling, and this is how far along it is.
     sheet.pricedRows ? `${sheet.pricedRows} priced` : 'no prices yet',
-    money,
+    // The contract figure is NOT repeated here. It is stated once, in the strip
+    // directly below, where it stands next to what has actually been allocated
+    // against it.
   ].filter(Boolean);
 
   return (
     <RouteTransition id="project-home">
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <header className="animate-enter shrink-0 border-b px-3 py-3 sm:px-6">
           <Link
             href="/projects"
@@ -87,7 +85,10 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
                 ))}
               </p>
             </div>
-            <OpenProjectButton id={id} isOpen={isOpen} />
+            <div className="flex shrink-0 items-center gap-2">
+              <ProjectDetails project={project} />
+              <OpenProjectButton id={id} isOpen={isOpen} />
+            </div>
           </div>
         </header>
 

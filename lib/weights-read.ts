@@ -36,8 +36,12 @@ export function getWeightSummary(projectId: string): WeightSummary | null {
     .where(eq(schema.projects.id, projectId))
     .all()[0];
   if (!project) return null;
+  // A project with no rows still has money. Returning null here hid the
+  // contract figure on exactly the project where it had just been typed, along
+  // with the currency picker and the gap — which on a new project is the whole
+  // contract. `summariseWeights` handles an empty list; the strip hides the
+  // parts that need rows.
   const nodes = loadWeightNodes(projectId);
-  if (nodes.length === 0) return null;
   // `projects.contract_value` is the SIGNED figure now, not a cache of the sum.
   // One source, read here and nowhere else, so the list card and the project
   // page can never show two different numbers for the same project again.

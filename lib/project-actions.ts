@@ -94,6 +94,13 @@ export async function createProjectAction(input: {
   contractorName?: string;
   startDate: string;
   finishDate: string;
+  /**
+   * The SIGNED contract value. Asked here because a contract exists before a
+   * single WBS row does — deriving it from prices later forced signed and
+   * allocated to be equal, which deleted the gap between them.
+   */
+  contractValue?: number | null;
+  currency?: string;
 }): Promise<ProjectResult> {
   try {
     const name = input.name.trim();
@@ -118,6 +125,8 @@ export async function createProjectAction(input: {
           startDate: input.startDate,
           finishDate: input.finishDate,
           updatedAt: now,
+          contractValue: input.contractValue ?? null,
+          currency: input.currency && isKnownCurrency(input.currency) ? input.currency : 'IDR',
           // Weight comes from prices, and there are none yet. `even` is the
           // honest label until a BOQ exists — see AGENTS.md.
           weightBasis: 'even',
@@ -248,18 +257,56 @@ export async function deleteProjectAction(projectId: string): Promise<ProjectRes
   }
 }
 
+/**
+ * Everything a project is, apart from its plan.
+ *
+ * This existed for a day as dead code — written, exported, never called from
+ * anywhere — which is why a project made in the app could never be given a
+ * contractor, a contract number, a site, or a document-number prefix. Document
+ * Control cannot number a single drawing without that last one.
+ *
+ * The contract value is here because of decision ②: it is SIGNED, typed by a
+ * person, not derived from whatever prices happen to have been entered. What is
+ * derived is how much of it has been allocated, and the gap between the two is
+ * the most useful number on the project screen.
+ */
+export type ProjectField =
+  | 'name'
+  | 'clientName'
+  | 'contractorName'
+  | 'contractNo'
+  | 'workLocation'
+  | 'docNoPrefix'
+  | 'contractValue'
+  | 'startDate'
+  | 'finishDate';
+
 export async function updateProjectFieldAction(
   projectId: string,
-  field: 'clientName' | 'contractorName' | 'contractNo' | 'workLocation' | 'docNoPrefix',
+  field: ProjectField,
   value: string
 ): Promise<ProjectResult> {
   try {
-    const clean = value.trim() || null;
+    const raw = value.trim();
+    let next: string | number | null = raw || null;
+
+    if (field === 'name' && !raw) throw new Error('A project needs a name');
+
+    if (field === 'contractValue') {
+      const n = raw === '' ? null : Number(raw.replace(/[^0-9.]/g, ''));
+      if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a contract value');
+      next = n;
+    }
+
+    if (field === 'startDate' || field === 'finishDate') {
+      if (raw && !ISO_DATE.test(raw)) throw new Error('That is not a date');
+      next = raw || null;
+    }
+
     db.update(schema.projects)
-      .set({ [field]: clean, updatedAt: new Date().toISOString() })
+      .set({ [field]: next, updatedAt: new Date().toISOString() })
       .where(eq(schema.projects.id, projectId))
       .run();
-    touch(projectId);
     revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {

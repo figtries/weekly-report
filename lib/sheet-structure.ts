@@ -362,12 +362,26 @@ export async function moveRowAction(nodeId: string, dir: 'up' | 'down'): Promise
 export async function setReportingUnitAction(
   nodeId: string,
   on: boolean,
-  label?: string
+  label?: string,
+  /**
+   * The unit's own signed value. A reporting unit is its own contract even when
+   * it sits inside another — SPK-007 at 1.4.4 lives inside SPK-004's 1.4 and
+   * its 842,723.72 is NOT part of 1.4's figure. Without a way to type this, the
+   * check that the units add up to the contract had nothing to check.
+   */
+  unitValue?: number | null
 ): Promise<StructureResult> {
   try {
     const projectId = projectOf(nodeId);
     db.update(schema.wbsNodes)
-      .set({ isReportingUnit: on, unitLabel: on ? (label?.trim() || 'Unit') : null })
+      .set({
+        isReportingUnit: on,
+        unitLabel: on ? label?.trim() || 'Unit' : null,
+        unitContractValue: on ? (unitValue ?? null) : null,
+        // The unit's value IS its price: a unit is a contract, and a contract's
+        // figure is what the money formula spends down its subtree.
+        ...(on && unitValue != null ? { price: unitValue } : {}),
+      })
       .where(eq(schema.wbsNodes.id, nodeId))
       .run();
     touchProject(projectId);

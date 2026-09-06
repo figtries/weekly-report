@@ -73,6 +73,10 @@ export default function ValueStrip({
           </span>
         )}
 
+        {/* Rows-only. On a project with nothing in it, "Weights 0.00%" is not a
+            finding — it is the absence of any rows to weigh, which the sheet
+            below already says in words. */}
+        {summary.leaves > 0 && (
         <span className="flex items-baseline gap-1.5">
           <span className="uppercase tracking-wider text-muted-foreground">Weights</span>
           <strong className={`tabular-nums ${closes ? '' : 'text-warn'}`}>
@@ -86,11 +90,13 @@ export default function ValueStrip({
                 : `${summary.storedLeaves} of ${summary.leaves} rows`}
           </span>
         </span>
+        )}
 
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <CurrencyPicker projectId={projectId} currency={summary.currency} />
         </span>
 
+        {summary.leaves > 0 && (
         <m.button
           type="button"
           whileTap={{ scale: 0.97 }}
@@ -110,6 +116,7 @@ export default function ValueStrip({
           <Calculator className="size-3.5" />
           Recalculate from prices…
         </m.button>
+        )}
       </div>
 
       {error && <p className="border-b bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
