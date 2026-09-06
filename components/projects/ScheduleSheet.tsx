@@ -433,14 +433,25 @@ export default function ScheduleSheet({
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  // The stack, reachable without going through a state updater — see `undo`.
+  const undoRef = useRef(undoStack);
+  undoRef.current = undoStack;
+  /**
+   * Undo, with the work done OUTSIDE the state updater.
+   *
+   * It used to call `commit` from inside `setUndoStack`'s updater, and an
+   * updater has to be pure — React runs it during the update phase, so the
+   * `startTransition` inside `commit` was illegal and the write never left the
+   * browser. Ctrl+Z printed "Cannot call startTransition while rendering" and
+   * the cell simply kept its new value. The stack is read from a ref, the send
+   * happens in the handler, and the pop is the only thing the updater does.
+   */
   const undo = useCallback(() => {
-    setUndoStack((stack) => {
-      const last = stack[stack.length - 1];
-      if (!last) return stack;
-      const row = rowsRef.current.find((r) => r.id === last.rowId);
-      if (row) commit(row, last.field, last.before, false);
-      return stack.slice(0, -1);
-    });
+    const last = undoRef.current[undoRef.current.length - 1];
+    if (!last) return;
+    const row = rowsRef.current.find((r) => r.id === last.rowId);
+    setUndoStack((stack) => stack.slice(0, -1));
+    if (row) commit(row, last.field, last.before, false);
   }, [commit]);
 
   // Keyboard: move with the arrows, act with Tab, undo with Ctrl+Z. Ignored
