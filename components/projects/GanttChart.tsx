@@ -106,6 +106,7 @@ function utc(iso: string): number {
 function daysBetween(a: string, b: string): number {
   return Math.round((utc(b) - utc(a)) / MS_PER_DAY);
 }
+/** Same shape as the sheet's, "Sept" trimmed to "Sep" for the same reason. */
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
   return new Intl.DateTimeFormat('en-GB', {
@@ -113,7 +114,9 @@ function fmtDate(iso: string | null): string {
     month: 'short',
     year: '2-digit',
     timeZone: 'UTC',
-  }).format(utc(iso));
+  })
+    .format(utc(iso))
+    .replace('Sept', 'Sep');
 }
 /**
  * Days to pixels, chosen per plan AND per pane.

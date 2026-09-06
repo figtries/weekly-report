@@ -73,7 +73,7 @@ const SPLIT_KEY = 'figtries:sheet-split-ratio';
 // name was down to its 8rem floor and every branch read "Detail…". The divider
 // still moves; this is only where it starts. A fixed ratio instead of a width
 // cut the price column off at 1240px and wasted half the timeline at 1920.
-const SHEET_NATURAL = 792;
+const SHEET_NATURAL = 800;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
 
@@ -82,10 +82,18 @@ const MIN_PANE = 300;
 // Under 640px the first column is the colour chip alone. A six-level outline
 // code needs ~60px and truncates to nonsense in less, while indentation already
 // carries the structure — and the full code is one tap away in the row panel.
-const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.25rem]';
+const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_4.25rem_2.25rem]';
 const GRID_LG =
-  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.25rem_4.25rem_4.25rem_5rem_3.25rem_2.25rem]';
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_4.25rem_4.25rem_4.25rem_4.25rem_5.25rem_3.5rem_2.25rem]';
 
+/**
+ * `04 Sep 26` — and every one of them exactly that wide.
+ *
+ * en-GB abbreviates September to "Sept", four letters where every other month
+ * has three, so one row in twelve came out a character longer and a column of
+ * dates read ragged however it was aligned. The 't' goes; nothing else about
+ * the format changes.
+ */
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
   const [y, mo, d] = iso.split('-').map(Number);
@@ -94,7 +102,9 @@ function fmtDate(iso: string | null): string {
     month: 'short',
     year: '2-digit',
     timeZone: 'UTC',
-  }).format(Date.UTC(y, mo - 1, d));
+  })
+    .format(Date.UTC(y, mo - 1, d))
+    .replace('Sept', 'Sep');
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -630,10 +640,15 @@ export default function ScheduleSheet({
                   their first cell, the stripe, is always in flow. */}
               <span className="invisible sm:visible">#</span>
               <span>Task name</span>
-              <span className="text-right">Days</span>
-              <span className="hidden sm:block">Start</span>
-              <span className="hidden sm:block">Finish</span>
-              <span className="hidden sm:block">Target</span>
+              {/* Everything that is a number or a date is RIGHT-aligned, header
+                  and value alike, so each column ends on one straight edge. The
+                  header used to sit left of figures that sat right, which is
+                  what made "DAYS  START" and "PRICE WEIGHT" read as one word
+                  each with a hole beside them. */}
+              <span className="text-right">Duration</span>
+              <span className="hidden text-right sm:block">Start</span>
+              <span className="hidden text-right sm:block">Finish</span>
+              <span className="hidden text-right sm:block">Target</span>
               <span className="hidden text-right sm:block">Price</span>
               <span className="hidden text-right sm:block">Weight</span>
               <span className="sr-only">Row actions</span>
@@ -884,15 +899,22 @@ function Row({
         )}
       </div>
 
+      {/* The unit travels with the number — `97 d`, the way MS Project writes
+          it — so the column can be called Duration without leaving the reader
+          to guess what it is measured in. The input still holds the bare
+          number: a unit you have to delete before you can type is a unit that
+          gets typed over. */}
       <div className="text-right tabular-nums">
         {locked ? (
-          <span className="text-muted-foreground">{r.durationDays ?? '—'}</span>
+          <span className="text-muted-foreground">
+            {r.durationDays == null ? '—' : `${r.durationDays} d`}
+          </span>
         ) : r.isMilestone ? (
           <span className="text-[11px] text-muted-foreground">—</span>
         ) : (
           <EditableCell
             value={r.durationDays == null ? '' : String(r.durationDays)}
-            display={r.durationDays == null ? '—' : String(r.durationDays)}
+            display={r.durationDays == null ? '—' : `${r.durationDays} d`}
             active={editing === 'duration'}
             onEdit={() => onEdit('duration')}
             onDone={onDone}
@@ -903,7 +925,7 @@ function Row({
         )}
       </div>
 
-      <div className="hidden tabular-nums sm:block">
+      <div className="hidden text-right tabular-nums sm:block">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || '—'}</span>
         ) : (
@@ -915,12 +937,12 @@ function Row({
             onDone={onDone}
             onCommit={(v) => onCommit('start', v)}
             type="date"
-            className="text-[11px]"
+            className="text-right text-[11px]"
           />
         )}
       </div>
 
-      <div className="hidden tabular-nums sm:block">
+      <div className="hidden text-right tabular-nums sm:block">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || '—'}</span>
         ) : (
@@ -932,7 +954,7 @@ function Row({
             onDone={onDone}
             onCommit={(v) => onCommit('finish', v)}
             type="date"
-            className="text-[11px]"
+            className="text-right text-[11px]"
           />
         )}
       </div>
@@ -940,7 +962,7 @@ function Row({
       {/* Typed on EVERY row, summaries included — the one date a branch owns,
           because it is a promise rather than an observation about its children.
           `locked` deliberately does not gate it. */}
-      <div className="hidden tabular-nums sm:block">
+      <div className="hidden text-right tabular-nums sm:block">
         <EditableCell
           value={r.targetDate ?? ''}
           display={fmtDate(r.targetDate) || '—'}
@@ -949,7 +971,7 @@ function Row({
           onDone={onDone}
           onCommit={(v) => onCommit('target', v)}
           type="date"
-          className={`text-[11px] ${r.daysLate != null ? 'font-medium text-warn' : ''}`}
+          className={`text-right text-[11px] ${r.daysLate != null ? 'font-medium text-warn' : ''}`}
         />
       </div>
 
