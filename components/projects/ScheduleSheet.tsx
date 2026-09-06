@@ -14,6 +14,7 @@ import {
   outdentRowAction,
 } from '@/lib/sheet-structure';
 import GanttChart, { GanttLegend, planColor } from './GanttChart';
+import { formatMoney } from '@/lib/currency';
 import RowMenu from './RowMenu';
 import SheetToolbar from './SheetToolbar';
 
@@ -631,15 +632,7 @@ function Row({
             // An empty price is not a warning. Scheduling and pricing are two
             // jobs, often two people — a column of exclamation marks would tell
             // the scheduler they had failed at something they were not doing.
-            display={
-              r.price == null
-                ? '—'
-                : new Intl.NumberFormat('en-GB', {
-                    style: 'currency',
-                    currency,
-                    maximumFractionDigits: 0,
-                  }).format(r.price)
-            }
+            display={r.price == null ? '—' : formatMoney(r.price, currency)}
             active={editing === 'price'}
             onEdit={() => onEdit('price')}
             onDone={onDone}

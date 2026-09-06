@@ -13,6 +13,7 @@ import {
   setProjectArchivedAction,
 } from '@/lib/project-actions';
 import MiniGantt from './MiniGantt';
+import { formatMoney } from '@/lib/currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -108,19 +109,11 @@ export default function ProjectList({ all }: { all: ProjectCard[] }) {
 }
 
 function money(value: number | null, currency: string): string | null {
+  // One formatter, in lib/currency.ts. This page is where the bug showed:
+  // Gundih is priced in USD and a rupiah formatter turned $5.92M into
+  // "Rp 5.920.000" — a figure with the wrong symbol is a wrong number.
   if (value == null || value <= 0) return null;
-  // The project carries its own currency and Gundih's is USD — printing it
-  // through a rupiah formatter turned $5.92M into "Rp 5.920.000" on this very
-  // page.
-  try {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${currency} ${Math.round(value).toLocaleString('en-GB')}`;
-  }
+  return formatMoney(value, currency);
 }
 
 function dateRange(start: string | null, finish: string | null): string | null {

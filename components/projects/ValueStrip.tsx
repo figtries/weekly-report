@@ -6,6 +6,8 @@ import { Calculator, TriangleAlert } from 'lucide-react';
 
 import type { WeightSummary } from '@/lib/weights';
 import { applyWeightsAction, previewWeightsAction, type WeightPreview } from '@/lib/weights-actions';
+import { formatMoney } from '@/lib/currency';
+import CurrencyPicker from './CurrencyPicker';
 
 /**
  * The money, said out loud.
@@ -32,17 +34,7 @@ export default function ValueStrip({
   const [preview, setPreview] = useState<WeightPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const money = (v: number) => {
-    try {
-      return new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency: summary.currency,
-        maximumFractionDigits: 0,
-      }).format(v);
-    } catch {
-      return `${summary.currency} ${Math.round(v).toLocaleString('en-GB')}`;
-    }
-  };
+  const money = (v: number) => formatMoney(v, summary.currency);
 
   const closes = Math.abs(summary.storedTotal - 100) < 0.005;
 
@@ -73,10 +65,11 @@ export default function ValueStrip({
           )}
         </span>
 
-        <span className="text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
           {summary.pricedRows > 0
-            ? `${summary.pricedRows} priced rows`
-            : 'no prices — weights would be spread evenly'}
+            ? `${summary.pricedRows} priced ${summary.pricedRows === 1 ? 'row' : 'rows'}`
+            : 'no prices yet — weights would spread evenly'}
+          <CurrencyPicker projectId={projectId} currency={summary.currency} />
         </span>
 
         <m.button

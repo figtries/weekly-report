@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { SheetRow } from '@/lib/sheet';
 
@@ -30,6 +30,8 @@ import type { SheetRow } from '@/lib/sheet';
 
 const MS_PER_DAY = 86_400_000;
 const TARGET_PX = 1200;
+/** Never thinner than this, or a bar becomes a dot. */
+const MIN_PX_PER_DAY = 1.5;
 
 export const PLAN_COLORS = [
   'var(--plan-1)',
@@ -60,9 +62,19 @@ function fmtDate(iso: string | null): string {
     timeZone: 'UTC',
   }).format(utc(iso));
 }
-function pxPerDay(days: number): number {
+/**
+ * Days to pixels, chosen per plan AND per pane.
+ *
+ * A fixed rate is wrong in both directions: at 3px/day a three-day project was
+ * nine pixels of bar, and a five-year one needed a week of scrolling. The target
+ * is the width actually available — so a short plan fills its pane instead of
+ * leaving two thirds of the timeline blank, which is what it looked like on a
+ * two-row project.
+ */
+function pxPerDay(days: number, paneWidth: number): number {
   if (days <= 0) return 8;
-  return Math.min(24, Math.max(1.5, TARGET_PX / days));
+  const target = Math.max(TARGET_PX, paneWidth);
+  return Math.min(24, Math.max(MIN_PX_PER_DAY, target / days));
 }
 
 export default function GanttChart({
@@ -83,6 +95,17 @@ export default function GanttChart({
   onSelect: (id: string) => void;
 }) {
   const [todayX, setTodayX] = useState<number | null>(null);
+  // The pane's own width, so a short plan can fill it. Measured rather than
+  // guessed: the split divider moves, and so does the window.
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = paneRef.current?.parentElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setPaneWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const end = useMemo(() => {
     const last = rows.reduce<string | null>(
@@ -94,8 +117,14 @@ export default function GanttChart({
     return last > spanFinish ? last : spanFinish;
   }, [rows, spanFinish]);
 
-  const scale = spanStart && end ? pxPerDay(daysBetween(spanStart, end) + 1) : 8;
-  const width = spanStart && end ? Math.max((daysBetween(spanStart, end) + 1) * scale, 240) : 240;
+  const days = spanStart && end ? daysBetween(spanStart, end) + 1 : 0;
+  const scale = days > 0 ? pxPerDay(days, paneWidth) : 8;
+  // At least as wide as the pane. A plan whose rows all sit on one day inside
+  // a two-week project genuinely fills almost none of its calendar — that is
+  // true and should look it. What read as broken was the drawing surface
+  // STOPPING at 288px, so the month lines and the today line covered a third
+  // of the pane and bare white covered the rest.
+  const width = days > 0 ? Math.max(days * scale, paneWidth, 240) : Math.max(paneWidth, 240);
 
   const months = useMemo(() => {
     if (!spanStart || !end) return [];
@@ -143,7 +172,7 @@ export default function GanttChart({
   const bodyH = rows.length * rowH;
 
   return (
-    <div className="relative" style={{ width }}>
+    <div ref={paneRef} className="relative" style={{ width }}>
       <div
         className="sticky top-0 z-20 border-b bg-card"
         style={{ height: headH }}

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { eq, sql } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
+import { isKnownCurrency } from './currency';
 
 /**
  * Projects — the writes.
@@ -259,6 +260,32 @@ export async function updateProjectFieldAction(
       .where(eq(schema.projects.id, projectId))
       .run();
     touch(projectId);
+    revalidateEverything();
+    return { ok: true, id: projectId };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * The currency a project is priced in.
+ *
+ * Changing it RELABELS, it does not convert. A figure typed as 12,313 stays
+ * 12,313 — the app holds no exchange rate, and inventing one would silently
+ * restate a signed contract. The list itself lives in lib/currency.ts, because
+ * a  file may only export async functions.
+ */
+export async function setProjectCurrencyAction(
+  projectId: string,
+  currency: string
+): Promise<ProjectResult> {
+  try {
+    const code = currency.trim().toUpperCase();
+    if (!isKnownCurrency(code)) throw new Error('That currency is not one this app knows');
+    db.update(schema.projects)
+      .set({ currency: code, updatedAt: new Date().toISOString() })
+      .where(eq(schema.projects.id, projectId))
+      .run();
     revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {

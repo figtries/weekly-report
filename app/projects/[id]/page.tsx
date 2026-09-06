@@ -9,6 +9,7 @@ import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
 import { getSheet } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
+import { formatMoney } from '@/lib/currency';
 import ValueStrip from '@/components/projects/ValueStrip';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
@@ -49,14 +50,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
 
   // The header used to print the stored column. It prints the DERIVED figure
   // now, so the number at the top and the formula below it can never disagree.
-  const money =
-    weights && weights.contractValue > 0
-      ? new Intl.NumberFormat('en-GB', {
-          style: 'currency',
-          currency: project.currency,
-          maximumFractionDigits: 0,
-        }).format(weights.contractValue)
-      : null;
+  const money = weights && weights.contractValue > 0 ? formatMoney(weights.contractValue, project.currency) : null;
 
   const facts = [
     `${contents.wbsRows} rows`,

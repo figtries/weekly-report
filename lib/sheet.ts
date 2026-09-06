@@ -226,7 +226,12 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
     // off one root, that root is the plan itself and colouring it paints
     // everything the same; go one level down instead.
     const roots = rows.filter((r) => r.depth === 0);
-    anchors = roots.length === 1 ? rows.filter((r) => r.depth === 1) : roots;
+    const level = roots.length === 1 ? rows.filter((r) => r.depth === 1) : roots;
+    // Fewer than three branches is not a grouping, it is one colour per row —
+    // noise wearing the costume of meaning. Colour says WHICH PACKAGE, and a
+    // plan with no packages has nothing for it to say, so everything stays
+    // neutral until there is something to distinguish.
+    anchors = level.length >= 3 ? level : [];
   }
 
   const groupOf = new Map<string, number>();
