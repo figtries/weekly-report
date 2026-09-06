@@ -44,6 +44,18 @@ export interface SheetRow {
   bobot: number | null;
   startDate: string | null;
   finishDate: string | null;
+  /**
+   * "Should be finished before this." Typed on any row, including a summary —
+   * the one date a branch owns, because it is a promise rather than an
+   * observation. It never moves the span; it is compared against it.
+   */
+  targetDate: string | null;
+  /**
+   * How many days past the target the row finishes. Null when either date is
+   * missing; zero or negative is not late and is reported as null so that
+   * "has a number here" and "is late" are the same question.
+   */
+  daysLate: number | null;
   /** Calendar days, both ends counted — `inclusiveDays`, the MS Project convention. */
   durationDays: number | null;
   childCount: number;
@@ -160,6 +172,8 @@ export function getSheet(projectId: string): Sheet {
         bobot: n.bobot,
         startDate: null,
         finishDate: null,
+        targetDate: n.targetDate,
+        daysLate: null,
         durationDays: null,
         childCount: (childrenOf.get(n.id) ?? []).length,
         isSummary: hasChildren,
@@ -181,6 +195,12 @@ export function getSheet(projectId: string): Sheet {
       row.finishDate = own.finish;
       row.durationDays =
         own.start && own.finish ? inclusiveDays(own.start, own.finish) : null;
+      // Late by however many days the finish sits past the target. Not late is
+      // null rather than 0, so a caller never has to ask which of the two it
+      // is looking at.
+      if (row.targetDate && own.finish && own.finish > row.targetDate) {
+        row.daysLate = inclusiveDays(row.targetDate, own.finish) - 1;
+      }
 
       if (own.start && (!start || own.start < start)) start = own.start;
       if (own.finish && (!finish || own.finish > finish)) finish = own.finish;

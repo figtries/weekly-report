@@ -226,6 +226,63 @@ export default function GanttChart({
           />
         )}
 
+        {/* Deadlines, drawn BEFORE the bars so a bar that runs through one is
+            not hidden by it, and drawn independently of them so a row that has
+            a promised date but no plan yet still shows the promise. MS Project
+            puts an arrow here; so does this, pointing down at the day. */}
+        {rows.map((r, i) => {
+          if (!r.targetDate) return null;
+          const x = daysBetween(spanStart, r.targetDate) * scale;
+          if (x < -8 || x > width + 8) return null;
+          const late = r.daysLate != null;
+          return (
+            <span
+              key={`t-${r.id}`}
+              aria-hidden
+              title={
+                late
+                  ? `Target ${fmtDate(r.targetDate)} — finishes ${r.daysLate} days late`
+                  : `Target ${fmtDate(r.targetDate)}`
+              }
+              className="absolute z-[5]"
+              style={{
+                left: x - 4,
+                top: i * rowH + rowH / 2 - 11,
+                width: 0,
+                height: 0,
+                borderLeft: '4px solid transparent',
+                borderRight: '4px solid transparent',
+                borderTop: `7px solid ${late ? 'var(--warn)' : 'var(--foreground)'}`,
+                opacity: late ? 1 : 0.45,
+              }}
+            />
+          );
+        })}
+
+        {/* The overrun itself, as LENGTH rather than as a colour swap: the bar
+            keeps its package hue and the days past the target are drawn over
+            its tail. Someone scanning the timeline sees how far, not just that. */}
+        {rows.map((r, i) => {
+          if (r.daysLate == null || !r.targetDate || !r.finishDate) return null;
+          const x = daysBetween(spanStart, r.targetDate) * scale;
+          const w = Math.max(daysBetween(r.targetDate, r.finishDate) * scale, 2);
+          return (
+            <span
+              key={`o-${r.id}`}
+              aria-hidden
+              className="absolute z-[4] rounded-[3px]"
+              style={{
+                left: x,
+                top: i * rowH + rowH / 2 - (r.isSummary ? 2 : 6),
+                width: w,
+                height: r.isSummary ? 5 : 12,
+                background:
+                  'repeating-linear-gradient(45deg, var(--warn) 0 3px, transparent 3px 6px)',
+              }}
+            />
+          );
+        })}
+
         {rows.map((r, i) => {
           if (!r.startDate || !r.finishDate) return null;
           const x = daysBetween(spanStart, r.startDate) * scale;
@@ -307,6 +364,22 @@ export function GanttLegend({ rows }: { rows: SheetRow[] }) {
         <span aria-hidden className="size-2 rotate-45 rounded-[1px] bg-muted-foreground" />
         Milestone
       </span>
+      {rows.some((r) => r.targetDate) && (
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            aria-hidden
+            style={{
+              width: 0,
+              height: 0,
+              borderLeft: '4px solid transparent',
+              borderRight: '4px solid transparent',
+              borderTop: '7px solid var(--foreground)',
+              opacity: 0.45,
+            }}
+          />
+          Target date
+        </span>
+      )}
     </div>
   );
 }

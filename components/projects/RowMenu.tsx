@@ -25,6 +25,7 @@ import {
 import {
   setMilestoneAction,
   updateRowDatesAction,
+  updateRowTargetAction,
   updateRowTextAction,
 } from '@/lib/sheet-actions';
 
@@ -85,6 +86,33 @@ export default function RowMenu({
       >
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Row {row.code}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
+
+        {/* The target date is here for EVERY row, summaries included — it is the
+            one date a branch owns, and the Target column disappears below
+            640px. It sits outside the block below because that block is
+            leaf-only. */}
+        {mode === 'menu' && (
+          <label className="mt-3 block text-[11px] font-medium text-muted-foreground sm:hidden">
+            Target date
+            <span className="ml-1 font-normal">— should be finished before this</span>
+            <input
+              type="date"
+              defaultValue={row.targetDate ?? ''}
+              onBlur={(e) =>
+                e.target.value !== (row.targetDate ?? '') &&
+                run(() => updateRowTargetAction(row.id, e.target.value), true)
+              }
+              className={`mt-1 h-11 w-full rounded-lg border px-2 text-sm outline-none focus:border-foreground ${
+                row.daysLate != null ? 'border-warn text-warn' : 'text-foreground'
+              }`}
+            />
+            {row.daysLate != null && (
+              <span className="mt-1 block font-semibold text-warn">
+                Finishes {row.daysLate} days past it
+              </span>
+            )}
+          </label>
+        )}
 
         {/* Dates live here on small screens because the sheet cannot show six
             columns and a readable name at 390px. Above `sm` the columns are

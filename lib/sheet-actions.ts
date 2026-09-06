@@ -100,6 +100,34 @@ export async function updateRowTextAction(
 }
 
 
+/**
+ * The target date — the one date a summary row is allowed to have.
+ *
+ * It writes to the NODE, not to a schedule, and it moves nothing. That is the
+ * whole reason it can sit on a branch while start and finish cannot: a branch's
+ * span is an observation about its children and typing over it makes the
+ * schedule lie, whereas a deadline is a promise the contract made about the
+ * branch itself. Nothing recomputes off the back of this — the row is simply
+ * marked when its finish lands past it.
+ */
+export async function updateRowTargetAction(
+  nodeId: string,
+  value: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const raw = value.trim();
+    if (raw && !ISO.test(raw)) throw new Error('That is not a date');
+    db.update(schema.wbsNodes)
+      .set({ targetDate: raw || null })
+      .where(eq(schema.wbsNodes.id, nodeId))
+      .run();
+    revalidatePath('/projects', 'layout');
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function updateRowDatesAction(
   nodeId: string,
   edited: 'duration' | 'start' | 'finish',

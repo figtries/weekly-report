@@ -153,6 +153,24 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
   unitContractNo: text('unit_contract_no'),
   unitContractValue: real('unit_contract_value'),
 
+  /**
+   * "Should be finished before this" — MS Project's `Deadline`, and the only
+   * date a person types on a row that has children.
+   *
+   * It is deliberately NOT part of the schedule: it never moves a bar, never
+   * feeds the plan curve, and never overwrites a summary's computed span. It
+   * sits beside the span and is compared against it, so a row that runs past it
+   * is marked instead of being quietly re-planned. That separation is the whole
+   * point — a deadline that pushes the work is just another finish date, and
+   * then nothing records what was actually promised.
+   *
+   * It lives on the node rather than on a baseline because it is a promise, not
+   * a revision: re-baselining the plan does not move what the contract asked
+   * for. This is also the first home each SPK's contractual completion date has
+   * ever had.
+   */
+  targetDate: text('target_date'),
+
   /* leaf economics — null on every branch */
   vol: real('vol'),
   satuan: text('satuan'),

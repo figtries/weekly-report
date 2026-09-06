@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, TriangleAlert } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
-import { updateRowDatesAction, updateRowTextAction } from '@/lib/sheet-actions';
+import {
+  updateRowDatesAction,
+  updateRowTargetAction,
+  updateRowTextAction,
+} from '@/lib/sheet-actions';
 import {
   addRowAction,
   deleteRowAction,
@@ -51,11 +55,13 @@ const HEAD_H = 36;
 // every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
 // window, which is what "the Gantt is cut off" meant.
 const SPLIT_KEY = 'figtries:sheet-split-ratio';
-// The sheet needs about 560px before its seven columns start scrolling, so
-// the default is that width where the window allows it and a share of the
-// window where it does not — a fixed ratio cut the price column off at
-// 1240px and wasted half the timeline at 1920.
-const SHEET_NATURAL = 634;
+// The sheet's nine columns come to 39.75rem, plus eight 6px gaps and 12px of
+// padding either side: 708px before anything starts scrolling. The default is
+// that width where the window allows it and a share of the window where it does
+// not — a fixed ratio cut the price column off at 1240px and wasted half the
+// timeline at 1920, and 634 (the eight-column figure) clipped Weight the moment
+// Target arrived.
+const SHEET_NATURAL = 712;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
 
@@ -66,7 +72,7 @@ const MIN_PANE = 300;
 // carries the structure — and the full code is one tap away in the row panel.
 const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.25rem]';
 const GRID_LG =
-  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_5rem_3.25rem_2.25rem]';
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_4.5rem_5rem_3.25rem_2.25rem]';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
@@ -79,7 +85,26 @@ function fmtDate(iso: string | null): string {
   }).format(Date.UTC(y, mo - 1, d));
 }
 
-type Field = 'name' | 'duration' | 'start' | 'finish' | 'price';
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Days the finish lands past the target, or null when it does not.
+ *
+ * Null rather than 0 or a negative number, so "is there a value here" and "is
+ * this row late" are the same question — the same shape `lib/sheet.ts` returns
+ * on the server, because an optimistic edit that disagreed with the next read
+ * would make the marking flicker.
+ */
+function lateBy(target: string | null, finish: string | null): number | null {
+  if (!target || !finish || finish <= target) return null;
+  const day = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((day(finish) - day(target)) / MS_PER_DAY);
+}
+
+type Field = 'name' | 'duration' | 'start' | 'finish' | 'target' | 'price';
 interface Edit {
   rowId: string;
   field: Field;
@@ -162,7 +187,9 @@ export default function ScheduleSheet({
           ? String(row.durationDays ?? '')
           : field === 'start'
             ? (row.startDate ?? '')
-            : (row.finishDate ?? '');
+            : field === 'target'
+              ? (row.targetDate ?? '')
+              : (row.finishDate ?? '');
 
   /**
    * Send one cell. Optimistic for text, because a sheet that waits for the
@@ -177,7 +204,18 @@ export default function ScheduleSheet({
       setError(null);
 
       startTransition(async () => {
-        if (field === 'name' || field === 'price') {
+        // The target date moves nothing, so it is safe to show immediately and
+        // to work out "late by" here — the same subtraction the server does on
+        // the next read.
+        if (field === 'target') {
+          patch(row.id, { targetDate: raw || null, daysLate: lateBy(raw || null, row.finishDate) });
+          const res = await updateRowTargetAction(row.id, raw);
+          if (!res.ok) {
+            setError(res.error);
+            patch(row.id, { targetDate: before || null, daysLate: lateBy(before || null, row.finishDate) });
+            return;
+          }
+        } else if (field === 'name' || field === 'price') {
           patch(row.id, field === 'name' ? { name: raw } : { price: raw === '' ? null : Number(raw) });
           const res = await updateRowTextAction(row.id, field, raw);
           if (!res.ok) {
@@ -410,7 +448,7 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[38rem]">
+          <div className="min-w-[19rem] sm:min-w-[44.5rem]">
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -425,6 +463,7 @@ export default function ScheduleSheet({
               <span className="text-right">Days</span>
               <span className="hidden sm:block">Start</span>
               <span className="hidden sm:block">Finish</span>
+              <span className="hidden sm:block">Target</span>
               <span className="hidden text-right sm:block">Price</span>
               <span className="hidden text-right sm:block">Weight</span>
               <span className="sr-only">Row actions</span>
@@ -604,6 +643,19 @@ function Row({
             {r.unitLabel || 'Unit'}
           </span>
         )}
+        {/* Beside the name, not only in the Target column, because that column
+            is gone below 640px and this is the row's most important fact when
+            it is true. Written as days rather than a colour alone — the app is
+            used by people who should never have to decode a hue. */}
+        {r.daysLate != null && (
+          <span
+            title={`${r.daysLate} days past its target date`}
+            className="flex shrink-0 items-center gap-0.5 rounded bg-warn/10 px-1 py-px text-[9px] font-semibold tabular-nums text-warn"
+          >
+            <TriangleAlert className="size-2.5" />
+            {r.daysLate}d late
+          </span>
+        )}
       </div>
 
       <div className="text-right tabular-nums">
@@ -657,6 +709,22 @@ function Row({
             className="text-[11px]"
           />
         )}
+      </div>
+
+      {/* Typed on EVERY row, summaries included — the one date a branch owns,
+          because it is a promise rather than an observation about its children.
+          `locked` deliberately does not gate it. */}
+      <div className="hidden tabular-nums sm:block">
+        <EditableCell
+          value={r.targetDate ?? ''}
+          display={fmtDate(r.targetDate) || '—'}
+          active={editing === 'target'}
+          onEdit={() => onEdit('target')}
+          onDone={onDone}
+          onCommit={(v) => onCommit('target', v)}
+          type="date"
+          className={`text-[11px] ${r.daysLate != null ? 'font-medium text-warn' : ''}`}
+        />
       </div>
 
       <div className="hidden text-right tabular-nums sm:block">

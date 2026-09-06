@@ -57,6 +57,13 @@
       "when": 1788605637805,
       "tag": "0007_bouncy_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788688882987,
+      "tag": "0008_wooden_ronan",
+      "breakpoints": true
     }
   ]
 }
