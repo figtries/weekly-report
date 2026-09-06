@@ -130,7 +130,14 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
   const range = dateRange(p.startDate, p.finishDate);
 
   return (
-    <div className="group flex h-full flex-col rounded-xl border bg-card p-4 transition-colors duration-300 ease-ios hover:border-muted-foreground">
+    // THE WHOLE CARD IS THE LINK, and it is drawn that way rather than wired
+    // that way: the title's `after:inset-0` stretches its hit area over the
+    // card, so there is still exactly one anchor per card, keyboard focus lands
+    // on something real, and no interactive element is nested inside another —
+    // which is invalid HTML and the usual reason a clickable card misbehaves on
+    // a phone. Everything that must stay separately clickable sits above it on
+    // `relative z-10`.
+    <div className="group relative flex h-full flex-col rounded-xl border bg-card p-4 transition-all duration-300 ease-ios hover:border-muted-foreground hover:shadow-sm active:scale-[0.995] focus-within:border-muted-foreground focus-within:ring-[3px] focus-within:ring-ring/40">
       <div className="flex items-start gap-2">
         <span
           aria-hidden
@@ -145,7 +152,7 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
             // Three lines, then an ellipsis. Contract titles here run past a
             // hundred characters — the Gundih one took five lines and pushed
             // everything else on the card below the fold.
-            className="line-clamp-3 block text-[13px] font-semibold leading-snug hover:underline"
+            className="line-clamp-3 block text-[13px] font-semibold leading-snug outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] group-hover:underline"
           >
             {p.name}
           </Link>
@@ -162,7 +169,7 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
           type="button"
           onClick={onActions}
           aria-label={`Actions for ${p.name}`}
-          className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="relative z-10 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <MoreHorizontal className="size-4" />
         </button>
@@ -172,12 +179,11 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
         {/* An empty project must read as EMPTY, not broken — so it gets a way
             forward here instead of a bar with nothing in it. */}
         {p.rowCount === 0 ? (
-          <Link
-            href={`/projects/${p.id}`}
-            className="flex h-11 items-center justify-center rounded-lg border border-dashed text-xs font-medium text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground"
-          >
+          // A prompt, not a second link. The card already goes here, and two
+          // anchors to the same place is one for a screen reader to read twice.
+          <span className="flex h-11 items-center justify-center rounded-lg border border-dashed text-xs font-medium text-muted-foreground transition-colors group-hover:border-muted-foreground group-hover:text-foreground">
             Not planned yet — build the schedule →
-          </Link>
+          </span>
         ) : (
           <>
             <MiniGantt
