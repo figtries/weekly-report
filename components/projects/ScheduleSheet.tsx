@@ -47,15 +47,25 @@ import SheetToolbar from './SheetToolbar';
 
 const ROW_H = 44;
 const HEAD_H = 36;
-const SPLIT_KEY = 'figtries:sheet-split';
+// A SHARE of the shell, not a pixel width. Stored as pixels it was 720 on
+// every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
+// window, which is what "the Gantt is cut off" meant.
+const SPLIT_KEY = 'figtries:sheet-split-ratio';
+// The sheet needs about 560px before its seven columns start scrolling, so
+// the default is that width where the window allows it and a share of the
+// window where it does not — a fixed ratio cut the price column off at
+// 1240px and wasted half the timeline at 1920.
+const SHEET_NATURAL = 596;
+/** Neither pane is useful below this, so the drag stops there. */
+const MIN_PANE = 300;
 
 // Under 640px only the outline, the name, the duration and the row menu fit;
 // dates and price move into the row's own panel. Above it, the full sheet.
 // Under 640px the first column is the colour chip alone. A six-level outline
 // code needs ~60px and truncates to nonsense in less, while indentation already
 // carries the structure — and the full code is one tap away in the row panel.
-const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.5rem]';
-const GRID_LG = 'sm:grid-cols-[5.25rem_minmax(9rem,1fr)_4rem_4.75rem_4.75rem_5.5rem_2.5rem]';
+const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_3.25rem_2.25rem]';
+const GRID_LG = 'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_3.5rem_4.5rem_4.5rem_5rem_2.25rem]';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
@@ -101,7 +111,8 @@ export default function ScheduleSheet({
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
-  const [splitPx, setSplitPx] = useState(720);
+  const [splitRatio, setSplitRatio] = useState<number | null>(null);
+  const [shellWidth, setShellWidth] = useState(0);
   const [, startTransition] = useTransition();
 
   useEffect(() => setRows(initialRows), [initialRows]);
@@ -109,7 +120,7 @@ export default function ScheduleSheet({
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(SPLIT_KEY));
-      if (Number.isFinite(saved) && saved >= 360) setSplitPx(saved);
+      if (Number.isFinite(saved) && saved > 0.15 && saved < 0.85) setSplitRatio(saved);
     } catch {
       /* a private window can throw; no stored preference is a fine answer */
     }
@@ -277,27 +288,45 @@ export default function ScheduleSheet({
   };
 
   const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setShellWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Clamped every render rather than only on drag: a window that shrinks below
+  // the stored width used to leave the timeline a sliver with no way back.
+  const splitPx =
+    shellWidth > 0
+      ? Math.min(
+          Math.max(
+            splitRatio != null ? shellWidth * splitRatio : Math.min(SHEET_NATURAL, shellWidth * 0.62),
+            MIN_PANE
+          ),
+          Math.max(MIN_PANE, shellWidth - MIN_PANE)
+        )
+      : 0;
   const onDragDivider = (e: React.PointerEvent) => {
     e.preventDefault();
     const shell = shellRef.current;
     if (!shell) return;
-    const move = (ev: PointerEvent) =>
-      setSplitPx(
-        Math.min(
-          Math.max(ev.clientX - shell.getBoundingClientRect().left, 360),
-          shell.clientWidth - 240
-        )
-      );
+    const move = (ev: PointerEvent) => {
+      const box = shell.getBoundingClientRect();
+      const px = Math.min(Math.max(ev.clientX - box.left, MIN_PANE), box.width - MIN_PANE);
+      setSplitRatio(px / box.width);
+    };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      setSplitPx((w) => {
+      setSplitRatio((r) => {
         try {
-          localStorage.setItem(SPLIT_KEY, String(w));
+          localStorage.setItem(SPLIT_KEY, String(r));
         } catch {
           /* storage can be blocked; the split still works for this visit */
         }
-        return w;
+        return r;
       });
     };
     window.addEventListener('pointermove', move);
@@ -307,7 +336,7 @@ export default function ScheduleSheet({
   const anchor = selectedId ?? rows.at(-1)?.id ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <SheetToolbar
         rowCount={rows.length}
         selected={selected}
@@ -371,18 +400,18 @@ export default function ScheduleSheet({
         </m.p>
       )}
 
-      <div ref={shellRef} className="flex min-h-0 flex-1">
+      <div ref={shellRef} className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">
         <div
           ref={leftRef}
           onScroll={mirror('l')}
-          style={{ width: splitPx }}
-          className={`min-h-0 shrink-0 overflow-auto max-md:!w-full ${
+          style={splitPx > 0 ? { width: splitPx } : { flex: '1 1 0%' }}
+          className={`min-h-0 min-w-0 shrink-0 overflow-auto max-md:!w-full ${
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[34rem]">
+          <div className="min-w-[19rem] sm:min-w-[36rem]">
             <div
-              className={`sticky top-0 z-20 grid items-center gap-x-2 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
+              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
             >
               <span className="hidden sm:inline">#</span>
@@ -456,7 +485,7 @@ export default function ScheduleSheet({
         <div
           ref={rightRef}
           onScroll={mirror('r')}
-          className={`min-h-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
+          className={`min-h-0 min-w-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
         >
           <GanttChart
             rows={visible}
@@ -516,7 +545,7 @@ function Row({
   return (
     <div
       onMouseDown={onSelect}
-      className={`group grid items-center gap-x-2 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
+      className={`group grid items-center gap-x-1.5 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
         selected ? 'bg-muted' : 'hover:bg-muted/50'
       } ${r.isSummary ? 'font-semibold' : ''}`}
       style={{ height: ROW_H }}

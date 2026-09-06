@@ -32,6 +32,8 @@ const MS_PER_DAY = 86_400_000;
 const TARGET_PX = 1200;
 /** Never thinner than this, or a bar becomes a dot. */
 const MIN_PX_PER_DAY = 1.5;
+/** Never wider than this, or a two-week plan becomes a ruler nobody can scan. */
+const MAX_PX_PER_DAY = 90;
 
 export const PLAN_COLORS = [
   'var(--plan-1)',
@@ -65,16 +67,19 @@ function fmtDate(iso: string | null): string {
 /**
  * Days to pixels, chosen per plan AND per pane.
  *
- * A fixed rate is wrong in both directions: at 3px/day a three-day project was
- * nine pixels of bar, and a five-year one needed a week of scrolling. The target
- * is the width actually available — so a short plan fills its pane instead of
- * leaving two thirds of the timeline blank, which is what it looked like on a
- * two-row project.
+ * The ceiling used to be 24px/day, which is why a twelve-day project drew
+ * one-day bars 22 pixels wide and looked like nothing at all. A day column can
+ * be as wide as MAX_PX_PER_DAY before it stops being a calendar and starts
+ * being a ruler; below MIN a bar is a dot.
+ *
+ * The target is whichever is larger, the pane or ~1200px: a short plan spreads
+ * out and becomes legible, a long one stays scrollable at a sane density
+ * instead of being crushed into whatever pane it was given.
  */
 function pxPerDay(days: number, paneWidth: number): number {
   if (days <= 0) return 8;
   const target = Math.max(TARGET_PX, paneWidth);
-  return Math.min(24, Math.max(MIN_PX_PER_DAY, target / days));
+  return Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, target / days));
 }
 
 export default function GanttChart({
@@ -239,7 +244,9 @@ export default function GanttChart({
                 title={title}
                 aria-label={title}
                 className="absolute grid place-items-center"
-                style={{ left: x - 11, top: y, width: 22, height: rowH }}
+                // Clamped to the surface: a milestone on day one sat at -11 and
+                // came out sliced in half against the divider.
+                style={{ left: Math.max(0, x - 11), top: y, width: 22, height: rowH }}
               >
                 <span className="size-2.5 rotate-45 rounded-[1px]" style={{ background: color }} />
               </button>

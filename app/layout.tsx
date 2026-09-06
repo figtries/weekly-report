@@ -54,7 +54,14 @@ export default async function RootLayout({
             applies to Sidebar and the div exactly as it did. */}
         <MotionRoot>
           <Sidebar currentWeek={currentWeek} projects={projects} />
-          <div className="flex-1 min-h-0 flex flex-col print:block print:h-auto">
+          {/* `min-w-0` is load-bearing, not tidiness. A flex child's default
+              `min-width: auto` sizes it to its CONTENT, so this column grew to
+              2262px inside a 1240px window the moment a page held something
+              wide — the schedule sheet and its timeline were pushed off screen
+              and the whole app scrolled sideways instead of the panes scrolling
+              inside themselves. Every page has been able to do this; the sheet
+              is simply the first one wide enough to show it. */}
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col print:block print:h-auto">
             <StorageWarning />
             {/* No transition boundary here, deliberately. Knowing which route is
                 being rendered means reading the pathname, and an uncached read in
