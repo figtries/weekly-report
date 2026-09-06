@@ -2,36 +2,68 @@ import { notFound } from 'next/navigation';
 import { getCachedWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
-import DocumentControlLink from '@/components/weekly/DocumentControlLink';
-import { getEngineeringBridge } from '@/lib/register';
+import PageHeader from '@/components/layout/PageHeader';
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
+/**
+ * Step ③ — the Overall Summary sheet, and nothing else.
+ *
+ * This page briefly carried the reading layer as well: six stat cards (SPI,
+ * earned value, deferred, forecast), the contract-value field and the
+ * generated paragraph, all above the summary itself. A tab called "Overall
+ * Summary" that opens with two screens of something else is not the sheet it
+ * names, and the four report tabs are meant to be siblings — one sheet each —
+ * rather than one fat page and three thin ones.
+ *
+ * Nothing was deleted, only unmounted. `WeekAnalysis`, `ContractValueField`
+ * and `DocumentControlLink` are still in `components/weekly/`, and every figure
+ * they showed is still computed by `computeHealth` / `findLaggards` /
+ * `buildLookAhead` — the Dashboard reads all three. Putting any of them back is
+ * re-adding the component here and nothing else.
+ *
+ * AND THE CONTRACT VALUE IS NOT COMING BACK HERE. `ContractValueField` was the
+ * only place in the running app that could type `project.contractValue`, and
+ * unmounting it is deliberate: that figure belongs to setting a project up, not
+ * to one week's report. It arrives with the priced BOQ that already derives
+ * every weight (`lib/setup.ts`), so board items 16 (Project management) and 17
+ * (Planner) own the door. Until they exist the setup wizard is the only way in,
+ * and step ②'s warning ("Contract value is not filled in") stands — it says the
+ * figure is missing, which is true, and never promised to fix it from here.
+ */
 export default async function SummaryPage({ params }: { params: Promise<{ week: string }> }) {
+  // The v1 pages read db.json while projects are chosen in SQLite, so the open
+  // project may have nothing here. The check sits on the page rather than the
+  // layout because a layout that skips its children fails `unstable_instant`
+  // validation at build time. See lib/legacy-bridge.ts.
+  const openProject = getOpenProject();
+  if (openProject && !openProject.hasLegacyData) return <NoLegacyData what="weekly reports" />;
   const { week: weekParam } = await params;
   const week = Number(weekParam);
+
   const result = await getCachedWeekRollup(week);
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);
-  // The other half of the seam: the EDL summary carries the mirror of this band
-  // pointing back here, and both read the same week.
-  const bridge = getEngineeringBridge('gundih', week);
 
   return (
-    <>
-      <div className="px-3 py-4 sm:p-6 lg:p-8 animate-fade-in-up print:hidden">
-        <div className="mb-5 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Overall Summary</h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            <span className="font-medium text-gray-900">Week {week}</span> · Progress per SPK contract.
-          </p>
-        </div>
+    // The root carries no animation of its own any more. On a tab change the
+    // RouteTransition fades this whole block, and on a cold load the sections
+    // inside arrive one after another — a root that also moved would compound
+    // with both, and a card would travel 32px instead of 16.
+    <RouteTransition id="weekly-summary">
+      <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
+        <PageHeader section="Weekly Progress" title="Overall Summary" className="animate-enter">
+          <span className="font-medium text-foreground">Week {week}</span> · Progress per SPK
+          contract.
+        </PageHeader>
 
-        {bridge && <DocumentControlLink bridge={bridge} week={week} />}
-
+        {/* SummaryCards staggers its own hero and contract grid from here. */}
         <SummaryCards roots={summaryRows} grandTotal={grandTotal} />
       </div>
-    </>
+    </RouteTransition>
   );
 }

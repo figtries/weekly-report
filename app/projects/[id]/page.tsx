@@ -92,37 +92,19 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </header>
 
-        {sheet.rows.length === 0 ? (
-          <EmptyPlan />
-        ) : (
-          <ScheduleSheet
-            rows={sheet.rows}
-            spanStart={sheet.spanStart}
-            spanFinish={sheet.spanFinish}
-            currency={project.currency}
-          />
-        )}
+        {/* Always the sheet, even with nothing in it. An empty project used to
+            get a separate panel here, which meant the one screen where you
+            build a plan was missing on exactly the project that had none. */}
+        <ScheduleSheet
+          rows={sheet.rows}
+          spanStart={sheet.spanStart}
+          spanFinish={sheet.spanFinish}
+          projectStart={project.startDate}
+          projectFinish={project.finishDate}
+          currency={project.currency}
+          projectId={id}
+        />
       </div>
     </RouteTransition>
-  );
-}
-
-/**
- * A new project lands here, and this is the whole first impression. It says
- * what to do rather than showing an empty grid — an editor with no rows in it
- * looks broken, and looking broken is what the old flow did.
- */
-function EmptyPlan() {
-  return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <div className="animate-enter max-w-md text-center">
-        <p className="text-sm font-semibold">No work planned yet</p>
-        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          This is where the plan goes: one row per piece of work, with a duration and dates, and a
-          bar for each one on the right. Adding rows and pasting a breakdown out of Excel are being
-          built next — the project itself is already real and keeps everything you give it.
-        </p>
-      </div>
-    </div>
   );
 }

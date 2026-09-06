@@ -3,10 +3,19 @@ import { getDb, getWeekMeta } from '@/lib/data';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
 export default async function DocumentationPage({ params }: { params: Promise<{ week: string }> }) {
+  // The v1 pages read db.json while projects are chosen in SQLite, so the open
+  // project may have nothing here. The check sits on the page rather than the
+  // layout because a layout that skips its children fails unstable_instant
+  // validation at build time. See lib/legacy-bridge.ts.
+  const openProject = getOpenProject();
+  if (openProject && !openProject.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+
   const { week: weekParam } = await params;
   const week = Number(weekParam);
   const db = await getDb();

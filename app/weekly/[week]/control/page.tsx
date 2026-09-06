@@ -1,43 +1,68 @@
 import { notFound } from 'next/navigation';
-import { buildLookAhead, computeHealth, findLaggards, validateWeek } from '@/lib/analysis';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
-import ControlPanel from '@/components/weekly/ControlPanel';
+import { computeHealth, validateWeek } from '@/lib/analysis';
+import { getDb } from '@/lib/data';
+import WeekChecks from '@/components/weekly/WeekChecks';
+import PageHeader from '@/components/layout/PageHeader';
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
 
-export default async function ControlPage({ params }: { params: Promise<{ week: string }> }) {
+/**
+ * Step ② — the gate, and nothing else.
+ *
+ * This page used to be the whole "Control Panel": six stat cards, the contract
+ * value, a narrative paragraph, a look-ahead, a laggard table, the checks and
+ * the sign-off, all as equal-sized cards. The one thing it exists to answer —
+ * may this week be issued? — was a small panel in the corner, and the checks
+ * were invisible unless one failed, so the screen could not be described by
+ * anyone who used it.
+ *
+ * Everything that is a READING rather than a CHECK moved to step ③ with the
+ * report it belongs to (`WeekAnalysis`). What is left is the verdict and the
+ * list of what was examined.
+ *
+ * The sign-off panel was taken off this screen too. Only the SCREEN — the
+ * approval record itself is untouched: `applyApproval`, `approveWeekAction` and
+ * `db.approvals` all still work, existing approvals are still stored, and the
+ * Portfolio still reads `approvedThroughWeek` from them. Putting the panel back
+ * is re-adding `<ApprovalPanel>` here and nothing else.
+ */
+export default async function CheckPage({ params }: { params: Promise<{ week: string }> }) {
+  // The v1 pages read db.json while projects are chosen in SQLite, so the open
+  // project may have nothing here. The check sits on the page rather than the
+  // layout because a layout that skips its children fails `unstable_instant`
+  // validation at build time. See lib/legacy-bridge.ts.
+  const openProject = getOpenProject();
+  if (openProject && !openProject.hasLegacyData) return <NoLegacyData what="weekly reports" />;
   const { week: weekParam } = await params;
   const week = Number(weekParam);
 
   const db = await getDb();
-  const rollup = await getCachedWeekRollup(week);
+  // computeHealth still gates the 404 — it returns null for a week that does
+  // not exist, which is the cheapest way to reject a bad :week param.
   const health = computeHealth(db, week);
-  if (!rollup || !health) notFound();
-
-  const laggards = findLaggards(rollup.roots, health.contractValue);
+  if (!health) notFound();
   const validation = validateWeek(db, week);
-  const lookAhead = buildLookAhead(db, health);
-  const approval = db.approvals?.find((a) => a.week === week) ?? null;
 
   return (
-    <div className="animate-fade-in-up px-3 py-4 sm:p-6 lg:p-8 print:hidden">
-      <header className="mb-5 sm:mb-7">
-        <h1 className="mb-1 text-2xl font-semibold tracking-tight sm:mb-2 sm:text-3xl">
-          Control Panel
-        </h1>
-        <p className="text-sm text-muted-foreground sm:text-base">
-          <span className="font-medium text-foreground">Week {week}</span> · Every figure below is
-          computed from data already entered — nothing extra to fill in.
-        </p>
-      </header>
+    <RouteTransition id="weekly-control">
+      <div className="space-y-4 px-3 py-4 sm:p-6 lg:p-8 print:hidden">
+        <PageHeader
+          section="Weekly Progress"
+          title="Check the figures"
+          className="mb-0 animate-enter"
+        >
+          <span className="font-medium text-foreground">Week {week}</span> · Nothing to fill in
+          here. The app goes through what you entered and says what is wrong with it, before the
+          report is printed.
+        </PageHeader>
 
-      <ControlPanel
-        health={health}
-        laggards={laggards}
-        validation={validation}
-        lookAhead={lookAhead}
-        approval={approval}
-      />
-    </div>
+        <div className="animate-enter stagger-1">
+          <WeekChecks week={week} validation={validation} />
+        </div>
+      </div>
+    </RouteTransition>
   );
 }

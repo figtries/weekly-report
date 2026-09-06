@@ -27,11 +27,23 @@ export default async function WeeklyWeekLayout({
   const weekNo = Number(week);
 
   // Covers Weekly Progress AND Reports — both live under this layout, so one
-  // guard serves five screens. The v1 pages read db.json while projects are
-  // chosen in SQLite; when the open project has no data here, saying so beats
-  // drawing another project's numbers. See lib/legacy-bridge.ts.
+  // check serves five screens. The v1 pages read db.json while projects are
+  // chosen in SQLite; when the open project has no data here, its week picker
+  // and step counts would be another project's. See lib/legacy-bridge.ts.
+  //
+  // It must still render `children`. A layout that returns early instead fails
+  // the build: `unstable_instant` validates the segment beneath it, and a child
+  // that never renders comes back as "the target segment was prevented from
+  // rendering for an unknown reason". So the chrome goes and the page below
+  // says the rest.
   const open = getOpenProject();
-  if (open && !open.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+  if (open && !open.hasLegacyData) {
+    return (
+      <RouteTransition id="weekly">
+        <div className="flex h-full flex-col">{children}</div>
+      </RouteTransition>
+    );
+  }
 
   const db = await getDb();
   const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);

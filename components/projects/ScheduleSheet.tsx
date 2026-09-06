@@ -1,10 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Undo2 } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
 import { updateRowDatesAction, updateRowTextAction } from '@/lib/sheet-actions';
+import { addRowAction, indentRowAction, outdentRowAction } from '@/lib/sheet-structure';
+import RowMenu from './RowMenu';
 
 /**
  * The schedule sheet, and the Gantt beside it.
@@ -43,12 +46,21 @@ import { updateRowDatesAction, updateRowTextAction } from '@/lib/sheet-actions';
 
 const ROW_H = 36;
 const HEAD_H = 34;
-const PX_PER_DAY = 3;
+// Days-to-pixels is chosen per plan, not fixed. At a constant 3px/day a
+// three-day project drew nine pixels of bar across a thousand-pixel pane, and a
+// five-year one would need scrolling for a week. ~1200px of timeline is the
+// target; the clamps stop a one-day plan filling the screen with a single block
+// and a decade-long one collapsing into a smear.
+const TARGET_PX = 1200;
+function pxPerDay(days: number): number {
+  if (days <= 0) return 8;
+  return Math.min(24, Math.max(1.5, TARGET_PX / days));
+}
 const MS_PER_DAY = 86_400_000;
 // Sized against the widest real content: an outline code six levels deep
 // (1.2.1.2.1.1), a date as 'dd MMM yy', and a price in a currency symbol.
 // Everything left over goes to the name, which is the column people read.
-const GRID = '5.25rem minmax(9rem,1fr) 4rem 4.75rem 4.75rem 5.5rem';
+const GRID = '5.25rem minmax(9rem,1fr) 4rem 4.75rem 4.75rem 5.5rem 2.5rem';
 const SPLIT_KEY = 'figtries:sheet-split';
 
 function utc(iso: string): number {
@@ -78,19 +90,34 @@ interface Edit {
 export default function ScheduleSheet({
   rows: initialRows,
   spanStart,
+  spanFinish,
+  projectStart,
+  projectFinish,
   currency,
+  projectId,
 }: {
   rows: SheetRow[];
   spanStart: string | null;
   spanFinish: string | null;
+  /** The contract window. The timeline is drawn against this, not against
+   *  whichever rows happen to exist — otherwise a plan with two rows in it
+   *  shows a two-day calendar. */
+  projectStart: string | null;
+  projectFinish: string | null;
   currency: string;
+  projectId: string;
 }) {
+  // A row may legitimately sit outside the contract window; the Gantt widens
+  // rather than clipping it, because that is exactly the row worth seeing.
+  const ganttStart = projectStart ?? spanStart;
+  const ganttFinish = projectFinish ?? spanFinish;
   const [rows, setRows] = useState(initialRows);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{ rowId: string; field: Field } | null>(null);
   const [undoStack, setUndoStack] = useState<Edit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
+  const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
   const [splitPx, setSplitPx] = useState(780);
   const [, startTransition] = useTransition();
 
@@ -179,6 +206,31 @@ export default function ScheduleSheet({
     [patch]
   );
 
+  /**
+   * Structural edits — add, indent, outdent, move, delete.
+   *
+   * These are NOT optimistic and NOT on the undo stack, unlike a cell. Adding a
+   * row renumbers the whole outline and can reshape every row below it, so
+   * guessing the result locally would mean reimplementing the server's tree walk
+   * in the browser and then hoping the two agree. `router.refresh()` re-reads
+   * the sheet instead, which is one round trip and always right.
+   */
+  const router = useRouter();
+  const structure = useCallback(
+    (p: Promise<{ ok: boolean; error?: string }>) => {
+      setError(null);
+      startTransition(async () => {
+        const res = await p;
+        if (!res.ok) {
+          setError(res.error ?? 'Something went wrong');
+          return;
+        }
+        router.refresh();
+      });
+    },
+    [router]
+  );
+
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const undo = useCallback(() => {
@@ -253,6 +305,7 @@ export default function ScheduleSheet({
         rowCount={rows.length}
         canUndo={undoStack.length > 0}
         onUndo={undo}
+        onAdd={() => structure(addRowAction(projectId, { afterNodeId: rows.at(-1)?.id ?? null }))}
         pane={pane}
         setPane={setPane}
         allCollapsed={collapsed.size > 0}
@@ -289,7 +342,18 @@ export default function ScheduleSheet({
               <span>Start</span>
               <span>Finish</span>
               <span className="text-right">Price</span>
+              <span className="sr-only">Row actions</span>
             </div>
+
+            {visible.length === 0 && (
+              <div className="animate-enter p-8 text-center">
+                <p className="text-sm font-semibold">Nothing planned yet</p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  Add the first row, then Tab to put a row under another one. Dates and a price go
+                  in the columns beside it, and its bar appears on the right.
+                </p>
+              </div>
+            )}
 
             {visible.map((r) => (
               <Row
@@ -309,6 +373,9 @@ export default function ScheduleSheet({
                 onEdit={(field) => setEditing({ rowId: r.id, field })}
                 onDone={() => setEditing(null)}
                 onCommit={(field, value) => commit(r, field, value)}
+                onMenu={() => setMenuRow(r)}
+                onIndent={(shift) => structure(shift ? outdentRowAction(r.id) : indentRowAction(r.id))}
+                onEnter={() => structure(addRowAction(projectId, { afterNodeId: r.id }))}
               />
             ))}
           </div>
@@ -327,9 +394,22 @@ export default function ScheduleSheet({
           onScroll={mirror('r')}
           className={`min-h-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
         >
-          <Gantt rows={visible} spanStart={spanStart} />
+          <Gantt
+            rows={visible}
+            spanStart={ganttStart}
+            spanFinish={ganttFinish}
+          />
         </div>
       </div>
+
+      {menuRow && (
+        <RowMenu
+          row={menuRow}
+          projectId={projectId}
+          onClose={() => setMenuRow(null)}
+          onChanged={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }
@@ -338,6 +418,7 @@ function Toolbar({
   rowCount,
   canUndo,
   onUndo,
+  onAdd,
   pane,
   setPane,
   allCollapsed,
@@ -346,6 +427,7 @@ function Toolbar({
   rowCount: number;
   canUndo: boolean;
   onUndo: () => void;
+  onAdd: () => void;
   pane: 'sheet' | 'gantt';
   setPane: (p: 'sheet' | 'gantt') => void;
   allCollapsed: boolean;
@@ -356,6 +438,14 @@ function Toolbar({
       <span className="mr-1 text-[11px] uppercase tracking-wider text-muted-foreground">
         {rowCount} rows
       </span>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-2.5 text-xs font-medium text-background"
+      >
+        <Plus className="size-3.5" />
+        Add row
+      </button>
       <button
         type="button"
         onClick={onToggleAll}
@@ -401,6 +491,9 @@ function Row({
   onEdit,
   onDone,
   onCommit,
+  onMenu,
+  onIndent,
+  onEnter,
 }: {
   row: SheetRow;
   currency: string;
@@ -410,6 +503,9 @@ function Row({
   onEdit: (f: Field) => void;
   onDone: () => void;
   onCommit: (f: Field, v: string) => void;
+  onMenu: () => void;
+  onIndent: (shift: boolean) => void;
+  onEnter: () => void;
 }) {
   const locked = r.isSummary;
 
@@ -448,6 +544,8 @@ function Row({
           onEdit={() => onEdit('name')}
           onDone={onDone}
           onCommit={(v) => onCommit('name', v)}
+          onTab={onIndent}
+          onEnterKey={onEnter}
           className="truncate"
         />
         {r.isReportingUnit && (
@@ -537,6 +635,17 @@ function Row({
           />
         )}
       </div>
+
+      {/* Always drawn, never on hover: there is no hover on a phone, and this
+          app's rule is that no information or control lives there. */}
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label={`Actions for row ${r.code}`}
+        className="grid size-8 place-items-center justify-self-end rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
     </div>
   );
 }
@@ -555,6 +664,8 @@ function EditableCell({
   className = '',
   type = 'text',
   inputMode,
+  onTab,
+  onEnterKey,
 }: {
   value: string;
   display?: string;
@@ -565,6 +676,10 @@ function EditableCell({
   className?: string;
   type?: 'text' | 'date';
   inputMode?: 'numeric' | 'decimal';
+  /** Tab indents the row, Shift+Tab outdents it — MS Project's own shortcut. */
+  onTab?: (shift: boolean) => void;
+  /** Enter on a name adds the next row, so a plan can be typed without the mouse. */
+  onEnterKey?: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value, active]);
@@ -596,8 +711,17 @@ function EditableCell({
         if (e.key === 'Enter') {
           onCommit(draft);
           onDone();
+          onEnterKey?.();
         }
         if (e.key === 'Escape') onDone();
+        if (e.key === 'Tab' && onTab) {
+          // Taken from the browser: Tab would otherwise walk to the next cell,
+          // and in a sheet this shape Tab means "one level in".
+          e.preventDefault();
+          onCommit(draft);
+          onDone();
+          onTab(e.shiftKey);
+        }
       }}
       className={`w-full rounded border border-foreground bg-background px-1 leading-[22px] outline-none ${className}`}
     />
@@ -605,47 +729,71 @@ function EditableCell({
 }
 
 /** Bars placed by arithmetic, which only works because every row is exactly ROW_H. */
-function Gantt({ rows, spanStart }: { rows: SheetRow[]; spanStart: string | null }) {
+function Gantt({
+  rows,
+  spanStart,
+  spanFinish,
+}: {
+  rows: SheetRow[];
+  spanStart: string | null;
+  spanFinish: string | null;
+}) {
   const [todayX, setTodayX] = useState<number | null>(null);
 
-  const months = useMemo(() => {
-    if (!spanStart || rows.length === 0) return [];
+  // The plan's own window: the project's dates, widened if a row runs outside
+  // them. A bar that sits past the contract finish must still be drawable —
+  // that is exactly the row someone needs to see.
+  const start = spanStart;
+  const end = useMemo(() => {
     const last = rows.reduce<string | null>(
       (acc, r) => (r.finishDate && (!acc || r.finishDate > acc) ? r.finishDate : acc),
       null
     );
-    if (!last) return [];
-    const out: { x: number; label: string }[] = [];
-    const start = new Date(utc(spanStart));
-    const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
-    const end = utc(last);
-    for (let i = 0; i < 400 && cursor.getTime() <= end + 31 * MS_PER_DAY; i++) {
-      const x = ((cursor.getTime() - utc(spanStart)) / MS_PER_DAY) * PX_PER_DAY;
-      if (x >= 0)
-        out.push({
-          x,
-          label: new Intl.DateTimeFormat('en-GB', {
-            month: 'short',
-            year: '2-digit',
-            timeZone: 'UTC',
-          }).format(cursor),
-        });
+    if (!spanFinish) return last;
+    if (!last) return spanFinish;
+    return last > spanFinish ? last : spanFinish;
+  }, [rows, spanFinish]);
+
+  const scale = start && end ? pxPerDay(daysBetween(start, end) + 1) : 8;
+  const width = start && end ? Math.max((daysBetween(start, end) + 1) * scale, 240) : 240;
+
+  const months = useMemo(() => {
+    if (!start || !end) return [];
+    const out: { key: string; x: number; label: string }[] = [];
+    const first = new Date(utc(start));
+    const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+    const stop = utc(end);
+    for (let i = 0; i < 400 && cursor.getTime() <= stop; i++) {
+      const x = ((cursor.getTime() - utc(start)) / MS_PER_DAY) * scale;
+      out.push({
+        key: cursor.toISOString().slice(0, 7),
+        // The month containing the start begins before it — pin its label to
+        // the edge instead of dropping it, or a short plan shows no month at all.
+        x: Math.max(0, x),
+        label: new Intl.DateTimeFormat('en-GB', {
+          month: 'short',
+          year: '2-digit',
+          timeZone: 'UTC',
+        }).format(cursor),
+      });
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
-    return out;
-  }, [spanStart, rows]);
+    // Two labels closer than their own width collide, and the first one is
+    // pinned to the edge so it collides most often. Drop the crowded one rather
+    // than draw them on top of each other.
+    return out.filter((m, i) => i === 0 || m.x - out[i - 1].x >= 46);
+  }, [start, end, scale]);
 
-  const width = months.length ? months[months.length - 1].x + 120 : 320;
   const bodyH = rows.length * ROW_H;
 
   useEffect(() => {
-    if (!spanStart) return;
+    if (!start) return;
     // Today comes from the browser: a server component prerenders into the
     // static shell, so a build-time clock would drift a day further from the
     // truth every day, silently.
-    const x = ((Date.now() - utc(spanStart)) / MS_PER_DAY) * PX_PER_DAY;
+    const x = ((Date.now() - utc(start)) / MS_PER_DAY) * scale;
     setTodayX(x >= 0 && x <= width ? x : null);
-  }, [spanStart, width]);
+  }, [start, scale, width]);
 
   if (!spanStart) {
     return (
@@ -661,7 +809,7 @@ function Gantt({ rows, spanStart }: { rows: SheetRow[]; spanStart: string | null
       <div className="sticky top-0 z-20 border-b bg-card" style={{ height: HEAD_H }}>
         {months.map((m) => (
           <span
-            key={m.x}
+            key={m.key}
             className="absolute top-0 border-l pl-1 text-[10px] text-muted-foreground"
             style={{ left: m.x, lineHeight: `${HEAD_H}px` }}
           >
@@ -673,7 +821,7 @@ function Gantt({ rows, spanStart }: { rows: SheetRow[]; spanStart: string | null
       <div className="relative" style={{ height: bodyH }}>
         {months.map((m) => (
           <span
-            key={m.x}
+            key={m.key}
             aria-hidden
             className="absolute top-0 w-px bg-border"
             style={{ left: m.x, height: bodyH }}
@@ -690,7 +838,7 @@ function Gantt({ rows, spanStart }: { rows: SheetRow[]; spanStart: string | null
 
         {rows.map((r, i) => {
           if (!r.startDate || !r.finishDate) return null;
-          const x = daysBetween(spanStart, r.startDate) * PX_PER_DAY;
+          const x = daysBetween(start!, r.startDate) * scale;
           const y = i * ROW_H;
 
           if (r.isMilestone) {
@@ -704,7 +852,7 @@ function Gantt({ rows, spanStart }: { rows: SheetRow[]; spanStart: string | null
             );
           }
 
-          const w = Math.max((daysBetween(r.startDate, r.finishDate) + 1) * PX_PER_DAY, 3);
+          const w = Math.max((daysBetween(r.startDate, r.finishDate) + 1) * scale, 3);
           // A summary is thin and dark, a task fuller and lighter — the visual
           // grammar MS Project uses, so the shape of a plan is recognisable to
           // anyone who has ever seen one.

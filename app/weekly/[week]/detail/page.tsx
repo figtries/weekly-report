@@ -2,6 +2,10 @@ import { notFound } from 'next/navigation';
 import { getCachedWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
+import PageHeader from '@/components/layout/PageHeader';
+import { RouteTransition } from '@/components/motion/RouteTransition';
+import NoLegacyData from '@/components/projects/NoLegacyData';
+import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -10,27 +14,44 @@ export const unstable_instant = {
 };
 
 export default async function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
+  // The v1 pages read db.json while projects are chosen in SQLite, so the open
+  // project may have nothing here. The check sits on the page rather than the
+  // layout because a layout that skips its children fails unstable_instant
+  // validation at build time. See lib/legacy-bridge.ts.
+  const openProject = getOpenProject();
+  if (openProject && !openProject.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+
   const { week: weekParam } = await params;
   const week = Number(weekParam);
   const result = await getCachedWeekRollup(week);
   if (!result) notFound();
   const { roots } = result;
-  const leafCount = flattenTree(roots).filter((n) => n.children.length === 0).length;
+  // The same leaves the page itself counts: zero-weight rows are milestone
+  // markers, not activities, and every weekly UI hides them. Counting them here
+  // put "218 activities" in the title above a hero reading "176 activities".
+  const leafCount = flattenTree(roots).filter(
+    (n) => n.children.length === 0 && n.bobot > 0
+  ).length;
 
   return (
-    <>
-      <div className="px-3 py-4 sm:p-6 lg:p-8 animate-fade-in-up print:hidden">
-        <div className="mb-5 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Detail Progress</h1>
-          <p className="text-xs sm:text-base text-gray-600">
-            <span className="font-medium text-gray-900">Week {week}</span> · {leafCount} activities.{' '}
-            <span className="hidden sm:inline">Explore by contract — numbers are edited in </span>
-            <span className="sm:hidden">Edit in </span>
-            <span className="font-medium text-blue-600">Data Overall</span>.
-          </p>
+    <RouteTransition id="weekly-detail">
+      <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
+        <PageHeader
+          section="Weekly Progress"
+          title="Detail Progress"
+          className="animate-enter"
+        >
+          <span className="font-medium text-foreground">Week {week}</span> · {leafCount} activities.{' '}
+          <span className="hidden sm:inline">Explore by contract — numbers are edited in </span>
+          <span className="sm:hidden">Edit in </span>
+          <span className="font-medium text-chart-1">Fill in</span>.
+        </PageHeader>
+        {/* One step behind the header, and no further: this tree can render
+            every leaf at once, so nothing inside it is staggered per row. */}
+        <div className="animate-enter stagger-1">
+          <WbsTreeVisual roots={roots} />
         </div>
-        <WbsTreeVisual roots={roots} />
       </div>
-    </>
+    </RouteTransition>
   );
 }
