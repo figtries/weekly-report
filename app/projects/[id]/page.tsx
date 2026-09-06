@@ -8,6 +8,8 @@ import OpenProjectButton from '@/components/projects/OpenProjectButton';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
 import { getSheet } from '@/lib/sheet';
+import { getWeightSummary } from '@/lib/weights-read';
+import ValueStrip from '@/components/projects/ValueStrip';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
@@ -42,15 +44,18 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
 
   const contents = getProjectContents(id);
   const sheet = getSheet(id);
+  const weights = getWeightSummary(id);
   const isOpen = getActiveProjectId() === id;
 
+  // The header used to print the stored column. It prints the DERIVED figure
+  // now, so the number at the top and the formula below it can never disagree.
   const money =
-    project.contractValue && project.contractValue > 0
+    weights && weights.contractValue > 0
       ? new Intl.NumberFormat('en-GB', {
           style: 'currency',
           currency: project.currency,
           maximumFractionDigits: 0,
-        }).format(project.contractValue)
+        }).format(weights.contractValue)
       : null;
 
   const facts = [
@@ -91,6 +96,8 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
             <OpenProjectButton id={id} isOpen={isOpen} />
           </div>
         </header>
+
+        {weights && <ValueStrip summary={weights} projectId={id} />}
 
         {/* Always the sheet, even with nothing in it. An empty project used to
             get a separate panel here, which meant the one screen where you

@@ -76,10 +76,17 @@ export async function updateRowTextAction(
       const n = raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a price');
       db.update(schema.wbsNodes).set({ price: n }).where(eq(schema.wbsNodes.id, nodeId)).run();
-      // Weight is DERIVED from price and never accepted from a client — the
-      // same rule `applySetup` enforces. Recomputed across the whole project so
-      // it closes at 100 by construction rather than by luck.
-      recomputeWeights(nodeId);
+      // NO automatic recompute here, and that is the important part.
+      //
+      // It used to rewrite every weight in the project from the sum of all
+      // prices. On Gundih that would have been a disaster twice over: prices
+      // are nested, so the sum triple-counts, and only 95 of its 176 stored
+      // weights can be re-derived from prices at all — the other 81 came from
+      // the workbook. One keystroke in this column would have replaced them and
+      // broken a total that closes at exactly 100.000000.
+      //
+      // Weight is still derived, never typed. It is derived when someone asks,
+      // after being shown what would change: `previewWeights` in lib/weights.ts.
     }
     revalidatePath('/projects', 'layout');
     return { ok: true };
@@ -88,35 +95,6 @@ export async function updateRowTextAction(
   }
 }
 
-function recomputeWeights(anyNodeId: string) {
-  const node = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, anyNodeId)).all()[0];
-  if (!node) return;
-  const all = db
-    .select()
-    .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, node.projectId))
-    .all();
-  const parentIds = new Set(all.map((n) => n.parentId).filter(Boolean));
-  const leaves = all.filter((n) => !parentIds.has(n.id));
-  const total = leaves.reduce((s, n) => s + (n.price ?? 0), 0);
-
-  db.transaction((tx) => {
-    for (const leaf of leaves) {
-      const bobot = total > 0 && leaf.price ? (leaf.price / total) * 100 : null;
-      tx.update(schema.wbsNodes).set({ bobot }).where(eq(schema.wbsNodes.id, leaf.id)).run();
-    }
-    tx.update(schema.projects)
-      .set({
-        contractValue: total > 0 ? total : null,
-        // `boq` means every weight came from a price. Until every leaf has one,
-        // the honest label is `even` — see AGENTS.md.
-        weightBasis: total > 0 && leaves.every((l) => l.price != null) ? 'boq' : 'even',
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(schema.projects.id, node.projectId))
-      .run();
-  });
-}
 
 export async function updateRowDatesAction(
   nodeId: string,
