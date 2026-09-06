@@ -8,7 +8,7 @@ import OpenProjectButton from '@/components/projects/OpenProjectButton';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
-import { getSheet } from '@/lib/sheet';
+import { getSheet, getWeekSpans } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
 import ValueStrip from '@/components/projects/ValueStrip';
 import { getBarStyles } from '@/lib/bar-styles-read';
@@ -48,6 +48,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const sheet = getSheet(id);
   const weights = getWeightSummary(id);
   const bars = getBarStyles(id);
+  const weeks = getWeekSpans(id);
   const isOpen = getActiveProjectId() === id;
 
   const facts = [
@@ -109,6 +110,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           projectId={id}
           barStyles={bars.styles}
           barStylesCustomised={bars.customised}
+          weeks={weeks}
         />
       </div>
     </RouteTransition>

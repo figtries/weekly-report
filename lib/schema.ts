@@ -212,11 +212,9 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
  * What a condition can ask about a row. Everything here is answerable from data
  * that actually exists today.
  *
- * `critical` is declared and NOT offered in the editor until the chain engine
- * lands — a condition nothing can ever satisfy is worse than one that is
- * missing, because it looks like a rule that simply never fires. `progress`
- * is absent on purpose: how far along a row is lives in Data Overall, by our
- * own decision, and the plan screen does not read it.
+ * `critical` reads the chain inferred in lib/chains.ts. `progress` is absent
+ * on purpose: how far along a row is lives in Data Overall, by our own
+ * decision, and the plan screen does not read it.
  */
 export type BarCondition =
   | 'always'

@@ -42,11 +42,17 @@ check('the plan is there to style', rows.length === 285, `${rows.length} rows`);
 /* --- first match wins ----------------------------------------------------- */
 
 {
-  const late = rows.filter((r) => r.daysLate != null);
+  // Lateness is made HERE rather than read from the project: nobody has typed a
+  // target date on Gundih, and a check that only passes while some row happens
+  // to carry test data is a check that will pass until the day it matters.
+  const late = [
+    { ...rows.find((r) => r.isSummary)!, targetDate: '2026-01-01', daysLate: 12 },
+    { ...rows.find((r) => !r.isSummary && !r.isMilestone)!, targetDate: '2026-01-01', daysLate: 3 },
+  ];
   const hits = late.map((r) => resolveBar(r, DEFAULT_BAR_STYLES, TODAY));
   check(
     'past-target sits above everything and takes the paint',
-    late.length > 0 && hits.every((h) => h.paint === 'warn' && h.hatched),
+    hits.every((h) => h.paint === 'warn' && h.hatched),
     `${late.length} late rows, all amber and hatched`
   );
   const lateSummaries = late.filter((r) => r.isSummary);
@@ -69,13 +75,13 @@ check('the plan is there to style', rows.length === 285, `${rows.length} rows`);
     ...DEFAULT_BAR_STYLES.slice(1, 2),
     ...DEFAULT_BAR_STYLES.slice(3),
   ];
-  const lateSummary = rows.find((r) => r.daysLate != null && r.isSummary);
-  const before = lateSummary && resolveBar(lateSummary, DEFAULT_BAR_STYLES, TODAY);
-  const after = lateSummary && resolveBar(lateSummary, reordered, TODAY);
+  const lateSummary = { ...rows.find((r) => r.isSummary)!, targetDate: '2026-01-01', daysLate: 12 };
+  const before = resolveBar(lateSummary, DEFAULT_BAR_STYLES, TODAY);
+  const after = resolveBar(lateSummary, reordered, TODAY);
   check(
     'moving a rule up changes what wins',
-    !!before && !!after && before.paint === 'warn' && after.paint === 'unit',
-    `${lateSummary?.code}: ${before?.paint} → ${after?.paint}`
+    before.paint === 'warn' && after.paint === 'unit',
+    `${lateSummary.code}: ${before.paint} → ${after.paint}`
   );
 }
 

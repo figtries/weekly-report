@@ -27,9 +27,12 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
+import { computeFloat, inferChains, type ChainNode, type WeekSpan } from './chains';
 
 export interface SheetRow {
   id: string;
+  /** Whose child this is. The client infers the chain from it — see lib/chains.ts. */
+  parentId: string | null;
   /** Generated outline code — `1.2.1`. Not the stored one. */
   code: string;
   /** The code the project was imported with, kept because its documents cite it. */
@@ -89,6 +92,14 @@ export interface SheetRow {
   unitId: string | null;
   /** That unit's label, for a rule editor to show without a second lookup. */
   unitName: string | null;
+  /**
+   * Days this row could slip before the project's own finish moves, on the
+   * chain inferred from the dates. Null on a summary, whose dates are its
+   * children's and which therefore has no float of its own.
+   */
+  totalFloat: number | null;
+  /** Zero float: delaying this row by a day moves the end of the project. */
+  isCritical: boolean;
 }
 
 /** Fixed order, never cycled. A plan with more groups than this shows the rest neutral. */
@@ -171,6 +182,7 @@ export function getSheet(projectId: string): Sheet {
       // walked, and its children must sit directly beneath it in the list.
       rows.push({
         id: n.id,
+        parentId: n.parentId ?? null,
         code,
         wbsCode: n.wbsCode,
         name: n.deskripsi,
@@ -192,6 +204,8 @@ export function getSheet(projectId: string): Sheet {
         groupLabel: null,
         unitId: null,
         unitName: null,
+        totalFloat: null,
+        isCritical: false,
       });
       if (n.price != null && n.price > 0) pricedRows += 1;
 
@@ -224,6 +238,25 @@ export function getSheet(projectId: string): Sheet {
 
   const span = walk(null, 0, '');
   assignColorGroups(rows, nodes);
+
+  // Criticality, from the chain the dates already describe. Inferred rather
+  // than stored — see lib/chains.ts — so it costs one pass and can never go
+  // stale against the dates it came from.
+  const chainNodes: ChainNode[] = rows.map((r, i) => ({
+    id: r.id,
+    parentId: r.parentId,
+    order: i,
+    isLeaf: r.isLeaf,
+    startDate: r.startDate,
+    finishDate: r.finishDate,
+  }));
+  const floats = computeFloat(chainNodes, inferChains(chainNodes));
+  for (const r of rows) {
+    const f = floats.get(r.id);
+    if (!f || r.isSummary) continue;
+    r.totalFloat = f.totalFloat;
+    r.isCritical = f.isCritical;
+  }
 
   return {
     rows,
@@ -303,4 +336,27 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
     const row = byId.get(a.id);
     if (row) row.groupLabel = row.unitLabel || row.name;
   }
+}
+
+/**
+ * The reporting weeks, with the status each one is in.
+ *
+ * The sheet needs these because the plan curve is DERIVED from the dates: moving
+ * a date today changes the planned figure for a week that may have been approved
+ * last month. It never refuses the edit — a schedule that cannot be revised gets
+ * revised in Excel instead — but it says which weeks moved and which of them had
+ * already been signed. See `weeksTouched` in lib/chains.ts.
+ */
+export function getWeekSpans(projectId: string): WeekSpan[] {
+  return db
+    .select({
+      weekNo: schema.weeks.weekNo,
+      startDate: schema.weeks.startDate,
+      endDate: schema.weeks.endDate,
+      status: schema.weeks.status,
+    })
+    .from(schema.weeks)
+    .where(eq(schema.weeks.projectId, projectId))
+    .orderBy(asc(schema.weeks.weekNo))
+    .all();
 }

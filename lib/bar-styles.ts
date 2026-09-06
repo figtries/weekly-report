@@ -115,8 +115,8 @@ export const DEFAULT_BAR_STYLES: BarStyle[] = [
 
 /**
  * Every condition, with the sentence the editor shows and whether it takes a
- * value. `critical` is deliberately absent — it needs the chain engine, and a
- * rule that can never fire is worse than one that is missing, because it looks
+ * value. `critical` arrived with the chain engine — it was held back until
+ * something could actually satisfy it, because a rule that can never fire looks
  * like a rule that simply never matched.
  */
 export const CONDITIONS: {
@@ -132,6 +132,11 @@ export const CONDITIONS: {
   { key: 'in_unit', label: 'Inside a package', help: 'Everything under one SPK or lot', takes: 'unit' },
   { key: 'past_target', label: 'Past its target date', help: 'Finishes after the date it was promised for' },
   { key: 'in_progress', label: 'Running today', help: 'Today falls between its start and its finish' },
+  {
+    key: 'critical',
+    label: 'On the critical path',
+    help: 'Delaying it by a day moves the end of the project',
+  },
   { key: 'unscheduled', label: 'Not scheduled yet', help: 'No start or no finish' },
   { key: 'unpriced', label: 'Not priced yet', help: 'No money against it' },
   { key: 'weight_above', label: 'Weight above', help: 'Its share of the project is over this', takes: 'percent' },
@@ -193,8 +198,7 @@ export function matches(style: BarStyle, row: SheetRow, today: string): boolean 
     case 'weight_below':
       return row.bobot != null && row.bobot < Number(style.conditionValue ?? 0);
     case 'critical':
-      // Nothing computes this yet; see the note on BarCondition.
-      return false;
+      return row.isCritical;
     default:
       return false;
   }

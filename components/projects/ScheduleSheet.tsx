@@ -18,6 +18,14 @@ import {
   outdentRowAction,
 } from '@/lib/sheet-structure';
 import BarStyleEditor from './BarStyleEditor';
+import ShiftPreviewBar from './ShiftPreview';
+import {
+  inferChains,
+  shiftPreview,
+  type ChainNode,
+  type ShiftPreview as Shift,
+  type WeekSpan,
+} from '@/lib/chains';
 import GanttChart, { GanttLegend, planColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, type BarStyle } from '@/lib/bar-styles';
 import { formatMoney } from '@/lib/currency';
@@ -125,6 +133,7 @@ export default function ScheduleSheet({
   projectId,
   barStyles = DEFAULT_BAR_STYLES,
   barStylesCustomised = false,
+  weeks = [],
 }: {
   rows: SheetRow[];
   spanStart: string | null;
@@ -136,6 +145,8 @@ export default function ScheduleSheet({
   /** The project's ordered rule list; the defaults until someone edits it. */
   barStyles?: BarStyle[];
   barStylesCustomised?: boolean;
+  /** Reporting weeks and their status, for the affected-weeks warning. */
+  weeks?: WeekSpan[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
@@ -148,6 +159,7 @@ export default function ScheduleSheet({
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
   const [query, setQuery] = useState('');
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
   // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
@@ -258,6 +270,24 @@ export default function ScheduleSheet({
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
 
+  // The chain, inferred on the client from the same rows the sheet is drawing.
+  // Nothing is stored and nothing is fetched — see lib/chains.ts — so a preview
+  // is instant and can never disagree with the dates on screen.
+  const chainNodes = useMemo<ChainNode[]>(
+    () =>
+      rows.map((r, i) => ({
+        id: r.id,
+        parentId: r.parentId,
+        order: i,
+        isLeaf: r.isLeaf,
+        startDate: r.startDate,
+        finishDate: r.finishDate,
+      })),
+    [rows]
+  );
+  const chainLinks = useMemo(() => inferChains(chainNodes), [chainNodes]);
+  const nameById = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
+
   const patch = useCallback((rowId: string, next: Partial<SheetRow>) => {
     setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, ...next } : r)));
   }, []);
@@ -323,11 +353,29 @@ export default function ScheduleSheet({
             finishDate: res.finishDate,
             durationDays: res.durationDays,
           });
+          // Decision ④: the edit has already landed. What appears now is what
+          // the person could not have known — what follows this row, and which
+          // reported weeks the change lands in.
+          const delta =
+            row.startDate && res.startDate
+              ? Math.round(
+                  (Date.parse(res.startDate + 'T00:00:00Z') -
+                    Date.parse(row.startDate + 'T00:00:00Z')) /
+                    MS_PER_DAY
+                )
+              : 0;
+          if (delta !== 0) {
+            setShift({
+              rowId: row.id,
+              rowName: row.name,
+              preview: shiftPreview(chainNodes, chainLinks, nameById, row.id, delta),
+            });
+          }
         }
         if (recordUndo) setUndoStack((s) => [...s.slice(-49), { rowId: row.id, field, before }]);
       });
     },
-    [patch]
+    [patch, chainNodes, chainLinks, nameById]
   );
 
   /**
@@ -544,6 +592,21 @@ export default function ScheduleSheet({
         >
           {error}
         </m.p>
+      )}
+
+      {shift && (
+        <ShiftPreviewBar
+          projectId={projectId}
+          rowId={shift.rowId}
+          rowName={shift.rowName}
+          shift={shift.preview}
+          weeks={weeks}
+          onApplied={() => {
+            setShift(null);
+            router.refresh();
+          }}
+          onDismiss={() => setShift(null)}
+        />
       )}
 
       <div ref={shellRef} className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">

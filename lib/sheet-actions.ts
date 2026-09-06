@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
+import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
 
 /**
  * The schedule sheet — the writes.
@@ -249,6 +250,112 @@ export async function setMilestoneAction(nodeId: string, on: boolean): Promise<S
       finishDate: current?.finishDate ?? null,
       durationDays: current?.durationDays ?? null,
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Move everything that follows a row, by the same number of days.
+ *
+ * The chain comes from `lib/chains.ts` — inferred from the dates, never stored —
+ * and it is re-inferred HERE rather than trusted from the client, because a
+ * payload naming its own list of rows to move is a payload that can move any row
+ * it likes.
+ *
+ * Gaps are preserved exactly. Nothing is compressed and no duration changes: a
+ * revision that quietly shortened a job while claiming to move a date would be
+ * the worst kind of help.
+ */
+export async function shiftFollowersAction(
+  projectId: string,
+  nodeId: string,
+  deltaDays: number
+): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
+  try {
+    if (!Number.isFinite(deltaDays) || deltaDays === 0) return { ok: true, moved: 0 };
+    if (Math.abs(deltaDays) > 3650) throw new Error('That is more than ten years');
+
+    const baselineId = getActiveBaselineId(projectId);
+    if (!baselineId) throw new Error('This project has no schedule yet');
+
+    const nodes = db
+      .select({
+        id: schema.wbsNodes.id,
+        parentId: schema.wbsNodes.parentId,
+        order: schema.wbsNodes.order,
+        isLeaf: schema.wbsNodes.isLeaf,
+      })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, projectId))
+      .orderBy(schema.wbsNodes.order)
+      .all();
+
+    const scheds = db
+      .select()
+      .from(schema.nodeSchedules)
+      .where(eq(schema.nodeSchedules.baselineId, baselineId))
+      .all();
+    const byNode = new Map(scheds.map((s) => [s.nodeId, s]));
+
+    // The chain is inferred from the dates as they were BEFORE the move, by
+    // putting the edited row back where it came from.
+    //
+    // This is not a nicety. The link that makes a row worth following is
+    // exactly the link the move breaks: push IFR five days later and it now
+    // finishes AFTER IFA starts, so a graph built from the dates as they are
+    // finds no chain at all and nothing follows anything. The client showed the
+    // person a chain that existed a moment ago; this reproduces it rather than
+    // trusting a list of row ids from the browser.
+    const chainNodes: ChainNode[] = nodes.map((n) => {
+      const s = byNode.get(n.id);
+      const rewind = n.id === nodeId ? -deltaDays : 0;
+      return {
+        id: n.id,
+        parentId: n.parentId ?? null,
+        order: n.order,
+        isLeaf: n.isLeaf,
+        startDate: s ? chainAddDays(s.startDate, rewind) : null,
+        finishDate: s ? chainAddDays(s.finishDate, rewind) : null,
+      };
+    });
+
+    const links = inferChains(chainNodes);
+    const successors = new Map<string, string[]>();
+    for (const l of links) {
+      const list = successors.get(l.fromId);
+      if (list) list.push(l.toId);
+      else successors.set(l.fromId, [l.toId]);
+    }
+    const moving = new Set<string>();
+    const queue = [nodeId];
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const next of successors.get(id) ?? []) {
+        if (moving.has(next)) continue;
+        moving.add(next);
+        queue.push(next);
+      }
+    }
+
+    let moved = 0;
+    db.transaction((tx) => {
+      for (const id of moving) {
+        const s = byNode.get(id);
+        if (!s) continue;
+        tx.update(schema.nodeSchedules)
+          .set({
+            startDate: chainAddDays(s.startDate, deltaDays),
+            finishDate: chainAddDays(s.finishDate, deltaDays),
+          })
+          .where(eq(schema.nodeSchedules.id, s.id))
+          .run();
+        moved += 1;
+      }
+    });
+
+    revalidatePath('/projects', 'layout');
+    return { ok: true, moved };
   } catch (e) {
     return fail(e);
   }
