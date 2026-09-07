@@ -65,3 +65,7 @@ next-env.d.ts
 
 # Skill klon terpisah (punya .git sendiri) — bukan bagian aplikasi ini.
 /excalidraw-diagram-skill/
+
+# Sisi-berkas WAL dari snapshot; snapshot-nya sendiri (data/seed.db) ikut di-commit.
+/data/seed.db-shm
+/data/seed.db-wal

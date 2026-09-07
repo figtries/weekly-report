@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
   // ("input directory .../bin does not exist").
   outputFileTracingIncludes: {
     '/api/pdf/**': ['node_modules/@sparticuz/chromium/bin/**/*'],
+    // The committed database snapshot (see lib/sqlite.ts). The tracer follows
+    // imports, not a path built at runtime, so without this every deployed
+    // route opens an empty file and the first query reports "no such table".
+    '/**': ['data/seed.db'],
   },
   experimental: {
     viewTransition: true,
