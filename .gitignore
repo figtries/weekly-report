@@ -57,3 +57,11 @@ next-env.d.ts
 # Kembaran database untuk melihat layar register kosong (scripts/make-empty-db.mjs)
 /data/empty.db*
 /.next-empty/
+
+# Salinan database sebelum tiap migrasi drizzle (lihat AGENTS.md) — bukan kode,
+# dan 1,8 MB per berkas. Dibuat manual, dibuang manual.
+/data/report.db.before-*
+/data/db.json.bak
+
+# Skill klon terpisah (punya .git sendiri) — bukan bagian aplikasi ini.
+/excalidraw-diagram-skill/

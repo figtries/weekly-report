@@ -16,6 +16,7 @@ import {
   applyRevokeApproval,
   applySetup,
   applyWeekUpdates,
+  markNoProgress,
   type FieldProgressUpdate,
 } from './mutations';
 import type { SetupDraft } from './setup-draft';
@@ -162,6 +163,26 @@ export async function saveFieldProgressAction(
 ): Promise<ActionResult> {
   try {
     await mutateDb((db) => applyFieldProgress(db, week, updates));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * "Checked it, nothing moved this week."
+ *
+ * Takes a list because the queue offers it per card, but someone clearing a
+ * quiet week wants to say it about several at once.
+ */
+export async function markNoProgressAction(
+  week: number,
+  leafIds: string[]
+): Promise<ActionResult> {
+  try {
+    await mutateDb((db) => markNoProgress(db, week, leafIds));
     updateTag('db');
     refresh();
     return { ok: true };

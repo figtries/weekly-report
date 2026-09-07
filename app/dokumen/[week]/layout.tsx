@@ -55,7 +55,7 @@ export default async function DocumentControlLayout({
     // Stable across all four screens and every week: this fires on the way
     // into Document Control and stays still inside it. See the weekly layout.
     <RouteTransition id="dokumen">
-    <div className="flex h-full flex-col">
+    <div className="section-shell flex h-full flex-col">
       <RegisterTabs
         weeks={weeks}
         selectedWeek={Number(week)}
@@ -67,7 +67,7 @@ export default async function DocumentControlLayout({
       {/* Same placement as the weekly report's: each screen's own boundary sits
           inside this scroller, so moving between the four never disturbs the
           week picker or the tab row. */}
-      <div className="flex-1 overflow-auto scrollbar-none">
+      <div className="section-scroll flex-1 overflow-auto scrollbar-none">
         <div className="px-3 py-4 sm:p-6 lg:p-8">{children}</div>
       </div>
     </div>

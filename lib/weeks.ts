@@ -57,3 +57,21 @@ export function weekPeriodShort(anchorEndDateISO: string, week: number): string 
   const year = new Intl.DateTimeFormat('en-GB', { year: 'numeric', timeZone: 'UTC' }).format(end);
   return `${formatDateCompact(start)} – ${formatDateCompact(end)} ${year}`;
 }
+
+/**
+ * Which reporting week a calendar date falls in.
+ *
+ * The inverse of `weekEndDate`, and the reason it exists: a daily report only
+ * carries a date, so anything that reads daily data from a WEEKLY screen has to
+ * fold the two together or it ends up comparing a whole project's figures
+ * against one week's — see the man-hours check in `lib/analysis.ts`.
+ *
+ * Weeks are half-open on the start and inclusive on the end, exactly as
+ * `weekStartDate`/`weekEndDate` draw them. A date before week 1 returns 0 or
+ * less, which every caller reads as "not in any reporting week".
+ */
+export function weekOfDate(anchorEndDateISO: string, dateISO: string): number {
+  const firstStart = weekStartDate(anchorEndDateISO, 1).getTime();
+  const days = Math.floor((parseISODate(dateISO).getTime() - firstStart) / MS_PER_DAY);
+  return Math.floor(days / 7) + 1;
+}

@@ -70,7 +70,7 @@ export default async function WeeklyWeekLayout({
     // it — which is the whole point of moving off the root template. Each page
     // carries its own boundary inside the scroller below.
     <RouteTransition id="weekly">
-    <div className="flex h-full flex-col print:block print:h-auto">
+    <div className="section-shell flex h-full flex-col print:block print:h-auto">
       <WeekTabs
         weeks={weeks}
         selectedWeek={weekNo}
@@ -87,7 +87,7 @@ export default async function WeeklyWeekLayout({
       {/* The tab change animates inside this scroller — each page wraps its own
           root in a RouteTransition of its own — so WeekTabs above is not even
           within the boundary that moves. */}
-      <div className="flex-1 overflow-auto scrollbar-none print:overflow-visible">{children}</div>
+      <div className="section-scroll flex-1 overflow-auto scrollbar-none print:overflow-visible">{children}</div>
     </div>
     </RouteTransition>
   );

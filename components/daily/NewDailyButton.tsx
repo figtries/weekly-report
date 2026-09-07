@@ -65,7 +65,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     <>
       <m.button {...pressMotion}
         onClick={openModal}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-blue-700 hover:shadow-md sm:flex-none"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-chart-1 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-chart-1/90 hover:shadow-md sm:flex-none"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
@@ -81,14 +81,14 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
             onClick={() => !creating && closeModal()}
           />
           <div
-            className={`relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-xl sm:p-6 ${
+            className={`relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6 ${
               closing ? 'animate-scale-out' : 'animate-scale-in'
             }`}
           >
-            <h2 className="text-lg font-semibold text-gray-900">New Daily Report</h2>
-            <p className="mt-1 text-sm text-gray-500">Choose the day for this report.</p>
+            <h2 className="text-lg font-semibold text-foreground">New Daily Report</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Choose the day for this report.</p>
 
-            <label htmlFor="new-daily-date" className="mt-5 block text-xs font-medium text-gray-600">
+            <label htmlFor="new-daily-date" className="mt-5 block text-xs font-medium text-muted-foreground">
               Date
             </label>
             <DateField
@@ -99,23 +99,23 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
                 setDate(v);
                 setError(null);
               }}
-              className="mt-1 h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 shadow-sm transition-all duration-200 ease-ios hover:border-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 sm:h-10 sm:text-sm"
+              className="mt-1 h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base text-foreground shadow-sm transition-all duration-200 ease-ios hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1 disabled:opacity-60 sm:h-10 sm:text-sm"
             />
-            {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-gray-700">{weekdayPreview}</p>}
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {weekdayPreview && <p className="mt-1.5 text-sm font-medium text-foreground">{weekdayPreview}</p>}
+            {error && <p className="mt-2 text-sm text-bad">{error}</p>}
 
             <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <m.button {...pressMotion}
                 onClick={closeModal}
                 disabled={creating}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors duration-200 ease-ios hover:bg-gray-50 disabled:opacity-50 sm:py-2"
+                className="rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-muted/60 disabled:opacity-50 sm:py-2"
               >
                 Cancel
               </m.button>
               <m.button {...pressMotion}
                 onClick={create}
                 disabled={creating || !date}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-blue-700 hover:shadow-md disabled:opacity-60 sm:py-2"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-chart-1 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-chart-1/90 hover:shadow-md disabled:opacity-60 sm:py-2"
               >
                 {creating && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -128,7 +128,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
             </div>
 
             {creating && (
-              <p role="status" className="mt-3 text-center text-xs text-gray-500 animate-fade-in">
+              <p role="status" className="mt-3 text-center text-xs text-muted-foreground animate-fade-in">
                 Setting up the report page — this only takes a moment…
               </p>
             )}

@@ -82,6 +82,8 @@ export interface Obstacle {
   documentId: string;
   docNo: string | null;
   title: string;
+  /** The group it sits in, so the workbench can jump straight to it. */
+  categoryId: string;
   categoryName: string;
   kind: ObstacleKind;
   stage: DocStage | null;
@@ -118,6 +120,89 @@ export interface DocumentStageDetail {
   /** Days from submission to return, or from submission to the as-of date. */
   waiting: number | null;
 }
+
+/**
+ * How one trip to the reviewer ended.
+ *
+ * `returned` is the one that costs money: it came back carrying a comment and
+ * is holding construction up until it goes round again.
+ *
+ * `unrecorded` is the honest name for a trip that was sent, has no return
+ * written against it, and has been OVERTAKEN — a later stage has since gone
+ * out, so the document plainly came back and nobody wrote down when. It is
+ * kept separate from `waiting` because conflating the two lies twice over:
+ * PRGG-20-E0-DS-003 is a finished document whose IFR row has no return date,
+ * and calling that "still out, 253 days" both invents a delay and, once those
+ * days are summed, double-counts a period the next stage already covers.
+ */
+export type LapOutcome = 'approved' | 'returned' | 'waiting' | 'unrecorded';
+
+/** One trip out and (maybe) back, ready to draw. */
+export interface DocumentLap {
+  stage: DocStage;
+  outcome: LapOutcome;
+  sentAt: string | null;
+  sentTransmittal: string | null;
+  returnedAt: string | null;
+  returnTransmittal: string | null;
+  returnCode: string | null;
+  /** Days it was with the reviewer — closed, or still running at the as-of date. */
+  days: number | null;
+  /** The register recorded the trip but not when it happened. */
+  undated: boolean;
+}
+
+/**
+ * A document's history, folded out of the stage rows it is already stored as.
+ *
+ * This is what used to be the Log screen. That screen listed 511 raw events
+ * newest-first across both registers, which meant one document's three trips
+ * appeared as three near-identical cards, usually side by side, differing only
+ * by one small badge — 173 documents printed as 511 cards down 54,718 pixels of
+ * page. The events were never the unit anyone reads; the DOCUMENT is, and a
+ * document's history belongs on the document.
+ *
+ * A stage with no submission and no return never happened, so it is not a trip
+ * and is left out. What remains is in stage order, which is chronological by
+ * construction: nothing reaches IFA before it has been through IFR.
+ */
+export function buildJourney(stages: DocumentStageDetail[]): DocumentLap[] {
+  const byStage = new Map(stages.map((s) => [s.stage, s]));
+  const laps: DocumentLap[] = [];
+
+  for (const stage of STAGE_ORDER) {
+    const row = byStage.get(stage);
+    if (!row || (!row.submitted && !row.returnCode && !row.returnedAt)) continue;
+
+    const closed = Boolean(row.returnedAt || row.returnCode);
+    laps.push({
+      stage,
+      // Provisional: any open trip is `waiting` here, and the pass below
+      // demotes the ones a later stage has overtaken.
+      outcome: closed ? (isApproved(row.returnCode) ? 'approved' : 'returned') : 'waiting',
+      sentAt: row.submittedAt,
+      sentTransmittal: row.submitTransmittal,
+      returnedAt: row.returnedAt,
+      returnTransmittal: row.returnTransmittal,
+      returnCode: row.returnCode,
+      days: row.waiting,
+      // The Gundih register marks 44 submissions without a date. Saying so is
+      // the point: a delay argument built on a date nobody wrote down is one
+      // the other side gets to throw out.
+      undated: row.submitted && !row.submittedAt,
+    });
+  }
+
+  // Only the LAST trip can still be with the reviewer. Anything open before it
+  // was overtaken by the stage that followed, so its missing return is a gap in
+  // the record rather than a document sitting on someone's desk.
+  for (let i = 0; i < laps.length - 1; i += 1) {
+    if (laps[i].outcome === 'waiting') laps[i].outcome = 'unrecorded';
+  }
+
+  return laps;
+}
+
 
 /** A document as the working screen needs it — history included. */
 export interface DocumentCard {

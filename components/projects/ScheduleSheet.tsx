@@ -892,7 +892,7 @@ function Row({
             type="button"
             onClick={onToggle}
             aria-label={collapsed ? `Expand ${r.name}` : `Collapse ${r.name}`}
-            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-background"
+            className="grid h-11 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-background"
           >
             {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
           </button>
@@ -1108,7 +1108,7 @@ function EditableCell({
       <button
         type="button"
         onClick={onEdit}
-        className={`block w-full truncate rounded px-1 py-1 text-left leading-[22px] decoration-dotted underline-offset-4 transition-colors hover:bg-background group-hover:underline ${className}`}
+        className={`block w-full truncate rounded px-1 py-[11px] text-left leading-[22px] decoration-dotted underline-offset-4 transition-colors hover:bg-background group-hover:underline ${className}`}
       >
         <Marked text={display ?? value} term={highlight} />
       </button>

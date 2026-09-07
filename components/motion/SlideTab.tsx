@@ -28,10 +28,10 @@ import { cn } from '@/lib/utils';
  * entrance in this app is held to, and the reason this one is allowed to be
  * framer-motion at all.
  *
- * This is `LogScreen`'s hand-rolled `layoutId="log-filter"` grown up. That one
- * moves on the curve; this moves on the spring, because a pill crossing a tab
- * row is a thing MOVING — which is precisely the distinction rule 2 in
- * `lib/design.ts` now draws.
+ * It grew out of the hand-rolled `layoutId="log-filter"` on the old Log screen
+ * (since folded into the documents themselves). That one moved on the curve;
+ * this moves on the spring, because a pill crossing a tab row is a thing
+ * MOVING — which is precisely the distinction rule 2 in `lib/design.ts` draws.
  */
 export function SlideTab({ id, className }: { id: string; className?: string }) {
   return (

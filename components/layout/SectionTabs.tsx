@@ -9,6 +9,14 @@ import { cn } from '@/lib/utils';
 export interface SectionTab {
   href: string;
   label: string;
+  /**
+   * Shown below `sm` in place of `label`. Only worth setting where the full
+   * labels genuinely do not fit: Document Control's four came to 484px of text
+   * for a 320px screen, so the row was cut mid-word with its scrollbar hidden
+   * — which reads as a broken page rather than as something to swipe. Leave it
+   * undefined and the tab uses `label` at every width.
+   */
+  short?: string;
 }
 
 /**
@@ -61,7 +69,7 @@ export default function SectionTabs({
     >
       {/* h-auto overrides the list's own h-8: these are the section's primary
           navigation and the triggers below carry the 44px touch target. */}
-      <TabsList className="group-data-horizontal/tabs:h-auto p-1">
+      <TabsList className="group-data-horizontal/tabs:h-auto p-0.5 sm:p-1">
         {tabs.map((t) => (
           <TabsTrigger
             key={t.href}
@@ -72,7 +80,10 @@ export default function SectionTabs({
             // active background, because the sliding pill is now drawing it —
             // leave them out and the screen shows two pills, the old one
             // blinking and the new one arriving.
-            className="relative h-auto min-h-11 whitespace-nowrap rounded-lg px-3.5 transition-colors duration-300 ease-ios data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+            // px-2.5 on phones: the padding is what runs out first on a narrow
+            // row, and the 44px target is `min-h-11`, so tightening it costs
+            // nothing you can tap.
+            className="relative h-auto min-h-11 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-300 ease-ios data-[state=active]:bg-transparent data-[state=active]:shadow-none sm:px-3.5"
           >
             <PressLink
               href={t.href}
@@ -80,7 +91,20 @@ export default function SectionTabs({
               {...pressMotion}
             >
               {activeHref === t.href && <SlideTab id={pillId} />}
-              <span className="relative">{t.label}</span>
+              {/* Both spellings render and CSS picks one, so this stays a
+                  server-safe swap with no width measurement and no hydration
+                  gap — the hidden one is `display:none`, so it is not
+                  announced twice either. */}
+              <span className="relative">
+                {t.short ? (
+                  <>
+                    <span className="sm:hidden">{t.short}</span>
+                    <span className="hidden sm:inline">{t.label}</span>
+                  </>
+                ) : (
+                  t.label
+                )}
+              </span>
             </PressLink>
           </TabsTrigger>
         ))}

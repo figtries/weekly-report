@@ -20,11 +20,15 @@ import { usePathname } from 'next/navigation';
  * one behaviour to maintain, and the two sections stay in step when someone
  * moves between them.
  */
+// `short` is what a phone shows. The four full labels come to 484px of text,
+// which no phone has: at 390px the row was cut to "...VDRL Summary  V". The
+// register name alone identifies the pair, and 'list' says the same thing to a
+// reader as 'Data' does while costing four characters less.
 const TABS = [
-  { key: 'summary', label: 'EDL Summary' },
-  { key: 'data', label: 'EDL Data' },
-  { key: 'vdrl', label: 'VDRL Summary' },
-  { key: 'vdrl-data', label: 'VDRL Data' },
+  { key: 'summary', label: 'EDL Summary', short: 'EDL' },
+  { key: 'data', label: 'EDL Data', short: 'EDL list' },
+  { key: 'vdrl', label: 'VDRL Summary', short: 'VDRL' },
+  { key: 'vdrl-data', label: 'VDRL Data', short: 'VDRL list' },
 ] as const;
 
 export function RegisterTabs({
@@ -62,7 +66,11 @@ export function RegisterTabs({
 
       <SectionTabs
         className="-mx-3 mt-2 stagger-1 px-3 sm:mx-0 sm:px-0"
-        tabs={TABS.map((t) => ({ href: `/dokumen/${selectedWeek}/${t.key}`, label: t.label }))}
+        tabs={TABS.map((t) => ({
+          href: `/dokumen/${selectedWeek}/${t.key}`,
+          label: t.label,
+          short: t.short,
+        }))}
       />
     </div>
   );

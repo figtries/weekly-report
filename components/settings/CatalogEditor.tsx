@@ -61,7 +61,7 @@ export default function CatalogEditor({
             <input
               value={r.label}
               onChange={(e) => patch(i, { label: e.target.value })}
-              className="h-8 min-w-40 flex-1 rounded-md border bg-background px-2 text-sm outline-none transition-colors duration-150 ease-ios focus:border-primary/60"
+              className="h-11 min-w-40 flex-1 rounded-md sm:h-8 border bg-background px-2 text-sm outline-none transition-colors duration-150 ease-ios focus:border-primary/60"
             />
             {showClaim && (
               <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
@@ -69,7 +69,7 @@ export default function CatalogEditor({
                   type="checkbox"
                   checked={!!r.claimable}
                   onChange={(e) => patch(i, { claimable: e.target.checked })}
-                  className="size-4 accent-primary"
+                  className="size-5 accent-primary sm:size-4"
                 />
                 claimable
               </label>
@@ -80,7 +80,7 @@ export default function CatalogEditor({
                 setRows((p) => p.filter((_, j) => j !== i));
                 setSaved(false);
               }}
-              className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors duration-150 ease-ios hover:bg-destructive/10 hover:text-destructive"
+              className="min-h-11 shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground sm:min-h-0 transition-colors duration-150 ease-ios hover:bg-destructive/10 hover:text-destructive"
               aria-label={`Remove ${r.label}`}
             >
               Remove

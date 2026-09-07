@@ -458,9 +458,14 @@ export default async function DashboardPage() {
 /** One cell of the hero's rail. Label above, figure below, divider between. */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col justify-between px-3 py-3 first:pl-4 last:pr-4">
+    // The rail is three fixed 1fr columns, so a figure that outgrows its
+    // track spills over the divider into the next one. At 390 (the width this
+    // card is designed at) it fits; at 360 '71.93%' ran 8px past. Both tweaks
+    // are scoped BELOW 380px so the hero keeps its frozen proportions on every
+    // phone that can afford them.
+    <div className="flex flex-col justify-between px-3 py-3 first:pl-4 last:pr-4 max-[380px]:px-2">
       <dt className={TYPE.statLabel}>{label}</dt>
-      <dd className={cn('mt-1', TYPE.figure)}>{value}</dd>
+      <dd className={cn('mt-1 max-[380px]:text-lg', TYPE.figure)}>{value}</dd>
     </div>
   );
 }

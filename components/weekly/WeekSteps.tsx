@@ -64,15 +64,22 @@ export default function WeekSteps({
         className
       )}
     >
-      <ol className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
+      <ol className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 sm:gap-1 sm:p-1">
         {steps.map((s, i) => {
           const active = s.key === activeKey;
           return (
             <li key={s.key} className="flex items-center">
+              {/* Hidden below `sm`. Three steps at their real labels overflow a
+                  360px screen, and this scroller hides its scrollbar, so what
+                  a phone actually showed was "3 Rep" — and at 320px just "3".
+                  A label cut mid-word reads as a broken page, not as something
+                  you can swipe. The chevrons are the only thing here carrying
+                  no information the numerals don't already carry, so they are
+                  what goes: 1, 2, 3 states the order on its own. */}
               {i > 0 && (
                 <svg
                   aria-hidden
-                  className="mx-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                  className="mx-0.5 hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -87,8 +94,10 @@ export default function WeekSteps({
                 {...pressMotion}
                 className={cn(
                   // min-h-11: these are the primary navigation of the whole
-                  // section and have to clear the 44px touch target.
-                  'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium',
+                  // section and have to clear the 44px touch target. The
+                  // horizontal padding tightens on phones instead — width is
+                  // what runs out there, never height.
+                  'relative flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium sm:gap-1.5 sm:px-3',
                   // `transition-colors`, not `transition-all`: the press is
                   // framer-motion's now, and two writers on one transform is a
                   // press that stutters halfway down.
@@ -101,7 +110,7 @@ export default function WeekSteps({
                 {active && <SlideTab id="week-step" className="rounded-md" />}
                 <span
                   className={cn(
-                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                    'flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:size-5',
                     active
                       ? 'bg-foreground text-background'
                       : 'bg-muted-foreground/25 text-muted-foreground'
@@ -113,7 +122,7 @@ export default function WeekSteps({
                 {s.badge && (
                   <Badge
                     className={cn(
-                      'ml-0.5 min-w-5 px-1.5 text-[11px] font-bold tabular-nums',
+                      'min-w-5 px-1 text-[11px] font-bold tabular-nums sm:ml-0.5 sm:px-1.5',
                       TONE[s.badgeTone ?? 'todo']
                     )}
                   >

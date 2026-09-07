@@ -109,9 +109,19 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
   };
 
   return (
+    // `--scroll-hint-bg` tells the table's scroll shadow below what ground it
+    // is sitting on; painted in the wrong colour, its cover layer shows as a
+    // smudge instead of hiding the shadow. Note this card is TRANSPARENT when
+    // off, so the ground is the page's `--background`, not `--card`.
+    //
+    // When on, the tint and the cover read the SAME custom property rather than
+    // two expressions that nearly agree — `bg-blue-50/40` composited over the
+    // page and a `color-mix` of the same two colours came out 4/255 apart,
+    // enough to see as a faint stripe. One value used twice cannot drift.
     <div className={cn(
-      'rounded-xl border p-4 transition-colors duration-300 ease-ios',
-      on && 'border-blue-600/40 bg-blue-50/40',
+      'rounded-xl border p-4 transition-colors duration-300 ease-ios [--scroll-hint-bg:var(--background)]',
+      on &&
+        'border-blue-600/40 bg-[var(--tint)] [--scroll-hint-bg:var(--tint)] [--tint:color-mix(in_srgb,var(--color-blue-50)_40%,var(--background))]',
     )}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
@@ -137,7 +147,7 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
 
       {/* Column headers are the whole point of this table. Without them the
           three numbers on each row are just three numbers. */}
-      <div className="mt-4 overflow-x-auto">
+      <div className="scroll-x-hint mt-4 overflow-x-auto">
         <table className="w-full min-w-[22rem] text-xs">
           <thead>
             <tr className="text-left text-muted-foreground">

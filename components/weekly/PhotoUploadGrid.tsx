@@ -3,6 +3,9 @@
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { refreshDbAction } from '@/lib/actions';
+import { Reveal } from '@/components/motion/Reveal';
+import { Button } from '@/components/ui/button';
+import { MOTION, TYPE } from '@/lib/design';
 
 const PAGE_SIZE = 6;
 
@@ -212,47 +215,56 @@ export default function PhotoUploadGrid({
   return (
     <div className="space-y-10">
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 animate-fade-in-up">
-          <p className="min-w-0">{error}</p>
-          <button
-            onClick={() => setError(null)}
-            aria-label="Dismiss error"
-            className="shrink-0 rounded p-0.5 text-red-400 transition-colors hover:text-red-600"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <Reveal>
+          <div className="flex items-start justify-between gap-3 rounded-lg bg-bad-soft px-4 py-3 text-sm text-bad ring-1 ring-bad/25">
+            <p className="min-w-0">{error}</p>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setError(null)}
+              aria-label="Dismiss error"
+              className="shrink-0 text-bad hover:bg-bad/10 hover:text-bad"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </Button>
+          </div>
+        </Reveal>
       )}
       {pages.map((pagePhotos, pageIndex) => (
         <section key={pageIndex}>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-              Page {pageIndex + 1}
-            </h2>
+            <h2 className={TYPE.cardTitle}>Page {pageIndex + 1}</h2>
             {pageIndex === pages.length - 1 && lastPageEmpty && (
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={() => handlePageAction('removePage')}
                 disabled={pageBusy}
-                className="rounded border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
               >
                 Remove page
-              </button>
+              </Button>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {/* TWO UP ON A PHONE, not one. A single column at 390px makes each
+              4/3 slot 268px tall, so a page of six empty "Add photo" boxes was
+              about 1730px of scrolling to see what is really one short list.
+              Two columns puts the whole page on roughly one screen.
+
+              The 4/3 is NOT what changes to save that height. `object-cover`
+              crops to the box, so the box on screen has to be the shape of the
+              box that prints — a 16/9 preview would show a crop the report
+              never uses, and someone would frame a photo against it. */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
             {pagePhotos.map((photo, i) => {
               const slot = pageIndex * PAGE_SIZE + i;
               const preview = previews[slot] ?? null;
               const displayed = preview ?? photo;
               const uploading = busySlot === slot && preview !== null;
               return (
-                <div
-                  key={slot}
-                  className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm transition-all duration-500 ease-ios hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
+                <Reveal key={slot} delay={MOTION.stagger * i}>
+                  <div className="group relative aspect-[4/3] overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10 transition-all duration-500 ease-ios hover:-translate-y-0.5 hover:shadow-lg">
                   {displayed ? (
                     <>
                       {preview ? (
@@ -269,7 +281,7 @@ export default function PhotoUploadGrid({
                           src={displayed}
                           alt={`Documentation ${slot + 1}`}
                           fill
-                          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                          sizes="(min-width: 1024px) 33vw, 50vw"
                           className="object-cover transition-transform duration-700 ease-ios group-hover:scale-[1.04]"
                         />
                       )}
@@ -285,11 +297,11 @@ export default function PhotoUploadGrid({
                         /* Touch screens have no hover — keep the overlay visible below sm
                            so photos can actually be removed on mobile. */
                         <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-300 ease-ios group-hover:opacity-100 max-sm:opacity-100">
-                          <span className="text-xs font-medium text-white">Photo {slot + 1}</span>
+                          <span className="hidden text-xs font-medium text-white sm:inline">Photo {slot + 1}</span>
                           <button
                             onClick={() => handleRemove(slot)}
                             disabled={busySlot === slot}
-                            className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-white disabled:opacity-60"
+                            className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-bad transition-colors hover:bg-white disabled:opacity-60"
                           >
                             Remove
                           </button>
@@ -300,10 +312,10 @@ export default function PhotoUploadGrid({
                     <button
                       onClick={() => inputRefs.current[slot]?.click()}
                       disabled={busySlot === slot}
-                      className="flex h-full w-full flex-col items-center justify-center gap-2 text-gray-400 transition-all duration-300 ease-ios hover:bg-gray-100 hover:text-gray-600 active:scale-[0.98]"
+                      className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground transition-all duration-300 ease-ios hover:bg-accent hover:text-foreground active:scale-[0.98]"
                     >
                       {busySlot === slot ? (
-                        <svg className="h-6 w-6 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <svg className="h-6 w-6 animate-spin text-chart-1" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
@@ -328,16 +340,18 @@ export default function PhotoUploadGrid({
                       e.target.value = '';
                     }}
                   />
-                </div>
+                  </div>
+                </Reveal>
               );
             })}
           </div>
         </section>
       ))}
-      <button
+      <Button
+        variant="outline"
         onClick={() => handlePageAction('addPage')}
         disabled={pageBusy}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 text-sm font-medium text-gray-500 transition-all duration-300 ease-ios hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+        className="h-auto w-full border-2 border-dashed py-4 text-sm font-medium text-muted-foreground transition-all duration-300 ease-ios hover:text-foreground"
       >
         <span className="text-lg leading-none">+</span>
         {/* Both labels stay mounted, stacked in one grid cell, and hand off
@@ -362,7 +376,7 @@ export default function PhotoUploadGrid({
             Working…
           </span>
         </span>
-      </button>
+      </Button>
     </div>
   );
 }

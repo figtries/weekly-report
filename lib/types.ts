@@ -151,7 +151,16 @@ export interface ChangeLogEntry {
   id: string;
   leafId: string;
   week: number;
-  field: 'cumProgressPct' | 'planPct';
+  /**
+   * 'noProgress' records that someone LOOKED and there was nothing to report.
+   *
+   * Without it the weekly queue can never empty: the log only gets an entry
+   * when a figure actually changes, so an item that genuinely did not move
+   * stays in "not filled in yet" forever and the "3 of 9 done" counter lies.
+   * `oldValue` and `newValue` are equal on these — the entry is the fact that
+   * it was checked, not a change.
+   */
+  field: 'cumProgressPct' | 'planPct' | 'noProgress';
   oldValue: number;
   newValue: number;
   at: string;

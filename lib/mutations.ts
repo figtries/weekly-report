@@ -278,6 +278,46 @@ export interface FieldProgressUpdate {
  * round. That is the entire point of the quantity path, so this function must
  * stay the only way those fields are set.
  */
+/**
+ * Record that a leaf was checked this week and had nothing to report.
+ *
+ * The weekly queue counts an item as dealt with when the change log has an
+ * entry for it that week, and the log only gets one when a figure moves. An
+ * item that was looked at and genuinely had not moved would therefore sit in
+ * the queue for the rest of the project, and the "N left" counter would never
+ * reach zero — so "nothing happened" has to be sayable.
+ *
+ * It writes no progress, only the fact of the check: `oldValue === newValue`
+ * is what tells every reader this entry moved nothing.
+ */
+export function markNoProgress(db: Database, week: number, leafIds: string[]): void {
+  const meta = db.weeks.find((w) => w.week === week);
+  if (!meta) throw new Error(`Week ${week} not found`);
+  const itemById = new Map(db.wbsItems.map((i) => [i.id, i]));
+  const at = new Date().toISOString();
+  db.changeLog ??= [];
+
+  for (const leafId of leafIds) {
+    const item = itemById.get(leafId);
+    if (!item) continue;
+    // Already recorded this week — checking twice is not two events.
+    if (db.changeLog.some((c) => c.leafId === leafId && c.week === week && c.field === 'noProgress')) {
+      continue;
+    }
+    const pct = resolveLeafProgress(item, meta.leafData[leafId] ?? { cumProgressPct: 0, targetWF: 0 });
+    db.changeLog.push({
+      id: `${at}-${leafId}-none`,
+      leafId,
+      week,
+      field: 'noProgress',
+      oldValue: pct,
+      newValue: pct,
+      at,
+    });
+  }
+  if (db.changeLog.length > MAX_LOG) db.changeLog = db.changeLog.slice(-MAX_LOG);
+}
+
 export function applyFieldProgress(
   db: Database,
   week: number,

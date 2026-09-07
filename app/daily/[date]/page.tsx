@@ -1,3 +1,4 @@
+import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
@@ -46,7 +47,7 @@ async function DailyDetail({ date }: { date: string }) {
       <div className="p-4 sm:p-6 lg:p-8">
         <Link
           href="/daily"
-          className="mb-4 inline-flex items-center gap-2 text-gray-600 transition-all duration-200 ease-ios hover:text-gray-900 active:scale-[0.96]"
+          className="mb-4 inline-flex items-center gap-2 text-muted-foreground transition-all duration-200 ease-ios hover:text-foreground active:scale-[0.96]"
           aria-label="Back to daily reports"
         >
           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -54,10 +55,10 @@ async function DailyDetail({ date }: { date: string }) {
           </svg>
           <span className="text-sm font-medium">Back</span>
         </Link>
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center animate-fade-in-up">
-          <p className="text-gray-500">No daily report exists for {date} yet.</p>
+        <div className="rounded-lg border border-dashed border-input bg-card p-10 text-center animate-fade-in-up">
+          <p className="text-muted-foreground">No daily report exists for {date} yet.</p>
           {isValidDate && <CreateReportHere date={date} />}
-          <Link href="/daily" className="mt-3 inline-block text-sm text-blue-600 transition-colors hover:text-blue-800">
+          <Link href="/daily" className="mt-3 inline-block text-sm text-chart-1 transition-colors hover:text-chart-1">
             Back to Daily Reports
           </Link>
         </div>
@@ -68,11 +69,14 @@ async function DailyDetail({ date }: { date: string }) {
   return (
     <div className="p-4 sm:p-6 lg:p-8 print:p-0">
       <DailyForm report={report} weatherLabels={labels} />
-      {/* Delay continues DailyForm's section cascade (its last card starts at 240ms). */}
-      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-fade-in-up print:hidden" style={{ animationDelay: '280ms' }}>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Documentation</h2>
+      {/* The last thing on the longest screen in the app: reached, not
+          animated on a delay two screens above it. */}
+      <ScrollReveal>
+      <section className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm print:hidden">
+        <h2 className="mb-4 text-lg font-semibold text-foreground">Documentation</h2>
         <PhotoUploadGrid photos={report.photos} uploadUrl={`/api/daily/${date}/photos`} />
       </section>
+      </ScrollReveal>
     </div>
   );
 }

@@ -116,8 +116,8 @@ export default function DailyReportsView({
     <>
       <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">Daily Reports</h1>
-          <p className="text-sm sm:text-base text-gray-600">Field man-hours, PTW, HSE and daily progress</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-1 sm:mb-2">Daily Reports</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Field man-hours, PTW, HSE and daily progress</p>
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <MonthDropdown
@@ -132,17 +132,17 @@ export default function DailyReportsView({
       </div>
 
       {deleteError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 animate-fade-in-up">
+        <div className="mb-4 rounded-lg border border-bad/30 bg-bad-soft px-4 py-2.5 text-sm text-bad animate-fade-in-up">
           Could not delete the report: {deleteError}
         </div>
       )}
 
-      <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="divide-y divide-border rounded-lg border border-border bg-card shadow-sm">
         {visible.length === 0 && (
-          <p className="p-6 text-sm text-gray-500">No daily reports yet — create one above.</p>
+          <p className="p-6 text-sm text-muted-foreground">No daily reports yet — create one above.</p>
         )}
         {visible.length > 0 && filtered.length === 0 && (
-          <p className="p-6 text-sm text-gray-500">No daily reports for {selectedLabel}.</p>
+          <p className="p-6 text-sm text-muted-foreground">No daily reports for {selectedLabel}.</p>
         )}
         <AnimatePresence initial={false} mode="popLayout">
         {filtered.map((d, idx) => (
@@ -158,7 +158,7 @@ export default function DailyReportsView({
             layout={animatedRows}
             exit={{ opacity: 0 }}
             transition={MOTION.spring}
-            className="transition-colors duration-150 ease-ios hover:bg-gray-50"
+            className="transition-colors duration-150 ease-ios hover:bg-muted/60"
           >
             {/* TWO ELEMENTS, ON PURPOSE. The arrival is a CSS keyframe on this
                 inner div; the outer one owns `layout` and `exit`. Putting both
@@ -178,10 +178,10 @@ export default function DailyReportsView({
               className="flex min-w-0 flex-1 flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4"
             >
               <div className="min-w-0">
-                <p className="truncate font-medium text-gray-900">{fullDateLabel(d.date)}</p>
-                <p className="text-sm text-gray-500">Day {d.hariKe ?? '-'}</p>
+                <p className="truncate font-medium text-foreground">{fullDateLabel(d.date)}</p>
+                <p className="text-sm text-muted-foreground">Day {d.hariKe ?? '-'}</p>
               </div>
-              <p className="text-sm text-gray-500 sm:pr-4">
+              <p className="text-sm text-muted-foreground sm:pr-4">
                 Plan {d.planPct.toFixed(0)}% · Actual {d.actualPct.toFixed(0)}%
               </p>
             </Link>
@@ -190,7 +190,7 @@ export default function DailyReportsView({
                 href={`/daily/${d.date}`}
                 aria-label={`Edit report for ${d.date}`}
                 title="Edit report"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-all duration-200 ease-ios hover:bg-blue-50 hover:text-blue-600 active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-chart-1/10 hover:text-chart-1 active:scale-95"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -207,7 +207,7 @@ export default function DailyReportsView({
                 }}
                 aria-label={`Delete report for ${d.date}`}
                 title="Delete report"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-all duration-200 ease-ios hover:bg-red-50 hover:text-red-600 active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-bad-soft hover:text-bad active:scale-95"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -230,7 +230,7 @@ export default function DailyReportsView({
         message={
           <p>
             Delete the report for{' '}
-            <span className="font-medium text-gray-700">{confirmDate ? fullDateLabel(confirmDate) : ''}</span>?
+            <span className="font-medium text-foreground">{confirmDate ? fullDateLabel(confirmDate) : ''}</span>?
             This will also remove its photos and cannot be undone.
           </p>
         }
@@ -292,15 +292,15 @@ function MonthDropdown({
     <div ref={ref} className="relative flex-1 sm:flex-none">
       <m.button {...pressMotion}
         onClick={() => (open ? close() : setOpen(true))}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors duration-200 ease-ios hover:bg-gray-50 hover:shadow sm:w-auto sm:min-w-[12.5rem] sm:justify-between"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-input bg-card px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-muted/60 hover:shadow sm:w-auto sm:min-w-[12.5rem] sm:justify-between"
       >
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
           <path d="M3 8h14M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         <span className="whitespace-nowrap">{label}</span>
         <svg
-          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${open && !closing ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open && !closing ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden="true"
@@ -311,12 +311,12 @@ function MonthDropdown({
 
       {open && (
         <div
-          className={`absolute left-0 z-30 mt-2 max-h-[60vh] w-max min-w-full max-w-[calc(100vw-2rem)] origin-top-left overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white p-1 shadow-xl sm:min-w-[13rem] ${
+          className={`absolute left-0 z-30 mt-2 max-h-[60vh] w-max min-w-full max-w-[calc(100vw-2rem)] origin-top-left overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl sm:min-w-[13rem] ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
           <MonthOption label="All months" count={total} active={selected === 'all'} onClick={() => choose('all')} />
-          {months.length > 0 && <div className="my-1 h-px bg-gray-100" />}
+          {months.length > 0 && <div className="my-1 h-px bg-muted" />}
           {months.map(([key, count]) => (
             <MonthOption
               key={key}
@@ -347,12 +347,12 @@ function MonthOption({
     <button
       onClick={onClick}
       className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm transition-colors active:scale-[0.98] sm:py-2 ${
-        active ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-50 active:bg-gray-50'
+        active ? 'bg-chart-1/10 font-medium text-chart-1' : 'text-foreground hover:bg-muted/60 active:bg-muted/60'
       }`}
     >
       <span className="flex items-center gap-2">
         <svg
-          className={`h-4 w-4 shrink-0 ${active ? 'text-blue-600' : 'text-transparent'}`}
+          className={`h-4 w-4 shrink-0 ${active ? 'text-chart-1' : 'text-transparent'}`}
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden="true"
@@ -361,7 +361,7 @@ function MonthOption({
         </svg>
         {label}
       </span>
-      <span className={`shrink-0 tabular-nums ${active ? 'text-blue-400' : 'text-gray-400'}`}>{count}</span>
+      <span className={`shrink-0 tabular-nums ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{count}</span>
     </button>
   );
 }

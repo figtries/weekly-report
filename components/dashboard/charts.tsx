@@ -288,20 +288,30 @@ export function ProgressSpread({ spread }: { spread: LeafSpread }) {
       {/* Rows keep their own height rather than stretching to fill a card that
           has been matched to a taller neighbour: three legend rows pulled to
           160px apiece read as a gap, not as spacing. */}
+      {/* THE ROW WRAPS, and the label carries a floor. This card is one of
+          three `lg` columns, so at 1024 it comes out 234px wide — and a label
+          with `flex-1` (basis 0) collapses rather than forcing a wrap, so "Not
+          started" was squeezed into 27px and spilled straight across "24.43%".
+          `min-w-24` gives the label a real base width, which is what makes the
+          line overflow and pushes the item count down to a second line;
+          `ml-auto` keeps it right-aligned there. Above ~272px of card all three
+          still sit on one line exactly as before. */}
       <ul className="mt-4 flex flex-col divide-y">
         {seg.map((s) => (
           <li
             key={s.key}
-            className="flex items-center gap-3 py-2.5 text-sm first:pt-0 last:pb-0"
+            className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2.5 text-sm first:pt-0 last:pb-0"
           >
-            <span className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
+            <span className="flex min-w-24 flex-1 items-center gap-2 text-muted-foreground">
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', s.cls)} />
               {s.label}
             </span>
             <span className={cn(FIGURE_COL, 'font-semibold')}>
               {fmtPct((s.w / total) * 100)}
             </span>
-            <span className={cn('w-16 shrink-0 text-right', TYPE.meta)}>{s.n} items</span>
+            <span className={cn('ml-auto w-16 shrink-0 text-right', TYPE.meta)}>
+              {s.n} items
+            </span>
           </li>
         ))}
       </ul>

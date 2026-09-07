@@ -186,7 +186,7 @@ export default function DailyForm({
       <div className="flex items-center justify-between mb-4">
         <PressLink {...pressMotion}
           href="/daily"
-          className="inline-flex items-center gap-2 text-gray-600 transition-colors duration-200 ease-ios hover:text-gray-900"
+          className="inline-flex items-center gap-2 text-muted-foreground transition-colors duration-200 ease-ios hover:text-foreground"
           aria-label="Back to daily reports"
         >
           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -202,8 +202,8 @@ export default function DailyForm({
               justSaved
                 ? 'bg-emerald-600 text-white shadow-md'
                 : dirty
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
-                  : 'bg-gray-100 text-gray-400'
+                  ? 'bg-chart-1 text-white hover:bg-chart-1/90 hover:shadow-md'
+                  : 'bg-muted text-muted-foreground'
             }`}
           >
             {saving ? (
@@ -235,10 +235,10 @@ export default function DailyForm({
           />
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm animate-enter">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{weekday}</h1>
-          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">{weekday}</h1>
+          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
             <span>Day no.</span>
             <input
               type="number"
@@ -261,15 +261,15 @@ export default function DailyForm({
                 if (val < 1 && e.currentTarget.value !== '') e.currentTarget.value = '1';
               }}
               onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('hariKe', Math.min(7, value)), 1)}
-              className="w-16 rounded border border-gray-300 px-2 py-0.5 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-11 w-16 rounded border border-input px-2 py-0.5 sm:min-h-0 text-center focus:outline-none focus:ring-2 focus:ring-chart-1"
             />
           </div>
         </div>
       </div>
 
       {/* Weather */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter stagger-1">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Weather</h2>
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm animate-enter stagger-1">
+        <h2 className="mb-4 text-lg font-semibold text-foreground">Weather</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
@@ -282,15 +282,15 @@ export default function DailyForm({
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             <label
               key={checkKey}
-              className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 transition-colors hover:border-blue-300"
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:border-chart-1/40"
             >
               <input
                 type="checkbox"
                 checked={form.weather[checkKey]}
                 onChange={(e) => updateWeather(checkKey, e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="size-5 rounded border-input text-chart-1 focus:ring-chart-1 sm:size-4"
               />
-              <span className="flex-1 text-sm text-gray-700">{weatherLabels[checkKey] ?? checkKey}</span>
+              <span className="flex-1 text-sm text-foreground">{weatherLabels[checkKey] ?? checkKey}</span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -301,7 +301,7 @@ export default function DailyForm({
                   const cleaned = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
                   updateWeather(jamKey, cleaned);
                 }}
-                className="w-16 rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="min-h-11 w-16 rounded border border-input px-1.5 py-0.5 sm:min-h-0 text-xs focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
             </label>
           ))}
@@ -310,39 +310,39 @@ export default function DailyForm({
             stay aligned on any screen width; the labels replace the old
             floating "Time … to …" text. */}
         <div className="mt-4 grid grid-cols-2 gap-4 sm:max-w-md">
-          <label className="rounded-md border border-gray-200 px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 hover:border-blue-300">
-            <span className="mb-0.5 block text-xs font-medium text-gray-500">Start time</span>
+          <label className="rounded-md border border-border px-3 py-2 transition-colors focus-within:border-chart-1 focus-within:ring-1 focus-within:ring-chart-1 hover:border-chart-1/40">
+            <span className="mb-0.5 block text-xs font-medium text-muted-foreground">Start time</span>
             <input
               type="time"
               value={form.weather.waktuMulai}
               onChange={(e) => updateWeather('waktuMulai', e.target.value)}
-              className="block w-full border-0 bg-transparent p-0 text-sm text-gray-800 focus:outline-none"
+              className="block w-full border-0 bg-transparent p-0 text-sm text-foreground focus:outline-none"
             />
           </label>
-          <label className="rounded-md border border-gray-200 px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 hover:border-blue-300">
-            <span className="mb-0.5 block text-xs font-medium text-gray-500">End time</span>
+          <label className="rounded-md border border-border px-3 py-2 transition-colors focus-within:border-chart-1 focus-within:ring-1 focus-within:ring-chart-1 hover:border-chart-1/40">
+            <span className="mb-0.5 block text-xs font-medium text-muted-foreground">End time</span>
             <input
               type="time"
               value={form.weather.waktuSelesai}
               onChange={(e) => updateWeather('waktuSelesai', e.target.value)}
-              className="block w-full border-0 bg-transparent p-0 text-sm text-gray-800 focus:outline-none"
+              className="block w-full border-0 bg-transparent p-0 text-sm text-foreground focus:outline-none"
             />
           </label>
         </div>
       </section>
 
       {/* Man Hours */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm animate-enter stagger-2">
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm animate-enter stagger-2">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">1. Man Hours</h2>
-          <m.button {...pressMotion} onClick={addManHour} className="text-sm text-blue-600 transition-colors duration-200 ease-ios hover:text-blue-800">
+          <h2 className="text-lg font-semibold text-foreground">1. Man Hours</h2>
+          <m.button {...pressMotion} onClick={addManHour} className="text-sm text-chart-1 transition-colors duration-200 ease-ios hover:text-chart-1">
             + Add company
           </m.button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="scroll-x-hint overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-600">
+            <tr className="border-b border-border text-muted-foreground">
               <th className="px-2 py-2 text-left font-medium">Company</th>
               <th className="px-2 py-2 text-right font-medium">POB Qty</th>
               <th className="px-2 py-2 text-right font-medium">Previous</th>
@@ -353,12 +353,12 @@ export default function DailyForm({
           </thead>
           <tbody>
             {form.manHours.map((row) => (
-              <tr key={row.id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
+              <tr key={row.id} className="border-b border-border transition-colors hover:bg-muted/60">
                 <td className="px-2 py-1.5">
                   <input
                     value={row.company}
                     onChange={(e) => updateManHour(row.id, { company: e.target.value })}
-                    className="w-full rounded border border-gray-300 px-1.5 py-1 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-full rounded border border-input px-1.5 py-1 sm:min-h-0 transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -371,7 +371,7 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { pobQty: value }))}
-                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-16 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -384,7 +384,7 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { previousHours: value }))}
-                    className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-20 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -397,14 +397,14 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateManHour(row.id, { todayHours: value }))}
-                    className="w-20 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-20 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
-                <td className="px-2 py-1.5 text-right font-medium text-gray-700">
+                <td className="px-2 py-1.5 text-right font-medium text-foreground">
                   {(row.previousHours + row.todayHours).toLocaleString('en-US')}
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  <button onClick={() => removeManHour(row.id)} className="text-gray-300 transition-all duration-200 ease-ios hover:text-red-500 hover:scale-110 active:scale-95">
+                  <button onClick={() => removeManHour(row.id)} className="text-muted-foreground/50 transition-all duration-200 ease-ios hover:text-bad hover:scale-110 active:scale-95">
                     ✕
                   </button>
                 </td>
@@ -417,12 +417,12 @@ export default function DailyForm({
 
       {/* Non-Effective Working Hours */}
       <ScrollReveal>
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Non Effective Working Hours</h2>
-        <div className="overflow-x-auto">
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-foreground">Non Effective Working Hours</h2>
+        <div className="scroll-x-hint overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-600">
+            <tr className="border-b border-border text-muted-foreground">
               <th className="px-2 py-2 text-left font-medium">Cause</th>
               <th className="px-2 py-2 text-right font-medium">Previous</th>
               <th className="px-2 py-2 text-right font-medium">Today</th>
@@ -432,8 +432,8 @@ export default function DailyForm({
           </thead>
           <tbody>
             {form.nonEffective.map((row) => (
-              <tr key={row.id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
-                <td className="px-2 py-1.5 text-gray-700">{row.cause}</td>
+              <tr key={row.id} className="border-b border-border transition-colors hover:bg-muted/60">
+                <td className="px-2 py-1.5 text-foreground">{row.cause}</td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
@@ -444,7 +444,7 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateNonEffective(row.id, { previous: value }))}
-                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-16 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -457,15 +457,15 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateNonEffective(row.id, { today: value }))}
-                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-16 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
-                <td className="px-2 py-1.5 text-right font-medium text-gray-700">{row.previous + row.today}</td>
+                <td className="px-2 py-1.5 text-right font-medium text-foreground">{row.previous + row.today}</td>
                 <td className="px-2 py-1.5">
                   <input
                     value={row.remark}
                     onChange={(e) => updateNonEffective(row.id, { remark: e.target.value })}
-                    className="w-full rounded border border-gray-300 px-1.5 py-1 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-full rounded border border-input px-1.5 py-1 sm:min-h-0 transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
               </tr>
@@ -478,65 +478,65 @@ export default function DailyForm({
 
       {/* Permit to Work */}
       <ScrollReveal>
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">2. Permit to Work (PTW)</h2>
-          <m.button {...pressMotion} onClick={addPtw} className="text-sm text-blue-600 transition-colors duration-200 ease-ios hover:text-blue-800">
+          <h2 className="text-lg font-semibold text-foreground">2. Permit to Work (PTW)</h2>
+          <m.button {...pressMotion} onClick={addPtw} className="text-sm text-chart-1 transition-colors duration-200 ease-ios hover:text-chart-1">
             + Add permit
           </m.button>
         </div>
         <div className="space-y-6">
-          {form.ptw.length === 0 && <p className="text-sm text-gray-400">No permits recorded for this day.</p>}
+          {form.ptw.length === 0 && <p className="text-sm text-muted-foreground">No permits recorded for this day.</p>}
           {form.ptw.map((row) => (
-            <div key={row.id} className="grid grid-cols-1 gap-2 rounded-lg border-2 border-gray-300 p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div key={row.id} className="grid grid-cols-1 gap-2 rounded-lg border-2 border-input p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
               <textarea
                 value={row.description}
                 onChange={(e) => updatePtw(row.id, { description: e.target.value })}
                 placeholder="Description"
                 rows={2}
-                className="col-span-full resize-none rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="col-span-full resize-none rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
               <input
                 value={row.type}
                 onChange={(e) => updatePtw(row.id, { type: e.target.value })}
                 placeholder="Type"
-                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
               <input
                 value={row.pwtNo}
                 onChange={(e) => updatePtw(row.id, { pwtNo: e.target.value })}
                 placeholder="PWT No"
-                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
               <input
                 value={row.pa}
                 onChange={(e) => updatePtw(row.id, { pa: e.target.value })}
                 placeholder="PA"
-                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
               <input
                 value={row.status}
                 onChange={(e) => updatePtw(row.id, { status: e.target.value })}
                 placeholder="Status"
-                className="rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-chart-1"
               />
               <DateField
                 value={row.issued}
                 onChange={(v) => updatePtw(row.id, { issued: v })}
                 placeholder="Issued"
                 clearable
-                className="min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 transition-colors hover:border-gray-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                className="min-h-11 min-w-0 rounded border border-input bg-card px-2 py-1 sm:min-h-0 text-sm text-foreground transition-colors hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-chart-1"
               />
               <DateField
                 value={row.validity}
                 onChange={(v) => updatePtw(row.id, { validity: v })}
                 placeholder="Validity"
                 clearable
-                className="min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 transition-colors hover:border-gray-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                className="min-h-11 min-w-0 rounded border border-input bg-card px-2 py-1 sm:min-h-0 text-sm text-foreground transition-colors hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-chart-1"
               />
               <button
                 onClick={() => removePtw(row.id)}
-                className="justify-self-start text-xs text-gray-400 transition-colors hover:text-red-500"
+                className="justify-self-start text-xs text-muted-foreground transition-colors hover:text-bad"
               >
                 Remove permit
               </button>
@@ -548,12 +548,12 @@ export default function DailyForm({
 
       {/* HSE Input */}
       <ScrollReveal>
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">3. HSE Input</h2>
-        <div className="overflow-x-auto">
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-foreground">3. HSE Input</h2>
+        <div className="scroll-x-hint overflow-x-auto">
         <table className="w-full min-w-[480px] text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-600">
+            <tr className="border-b border-border text-muted-foreground">
               <th className="px-2 py-2 text-left font-medium">Activity</th>
               <th className="px-2 py-2 text-right font-medium">Previous</th>
               <th className="px-2 py-2 text-right font-medium">Today</th>
@@ -562,8 +562,8 @@ export default function DailyForm({
           </thead>
           <tbody>
             {form.hseInput.map((row) => (
-              <tr key={row.id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
-                <td className="px-2 py-1.5 text-gray-700">{row.activity}</td>
+              <tr key={row.id} className="border-b border-border transition-colors hover:bg-muted/60">
+                <td className="px-2 py-1.5 text-foreground">{row.activity}</td>
                 <td className="px-2 py-1.5 text-right">
                   <input
                     type="number"
@@ -574,7 +574,7 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateHse(row.id, { previous: value }))}
-                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-16 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -587,10 +587,10 @@ export default function DailyForm({
                     onFocus={selectDisplayedZero}
                     onInput={normalizeLeadingZero}
                     onKeyDown={(e) => replaceDisplayedZero(e, (value) => updateHse(row.id, { today: value }))}
-                    className="w-16 rounded border border-gray-300 px-1.5 py-1 text-right transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-h-11 w-16 rounded border border-input px-1.5 py-1 sm:min-h-0 text-right transition-colors focus:border-chart-1 focus:outline-none focus:ring-1 focus:ring-chart-1"
                   />
                 </td>
-                <td className="px-2 py-1.5 text-right font-medium text-gray-700">{row.previous + row.today}</td>
+                <td className="px-2 py-1.5 text-right font-medium text-foreground">{row.previous + row.today}</td>
               </tr>
             ))}
           </tbody>
@@ -601,12 +601,12 @@ export default function DailyForm({
 
       {/* Activities & Plan/Actual */}
       <ScrollReveal>
-      <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Daily Activities</h2>
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-foreground">Daily Activities</h2>
         <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+              <span className="h-2 w-2 rounded-full bg-chart-1" />
               Today&apos;s Activities
             </h3>
             <textarea
@@ -614,11 +614,11 @@ export default function DailyForm({
               onChange={(e) => update('activitiesToday', e.target.value)}
               rows={5}
               placeholder="Describe the activities carried out today…"
-              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full resize-none rounded-md border border-input px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-chart-1"
             />
           </div>
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Tomorrow&apos;s Activities
             </h3>
@@ -627,13 +627,13 @@ export default function DailyForm({
               onChange={(e) => update('activitiesTomorrow', e.target.value)}
               rows={5}
               placeholder="Describe the planned activities for tomorrow…"
-              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full resize-none rounded-md border border-input px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Plan (%)</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Plan (%)</label>
             <input
               type="number"
               min={0}
@@ -644,11 +644,11 @@ export default function DailyForm({
               onFocus={selectDisplayedZero}
               onInput={normalizeLeadingZero}
               onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('planPct', value))}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chart-1"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Actual (%)</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Actual (%)</label>
             <input
               type="number"
               min={0}
@@ -659,7 +659,7 @@ export default function DailyForm({
               onFocus={selectDisplayedZero}
               onInput={normalizeLeadingZero}
               onKeyDown={(e) => replaceDisplayedZero(e, (value) => update('actualPct', value))}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ok"
             />
           </div>
         </div>

@@ -56,31 +56,36 @@ export default function TruncatedName({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const swallowClick = useRef(false);
 
-  const [clipped, setClipped] = useState(false);
   /** The name's box plus the x the finger landed on, captured when the hold fires. */
   const [anchor, setAnchor] = useState<{ rect: DOMRect; pointerX: number } | null>(null);
   /** Filled in after the popover has been measured — until then it stays hidden. */
   const [place, setPlace] = useState<{ top: number; above: boolean } | null>(null);
 
-  useEffect(() => {
+  /**
+   * Is the name actually cut off? ASKED AT THE MOMENT OF THE PRESS, never at
+   * mount — and that is a fix, not a shortcut.
+   *
+   * This used to be state: a `useEffect` that read `scrollWidth`/`clientWidth`
+   * on mount, a `ResizeObserver` per instance, and a `document.fonts.ready`
+   * re-measure on top. Every one of those reads forces a synchronous layout,
+   * and they all fired in the same frames as the card's entrance animation. On
+   * Detail Progress at 4x CPU it was the largest single entry in the CPU
+   * profile — 92ms of self time for FOUR cards — and a folder one level down
+   * mounts up to 89 of them at once, each with its own observer.
+   *
+   * Nothing on screen depends on the answer: `clipped` gates the press-and-hold
+   * gesture and nothing else, so there is no reason to know it before a finger
+   * lands. Reading it here costs one layout on one element on a real gesture,
+   * which no one can feel — and it is strictly MORE correct than the old
+   * version, because a measurement taken now can never be stale from a resize,
+   * a font swap or a rotation. That is also why the observer and the
+   * `fonts.ready` re-measure are gone rather than merely moved: they existed
+   * only to keep a mount-time measurement honest.
+   */
+  const isClipped = () => {
     const el = nameRef.current;
-    if (!el) return;
-    let live = true;
-    const measure = () => {
-      if (live) setClipped(el.scrollWidth > el.clientWidth + 1);
-    };
-    measure();
-    // The clipped width never changes when Inter finally swaps in, so the
-    // observer alone would keep a first-paint measurement taken in a fallback
-    // face.
-    document.fonts?.ready.then(measure);
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => {
-      live = false;
-      ro.disconnect();
-    };
-  }, [text]);
+    return !!el && el.scrollWidth > el.clientWidth + 1;
+  };
 
   // The gesture is watched on the window, not on the name: a finger that slides
   // off the name still has to end the hold, and without pointer capture (which
@@ -150,7 +155,7 @@ export default function TruncatedName({
         className={`block select-none [-webkit-touch-callout:none] ${className}`}
         onPointerDown={(e) => {
           swallowClick.current = false;
-          if (!clipped || e.button !== 0) return;
+          if (!isClipped() || e.button !== 0) return;
           stop();
           const start = { x: e.clientX, y: e.clientY };
           const onMove = (ev: PointerEvent) => {
@@ -175,7 +180,7 @@ export default function TruncatedName({
           }, HOLD_MS);
         }}
         onContextMenu={(e) => {
-          if (clipped) e.preventDefault();
+          if (isClipped()) e.preventDefault();
         }}
         onClickCapture={(e) => {
           if (!swallowClick.current) return;

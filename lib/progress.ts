@@ -90,7 +90,7 @@ export function progressEvidence(
       return labels.length ? labels.join(' + ') : 'none yet';
     }
     case 'lumpsum':
-      return 'diketik manual';
+      return 'Typed by hand';
   }
 }
 
@@ -118,5 +118,7 @@ export function defaultMilestones(): Milestone[] {
 }
 
 function fmt(n: number): string {
-  return n.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  // en-GB, like every other number the app shows: a decimal POINT. This string
+  // lands in the app's Evidence column, not in the printed report.
+  return n.toLocaleString('en-GB', { maximumFractionDigits: 2 });
 }

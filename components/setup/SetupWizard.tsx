@@ -179,16 +179,22 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         </p>
       </header>
 
-      <ol className="mb-6 flex gap-1.5 overflow-x-auto pb-1">
+      {/* WRAPS on a phone, shares the row from `sm` up. `flex-1` on five chips
+          divides whatever width there is by five — at 320px that is 55px each,
+          and the labels came out as "1 I…  2 W…  3 V…  4 S…  5 B…", which names
+          nothing. Sized to their content they wrap onto a second row instead
+          and every step keeps its word. The hint line stays `sm:block`, so the
+          wrapped rows are one line tall and cost almost nothing. */}
+      <ol className="mb-6 flex flex-wrap gap-1.5 pb-1 sm:flex-nowrap sm:overflow-x-auto">
         {STEPS.map((s, i) => {
           const state = i === step ? 'now' : i < step ? 'done' : 'todo';
           return (
-            <li key={s.key} className="min-w-0 flex-1">
+            <li key={s.key} className="flex-none sm:min-w-0 sm:flex-1">
               <button
                 type="button"
                 onClick={() => i <= step && setStep(i)}
                 disabled={i > step}
-                className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors duration-200 ease-ios ${
+                className={`flex min-h-11 w-full flex-col justify-center rounded-md border px-2.5 py-2 text-left transition-colors duration-200 ease-ios sm:min-h-0 sm:block ${
                   state === 'now'
                     ? 'border-primary/40 bg-primary/5'
                     : state === 'done'
@@ -277,7 +283,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
               <p className="mt-4 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 There is already an active project in this app. Finishing the wizard replaces it —
                 run <code className="font-mono">npm run seed</code> to bring the demo data
-                semula.
+                back.
               </p>
             )}
           </Section>
@@ -285,13 +291,13 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
         {step === 1 && (
           <Section
-            title="Susun WBS"
+            title="Build the WBS"
             desc="Paste from Excel. The hierarchy is read from dotted numbering (1.2.3), indentation, or a level column — whichever you have."
           >
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <Label htmlFor="wbs-paste" className="mb-1.5 block text-xs text-muted-foreground">
-                  Tempel di sini — kolom: kode, deskripsi, volume, satuan
+                  Paste here — columns: code, description, quantity, unit
                 </Label>
                 <Textarea
                   id="wbs-paste"
@@ -303,7 +309,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                 />
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => importWbs(wbsText)} disabled={!wbsText.trim()}>
-                    Baca WBS
+                    Read WBS
                   </Button>
                   <Button
                     size="sm"
@@ -382,7 +388,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                   type="checkbox"
                   checked={useEven}
                   onChange={(e) => setUseEven(e.target.checked)}
-                  className="size-4 accent-primary"
+                  className="size-5 accent-primary sm:size-4"
                 />
                 <span>No BOQ yet — use even weights for now</span>
               </label>
