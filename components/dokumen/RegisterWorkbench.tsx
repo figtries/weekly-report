@@ -389,22 +389,23 @@ export function RegisterWorkbench({
             Windows scrollbar reserves width and would pull every card's right
             edge in from the search box above it. */}
         <div className="flex flex-col gap-4 scrollbar-none lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pb-2">
-          {/* `packagesBefore` carries a running count across packages so the
-              cascade cap below counts the WHOLE column, not each package from
-              zero. Without it VDRL's many small packages each restart the
-              index and every button animates. */}
-          {groupByPackage(matchingGroups).map(([packageName, list], pkgIdx, packages) => {
-          const packagesBefore = packages
-            .slice(0, pkgIdx)
-            .reduce((n, [, l]) => n + l.length, 0);
-          return (
+          {/* THE CARDS DO NOT ANIMATE THEMSELVES. The column already arrives —
+              `.animate-enter` sits on the aside above — and a cascade in here
+              put a second translation on the same pixels: the container
+              travelling 16px over 0.42s while each of the first twenty cards
+              travelled another 8px over 0.26s on its own 40ms delay. Filmed at
+              4x CPU throttle, neighbouring cards drifted 3px apart and snapped
+              back mid-flight (gaps 94 → 97 → 94, 126 → 129 → 126) while the
+              column itself moved 25px. Nothing scrolled — every scroller
+              measured 0 the whole way — but a list whose rows stop holding
+              their spacing reads as one, and it was reported as exactly that.
+              One section, one entrance; see the entry scale in AGENTS.md. */}
+          {groupByPackage(matchingGroups).map(([packageName, list]) => (
             <div key={packageName} className="flex flex-col gap-1.5">
               <p className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {packageName}
               </p>
-              {list.map((g, gj) => {
-                const gi = packagesBefore + gj;
-                return (
+              {list.map((g) => (
                 <button
                   key={g.id}
                   type="button"
@@ -413,15 +414,8 @@ export function RegisterWorkbench({
                     else groupRefs.current.delete(g.id);
                   }}
                   onClick={() => { setSelectedId(g.id); setOpenDoc(null); }}
-                  // Delay capped at 8 steps AND the count capped at 20. The two
-                  // are different limits: the first stops the last row arriving
-                  // seconds in, the second stops a register with sixty vendor
-                  // packages from starting sixty keyframes at once. VDRL has
-                  // enough packages to need the second one.
-                  style={gi < 20 ? { animationDelay: `${Math.min(gi, 8) * 40}ms` } : undefined}
                   className={cn(
                     'w-full rounded-xl border px-3.5 py-3 text-left transition-colors duration-300 ease-ios',
-                    gi < 20 && 'animate-fade-in-up',
                     selectedId === g.id
                       ? 'border-foreground/20 bg-muted'
                       : 'border-transparent bg-card hover:bg-muted/60',
@@ -447,11 +441,16 @@ export function RegisterWorkbench({
                     <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   </div>
 
+                  {/* The bar still sweeps. It is a `scaleX` on the compositor,
+                      not a layout change, so it cannot move a card the way the
+                      removed cascade did — and capping by the column's own
+                      length is the same test the document rows below already
+                      use. */}
                   <Bar
                     className="mt-2.5"
                     actual={g.node.actual}
                     plan={g.node.plan}
-                    grow={gi < 20}
+                    grow={matchingGroups.length <= 20}
                   />
 
                   <div className="mt-2 flex items-center gap-2">
@@ -472,11 +471,9 @@ export function RegisterWorkbench({
                     )}
                   </div>
                 </button>
-                );
-              })}
+              ))}
             </div>
-          );
-          })}
+          ))}
 
           {matchingGroups.length === 0 && (
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">No match.</p>
@@ -637,19 +634,18 @@ export function RegisterWorkbench({
 
             {/* ---------------------------------------------- the documents */}
             <div className="flex flex-col gap-1.5">
-              {shown.map((doc, di) => {
+              {/* No cascade here either, for the reason given up in the group
+                  column: this list sits inside a `.animate-enter` section, and
+                  the two translations together are what made the screen look
+                  like it was scrolling itself. The section arrives; the rows
+                  arrive with it. */}
+              {shown.map((doc) => {
                 const open = openDoc === doc.id;
                 return (
                   <div
                     key={doc.id}
-                    // Only the first twenty animate. A discipline can hold far
-                    // more than that, and capping the delay is not capping the
-                    // count — the rows past this point are below the fold and
-                    // have nothing to announce.
-                    style={di < 20 ? { animationDelay: `${Math.min(di, 8) * 40}ms` } : undefined}
                     className={cn(
                       'overflow-hidden rounded-xl border bg-card transition-shadow duration-300 ease-ios',
-                      di < 20 && 'animate-fade-in-up',
                       open ? 'shadow-md ring-1 ring-blue-600/30' : 'hover:shadow-sm',
                     )}
                   >

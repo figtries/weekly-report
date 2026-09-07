@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
+import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
@@ -29,11 +30,17 @@ import { getBarStyles } from '@/lib/bar-styles-read';
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   // `params` is a runtime read. Under `cacheComponents` awaiting it in the page
   // component itself fails with "Runtime data ... accessed outside of
-  // <Suspense>" — the same wall `/print/*` hit. A `null` fallback is right
-  // here: everything on this page depends on which project it is, so there is
-  // no honest skeleton to draw before the id is known.
+  // <Suspense>" — the same wall `/print/*` hit.
+  //
+  // THIS FALLBACK IS THE PRERENDERED SHELL, which is why it may not be `null`.
+  // It was, and the consequence was measured: Next served this route as a page
+  // whose `<main>` held one empty `<template>`, so the shell painted instantly
+  // and painted nothing, and the whole wait — segment fetch plus 119 KB of
+  // client chunks that are not requested until the click — happened on a blank
+  // screen. 496 ms on a five-row project, 1.4 s on Gundih, on localhost with no
+  // network in the way. The frame does not depend on the id; only the words do.
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PlannerSkeleton />}>
       <ProjectBody params={params} />
     </Suspense>
   );

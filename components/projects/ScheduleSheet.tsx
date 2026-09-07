@@ -63,6 +63,8 @@ import { pressMotion } from '@/components/motion/Press';
 
 const ROW_H = 44;
 const HEAD_H = 36;
+/** Rows mounted by the first render, before the scroller can be measured. */
+const INITIAL_WINDOW = 30;
 // A SHARE of the shell, not a pixel width. Stored as pixels it was 720 on
 // every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
 // window, which is what "the Gantt is cut off" meant.
@@ -177,7 +179,22 @@ export default function ScheduleSheet({
   const [query, setQuery] = useState('');
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
   // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
-  const [range, setRange] = useState({ start: 0, end: 60 });
+  //
+  // THE FIRST WINDOW IS NOT THE SCROLLING ONE, and the initial 60 was paying
+  // for a scroll nobody had done yet. Nothing can be measured during the first
+  // render — no scroller exists — so this number is what the very first paint
+  // mounts, in BOTH panes, before `recomputeRange` replaces it. On Gundih that
+  // was 120 mounted rows against the thirteen a phone can show, and it cost
+  // 470 ms of the wait to open the project: measured at 4x CPU throttle,
+  // 2,252 ms to the plan on screen at 60, 1,780 ms at 30.
+  //
+  // 30 rather than fewer because of one straight-edged fact: 30 x 44px is
+  // 1,320px of sheet, which is taller than the sheet pane on any viewport up
+  // to about 1,570px. Below that the widening to the real window happens
+  // entirely under the fold and is invisible; above it there would be one
+  // frame of a short list, which is why this is not tuned down to the twenty a
+  // phone would prefer.
+  const [range, setRange] = useState({ start: 0, end: INITIAL_WINDOW });
   // Read after mount, never at render: this page prerenders into the static
   // shell, so a build-time clock would drift a day further from the truth every
   // day and "running today" would quietly stop being true.

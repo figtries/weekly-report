@@ -1,5 +1,6 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import NewProjectDialog from '@/components/projects/NewProjectDialog';
+import PlannerWarmup from '@/components/projects/PlannerWarmup';
 import ProjectList from '@/components/projects/ProjectList';
 import { listProjects } from '@/lib/projects';
 
@@ -41,6 +42,11 @@ export default function ProjectsPage() {
 
         <ProjectList all={all} />
       </div>
+
+      {/* Nothing to look at. It spends the quiet moment after this page settles
+          fetching the planner's chunks, so opening a project is not also the
+          moment the browser first hears about 119 KB of code. */}
+      <PlannerWarmup hasProjects={all.length > 0} />
     </RouteTransition>
   );
 }

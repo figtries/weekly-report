@@ -164,19 +164,22 @@ export function RegisterWorklist({
           on a 1440 screen left a hand's width of nothing between the document
           number and the day count on every one of fifteen rows — the same
           emptiness this panel was built to remove, just moved inside the row. */}
+      {/* The rows do not animate themselves. This panel arrives already — as
+          `.animate-enter` above when it is the full one, and inside the
+          documents section's when it is compact — and a per-row cascade on top
+          of that put two translations on the same pixels. That is what made the
+          register look like it was scrolling on its own; the same cascade was
+          removed from the group column and the document list for the same
+          reason. */}
       <div className="grid gap-1.5 xl:grid-cols-2">
-        {shown.map((o, i) => (
+        {shown.map((o) => (
           <button
             key={o.documentId}
             type="button"
             onClick={() => onOpen(o.categoryId, o.documentId)}
-            // Same cascade cap the group column uses, and for the same reason:
-            // the rows past twenty are below the fold and have nothing to say.
-            style={i < 20 ? { animationDelay: `${Math.min(i, 8) * 40}ms` } : undefined}
             className={cn(
               'flex w-full items-start gap-3 rounded-xl border border-l-4 bg-card px-4 py-3 text-left transition-shadow duration-300 ease-ios hover:shadow-sm',
               KIND[o.kind].edge,
-              i < 20 && 'animate-fade-in-up',
             )}
           >
             <div className="min-w-0 flex-1">

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
@@ -41,8 +41,6 @@ interface Destination {
   icon: LucideIcon;
   href: (week: number) => string;
   match: (pathname: string) => boolean;
-  /** Routes to warm during idle time — the tabs reachable from this entry. */
-  warm?: (week: number) => string[];
 }
 
 const WEEKLY_PROGRESS = ['overall', 'control'];
@@ -60,14 +58,12 @@ const DESTINATIONS: Destination[] = [
     icon: Activity,
     href: (w) => `/weekly/${w}/overall`,
     match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
-    warm: (w) => WEEKLY_PROGRESS.map((k) => `/weekly/${w}/${k}`),
   },
   {
     label: 'Daily',
     icon: CalendarDays,
     href: () => '/daily',
     match: (p) => p.startsWith('/daily'),
-    warm: () => ['/daily'],
   },
   {
     label: 'Reports',
@@ -77,14 +73,12 @@ const DESTINATIONS: Destination[] = [
     // named `summary` and `detail` too, so a bare endsWith lit Reports as well
     // on every /dokumen page — two destinations highlighted at once.
     match: (p) => WEEKLY_REPORT.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
-    warm: (w) => WEEKLY_REPORT.map((k) => `/weekly/${w}/${k}`),
   },
   {
     label: 'Document Control',
     icon: Files,
     href: (w) => `/dokumen/${w}/summary`,
     match: (p) => p.startsWith('/dokumen'),
-    warm: (w) => [`/dokumen/${w}/summary`, `/dokumen/${w}/data`],
   },
   {
     // Where a project is kept, created and planned. It is the app's first
@@ -93,7 +87,6 @@ const DESTINATIONS: Destination[] = [
     icon: FolderKanban,
     href: () => '/projects',
     match: (p) => p.startsWith('/projects') || p.startsWith('/portfolio'),
-    warm: () => ['/projects'],
   },
 ];
 
@@ -133,27 +126,41 @@ function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pa
 }
 
 function NavList({ pathname, currentWeek }: { pathname: string | null; currentWeek: number }) {
-  const router = useRouter();
-
   // Keep links on the week being viewed; fall back to the reporting week.
   const week = Number(pathname?.match(/^\/weekly\/(\d+)/)?.[1] ?? currentWeek);
 
-  // After every navigation, warm this sidebar's own targets during idle time.
-  // It is what keeps daily ↔ weekly jumps instant even right after a mutation
-  // cleared the prefetch cache (router.prefetch dedupes anything already warm).
-  useEffect(() => {
-    const warm = () => {
-      for (const dest of DESTINATIONS) {
-        for (const href of dest.warm?.(week) ?? [dest.href(week)]) router.prefetch(href);
-      }
-    };
-    if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(warm, { timeout: 2000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(warm, 400);
-    return () => window.clearTimeout(id);
-  }, [pathname, week, router]);
+  /*
+   * THE SIDEBAR NO LONGER WARMS ANYTHING, and the reason is a measurement.
+   *
+   * It used to hold a `warm` list per destination — every weekly tab, both
+   * document tabs — and prefetch the lot on an idle callback after EVERY
+   * navigation, with a note claiming `router.prefetch` deduped what was already
+   * warm. It does not. Sitting on three screens in turn and touching nothing:
+   *
+   *     land on /projects    59 RSC requests for 16 distinct URLs
+   *     then /daily          87 for 23
+   *     back to /projects   106 for 16
+   *
+   * 252 requests for a session with no clicks in it. `/settings`, which has no
+   * project list and no tab bar at all, still spent 47 requests on 13 URLs —
+   * seven of them weekly tabs belonging to a tab bar that was not on screen.
+   *
+   * The multiplier is not duplication anyone wrote. Under `cacheComponents` ONE
+   * `router.prefetch` is about three network requests, because the route is
+   * fetched as segments. So the only lever that matters is HOW MANY ROUTES get
+   * warmed at all — and the answer here is none of them, because every one was
+   * already covered:
+   *
+   *   - each sidebar destination is a `<Link>` in this very list, on screen,
+   *     which Next prefetches by itself;
+   *   - each sibling tab is a `<Link>` in `SectionTabs`, on the page where that
+   *     tab bar actually appears — plus `WeekTabs` prefetches its own siblings
+   *     explicitly.
+   *
+   * Warming them from here was buying a second copy of work the page in front
+   * of the user had already done, on every screen in the app. On a desk that is
+   * invisible; on a phone it is the connection busy at the moment somebody taps.
+   */
 
   return (
     <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-6">
