@@ -277,7 +277,7 @@ function MoneyPanel({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="h-11 rounded-lg bg-foreground px-5 text-sm font-medium text-background"
+                  className="btn-primary h-11 rounded-lg px-5 text-sm font-medium"
                 >
                   Done
                 </button>
@@ -419,7 +419,7 @@ function PreviewDialog({
                 onClose();
               })
             }
-            className="h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
+            className="btn-primary h-11 flex-1 rounded-lg text-sm font-medium"
           >
             {pending ? 'Applying…' : `Replace ${p.changes} weights`}
           </button>

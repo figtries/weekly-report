@@ -362,7 +362,7 @@ export default function DateField({
                     aria-label={`${d} ${MONTHS[view.m]} ${view.y}`}
                     className={`h-9 rounded-lg text-sm tabular-nums transition-[color,background-color,box-shadow,transform] duration-150 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 active:scale-[0.92] ${
                       isPicked
-                        ? 'bg-blue-600 font-semibold text-white shadow-sm'
+                        ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
                         : isToday
                           ? 'font-semibold text-blue-600 ring-1 ring-inset ring-blue-200 hover:bg-blue-50'
                           : 'text-gray-700 hover:bg-gray-100'

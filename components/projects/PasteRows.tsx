@@ -240,7 +240,7 @@ export default function PasteRows({
                         type="button"
                         onClick={insert}
                         disabled={pending}
-                        className="h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
+                        className="btn-primary h-11 flex-1 rounded-lg text-sm font-medium"
                       >
                         {pending
                           ? 'Inserting…'
@@ -253,7 +253,7 @@ export default function PasteRows({
                         type="button"
                         onClick={look}
                         disabled={pending || text.trim() === ''}
-                        className="h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
+                        className="btn-primary h-11 flex-1 rounded-lg text-sm font-medium"
                       >
                         {pending ? 'Reading…' : 'Read it'}
                       </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -19,9 +19,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
 import { cn } from '@/lib/utils';
-import type { ProjectCard } from '@/lib/projects';
 
 /**
  * Six destinations, not twelve.
@@ -199,7 +197,7 @@ function Brand({ compact }: { compact?: boolean }) {
   );
 }
 
-function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects: ProjectCard[] }) {
+function MobileDrawer({ currentWeek, switcher }: { currentWeek: number; switcher: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -251,11 +249,7 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
                 </m.button>
               </div>
 
-              {projects.length > 0 && (
-                <div className="px-4 pt-3">
-                  <ProjectSwitcher projects={projects} />
-                </div>
-              )}
+              {switcher}
               <NavList pathname={pathname} currentWeek={currentWeek} />
             </div>
           </div>
@@ -286,17 +280,22 @@ function MobileDrawer({ currentWeek, projects }: { currentWeek: number; projects
 
 export default function Sidebar({
   currentWeek,
-  projects,
+  switcher,
 }: {
   currentWeek: number;
-  projects: ProjectCard[];
+  /**
+   * The open project's card, handed down as a NODE rather than as data. It is a
+   * server component that reads at request time (see LiveProjectSwitcher), and
+   * a server component cannot be imported into a client one — which this is.
+   */
+  switcher: ReactNode;
 }) {
   return (
     <>
       {/* Mobile / tablet: slim top bar with hamburger */}
       <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur lg:hidden print:hidden">
         <Suspense>
-          <MobileDrawer currentWeek={currentWeek} projects={projects} />
+          <MobileDrawer currentWeek={currentWeek} switcher={switcher} />
         </Suspense>
         <span className="text-sm font-semibold text-foreground">Progress Report</span>
       </header>
@@ -308,11 +307,7 @@ export default function Sidebar({
             <Brand />
           </div>
 
-          {projects.length > 0 && (
-            <div className="px-4 pt-3">
-              <ProjectSwitcher projects={projects} />
-            </div>
-          )}
+          {switcher}
 
           <Suspense fallback={<NavList pathname={null} currentWeek={currentWeek} />}>
             <ActiveNavList currentWeek={currentWeek} />

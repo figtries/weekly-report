@@ -1,18 +1,34 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, CircleAlert, TrendingDown, TrendingUp } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
+import { Suspense } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChartLine,
+  CircleAlert,
+  FolderKanban,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react';
+
 import {
   buildLookAhead,
   computeHealth,
   findLaggards,
   fmtNum,
   fmtPct,
-  formatRupiah,
   validateWeek,
 } from '@/lib/analysis';
+import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, getSummaryRows, promoteNestedSpkContracts } from '@/lib/rollup';
-import { getCachedSCurveSeries, getCachedWeekRollup, getDb, getLatestWeek } from '@/lib/data';
+import { getWeekRollup } from '@/lib/data';
+import { buildProjectDashboardData } from '@/lib/dashboard-db';
+import { getActiveProjectId } from '@/lib/projects';
+import { buildSCurveSeries } from '@/lib/scurve';
 import ProgressCurve from '@/components/dashboard/ProgressCurve';
 import {
   DragList,
@@ -22,6 +38,7 @@ import {
   VelocityBars,
   type LeafSpread,
 } from '@/components/dashboard/charts';
+import WeekSelect from '@/components/weekly/WeekSelect';
 import { Reveal } from '@/components/motion/Reveal';
 import { CountUp } from '@/components/motion/CountUp';
 import { TYPE, verdictChip, verdictOf, verdictText } from '@/lib/design';
@@ -34,9 +51,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import NoLegacyData from '@/components/projects/NoLegacyData';
-import { getOpenProject } from '@/lib/legacy-bridge';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -44,7 +60,19 @@ export const metadata = { title: 'Dashboard' };
  * The dashboard is the product's main advantage, so it does not stop at the
  * number — it states the cause, and it shows it.
  *
- * FOUR RULES HOLD THIS PAGE TOGETHER.
+ * IT ANSWERS FOR THE PROJECT THAT IS OPEN, AND FOR THE WEEK YOU PICK. It used
+ * to read `db.json`, which holds exactly one project, so opening any other left
+ * this page drawing Gundih under a sidebar naming something else — and it was
+ * pinned to the latest week with no way to look at any other. Both come from
+ * `lib/dashboard-db.ts` now: SQLite, per project, per week.
+ *
+ * THE WEEK LIVES IN THE QUERY, AND THAT IS WHAT KEEPS THIS PAGE HONEST. Reading
+ * `searchParams` is an uncached read, so the body sits behind `<Suspense>` and
+ * is rendered per request rather than baked into the prerendered shell — which
+ * is exactly the bug that let a stale shell name one project while the projects
+ * page named another.
+ *
+ * FOUR RULES HOLD THE LAYOUT TOGETHER.
  *
  * It reads in three tiers, and the tiers are what make it understandable: WHERE
  * WE ARE (the hero, which owns actual, plan, deviation and SPI and is the only
@@ -62,42 +90,78 @@ export const metadata = { title: 'Dashboard' };
  *
  * Motion comes from framer-motion through `Reveal`, one curve and one duration
  * for the whole app. Every chart is hand-drawn SVG rather than Recharts: they
- * are all static, so drawing them by hand keeps them in the prerendered shell
- * instead of appearing after hydration.
+ * are all static, so drawing them by hand keeps them out of the hydration path.
  *
  * EVERY CARD IN A ROW IS THE SAME HEIGHT. `items-start` used to let the short
  * card in each pair stop early, which left a white hole the height of a hand
  * beside "Work spread" and again beside "Forecast".
  */
-export default async function DashboardPage() {
-  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
-  // project may have no data here at all. Saying so beats drawing another
-  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
-  const open = getOpenProject();
-  if (open && !open.hasLegacyData) return <NoLegacyData what="weekly reports" />;
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
+  return (
+    <RouteTransition id="dashboard">
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardBody searchParams={searchParams} />
+      </Suspense>
+    </RouteTransition>
+  );
+}
 
-  const db = await getDb();
-  const week = getLatestWeek(db) || 1;
-  const rollup = await getCachedWeekRollup(week);
+async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+  const { week: weekParam } = await searchParams;
+
+  const projectId = getActiveProjectId();
+  const data = projectId ? buildProjectDashboardData(projectId) : null;
+
+  if (!data) {
+    return (
+      <Empty
+        icon={FolderKanban}
+        title="No project open"
+        body="Make one, or open one you already keep — every number on this page belongs to a project."
+        href="/projects"
+        cta="Go to Projects"
+      />
+    );
+  }
+
+  // A project with rows but no weight cannot be measured, and a bar chart of
+  // zeroes would say the work has not started rather than that nobody has
+  // priced it. Weight is derived from the BOQ; the planner is where that lives.
+  if (!data.hasPlan) {
+    return (
+      <Empty
+        icon={Scale}
+        title={`"${data.db.project.name}" has no weights yet`}
+        body="Weight comes from the priced BOQ, and the plan curve from each item's dates. Fill those in and this page fills itself in."
+        href={`/projects/${projectId}`}
+        cta="Open the planner"
+      />
+    );
+  }
+
+  // The week being viewed: whatever was asked for if the project has it,
+  // otherwise the last week anybody reported — never a week off the calendar.
+  const asked = Number(weekParam);
+  const fallback = data.currentWeek || data.weeks[0];
+  const week = data.weeks.includes(asked) ? asked : fallback;
+
+  const db = data.db;
+  const rollup = getWeekRollup(db, week);
   const health = computeHealth(db, week);
 
   if (!rollup || !health) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <Reveal>
-          <h1 className="text-2xl font-semibold tracking-tight">No progress data yet</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Build the WBS and its weights first — every number on this page fills itself in after
-            that.
-          </p>
-          <Link
-            href="/setup"
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-chart-1 px-5 text-sm font-medium text-white shadow-sm transition-all duration-300 ease-ios hover:brightness-110 active:scale-[0.97]"
-          >
-            Set the project up <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Reveal>
-      </div>
+      <Empty
+        icon={ChartLine}
+        title="No progress data yet"
+        body="Build the WBS and its weights first — every number on this page fills itself in after that."
+        href={`/projects/${projectId}`}
+        cta="Open the planner"
+      />
     );
   }
 
@@ -107,7 +171,7 @@ export default async function DashboardPage() {
   // The list below shows the three costliest; this is what all of them cost
   // together, which is the one figure the list itself cannot state.
   const totalDrag = Math.abs(laggards.reduce((sum, l) => sum + l.varianceWF, 0));
-  const curve = await getCachedSCurveSeries(week);
+  const curve = buildSCurveSeries(db, week);
   const units = getSummaryRows(promoteNestedSpkContracts(rollup.roots));
 
   // By weight, not by count: a 3.3% leaf and a 0.03% leaf are not equals.
@@ -131,10 +195,44 @@ export default async function DashboardPage() {
   const weeksLeft = Math.max(0, health.lastWeek - health.week);
   const curveWeeks = curve.map((r) => r.week);
   const firstWeek = curveWeeks.length ? Math.min(...curveWeeks) : health.week;
+  const unreported = data.currentWeek > 0 && week > data.currentWeek;
 
   return (
-    <RouteTransition id="dashboard">
     <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8">
+      {/* Whose numbers these are, and which week of them. The name is here
+          rather than only in the sidebar because this page is what somebody
+          screenshots into a chat — and a percentage with no project on it is
+          the same trap the sidebar mismatch was. */}
+      {/* `flex-1` with a floor on the name, so the picker rides on the same
+          line as the title on a desktop and drops below it on a phone rather
+          than squeezing a 100-character project name into a third of the row. */}
+      <header className="animate-enter flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="min-w-64 flex-1">
+          <h1 className="line-clamp-2 text-xl font-semibold tracking-tight sm:text-2xl">
+            {db.project.name}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {db.project.customer || 'No customer set'}
+            {data.currentWeek > 0 ? ` · reported up to week ${data.currentWeek}` : ' · nothing reported yet'}
+          </p>
+        </div>
+        <WeekSelect
+          weeks={data.weeks}
+          selectedWeek={week}
+          projectCurrentWeek={data.currentWeek}
+          activeTab=""
+          hrefPattern="/?week={week}"
+          prefetch={false}
+        />
+      </header>
+
+      {unreported && (
+        <p className="animate-fade-in-up rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2.5 text-sm text-warn">
+          Nothing has been reported after week {data.currentWeek}. The actual figures below are
+          carried forward; the plan keeps climbing, so the gap you see is the weeks nobody has filed.
+        </p>
+      )}
+
       {/* ------------------------------------------------ tier 1 · where we are */}
       <Reveal>
         {/* py-0 because the curve runs to the card's own edges — shadcn's Card
@@ -169,7 +267,10 @@ export default async function DashboardPage() {
                 </Badge>
                 {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
                   <p className="text-sm text-muted-foreground">
-                    ≈ {formatRupiah(Math.abs(health.scheduleVarianceRp))}{' '}
+                    {/* In the project's OWN currency. `formatRupiah` stamped
+                        "Rp" on everything, which on a contract priced in
+                        dollars is not a rounding error, it is a wrong number. */}
+                    ≈ {formatMoneyShort(Math.abs(health.scheduleVarianceRp), data.currency)}{' '}
                     {behind ? 'undelivered' : 'delivered early'}
                   </p>
                 )}
@@ -451,7 +552,6 @@ export default async function DashboardPage() {
         </div>
       </ScrollReveal>
     </div>
-    </RouteTransition>
   );
 }
 
@@ -466,6 +566,58 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col justify-between px-3 py-3 first:pl-4 last:pr-4 max-[380px]:px-2">
       <dt className={TYPE.statLabel}>{label}</dt>
       <dd className={cn('mt-1 max-[380px]:text-lg', TYPE.figure)}>{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * Nothing to draw, and a way forward — never a chart of zeroes.
+ *
+ * The card, its size and its position are `EmptyState`, the same one Weekly,
+ * Daily, Reports and Klaim use. This used to be a 2xl headline pinned near the
+ * top of the page instead, which meant a project with no plan was told so in
+ * one shape on the dashboard and another the moment it moved one tab across.
+ */
+function Empty({
+  icon,
+  title,
+  body,
+  href,
+  cta,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+}) {
+  return (
+    <EmptyState icon={icon} title={title} body={body} primary={{ href, label: cta }} />
+  );
+}
+
+
+/**
+ * What the shell paints while the request-time render arrives. It mirrors the
+ * hero and the first two cards rather than showing a spinner, so the page does
+ * not jump height when the real thing lands.
+ */
+function DashboardSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="w-full max-w-md space-y-2">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <Skeleton className="h-11 w-28 rounded-lg" />
+      </div>
+      <Skeleton className="h-72 w-full rounded-xl" />
+      <Skeleton className="h-52 w-full rounded-xl" />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Skeleton className="h-56 w-full rounded-xl lg:col-span-2" />
+        <Skeleton className="h-56 w-full rounded-xl" />
+      </div>
     </div>
   );
 }

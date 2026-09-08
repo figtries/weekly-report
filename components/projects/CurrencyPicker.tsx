@@ -91,7 +91,7 @@ export default function CurrencyPicker({
                     setAsking(null);
                   })
                 }
-                className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
+                className="btn-primary flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-medium"
               >
                 <Check className="size-4" />
                 {pending ? 'Saving…' : `Use ${asking}`}

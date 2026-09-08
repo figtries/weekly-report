@@ -26,8 +26,23 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* ACTION — one blue for everything that COMMITS something. Locked 8 Sep 2026,
+     after the app was found asking for the same thing in three colours: black
+     (`bg-foreground`) through the planner, blue-600 on Save PDF and the confirm
+     dialog, and --chart-1 on the dashboard's empty state. The last one was the
+     worst: --chart-1 means ACTUAL on every curve in this app, so a button
+     wearing it claimed to be a measurement.
+
+     blue-700 rather than blue-500/600 because white on it is 7.0:1 — it clears
+     the NORMAL-text bar, not just the large-text one, which is what a screen
+     read by 22- to 60-year-olds needs; and the deeper face reads as chosen
+     rather than as a framework default. Do not lighten this without
+     re-measuring: blue-600 is 5.2:1 and blue-500 only 3.7:1. */
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1e40af;  /* blue-800 — hover/press, still 8.6:1 */
+  --primary-soft: #eff6ff;   /* blue-50  — its tinted ground */
+
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -37,7 +52,9 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* The focus ring is the action colour: a grey ring around a blue button
+     reads as a rendering artefact rather than as focus. */
+  --ring: #1d4ed8;
   /* The five chart slots shadcn ships arrive as a grey ramp, which is why every
      chart here used to invent its own colours. They now carry the meanings this
      app actually has, so a chart picks a role rather than a colour. 1 and 2 are
@@ -149,6 +166,9 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -1360,8 +1380,15 @@ a:active {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Dark inverts the direction of the hover: on a dark ground the pressed state
+     has to get BRIGHTER, not deeper, or the button sinks into the card.
+     Unvalidated — this app is light by decision; whoever turns dark on measures
+     these first. */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --primary-hover: #3b82f6;
+  --primary-soft: #172554;
+
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -1421,7 +1448,46 @@ a:active {
   .animate-out {
     animation-timing-function: var(--ease-ios);
   }
+
+  /* THE ACTION FACE. Colour, lift and feedback only — a button keeps its own
+     size, radius and layout classes, so the whole app's primary action can be
+     re-tuned here instead of in nineteen files.
+
+     Two deliberate omissions. The shadow is tinted with the button's OWN blue
+     rather than black: a neutral drop shadow under a saturated colour reads as
+     grime, a tinted one reads as lift. And there is no `transform` here on
+     purpose — several of these buttons are framer-motion `m.button`s whose
+     press scale arrives as an inline style, and a CSS :active transform would
+     be overridden on some buttons and not others. */
+  .btn-primary {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.08),
+      0 6px 16px -8px color-mix(in oklab, var(--primary) 60%, transparent);
+    transition:
+      background-color 0.3s var(--ease-ios),
+      box-shadow 0.3s var(--ease-ios);
+  }
+
+  /* hover: hover keeps the deepened face off touch screens, where :hover sticks
+     after a tap and the button stays looking pressed. */
+  @media (hover: hover) {
+    .btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
+      background-color: var(--primary-hover);
+      box-shadow:
+        0 1px 2px oklch(0 0 0 / 0.1),
+        0 10px 24px -10px color-mix(in oklab, var(--primary) 70%, transparent);
+    }
+  }
+
+  .btn-primary:disabled,
+  .btn-primary[aria-disabled='true'] {
+    opacity: 0.5;
+    box-shadow: none;
+  }
 }
+
 
 /* The setup wizard's plan curve draws itself in. The line has a known length,
    so revealing it costs a dash offset rather than an animation library — the

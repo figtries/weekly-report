@@ -65,7 +65,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     <>
       <m.button {...pressMotion}
         onClick={openModal}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-chart-1 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-chart-1/90 hover:shadow-md sm:flex-none"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg btn-primary px-4 py-2 text-sm font-medium sm:flex-none"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
@@ -115,7 +115,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
               <m.button {...pressMotion}
                 onClick={create}
                 disabled={creating || !date}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-chart-1 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 ease-ios hover:bg-chart-1/90 hover:shadow-md disabled:opacity-60 sm:py-2"
+                className="inline-flex items-center justify-center gap-2 rounded-lg btn-primary px-4 py-2.5 text-sm font-medium sm:py-2"
               >
                 {creating && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -214,7 +214,7 @@ function Action({
       {...(disabled ? {} : pressMotion)}
       className={`flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios disabled:pointer-events-none disabled:opacity-35 ${
         primary
-          ? 'bg-foreground text-background'
+          ? 'btn-primary'
           : danger
             ? 'text-destructive hover:bg-destructive/10'
             : 'hover:bg-muted'

@@ -154,7 +154,7 @@ export default function WbsTreeTable({
             <m.button {...pressMotion}
               onClick={save}
               disabled={!dirtyCount || saving}
-              className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-blue-700 hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
+              className="btn-primary ml-2 rounded-lg px-4 py-2 text-sm font-medium disabled:pointer-events-none"
             >
               {saving ? 'Saving…' : dirtyCount ? `Save ${dirtyCount} change${dirtyCount > 1 ? 's' : ''}` : 'Saved'}
             </m.button>

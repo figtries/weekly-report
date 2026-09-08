@@ -148,7 +148,7 @@ export default function SavePdfButton({
       ? 'bg-emerald-600 text-white shadow-md animate-success-bump'
       : phase === 'error'
         ? 'bg-rose-600 text-white hover:bg-rose-700'
-        : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md';
+        : 'bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md';
 
   return (
     <m.button

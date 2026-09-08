@@ -40,7 +40,7 @@ export default function SwitchProjectButton({ id, name }: { id: string; name: st
         onClick={open}
         disabled={pending}
         aria-label={`Switch to ${name}`}
-        className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-xs font-medium text-foreground transition-colors duration-300 ease-ios hover:border-chart-1/40 hover:bg-chart-1/10 hover:text-chart-1 disabled:opacity-50"
+        className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-xs font-medium text-foreground transition-colors duration-300 ease-ios hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:opacity-50"
       >
         {pending && <Loader2 className="size-3.5 animate-spin" />}
         {pending ? 'Switching…' : 'Switch'}

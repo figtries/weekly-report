@@ -350,7 +350,7 @@ export default function BarStyleEditor({
               <button
                 type="button"
                 onClick={onClose}
-                className="ml-auto h-11 rounded-lg bg-foreground px-5 text-sm font-medium text-background"
+                className="btn-primary ml-auto h-11 rounded-lg px-5 text-sm font-medium"
               >
                 Done
               </button>

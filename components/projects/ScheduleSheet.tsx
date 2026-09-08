@@ -724,7 +724,7 @@ export default function ScheduleSheet({
                         type="button"
                         onClick={open}
                         {...pressMotion}
-                        className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-foreground px-4 text-sm font-medium text-background"
+                        className="btn-primary inline-flex h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium"
                       >
                         <ClipboardPaste className="size-4" />
                         Paste from Excel

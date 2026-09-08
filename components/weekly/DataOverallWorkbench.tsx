@@ -1062,7 +1062,7 @@ export default function DataOverallWorkbench({
               </p>
               <PressLink {...pressMotion}
                 href={`/weekly/${week}/control`}
-                className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-chart-1 px-5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:brightness-110"
+                className="mt-4 inline-flex min-h-11 items-center rounded-xl btn-primary px-5 text-[14px] font-semibold"
               >
                 Go to Review
               </PressLink>
@@ -1276,7 +1276,7 @@ export default function DataOverallWorkbench({
                     }}
                     disabled={saving}
                     aria-label={saving ? 'Saving' : saveFailed ? 'Retry saving' : 'Save'}
-                    className="grid place-items-center rounded-lg bg-chart-1 px-3 py-2 text-[13px] font-semibold text-white shadow-sm transition-colors hover:brightness-110 hover:shadow-md disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
+                    className="grid place-items-center rounded-lg btn-primary px-3 py-2 text-[13px] font-semibold disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
                   >
                     <span
                       className={`col-start-1 row-start-1 transition-opacity duration-150 ${

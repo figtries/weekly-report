@@ -290,7 +290,7 @@ export default function RowMenu({
                     )
                   )
                 }
-                className="h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background disabled:opacity-50"
+                className="btn-primary h-11 flex-1 rounded-lg text-sm font-medium"
               >
                 {pending ? 'Saving…' : 'Mark as unit'}
               </button>

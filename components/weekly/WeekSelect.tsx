@@ -13,6 +13,8 @@ export default function WeekSelect({
   projectCurrentWeek,
   activeTab,
   basePath = '/weekly',
+  hrefPattern,
+  prefetch = true,
 }: {
   weeks: number[];
   selectedWeek: number;
@@ -20,6 +22,19 @@ export default function WeekSelect({
   activeTab: string;
   /** Document Control drives the same control over its own routes. */
   basePath?: string;
+  /**
+   * For a destination that is not `basePath/week/tab` — the Dashboard is one
+   * page and carries its week in the query. A pattern string rather than a
+   * function because this is a client component and a function prop cannot
+   * cross that boundary. `{week}` is the placeholder.
+   */
+  hrefPattern?: string;
+  /**
+   * Warm the router cache for nearby weeks. OFF for the Dashboard: one prefetch
+   * is roughly three segment requests and every dashboard week is a whole
+   * project rollup — sixty of those speculatively is a storm, not a warm-up.
+   */
+  prefetch?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -33,6 +48,8 @@ export default function WeekSelect({
   const listRef = useRef<HTMLDivElement>(null);
 
   const displayedWeek = isPending && pickedWeek !== null ? pickedWeek : selectedWeek;
+  const hrefFor = (w: number) =>
+    hrefPattern ? hrefPattern.replace('{week}', String(w)) : `${basePath}/${w}/${activeTab}`;
 
   function close() {
     setClosing(true);
@@ -55,7 +72,7 @@ export default function WeekSelect({
     close();
     if (w !== selectedWeek) {
       setPickedWeek(w);
-      startTransition(() => router.push(`${basePath}/${w}/${activeTab}`));
+      startTransition(() => router.push(hrefFor(w)));
     }
   }
 
@@ -64,6 +81,7 @@ export default function WeekSelect({
   // the neighbours of the selection plus the project's current week (the
   // likeliest jumps). While browsing: whatever row the cursor/keys are on.
   useEffect(() => {
+    if (!prefetch) return;
     const idx = weeks.indexOf(selectedWeek);
     const targets = new Set<number>([
       projectCurrentWeek,
@@ -71,7 +89,7 @@ export default function WeekSelect({
     ]);
     const warm = () =>
       targets.forEach((w) => {
-        if (w && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
+        if (w && w !== selectedWeek) router.prefetch(hrefFor(w));
       });
     // Defer to idle time so warming never competes with rendering this page.
     // (Safari has no requestIdleCallback — fall back to a short timeout.)
@@ -81,25 +99,27 @@ export default function WeekSelect({
     }
     const id = window.setTimeout(warm, 300);
     return () => window.clearTimeout(id);
-  }, [weeks, selectedWeek, projectCurrentWeek, activeTab, basePath, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeks, selectedWeek, projectCurrentWeek, activeTab, basePath, hrefPattern, prefetch, router]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !prefetch) return;
     const w = weeks[activeIdx];
-    if (w != null && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
-  }, [open, activeIdx, weeks, selectedWeek, activeTab, basePath, router]);
+    if (w != null && w !== selectedWeek) router.prefetch(hrefFor(w));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeIdx, weeks, selectedWeek, activeTab, basePath, hrefPattern, prefetch, router]);
 
   // Prefetch every week row the moment it becomes visible in the open panel
   // (including while scrolling), so whichever week the user can see and click
   // is already in the router cache when the click lands.
   useEffect(() => {
-    if (!open || !listRef.current) return;
+    if (!open || !prefetch || !listRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const w = Number((entry.target as HTMLElement).dataset.week);
-          if (w && w !== selectedWeek) router.prefetch(`${basePath}/${w}/${activeTab}`);
+          if (w && w !== selectedWeek) router.prefetch(hrefFor(w));
           observer.unobserve(entry.target);
         }
       },
@@ -107,7 +127,8 @@ export default function WeekSelect({
     );
     listRef.current.querySelectorAll('[data-week]').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [open, weeks, selectedWeek, activeTab, basePath, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, weeks, selectedWeek, activeTab, basePath, hrefPattern, prefetch, router]);
 
   // Close on outside click.
   useEffect(() => {

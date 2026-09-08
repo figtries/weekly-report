@@ -35,7 +35,7 @@ export default function CreateReportHere({ date }: { date: string }) {
       <m.button {...pressMotion}
         onClick={create}
         disabled={creating}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-chart-1 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-chart-1/90 hover:shadow-md disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-primary px-4 py-2 text-sm font-medium"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />

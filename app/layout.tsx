@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
+import LiveProjectSwitcher, {
+  ProjectSwitcherFallback,
+} from "@/components/layout/LiveProjectSwitcher";
 import Sidebar from "@/components/layout/Sidebar";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 import { getDb, getLatestWeek } from "@/lib/data";
-import { listProjects } from "@/lib/projects";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,10 +28,6 @@ export default async function RootLayout({
   // getDb is 'use cache' (tag: 'db'), so the sidebar's week-scoped sub-links
   // stay part of the static shell and refresh when the current week changes.
   const db = await getDb();
-  // From SQLite, not db.json: the sidebar must name the project the rest of
-  // the app is actually pointed at, or the app disagrees with itself in the
-  // one place a user looks to check. Synchronous, so it still prerenders.
-  const projects = listProjects();
   const currentWeek = getLatestWeek(db) || 1;
   return (
     // data-scroll-behavior lets Next.js suspend smooth scrolling during route
@@ -53,7 +52,17 @@ export default async function RootLayout({
             tell you. MotionRoot adds no DOM, so the flex layout above still
             applies to Sidebar and the div exactly as it did. */}
         <MotionRoot>
-          <Sidebar currentWeek={currentWeek} projects={projects} />
+          {/* The project card is the ONE thing in this layout that may not come
+              from the prerendered shell — a shell is per deployment, and the
+              open project changes between them. See LiveProjectSwitcher. */}
+          <Sidebar
+            currentWeek={currentWeek}
+            switcher={
+              <Suspense fallback={<ProjectSwitcherFallback />}>
+                <LiveProjectSwitcher />
+              </Suspense>
+            }
+          />
           {/* `min-w-0` is load-bearing, not tidiness. A flex child's default
               `min-width: auto` sizes it to its CONTENT, so this column grew to
               2262px inside a 1240px window the moment a page held something
