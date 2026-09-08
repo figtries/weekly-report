@@ -110,11 +110,20 @@ export async function getActiveProject() {
 }
 
 /**
- * The list, newest touch first, with the open project pinned to the top.
+ * The list, newest touch first. NOTHING IS PINNED.
  *
- * Ordering is done here rather than in SQL because "the open one first" is a
- * property of the app's state, not of the table, and mixing the two into one
- * ORDER BY reads worse than saying it in a line of TypeScript.
+ * The open project used to be sorted to the front, and that one line made the
+ * screen unusable in the way people actually use it. Opening a project
+ * refreshes this list, the newly opened card jumps to position one, and every
+ * other card shifts down — under a finger that is already moving toward the
+ * next one. So you open the project you did not mean, and the card now at the
+ * top is the one that is already open, whose menu has no "Open this project"
+ * row at all. Reported on 8 Sep 2026 as "the wrong project comes out" and
+ * "other projects cannot be opened", and reproduced exactly: three cards, two
+ * clicks, and the third click had nothing to click.
+ *
+ * The badge already says which project is open. A list that rearranges itself
+ * in response to your own tap is not helping you find it.
  */
 export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<ProjectCard[]> {
   const activeId = await getActiveProjectId();
@@ -160,8 +169,7 @@ export async function listProjects(opts: { includeArchived?: boolean } = {}): Pr
       isActive: p.id === activeId,
       rowCount: counts.get(p.id) ?? 0,
       weekCount: weekCounts.get(p.id) ?? 0,
-    }))
-    .sort((a, b) => Number(b.isActive) - Number(a.isActive));
+    }));
 }
 
 export function countArchived(): number {

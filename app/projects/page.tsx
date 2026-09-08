@@ -5,7 +5,7 @@ import NewProjectDialog from '@/components/projects/NewProjectDialog';
 import PlannerWarmup from '@/components/projects/PlannerWarmup';
 import ProjectList from '@/components/projects/ProjectList';
 import { listProjects } from '@/lib/projects';
-import { Skeleton } from '@/components/ui/skeleton';
+import ProjectsSkeleton from '@/components/projects/ProjectsSkeleton';
 
 export const metadata = { title: 'Projects' };
 
@@ -62,21 +62,5 @@ async function ProjectsBody() {
           moment the browser first hears about 119 KB of code. */}
       <PlannerWarmup hasProjects={all.length > 0} />
     </RouteTransition>
-  );
-}
-
-/** Held space for the cards, so the header does not land alone and then jump. */
-function ProjectsSkeleton() {
-  return (
-    <div className="mx-auto max-w-6xl px-3 py-5 sm:p-6 lg:p-8">
-      <Skeleton className="h-9 w-40" />
-      <Skeleton className="mt-3 h-4 w-2/3 max-w-lg" />
-      <Skeleton className="mt-5 h-11 w-full max-w-md rounded-xl" />
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Skeleton className="h-44 rounded-xl" />
-        <Skeleton className="h-44 rounded-xl" />
-        <Skeleton className="h-44 rounded-xl" />
-      </div>
-    </div>
   );
 }
