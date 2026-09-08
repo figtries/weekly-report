@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
@@ -112,11 +112,57 @@ const itemClass = (active: boolean) =>
       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
   );
 
+/**
+ * Warmed at most once each, because `router.prefetch` does NOT dedupe — see the
+ * measurement in NavList below. A module-level set outlives every re-render of
+ * this list and is exactly as long-lived as the page it belongs to.
+ */
+const warmed = new Set<string>();
+
 function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pathname: string | null }) {
+  const router = useRouter();
   const Icon = dest.icon;
   const active = pathname ? dest.match(pathname) : false;
+  const href = dest.href(week);
+
+  /*
+   * PREFETCH ON INTENT, NOT ON SIGHT.
+   *
+   * Next prefetches every `<Link>` in the viewport, and all seven of these are
+   * in it from the first paint. Under `cacheComponents` one route is fetched as
+   * SEGMENTS — about three requests each — and since the open project became a
+   * cookie those segments are per-request renders rather than cache hits. So
+   * landing on the planner cost 51 requests and six seconds to settle, measured
+   * at 390px with the CPU held at a quarter speed, with nothing clicked.
+   *
+   * Twenty of those requests were for six destinations nobody had asked for,
+   * arriving while the page in front of the person was still hydrating. That is
+   * the connection AND the main thread busy at the moment somebody taps, which
+   * is the whole complaint.
+   *
+   * `onPointerEnter` covers a mouse; `onTouchStart` fires roughly a tenth of a
+   * second before the click on a phone, which is not much of a head start but
+   * costs nothing and is honest about what a touch screen can know. `onFocus`
+   * covers the keyboard. Navigation without a warm segment is still a cached
+   * shell away — this trades a little latency on the tap for a page that is
+   * finished loading when the tap happens.
+   */
+  const warm = () => {
+    if (warmed.has(href)) return;
+    warmed.add(href);
+    router.prefetch(href);
+  };
+
   return (
-    <PressLink href={dest.href(week)} className={itemClass(active)} {...pressMotion}>
+    <PressLink
+      href={href}
+      prefetch={false}
+      onPointerEnter={warm}
+      onTouchStart={warm}
+      onFocus={warm}
+      className={itemClass(active)}
+      {...pressMotion}
+    >
       <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
       <span>{dest.label}</span>
     </PressLink>
@@ -149,8 +195,9 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
    * warmed at all — and the answer here is none of them, because every one was
    * already covered:
    *
-   *   - each sidebar destination is a `<Link>` in this very list, on screen,
-   *     which Next prefetches by itself;
+   *   - each sidebar destination is a `<Link>` in this very list (which no
+   *     longer prefetches on sight either — see NavItem: seven viewport
+   *     prefetches were half the requests on every page load);
    *   - each sibling tab is a `<Link>` in `SectionTabs`, on the page where that
    *     tab bar actually appears — plus `WeekTabs` prefetches its own siblings
    *     explicitly.
