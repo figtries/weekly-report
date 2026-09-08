@@ -1,3 +1,6 @@
+import { Suspense } from 'react';
+import SectionSkeleton from '@/components/ui/SectionSkeleton';
+
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb } from '@/lib/data';
 import { getCatalogs } from '@/lib/catalogs';
@@ -6,24 +9,32 @@ import { EngineeringSource } from '@/components/settings/EngineeringSource';
 import { getDisciplineLinks, getRegisterSummary } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
-/**
- * The project this screen is about — read per request, never at module scope.
- * A module-level read is evaluated once at import and goes stale the moment
- * anyone switches project. See lib/projects.ts.
- */
-function activeProjectId(): string {
-  return getActiveProjectId() ?? '';
-}
 
 export const metadata = { title: 'Project Settings' };
 
-export default async function SettingsPage() {
+/**
+ * Behind a boundary because the open project is a cookie now, and a cookie is
+ * an uncached read (see lib/projects.ts). Prerendering this screen would mean
+ * baking one person's register into a page everyone is served.
+ */
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SectionSkeleton />}>
+      <SettingsBody />
+    </Suspense>
+  );
+}
+
+async function SettingsBody() {
+  // The open project comes from a cookie now, so this is a per-request read
+  // and cannot be baked into a shell. See lib/projects.ts.
+  const projectId = (await getActiveProjectId()) ?? '';
   const db = await getDb();
   const cat = getCatalogs(db);
   // Left at its own last movement rather than a chosen week: this decides where
   // a number comes from, so what matters is what the register currently knows.
-  const edl = getRegisterSummary(activeProjectId(), 'edl');
-  const disciplines = edl ? getDisciplineLinks(activeProjectId()) : [];
+  const edl = getRegisterSummary(projectId, 'edl');
+  const disciplines = edl ? getDisciplineLinks(projectId) : [];
 
   return (
     <RouteTransition id="settings">
@@ -41,7 +52,7 @@ export default async function SettingsPage() {
       <div className="space-y-4">
         {edl && disciplines.length > 0 && (
           <EngineeringSource
-            projectId={activeProjectId()}
+            projectId={projectId}
             disciplines={disciplines}
             registerDate={edl.evidenceDate}
           />

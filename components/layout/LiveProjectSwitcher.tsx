@@ -22,7 +22,7 @@ import { listProjects } from '@/lib/projects';
  */
 export default async function LiveProjectSwitcher() {
   await connection();
-  const projects = listProjects();
+  const projects = await listProjects();
   if (projects.length === 0) return null;
 
   return (

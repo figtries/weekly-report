@@ -113,7 +113,7 @@ export default function DashboardPage({
 async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const { week: weekParam } = await searchParams;
 
-  const projectId = getActiveProjectId();
+  const projectId = await getActiveProjectId();
   const data = projectId ? buildProjectDashboardData(projectId) : null;
 
   if (!data) {

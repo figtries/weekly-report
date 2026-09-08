@@ -35,8 +35,8 @@ export interface OpenProject {
   hasLegacyData: boolean;
 }
 
-export function getOpenProject(): OpenProject | null {
-  const id = getActiveProjectId();
+export async function getOpenProject(): Promise<OpenProject | null> {
+  const id = await getActiveProjectId();
   if (!id) return null;
   const p = db
     .select({
@@ -56,8 +56,8 @@ export function getOpenProject(): OpenProject | null {
  * which is not necessarily the project on screen — so without this, adding a
  * daily report while an app-made project is open would write it into Gundih.
  */
-export function assertLegacyWritable(): void {
-  const open = getOpenProject();
+export async function assertLegacyWritable(): Promise<void> {
+  const open = await getOpenProject();
   if (open && !open.hasLegacyData) {
     throw new Error(
       `"${open.name}" has no weekly or daily data yet, and saving here would write it into another project. Build its schedule first.`

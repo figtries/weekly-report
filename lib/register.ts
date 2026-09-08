@@ -985,3 +985,16 @@ export function getEngineeringBridge(projectId: string, week?: number): Engineer
     documents: loaded.documents.length,
   };
 }
+
+/**
+ * Every week number that exists in any project's register.
+ *
+ * Used only by `generateStaticParams` for Document Control, which runs at build
+ * time and therefore cannot ask which project a person has open — that answer
+ * is a cookie now (see lib/projects.ts). A superset across all projects is the
+ * honest thing to prerender: no visitor gets somebody else's week list baked
+ * into their shell, and a week that belongs to only one project still gets one.
+ */
+export function getAllRegisterWeekNumbers(): number[] {
+  return db.select({ weekNo: schema.weeks.weekNo }).from(schema.weeks).all().map((w) => w.weekNo);
+}

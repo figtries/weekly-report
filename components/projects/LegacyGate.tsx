@@ -2,7 +2,7 @@ import { Suspense, type ReactNode } from 'react';
 import { connection } from 'next/server';
 
 import NoLegacyData from './NoLegacyData';
-import { Skeleton } from '@/components/ui/skeleton';
+import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { getOpenProject } from '@/lib/legacy-bridge';
 
 /**
@@ -36,7 +36,7 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  */
 async function Decide({ what, children }: { what: string; children: ReactNode }) {
   await connection();
-  const open = getOpenProject();
+  const open = await getOpenProject();
   if (open && !open.hasLegacyData) return <NoLegacyData what={what} />;
   return <>{children}</>;
 }
@@ -65,7 +65,7 @@ export default function LegacyGate({
  */
 async function DecideChrome({ children }: { children: ReactNode }) {
   await connection();
-  const open = getOpenProject();
+  const open = await getOpenProject();
   if (open && !open.hasLegacyData) return null;
   return <>{children}</>;
 }
@@ -80,14 +80,3 @@ export function LegacyChromeGate({
   return <Suspense fallback={fallback ?? null}>{<DecideChrome>{children}</DecideChrome>}</Suspense>;
 }
 
-/** Held space rather than a blank page, on the same reasoning as PlannerSkeleton. */
-function SectionSkeleton() {
-  return (
-    <div className="space-y-4 p-4 sm:p-6 lg:p-8">
-      <Skeleton className="h-7 w-2/5" />
-      <Skeleton className="h-4 w-3/5" />
-      <Skeleton className="h-48 w-full rounded-xl" />
-      <Skeleton className="h-32 w-full rounded-xl" />
-    </div>
-  );
-}

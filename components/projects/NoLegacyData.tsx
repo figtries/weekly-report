@@ -21,8 +21,8 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  * is `EmptyState`, shared with the dashboard so the app has ONE way of saying
  * there is nothing here yet.
  */
-export default function NoLegacyData({ what }: { what: string }) {
-  const open = getOpenProject();
+export default async function NoLegacyData({ what }: { what: string }) {
+  const open = await getOpenProject();
 
   return (
     <EmptyState

@@ -16,8 +16,33 @@
  * top turns every export into a server action, so they cannot share this one.
  */
 import { asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { cookies } from 'next/headers';
 
 import { db, schema } from './sqlite';
+
+/**
+ * WHICH PROJECT IS OPEN LIVES IN THE BROWSER, NOT IN THE DATABASE.
+ *
+ * It used to be one row in `app_state`, and on the deployment that row is not
+ * shared with anybody: `lib/sqlite.ts` copies `data/seed.db` into the lambda's
+ * own temp directory, so "open this project" was written into whichever
+ * instance served the click and every other instance went on answering from the
+ * seed — where the open project is Gundih. The result was the app disagreeing
+ * with itself on one screen: the sidebar naming one project while the page
+ * beside it said another was open. A deployment wiped the choice outright.
+ *
+ * A cookie follows the person instead of the instance. It survives a deploy, it
+ * cannot be prerendered into a shared static shell, and two people can hold
+ * different projects open — which is what a global pointer could never do and
+ * this app will need the moment it has logins.
+ *
+ * The `app_state` row is still written and still read, as the fallback for a
+ * browser that has never chosen (a fresh phone, a shared link).
+ */
+export const OPEN_PROJECT_COOKIE = 'figtries_open_project';
+
+/** A year: the choice should outlive the session, and it is not a secret. */
+export const OPEN_PROJECT_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export interface ProjectCard {
   id: string;
@@ -47,16 +72,15 @@ export interface ProjectCard {
  * one. `lib/workspace.ts:52` has refused to leave the app empty since the JSON
  * days; this keeps that promise.
  */
-export function getActiveProjectId(): string | null {
+export async function getActiveProjectId(): Promise<string | null> {
+  // Reading a cookie is an uncached read, which is the point: it drags every
+  // caller out of the prerendered shell, where this answer never belonged.
+  const jar = await cookies();
+  const chosen = jar.get(OPEN_PROJECT_COOKIE)?.value;
+  if (chosen && isOpenable(chosen)) return chosen;
+
   const state = db.select().from(schema.appState).where(eq(schema.appState.id, 'singleton')).all()[0];
-  if (state?.activeProjectId) {
-    const live = db
-      .select({ id: schema.projects.id, archivedAt: schema.projects.archivedAt })
-      .from(schema.projects)
-      .where(eq(schema.projects.id, state.activeProjectId))
-      .all()[0];
-    if (live && !live.archivedAt) return live.id;
-  }
+  if (state?.activeProjectId && isOpenable(state.activeProjectId)) return state.activeProjectId;
   const first = db
     .select({ id: schema.projects.id })
     .from(schema.projects)
@@ -66,12 +90,22 @@ export function getActiveProjectId(): string | null {
   return first?.id ?? null;
 }
 
+/** Live and not archived — the two ways a stored pointer goes bad. */
+function isOpenable(id: string): boolean {
+  const row = db
+    .select({ id: schema.projects.id, archivedAt: schema.projects.archivedAt })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, id))
+    .all()[0];
+  return !!row && !row.archivedAt;
+}
+
 export function getProject(projectId: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0] ?? null;
 }
 
-export function getActiveProject() {
-  const id = getActiveProjectId();
+export async function getActiveProject() {
+  const id = await getActiveProjectId();
   return id ? getProject(id) : null;
 }
 
@@ -82,8 +116,8 @@ export function getActiveProject() {
  * property of the app's state, not of the table, and mixing the two into one
  * ORDER BY reads worse than saying it in a line of TypeScript.
  */
-export function listProjects(opts: { includeArchived?: boolean } = {}): ProjectCard[] {
-  const activeId = getActiveProjectId();
+export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<ProjectCard[]> {
+  const activeId = await getActiveProjectId();
 
   const counts = new Map<string, number>(
     db

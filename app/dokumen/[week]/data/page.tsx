@@ -1,3 +1,6 @@
+import { Suspense } from 'react';
+import SectionSkeleton from '@/components/ui/SectionSkeleton';
+
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
@@ -8,41 +11,43 @@ import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'EDL Data' };
 
-/**
- * The project this screen is about.
- *
- * Until now this was the literal string 'gundih', written by hand in four
- * files, so choosing a project moved the rest of the app and left Document
- * Control behind on someone else's register. It is read per request, never
- * at module scope: a module-level read is evaluated once at import and would
- * go stale the moment anyone switched project.
- */
-function activeProjectId(): string {
-  // Empty is a real answer — no project means no register, and the screens
-  // already know how to render nothing.
-  return getActiveProjectId() ?? '';
-}
 
 /** Where the engineering register is written to, not just read. */
-export default async function EdlDataPage({ params }: { params: Promise<{ week: string }> }) {
-  const week = Number((await params).week);
-  const shape = getRegisterShape(activeProjectId(), 'edl');
-  const summary = shape.documents > 0 ? getRegisterSummary(activeProjectId(), 'edl', week) : null;
+/**
+ * Behind a boundary because the open project is a cookie now, and a cookie is
+ * an uncached read (see lib/projects.ts). Prerendering this screen would mean
+ * baking one person's register into a page everyone is served.
+ */
+export default function EdlDataPage({ params }: { params: Promise<{ week: string }> }) {
+  return (
+    <Suspense fallback={<SectionSkeleton />}>
+      <EdlDataPageBody params={params} />
+    </Suspense>
+  );
+}
 
-  const parties = getRegisterParties(activeProjectId());
+async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }) {
+  const week = Number((await params).week);
+  // The open project comes from a cookie now, so this is a per-request read
+  // and cannot be baked into a shell. See lib/projects.ts.
+  const projectId = (await getActiveProjectId()) ?? '';
+  const shape = getRegisterShape(projectId, 'edl');
+  const summary = shape.documents > 0 ? getRegisterSummary(projectId, 'edl', week) : null;
+
+  const parties = getRegisterParties(projectId);
 
   if (!summary) {
     return (
       <RouteTransition id="dokumen-edl-data">
         <RegisterBuilder
-          projectId={activeProjectId()}
+          projectId={projectId}
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
 
           hasDocuments={false}
           existingSections={[]}
-          numbering={getNumbering(activeProjectId(), 'edl')}
+          numbering={getNumbering(projectId, 'edl')}
         />
       </RouteTransition>
     );
@@ -51,16 +56,16 @@ export default async function EdlDataPage({ params }: { params: Promise<{ week: 
   return (
     <RouteTransition id="dokumen-edl-data">
     <RegisterWorkbench
-      projectId={activeProjectId()}
+      projectId={projectId}
       register="edl"
-      tree={getRegisterTree(activeProjectId(), 'edl', week)}
-      cards={getRegisterCards(activeProjectId(), 'edl', week)}
-      obstacles={getObstacles(activeProjectId(), 'edl', week)}
+      tree={getRegisterTree(projectId, 'edl', week)}
+      cards={getRegisterCards(projectId, 'edl', week)}
+      obstacles={getObstacles(projectId, 'edl', week)}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
-      numbering={getNumbering(activeProjectId(), 'edl')}
+      numbering={getNumbering(projectId, 'edl')}
     />
     </RouteTransition>
   );

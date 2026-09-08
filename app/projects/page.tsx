@@ -1,8 +1,11 @@
+import { Suspense } from 'react';
+
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import NewProjectDialog from '@/components/projects/NewProjectDialog';
 import PlannerWarmup from '@/components/projects/PlannerWarmup';
 import ProjectList from '@/components/projects/ProjectList';
 import { listProjects } from '@/lib/projects';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export const metadata = { title: 'Projects' };
 
@@ -20,11 +23,22 @@ export const metadata = { title: 'Projects' };
  * is client state instead, which is what it always should have been for a
  * handful of rows already on the page.
  *
- * `listProjects()` is synchronous — better-sqlite3 counts as deterministic, so
- * this whole page prerenders into the static shell. See `lib/sqlite.ts`.
+ * `listProjects()` reads which project is OPEN, and that now lives in a cookie
+ * (see lib/projects.ts) — an uncached read, so the list streams behind a
+ * boundary instead of prerendering. It has to: the badge saying which card is
+ * open is a per-person answer, and this page baked into a shared static shell
+ * is precisely how one person's choice ended up on everybody's screen.
  */
 export default function ProjectsPage() {
-  const all = listProjects({ includeArchived: true });
+  return (
+    <Suspense fallback={<ProjectsSkeleton />}>
+      <ProjectsBody />
+    </Suspense>
+  );
+}
+
+async function ProjectsBody() {
+  const all = await listProjects({ includeArchived: true });
 
   return (
     <RouteTransition id="projects">
@@ -48,5 +62,21 @@ export default function ProjectsPage() {
           moment the browser first hears about 119 KB of code. */}
       <PlannerWarmup hasProjects={all.length > 0} />
     </RouteTransition>
+  );
+}
+
+/** Held space for the cards, so the header does not land alone and then jump. */
+function ProjectsSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl px-3 py-5 sm:p-6 lg:p-8">
+      <Skeleton className="h-9 w-40" />
+      <Skeleton className="mt-3 h-4 w-2/3 max-w-lg" />
+      <Skeleton className="mt-5 h-11 w-full max-w-md rounded-xl" />
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Skeleton className="h-44 rounded-xl" />
+        <Skeleton className="h-44 rounded-xl" />
+        <Skeleton className="h-44 rounded-xl" />
+      </div>
+    </div>
   );
 }

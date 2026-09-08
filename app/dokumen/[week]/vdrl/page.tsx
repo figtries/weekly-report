@@ -1,3 +1,6 @@
+import { Suspense } from 'react';
+import SectionSkeleton from '@/components/ui/SectionSkeleton';
+
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
@@ -9,14 +12,6 @@ import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'VDRL Summary' };
 
-/**
- * The project this screen is about — read per request, never at module scope.
- * A module-level read is evaluated once at import and goes stale the moment
- * anyone switches project. See lib/projects.ts.
- */
-function activeProjectId(): string {
-  return getActiveProjectId() ?? '';
-}
 
 /**
  * The vendor register, read the same way and telling a different story.
@@ -26,24 +21,40 @@ function activeProjectId(): string {
  * the screen leads with. 76 packages would be a wall of empty cards, so they
  * are folded by status — only the ones that have actually moved get a card.
  */
-export default async function VdrlSummaryPage({ params }: { params: Promise<{ week: string }> }) {
+/**
+ * Behind a boundary because the open project is a cookie now, and a cookie is
+ * an uncached read (see lib/projects.ts). Prerendering this screen would mean
+ * baking one person's register into a page everyone is served.
+ */
+export default function VdrlSummaryPage({ params }: { params: Promise<{ week: string }> }) {
+  return (
+    <Suspense fallback={<SectionSkeleton />}>
+      <VdrlSummaryPageBody params={params} />
+    </Suspense>
+  );
+}
+
+async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string }> }) {
   const week = Number((await params).week);
-  const shape = getRegisterShape(activeProjectId(), 'vdrl');
-  const summary = shape.documents > 0 ? getRegisterSummary(activeProjectId(), 'vdrl', week) : null;
+  // The open project comes from a cookie now, so this is a per-request read
+  // and cannot be baked into a shell. See lib/projects.ts.
+  const projectId = (await getActiveProjectId()) ?? '';
+  const shape = getRegisterShape(projectId, 'vdrl');
+  const summary = shape.documents > 0 ? getRegisterSummary(projectId, 'vdrl', week) : null;
 
   if (!summary) {
-    const parties = getRegisterParties(activeProjectId());
+    const parties = getRegisterParties(projectId);
     return (
       <RouteTransition id="dokumen-vdrl-summary">
         <RegisterBuilder
-          projectId={activeProjectId()}
+          projectId={projectId}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
 
           hasDocuments={false}
           existingSections={[]}
-          numbering={getNumbering(activeProjectId(), 'vdrl')}
+          numbering={getNumbering(projectId, 'vdrl')}
         />
       </RouteTransition>
     );
@@ -54,9 +65,9 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
     <SummaryScreen
       summary={summary}
       // Vendor packages are the top level here — one card per package.
-      groups={getRegisterTree(activeProjectId(), 'vdrl', week)}
-      obstacles={getObstacles(activeProjectId(), 'vdrl', week)}
-      movement={getWeekMovement(activeProjectId(), 'vdrl', week)}
+      groups={getRegisterTree(projectId, 'vdrl', week)}
+      obstacles={getObstacles(projectId, 'vdrl', week)}
+      movement={getWeekMovement(projectId, 'vdrl', week)}
       groupNoun="packages"
       groupsTitle="By vendor package"
       foldEmptyGroups
@@ -64,9 +75,9 @@ export default async function VdrlSummaryPage({ params }: { params: Promise<{ we
 
     <div className="mt-6">
       <StageWeightsCard
-        projectId={activeProjectId()}
+        projectId={projectId}
         register="vdrl"
-        weights={getStageWeights(activeProjectId(), 'vdrl')}
+        weights={getStageWeights(projectId, 'vdrl')}
       />
     </div>
     </RouteTransition>

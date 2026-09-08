@@ -10,7 +10,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Runtime prefetch (validated against the sample week) lets the router
 // prefetch each tab's full cached content — no skeleton flash between
 // subpages. 'static' isn't possible here: WeekTabs/Sidebar read usePathname().
-export const unstable_instant = { prefetch: 'runtime', samples: [{ params: { week: '1' } }] };
+export const unstable_instant = {
+  prefetch: 'runtime',
+  // The open project is a cookie now (see lib/projects.ts), and this validation
+  // refuses any read it has not been told about. A null value is the sample
+  // that matters: a visitor who has never chosen a project, which is every
+  // first visit and every fresh phone.
+  samples: [{ params: { week: '1' }, cookies: [{ name: 'figtries_open_project', value: null }] }],
+};
 
 export async function generateStaticParams() {
   const db = await getDb();

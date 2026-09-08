@@ -56,7 +56,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const weights = getWeightSummary(id);
   const bars = getBarStyles(id, sheet.rows);
   const weeks = getWeekSpans(id);
-  const isOpen = getActiveProjectId() === id;
+  const isOpen = (await getActiveProjectId()) === id;
 
   const facts = [
     `${contents.wbsRows} rows`,

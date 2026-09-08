@@ -1,28 +1,32 @@
+import { Suspense } from 'react';
+
 import { RegisterTabs } from '@/components/dokumen/RegisterTabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb, getLatestWeek } from '@/lib/data';
-import { getRegisterWeeks } from '@/lib/register';
+import { getAllRegisterWeekNumbers, getRegisterWeeks } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'Document Control' };
 
-/**
- * The project this screen is about.
- *
- * Until now this was the literal string 'gundih', written by hand in four
- * files, so choosing a project moved the rest of the app and left Document
- * Control behind on someone else's register. It is read per request, never
- * at module scope: a module-level read is evaluated once at import and would
- * go stale the moment anyone switched project.
- */
-function activeProjectId(): string {
-  // Empty is a real answer — no project means no register, and the screens
-  // already know how to render nothing.
-  return getActiveProjectId() ?? '';
-}
 
+/**
+ * Every week any project has, not the open project's.
+ *
+ * This used to ask which project was open and enumerate ITS weeks — a question
+ * with no answer at build time now that the open project is a cookie, and one
+ * that was wrong even before: on the deployment it resolved to whatever
+ * `data/seed.db` happened to say, which is nobody's choice.
+ *
+ * It must still return something. Without `generateStaticParams` the `[week]`
+ * segment is request-time-only, so `await params` in this layout becomes an
+ * uncached read outside `<Suspense>` and the build refuses the route outright.
+ * A superset is the right shape: unknown weeks still render on demand, and
+ * every week that does exist gets its shell.
+ */
 export function generateStaticParams() {
-  return getRegisterWeeks(activeProjectId()).map((w) => ({ week: String(w.weekNo) }));
+  const weeks = new Set(getAllRegisterWeekNumbers());
+  return [...weeks].sort((a, b) => a - b).map((w) => ({ week: String(w) }));
 }
 
 /**
@@ -48,19 +52,19 @@ export default async function DocumentControlLayout({
   params: Promise<{ week: string }>;
 }) {
   const { week } = await params;
-  const weeks = getRegisterWeeks(activeProjectId()).map((w) => w.weekNo);
-  const db = await getDb();
 
   return (
     // Stable across all four screens and every week: this fires on the way
     // into Document Control and stays still inside it. See the weekly layout.
     <RouteTransition id="dokumen">
     <div className="section-shell flex h-full flex-col">
-      <RegisterTabs
-        weeks={weeks}
-        selectedWeek={Number(week)}
-        projectCurrentWeek={getLatestWeek(db) || 1}
-      />
+      {/* The week list belongs to the OPEN project, which is a cookie now —
+          a per-request read, so the tab row streams while the screens below it
+          keep their shell. Held space, not nothing: this row is the furniture
+          everything else is measured against. */}
+      <Suspense fallback={<RegisterTabsFallback />}>
+        <RegisterTabsForOpenProject week={Number(week)} />
+      </Suspense>
       {/* scrollbar-none for the same reason the weekly report hides it: the
           global classic scrollbar reserves width on this scroller alone and
           would pull every card's right edge in from the tab row above it. */}
@@ -72,5 +76,27 @@ export default async function DocumentControlLayout({
       </div>
     </div>
     </RouteTransition>
+  );
+}
+
+/**
+ * The tab row, resolved per request because its weeks come from whichever
+ * project the visitor has open (see lib/projects.ts).
+ */
+async function RegisterTabsForOpenProject({ week }: { week: number }) {
+  const projectId = (await getActiveProjectId()) ?? '';
+  const weeks = getRegisterWeeks(projectId).map((w) => w.weekNo);
+  const db = await getDb();
+
+  return <RegisterTabs weeks={weeks} selectedWeek={week} projectCurrentWeek={getLatestWeek(db) || 1} />;
+}
+
+/** Held space, so the scroller below does not jump when the real row lands. */
+function RegisterTabsFallback() {
+  return (
+    <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8">
+      <Skeleton className="h-11 w-32 rounded-lg" />
+      <Skeleton className="mt-3 h-9 w-full rounded-lg" />
+    </div>
   );
 }

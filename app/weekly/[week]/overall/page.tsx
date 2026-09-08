@@ -14,7 +14,10 @@ import LegacyGate from '@/components/projects/LegacyGate';
 
 export const unstable_instant = {
   prefetch: 'runtime',
-  samples: [{ params: { week: '1' } }],
+  // The open project is a cookie now (see lib/projects.ts); this validation
+  // refuses any read it has not been told about. A null value samples the
+  // visitor who has never chosen a project.
+  samples: [{ params: { week: '1' }, cookies: [{ name: 'figtries_open_project', value: null }] }],
   unstable_disableValidation: true,
 };
 

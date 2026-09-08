@@ -2,10 +2,12 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { isKnownCurrency } from './currency';
+import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
 /**
  * Projects — the writes.
@@ -165,6 +167,16 @@ export async function setActiveProjectAction(projectId: string): Promise<Project
       .values({ id: 'singleton', activeProjectId: projectId, updatedAt: now })
       .onConflictDoUpdate({ target: schema.appState.id, set: { activeProjectId: projectId, updatedAt: now } })
       .run();
+    // The cookie is the one that counts (see lib/projects.ts). The row above is
+    // kept as the answer for a browser that has never chosen — and because on
+    // a real machine, with one database, the two agree anyway.
+    const jar = await cookies();
+    jar.set(OPEN_PROJECT_COOKIE, projectId, {
+      maxAge: OPEN_PROJECT_COOKIE_MAX_AGE,
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: true,
+    });
     revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
