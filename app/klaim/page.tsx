@@ -3,17 +3,24 @@ import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { getDb } from '@/lib/data';
 import { claimableCauseLabels } from '@/lib/catalogs';
 import { buildDelayRegister, fmtNum } from '@/lib/analysis';
-import NoLegacyData from '@/components/projects/NoLegacyData';
-import { getOpenProject } from '@/lib/legacy-bridge';
+import LegacyGate from '@/components/projects/LegacyGate';
 
 export const metadata = { title: 'Delay Register' };
 
-export default async function KlaimPage() {
-  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
-  // project may have no data here at all. Saying so beats drawing another
-  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
-  const open = getOpenProject();
-  if (open && !open.hasLegacyData) return <NoLegacyData what="delay records" />;
+/**
+ * The gate is asked PER REQUEST (see components/projects/LegacyGate.tsx): this
+ * page's static HTML used to carry the open project's NAME, and the CDN served
+ * it to whoever had a different one open.
+ */
+export default function KlaimPage() {
+  return (
+    <LegacyGate what="delay records">
+      <KlaimBody />
+    </LegacyGate>
+  );
+}
+
+async function KlaimBody() {
 
   const db = await getDb();
   const reg = buildDelayRegister(db, claimableCauseLabels(db));

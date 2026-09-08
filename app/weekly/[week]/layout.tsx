@@ -3,8 +3,9 @@ import { validateWeek } from '@/lib/analysis';
 import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import NoLegacyData from '@/components/projects/NoLegacyData';
-import { getOpenProject } from '@/lib/legacy-bridge';
+import { LegacyChromeGate } from '@/components/projects/LegacyGate';
+import { Skeleton } from '@/components/ui/skeleton';
+
 
 // Runtime prefetch (validated against the sample week) lets the router
 // prefetch each tab's full cached content — no skeleton flash between
@@ -26,24 +27,6 @@ export default async function WeeklyWeekLayout({
   const { week } = await params;
   const weekNo = Number(week);
 
-  // Covers Weekly Progress AND Reports — both live under this layout, so one
-  // check serves five screens. The v1 pages read db.json while projects are
-  // chosen in SQLite; when the open project has no data here, its week picker
-  // and step counts would be another project's. See lib/legacy-bridge.ts.
-  //
-  // It must still render `children`. A layout that returns early instead fails
-  // the build: `unstable_instant` validates the segment beneath it, and a child
-  // that never renders comes back as "the target segment was prevented from
-  // rendering for an unknown reason". So the chrome goes and the page below
-  // says the rest.
-  const open = getOpenProject();
-  if (open && !open.hasLegacyData) {
-    return (
-      <RouteTransition id="weekly">
-        <div className="flex h-full flex-col">{children}</div>
-      </RouteTransition>
-    );
-  }
 
   const db = await getDb();
   const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);
@@ -71,13 +54,30 @@ export default async function WeeklyWeekLayout({
     // carries its own boundary inside the scroller below.
     <RouteTransition id="weekly">
     <div className="section-shell flex h-full flex-col print:block print:h-auto">
-      <WeekTabs
-        weeks={weeks}
-        selectedWeek={weekNo}
-        projectCurrentWeek={db.project.currentWeek}
-        dueCount={dueCount}
-        checkCount={checkCount}
-      />
+      {/* Covers Weekly Progress AND Reports — both live under this layout, so
+          one gate serves five screens. The v1 pages read db.json while projects
+          are chosen in SQLite; when the open project has no data here, this
+          week picker and these step counts would be another project's.
+
+          The gate reads per request (see LegacyGate). It used to be an early
+          return in this function, which put the answer in the prerendered
+          shell — so the deployment served Gundih's chrome above another
+          project's empty state. The layout must still render `children`
+          either way: a layout that returns early fails the build, because
+          `unstable_instant` validates the segment beneath it and a child that
+          never renders comes back as "the target segment was prevented from
+          rendering for an unknown reason". So only the chrome is gated, and
+          the page below says the rest. */}
+      <LegacyChromeGate fallback={<WeekTabsFallback />}>
+        <WeekTabs
+          weeks={weeks}
+          selectedWeek={weekNo}
+          projectCurrentWeek={db.project.currentWeek}
+          dueCount={dueCount}
+          checkCount={checkCount}
+        />
+      </LegacyChromeGate>
+
       {/* scrollbar-none: the global 10px classic scrollbar would otherwise
           reserve layout width on this scroller only (the header/print button
           sits outside it), pulling every card's right edge ~10px left of the
@@ -90,5 +90,24 @@ export default async function WeeklyWeekLayout({
       <div className="section-scroll flex-1 overflow-auto scrollbar-none print:overflow-visible">{children}</div>
     </div>
     </RouteTransition>
+  );
+}
+
+/**
+ * Held space for the chrome while the gate resolves, mirroring WeekTabs' own
+ * padding so the scroller below does not jump when the real thing lands. It is
+ * deliberately not a fixed pixel height — that number would go stale the first
+ * time the header changes.
+ */
+function WeekTabsFallback() {
+  return (
+    <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-11 w-32 rounded-lg" />
+        <Skeleton className="h-7 w-24 rounded-full" />
+      </div>
+      <Skeleton className="mt-3 h-11 w-full max-w-md rounded-xl" />
+      <Skeleton className="mt-3 h-9 w-full rounded-lg" />
+    </div>
   );
 }

@@ -1,8 +1,7 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { getDb } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
-import NoLegacyData from '@/components/projects/NoLegacyData';
-import { getOpenProject } from '@/lib/legacy-bridge';
+import LegacyGate from '@/components/projects/LegacyGate';
 
 function nextDateAfter(lastDate: string | undefined): string {
   if (!lastDate) return new Date().toISOString().slice(0, 10);
@@ -11,12 +10,20 @@ function nextDateAfter(lastDate: string | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default async function DailyListPage() {
-  // The v1 pages read db.json, and projects are chosen in SQLite — so the open
-  // project may have no data here at all. Saying so beats drawing another
-  // project's numbers under a sidebar naming this one. See lib/legacy-bridge.ts.
-  const open = getOpenProject();
-  if (open && !open.hasLegacyData) return <NoLegacyData what="daily reports" />;
+/**
+ * The gate is asked PER REQUEST (see components/projects/LegacyGate.tsx): this
+ * page's static HTML used to carry the open project's NAME, and the CDN served
+ * it to whoever had a different one open.
+ */
+export default function DailyListPage() {
+  return (
+    <LegacyGate what="daily reports">
+      <DailyListBody />
+    </LegacyGate>
+  );
+}
+
+async function DailyListBody() {
 
   const db = await getDb();
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
