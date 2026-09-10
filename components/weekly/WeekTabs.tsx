@@ -131,34 +131,51 @@ export default function WeekTabs({
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
-      <div className="flex items-start justify-between gap-2 md:items-center md:gap-x-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <WeekSelect
-              weeks={weeks}
-              selectedWeek={selectedWeek}
-              projectCurrentWeek={optimisticCurrent}
-              activeTab={activeTab}
-            />
-            {isCurrent && (
-              <span className="inline-flex shrink-0 animate-pop-in items-center gap-1.5 whitespace-nowrap rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
-                <span className="h-1.5 w-1.5 rounded-full bg-ok" />
-                Current
-              </span>
-            )}
-          </div>
+      {/* ONE grid holds all four controls, and the stepper changes seat in it
+          rather than being rendered twice — a second `WeekSteps` would mean two
+          elements claiming the same shared-layout id and the sliding pill would
+          jump between them.
+
+          On a phone: week picker and actions share the top row, stepper spans
+          beneath. From `md` up the stepper moves INTO that row, between the two,
+          which is what closes the half-screen of white the actions used to be
+          pushed across. Every control on the row stands 44px tall, so they read
+          as one bar instead of three things that happen to be near each other. */}
+      <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[auto_1fr_auto] md:gap-x-4">
+        <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
+          <WeekSelect
+            weeks={weeks}
+            selectedWeek={selectedWeek}
+            projectCurrentWeek={optimisticCurrent}
+            activeTab={activeTab}
+          />
+          {isCurrent && (
+            <span className="inline-flex shrink-0 animate-pop-in items-center gap-1.5 whitespace-nowrap rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
+              <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+              Current
+            </span>
+          )}
         </div>
+
+        <WeekSteps
+          // min-w-0: a grid item defaults to min-width:auto, which would let
+          // the stepper push the row wider instead of scrolling inside it.
+          className="col-span-2 col-start-1 row-start-2 -mx-3 min-w-0 px-3 sm:mx-0 sm:px-0 md:col-span-1 md:col-start-2 md:row-start-1"
+          steps={steps}
+          activeKey={activeStep}
+          stretch
+        />
+
         {/* The "set as current" button unmounts once the week is current; the
             group is justify-end, so the print button at the right edge never
-            moves. Freeing the width keeps the Current badge on the same row as
-            the week select on narrow screens. */}
-        <div className="flex shrink-0 items-start justify-end gap-2 sm:items-center">
+            moves. */}
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2 md:col-start-3">
           {!isCurrent && (
             <m.button {...pressMotion}
               onClick={setAsCurrent}
               disabled={isPending}
-              className="inline-flex min-h-10 animate-scale-in items-center justify-center gap-1.5 rounded-lg bg-ok px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:brightness-110 disabled:opacity-70"
-              title="Make this the latest reported week — the S-Curve actual line runs up to here"
+              className="inline-flex min-h-11 animate-scale-in items-center justify-center gap-1.5 rounded-lg bg-ok px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:brightness-110 disabled:opacity-70"
+              title="Make this the latest reported week: the S-Curve actual line runs up to here"
             >
               <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
               <span className="sm:hidden">Set as Current</span>
@@ -174,12 +191,6 @@ export default function WeekTabs({
         </div>
       </div>
 
-      <WeekSteps
-        className="-mx-3 mt-2 px-3 sm:mx-0 sm:px-0"
-        steps={steps}
-        activeKey={activeStep}
-      />
-
       {/* The four sheets are siblings, not stages, so they stay a plain tab row
           — and only while step 3 is where you are. Showing them permanently put
           six destinations on a 390px screen and made "Report" look like a
@@ -187,6 +198,7 @@ export default function WeekTabs({
       {onReport && (
         <SectionTabs
           className="-mx-3 mt-2 px-3 sm:mx-0 sm:px-0"
+          stretch
           tabs={GROUPS.laporan.map((t) => ({
             href: `/weekly/${selectedWeek}/${t.key}`,
             label: t.short,

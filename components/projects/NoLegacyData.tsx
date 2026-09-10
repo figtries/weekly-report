@@ -28,7 +28,7 @@ export default async function NoLegacyData({ what }: { what: string }) {
     <EmptyState
       icon={FolderKanban}
       title={open ? `“${open.name}” has no ${what} yet` : `No ${what} yet`}
-      body={`This project was made in the app and holds only its plan so far. ${what} start once there is work to measure — build the schedule first, or switch back to a project that already has one.`}
+      body={`This project was made in the app and holds only its plan so far. ${what} start once there is work to measure. Build the schedule first, or switch back to a project that already has one.`}
       primary={
         open ? { href: `/projects/${open.id}`, label: 'Build the schedule' } : undefined
       }

@@ -6,6 +6,7 @@ import { Check, Loader2 } from 'lucide-react';
 import { saveDocument, saveStage } from '@/lib/doc-actions';
 import { STAGE_LABEL, STAGE_ORDER, buildJourney, type DocumentCard } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
+import NativeSelect from '@/components/ui/NativeSelect';
 import { cn } from '@/lib/utils';
 
 import { DocumentJourney } from './DocumentJourney';
@@ -33,9 +34,16 @@ const CODES = ['', 'APP', 'AWC', 'RWC'];
 /** Only the three that carry weight are shown by default; the rest on request. */
 const CORE: DocStage[] = ['IFR', 'IFA', 'AFC'];
 
+/**
+ * The same metrics `Input` and `NativeSelect` use, so the six controls on a
+ * stage row share one height, one corner radius and one focus ring. It used to
+ * be `h-10 rounded-md` with its own focus colour, which put this table half a
+ * step out of the app on every count.
+ */
 const field =
-  'h-10 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none ' +
-  'transition-colors duration-150 ease-ios focus:border-primary/60';
+  'h-8 min-h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 ' +
+  'text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 ' +
+  'focus-visible:ring-ring/50 sm:min-h-0 md:text-sm dark:bg-input/30';
 
 export function DocumentEditor({
   projectId,
@@ -210,12 +218,19 @@ function StageRow({
           className={cn(field, 'font-mono')}
         />
       </td>
-      <td>
-        <select defaultValue={draft.returnCode} onBlur={onBlur('returnCode')} className={field}>
+      {/* `pr-2` like every other cell in this row. Without it the Code column
+          sat flush against the table's right edge while the five fields to its
+          left each kept a gutter, which is what made this row look ragged. */}
+      <td className="pr-2">
+        <NativeSelect
+          defaultValue={draft.returnCode}
+          onBlur={onBlur('returnCode')}
+          aria-label="Return code"
+        >
           {CODES.map((c) => (
             <option key={c} value={c}>{c || '—'}</option>
           ))}
-        </select>
+        </NativeSelect>
       </td>
     </tr>
   );

@@ -2,6 +2,7 @@
 
 import SectionTabs from '@/components/layout/SectionTabs';
 import WeekSelect from '@/components/weekly/WeekSelect';
+import { REGISTER_INFO } from '@/lib/register-shared';
 import { usePathname } from 'next/navigation';
 
 /**
@@ -42,6 +43,7 @@ export function RegisterTabs({
 }) {
   const pathname = usePathname();
   const active = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'summary';
+  const info = REGISTER_INFO[active.startsWith('vdrl') ? 'vdrl' : 'edl'];
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
@@ -64,14 +66,34 @@ export function RegisterTabs({
         )}
       </div>
 
+      {/* `stretch` for the same reason the weekly header has it, and because
+          this row was built to line up with that one to the pixel. Stretch one
+          and not the other and moving between the two sections stops feeling
+          like the same app. */}
       <SectionTabs
         className="-mx-3 mt-2 stagger-1 px-3 sm:mx-0 sm:px-0"
+        stretch
         tabs={TABS.map((t) => ({
           href: `/dokumen/${selectedWeek}/${t.key}`,
           label: t.label,
           short: t.short,
         }))}
       />
+
+      {/* WHICH OF THE TWO YOU ARE LOOKING AT, AND WHAT THAT MEANS. Four tabs
+          reading EDL, EDL list, VDRL, VDRL list told a document controller
+          everything and everybody else nothing, and the difference is not
+          decoration: one register is owed BY you and has promised dates, the
+          other is owed TO you and has none, which is why only one of these
+          screens draws a plan line or counts anything overdue. One line, on
+          every screen of the section, because the pair is a choice you make
+          again every time you come back. */}
+      <p className="mt-2 stagger-2 animate-enter max-w-4xl text-[11px] leading-snug text-muted-foreground">
+        <span className="font-semibold text-foreground">
+          {info.short} · {info.long}
+        </span>{' '}
+        {info.owes}. {info.detail}
+      </p>
     </div>
   );
 }

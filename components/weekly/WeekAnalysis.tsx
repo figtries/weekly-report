@@ -142,7 +142,7 @@ export default function WeekAnalysis({
           <CardContent>
             <ContractValueField value={health.contractValue} />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Every item already carries a weight, so earned value is one multiplication away — this
+              Every item already carries a weight, so earned value is one multiplication away. This
               single field is what lets the report speak in money instead of only percentages.
             </p>
           </CardContent>
@@ -159,7 +159,7 @@ export default function WeekAnalysis({
             <CardHeader>
               <CardTitle className={TYPE.cardTitle}>This week in a paragraph</CardTitle>
               <CardDescription className={TYPE.cardDesc}>
-                Written by the app from the rolled-up figures — ready to paste into the report
+                Written by the app from the rolled-up figures, ready to paste into the report
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
@@ -191,7 +191,7 @@ export default function WeekAnalysis({
             <CardHeader>
               <CardTitle className={TYPE.cardTitle}>{lookAhead.length}-week look-ahead</CardTitle>
               <CardDescription className={TYPE.cardDesc}>
-                Not just the planned target — stated against the velocity actually being achieved
+                Not just the planned target, but stated against the velocity actually being achieved
                 lately
               </CardDescription>
             </CardHeader>
@@ -240,7 +240,7 @@ export default function WeekAnalysis({
           <CardHeader className="pb-4">
             <CardTitle className={TYPE.cardTitle}>What is dragging</CardTitle>
             <CardDescription className={TYPE.cardDesc}>
-              Sorted by weight-factor deviation, not by percentage — a heavy item running slightly
+              Sorted by weight-factor deviation, not by percentage. A heavy item running slightly
               late is more dangerous than a light one that has not started
             </CardDescription>
           </CardHeader>

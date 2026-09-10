@@ -7,6 +7,7 @@ import { m } from 'framer-motion';
 import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { type FormEvent, type FocusEvent, type KeyboardEvent, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { saveDailyAction } from '@/lib/actions';
 import SavePdfButton from '@/components/print/SavePdfButton';
 import DateField from '@/components/ui/DateField';
@@ -51,6 +52,7 @@ export default function DailyForm({
   /** Keyed by WeatherInfo field name — see lib/catalogs.ts. */
   weatherLabels: Record<string, string>;
 }) {
+  const router = useRouter();
   const [form, setForm] = useState<DailyReport>(report);
   const [saving, startSaveTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
@@ -184,8 +186,26 @@ export default function DailyForm({
         cascade instead of the whole page animating as one slow block. */}
     <div className="space-y-6 print:hidden">
       <div className="flex items-center justify-between mb-4">
+        {/* Back names its destination rather than trusting history: a report
+            reached by creating it, by a deep link, or by a reload all have a
+            different "previous page", and only one of them is the list.
+
+            The click also refreshes before it leaves, which is what puts a
+            just-created report in that list. `/daily` gets prefetched by the
+            week tabs and by this very link, so without it the payload the
+            router already holds can be the one from before the report existed.
+
+            And an unsaved edit gets asked about instead of thrown away: this
+            screen commits on Save, not on every keystroke. */}
         <PressLink {...pressMotion}
           href="/daily"
+          onClick={(e) => {
+            if (dirty && !window.confirm('Leave without saving? Your changes to this report will be lost.')) {
+              e.preventDefault();
+              return;
+            }
+            router.refresh();
+          }}
           className="inline-flex items-center gap-2 text-muted-foreground transition-colors duration-200 ease-ios hover:text-foreground"
           aria-label="Back to daily reports"
         >

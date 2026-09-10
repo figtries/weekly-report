@@ -43,8 +43,8 @@ async function SettingsBody() {
       <header className="mb-6 animate-enter">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Settings</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          The lists below belong to this project, not to the app. Another project keeps its own —
-          which is what lets this app serve any company. Changes apply to the next report; reports
+          The lists below belong to this project, not to the app. Another project keeps its own, which is
+          what lets this app serve any company. Changes apply to the next report; reports
           already issued are left alone.
         </p>
       </header>

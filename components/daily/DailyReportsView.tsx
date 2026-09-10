@@ -102,7 +102,7 @@ export default function DailyReportsView({
         const res = await deleteDailyAction(date);
         if (!res.ok) error = res.error;
       } catch {
-        error = 'Network error — please try again';
+        error = 'Network error. Please try again';
       }
       if (error) {
         // The report is still there: bring its row back and say why.
@@ -139,7 +139,7 @@ export default function DailyReportsView({
 
       <div className="divide-y divide-border rounded-lg border border-border bg-card shadow-sm">
         {visible.length === 0 && (
-          <p className="p-6 text-sm text-muted-foreground">No daily reports yet — create one above.</p>
+          <p className="p-6 text-sm text-muted-foreground">No daily reports yet. Create one above.</p>
         )}
         {visible.length > 0 && filtered.length === 0 && (
           <p className="p-6 text-sm text-muted-foreground">No daily reports for {selectedLabel}.</p>

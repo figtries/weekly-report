@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Spinner from '@/components/ui/Spinner';
 import { saveStageWeights } from '@/lib/doc-actions';
 import { STAGE_FULL, STAGE_LABEL } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
@@ -24,9 +25,8 @@ export function StageWeightsCard({
   weights: { stage: DocStage; weight: number }[];
 }) {
   const weighted = weights.filter((w) => w.weight > 0);
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(weighted.map((w) => [w.stage, String(w.weight)])),
-  );
+  const stored = Object.fromEntries(weighted.map((w) => [w.stage, String(w.weight)]));
+  const [values, setValues] = useState<Record<string, string>>(stored);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -35,6 +35,11 @@ export function StageWeightsCard({
 
   const total = Object.values(values).reduce((a, v) => a + (Number(v) || 0), 0);
   const balanced = Math.abs(total - 100) < 0.001;
+  // Compared against what is stored, not against a flag someone remembered to
+  // clear: typing a 4 over a 3 and then typing the 3 back is not a change, and
+  // a Save button that stays lit through that is telling the reader something
+  // untrue about the database.
+  const dirty = weighted.some((w) => (values[w.stage] ?? '') !== stored[w.stage]);
 
   const submit = () => {
     setError(null); setSaved(false);
@@ -82,10 +87,11 @@ export function StageWeightsCard({
             className={`text-sm tabular-nums ${balanced ? 'text-muted-foreground' : 'font-medium text-rose-600'}`}
           >
             total {Number(total.toFixed(2))}
-            {!balanced && ' — must be 100'}
+            {!balanced && ' (must be 100)'}
           </span>
-          <Button className="ml-auto h-11" onClick={submit} disabled={pending || !balanced}>
-            {pending ? 'Saving…' : saved ? 'Saved' : 'Save'}
+          <Button className="ml-auto h-11 gap-1.5" onClick={submit} disabled={pending || !balanced || !dirty}>
+            {pending && <Spinner />}
+            {pending ? 'Saving…' : saved && !dirty ? 'Saved' : 'Save'}
           </Button>
         </div>
       </div>

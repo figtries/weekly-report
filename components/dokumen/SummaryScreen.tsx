@@ -297,7 +297,7 @@ export function SummaryScreen({
                 <span className="font-semibold">
                   Nothing filed since week {summary.evidenceWeek}
                 </span>{' '}
-                ({longDate(summary.evidenceDate)}) — you are viewing week {summary.asOfWeek}.
+                ({longDate(summary.evidenceDate)}). You are viewing week {summary.asOfWeek}.
               </p>
             </CardContent>
           </Card>
@@ -467,7 +467,7 @@ export function SummaryScreen({
             <Card className="py-0 mt-3 border-dashed shadow-none">
               <CardContent className="flex flex-col gap-3 p-5">
                 <p className="text-sm font-semibold">
-                  {idle.length} packages have sent nothing —{' '}
+                  {idle.length} packages have sent nothing:{' '}
                   {idle.reduce((a, g) => a + g.documents, 0)} documents owed
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -558,7 +558,7 @@ export function SummaryScreen({
             {movement.events.length > MOVEMENTS_SHOWN && (
               <Reveal delay={0.44}>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {MOVEMENTS_SHOWN} of {movement.events.length} — the Log tab has them all.
+                  {MOVEMENTS_SHOWN} of {movement.events.length}. The Log tab has them all.
                 </p>
               </Reveal>
             )}
@@ -570,7 +570,7 @@ export function SummaryScreen({
                 <span className="font-semibold">Nothing sent, returned or approved.</span>{' '}
                 {movement && movement.evidenceWeek < summary.asOfWeek && (
                   <span className="text-muted-foreground">
-                    Last movement was week {movement.evidenceWeek} — a stale file, not a quiet week.
+                    Last movement was week {movement.evidenceWeek}. A stale file, not a quiet week.
                   </span>
                 )}
               </CardContent>
@@ -660,7 +660,7 @@ export function SummaryScreen({
           {obstacles.length > OBSTACLES_SHOWN && (
             <Reveal delay={0.44}>
               <p className="mt-3 text-xs text-muted-foreground">
-                The {OBSTACLES_SHOWN} worst of {obstacles.length} — returned first, then overdue,
+                The {OBSTACLES_SHOWN} worst of {obstacles.length}, ordered returned first, then overdue,
                 then never sent.
               </p>
             </Reveal>

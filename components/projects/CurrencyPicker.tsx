@@ -5,6 +5,7 @@ import { m } from 'framer-motion';
 import { Check } from 'lucide-react';
 
 import { CURRENCIES } from '@/lib/currency';
+import NativeSelect from '@/components/ui/NativeSelect';
 import { setProjectCurrencyAction } from '@/lib/project-actions';
 
 /**
@@ -33,19 +34,21 @@ export default function CurrencyPicker({
 
   return (
     <>
-      <select
+      <NativeSelect
+        compact
+        wrapperClassName="w-auto"
         value={currency}
         disabled={pending}
         onChange={(e) => setAsking(e.target.value)}
         aria-label="Currency"
-        className="h-8 rounded-lg border bg-card px-1.5 text-[11px] font-medium outline-none transition-colors hover:bg-muted focus:border-foreground disabled:opacity-50"
+        className="bg-card hover:bg-muted"
       >
         {CURRENCIES.map((c) => (
           <option key={c.code} value={c.code}>
             {c.code}
           </option>
         ))}
-      </select>
+      </NativeSelect>
 
       {asking && asking !== currency && (
         <div
@@ -64,7 +67,7 @@ export default function CurrencyPicker({
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
               This changes the label, not the numbers. Every price stays exactly the figure it is
-              now — the app holds no exchange rate, and inventing one would silently restate the
+              now: the app holds no exchange rate, and inventing one would silently restate the
               contract.
               {current && (
                 <>

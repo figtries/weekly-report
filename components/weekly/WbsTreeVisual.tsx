@@ -121,10 +121,10 @@ function storyOf(cum: number, plan: number, thisWeek: number): string {
   if (st.key === 'idle') return 'This activity has not started yet.';
   const gap = round2(cum - plan);
   const moved = thisWeek > 0.05 ? ` Up ${thisWeek.toFixed(1)}% this week.` : ' No progress this week.';
-  if (gap >= 0) return `Ahead of plan — all good.${moved}`;
+  if (gap >= 0) return `Ahead of plan, all good.${moved}`;
   if (gap >= -1) return `Almost at plan.${moved}`;
-  if (gap >= -7.5) return `${Math.abs(gap).toFixed(1)}% behind plan — needs a push.${moved}`;
-  return `${Math.abs(gap).toFixed(1)}% behind plan — needs attention.${moved}`;
+  if (gap >= -7.5) return `${Math.abs(gap).toFixed(1)}% behind plan, needs a push.${moved}`;
+  return `${Math.abs(gap).toFixed(1)}% behind plan, needs attention.${moved}`;
 }
 
 function shortName(s: string): string {
@@ -376,7 +376,11 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
           <OverviewHero grand={grand} dist={dist} />
           <Level levelKey={levelKey} direction={direction}>
             <p className="mb-2.5 px-1 text-[13px] font-medium text-muted-foreground">
-              {homeNodes.length} {homeNodes.length === 1 ? 'contract' : 'contracts'} · click to explore
+              {/* "click to explore" was an instruction attached to a line that
+                  is not the thing you click. Each card below already carries a
+                  chevron, and a card with a chevron is not a control anybody
+                  needs told about. */}
+              {homeNodes.length} {homeNodes.length === 1 ? 'contract' : 'contracts'}
             </p>
             <div className="space-y-2.5">
               {homeNodes.map((node, idx) => (
@@ -456,9 +460,13 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
         </>
       )}
 
+      {/* `Fill in` is BOLD, not blue. Blue is what everything clickable in this
+          app is, and this is the name of another screen written inside a
+          sentence: styling it like a link offered a press that does nothing. */}
       <p className="px-1 text-[11px] text-muted-foreground">
-        This page is read-only — change the numbers in{' '}
-        <span className="font-medium text-chart-1">Fill in</span> and they appear here automatically.
+        This page is read-only. Change the numbers in{' '}
+        <span className="font-semibold text-foreground">Fill in</span> and they appear here
+        automatically.
       </p>
     </div>
   );

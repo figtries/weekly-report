@@ -96,7 +96,7 @@ export default function ShiftPreviewBar({
               <span className="flex items-center gap-1 rounded bg-warn/10 px-1.5 py-px font-medium text-warn">
                 <TriangleAlert className="size-3" />
                 {weekList(reported)} already{' '}
-                {reported.every((w) => w.status === 'approved') ? 'approved' : 'reported'} — the
+                {reported.every((w) => w.status === 'approved') ? 'approved' : 'reported'}, so the
                 deviation will show
               </span>
             )}
@@ -107,7 +107,7 @@ export default function ShiftPreviewBar({
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">
               <strong className="tabular-nums text-foreground">{shift.followers.length}</strong>{' '}
-              {shift.followers.length === 1 ? 'row follows' : 'rows follow'} it —{' '}
+              {shift.followers.length === 1 ? 'row follows' : 'rows follow'} it:{' '}
               <span className="truncate">
                 {shift.followers
                   .slice(0, 3)

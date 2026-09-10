@@ -113,8 +113,10 @@ function WeekTabsFallback() {
         <Skeleton className="h-11 w-32 rounded-lg" />
         <Skeleton className="h-7 w-24 rounded-full" />
       </div>
-      <Skeleton className="mt-3 h-11 w-full max-w-md rounded-xl" />
-      <Skeleton className="mt-3 h-9 w-full rounded-lg" />
+      {/* Both bands run the full width now, so the held space does too — a
+          narrower placeholder would make the row jump wider as it lands. */}
+      <Skeleton className="mt-3 h-11 w-full rounded-xl" />
+      <Skeleton className="mt-3 h-11 w-full rounded-xl" />
     </div>
   );
 }

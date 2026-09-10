@@ -51,9 +51,9 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
           className="animate-enter"
         >
           <span className="font-medium text-foreground">Week {week}</span> · {leafCount} activities.{' '}
-          <span className="hidden sm:inline">Explore by contract — numbers are edited in </span>
+          <span className="hidden sm:inline">The numbers are edited in </span>
           <span className="sm:hidden">Edit in </span>
-          <span className="font-medium text-chart-1">Fill in</span>.
+          <span className="font-semibold text-foreground">Fill in</span>.
         </PageHeader>
         {/* One step behind the header, and no further: this tree can render
             every leaf at once, so nothing inside it is staggered per row. */}

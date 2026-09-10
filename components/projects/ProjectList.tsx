@@ -17,6 +17,7 @@ import { formatMoney } from '@/lib/currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import Spinner from '@/components/ui/Spinner';
 
 /**
  * The app's first screen.
@@ -122,7 +123,9 @@ function dateRange(start: string | null, finish: string | null): string | null {
     new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(
       Date.parse(`${iso}T00:00:00Z`)
     );
-  return `${f(start)} — ${f(finish)}`;
+  // An arrow rather than a dash: the app already reads a dash as filler, and a
+  // range is the one place where the separator is carrying a direction anyway.
+  return `${f(start)} → ${f(finish)}`;
 }
 
 function Card({ project: p, onActions }: { project: ProjectCard; onActions: () => void }) {
@@ -182,7 +185,7 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
           // A prompt, not a second link. The card already goes here, and two
           // anchors to the same place is one for a screen reader to read twice.
           <span className="flex h-11 items-center justify-center rounded-lg border border-dashed text-xs font-medium text-muted-foreground transition-colors group-hover:border-muted-foreground group-hover:text-foreground">
-            Not planned yet — build the schedule →
+            Not planned yet. Build the schedule →
           </span>
         ) : (
           <>
@@ -275,16 +278,21 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
           <div className="mt-3 space-y-2">
             <Label htmlFor="rn">New name</Label>
             <Input id="rn" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="h-11" />
+            {/* Save leads and Cancel follows, on one row. "Back" was wrong on
+                both counts: it named a direction rather than what pressing it
+                does, and it sat under the primary where nothing else in this
+                app puts a secondary action. */}
             <div className="flex gap-2">
               <Button
-                className="h-11 flex-1"
-                disabled={pending || !name.trim()}
+                className="h-11 flex-1 gap-1.5"
+                disabled={pending || !name.trim() || name.trim() === p.name}
                 onClick={() => run(() => renameProjectAction(p.id, name))}
               >
+                {pending && <Spinner />}
                 {pending ? 'Saving…' : 'Save'}
               </Button>
               <Button variant="ghost" className="h-11" onClick={() => setMode('menu')} disabled={pending}>
-                Back
+                Cancel
               </Button>
             </div>
           </div>
@@ -292,24 +300,25 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
 
         {mode === 'delete' && (
           <div className="mt-3 space-y-3">
-            {/* Naming what disappears, rather than asking "are you sure?" */}
+            {/* Naming what disappears, rather than asking "are you sure?". One
+                sentence: the paragraph this replaces also explained archiving,
+                which is a choice already sitting one row up in the menu. */}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              This removes the project and everything inside it — its{' '}
-              <strong className="text-foreground">{p.rowCount} work breakdown rows</strong>, its
-              schedule, every week of progress recorded against it, and its document register. It
-              cannot be undone. Archiving keeps all of it and just hides the project.
+              Deletes {p.rowCount} work breakdown rows, the schedule, every week of progress and the
+              document register. This cannot be undone.
             </p>
             <div className="flex gap-2">
               <Button
                 variant="destructive"
-                className="h-11 flex-1"
+                className="h-11 flex-1 gap-1.5"
                 disabled={pending}
                 onClick={() => run(() => deleteProjectAction(p.id))}
               >
+                {pending && <Spinner />}
                 {pending ? 'Deleting…' : 'Delete permanently'}
               </Button>
               <Button variant="ghost" className="h-11" onClick={() => setMode('menu')} disabled={pending}>
-                Back
+                Cancel
               </Button>
             </div>
           </div>

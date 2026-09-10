@@ -97,7 +97,7 @@ export default function ApprovalPanel({
           <Expand open={!!drifted}>
             <p className="rounded-xl bg-warn-soft px-3 py-2.5 text-xs text-warn">
               The figure moved <strong className="tabular-nums">{fmtPct(Math.abs(drift))}</strong>{' '}
-              {drift > 0 ? 'up' : 'down'} since it was approved — this approval covers{' '}
+              {drift > 0 ? 'up' : 'down'} since it was approved. This approval covers{' '}
               {fmtPct(approval.approvedPct)}, not {fmtPct(currentPct)}. Approve again if the change
               was intended.
             </p>

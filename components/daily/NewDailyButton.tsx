@@ -4,7 +4,7 @@ import { pressMotion } from '@/components/motion/Press';
 
 import { m } from 'framer-motion';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
@@ -47,6 +47,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
   }
 
   function create() {
+    if (creating) return;
     setError(null);
     startTransition(async () => {
       const res = await createDailyAction(date);
@@ -57,9 +58,32 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
       // Navigate client-side instead of redirecting inside the action: the
       // destination's loading skeleton appears immediately, so the wait reads
       // as "the page is being prepared" rather than a frozen dialog.
+      created.current = true;
       router.push(`/daily/${date}`);
     });
   }
+
+  /**
+   * Close it once the navigation has landed, and NOT before.
+   *
+   * This dialog used to be left open on success, on the reasoning that the new
+   * report's page takes the screen anyway. It does — but pressing Back on that
+   * report returns to this list with the dialog still standing, so finishing a
+   * report put you back at the start of making one. That is the "Back goes to
+   * the previous modal instead of the list" this fixes.
+   *
+   * The wait matters: closing inside `create()` would take the progress state
+   * off screen for the seconds the destination needs, which is the frozen-
+   * dialog problem the client-side push was written to avoid. `creating` turns
+   * false only when the transition — action AND navigation — is done.
+   */
+  const created = useRef(false);
+  useEffect(() => {
+    if (creating || !created.current) return;
+    created.current = false;
+    setOpen(false);
+    setClosing(false);
+  }, [creating]);
 
   return (
     <>
@@ -129,7 +153,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
 
             {creating && (
               <p role="status" className="mt-3 text-center text-xs text-muted-foreground animate-fade-in">
-                Setting up the report page — this only takes a moment…
+                Setting up the report page. This only takes a moment…
               </p>
             )}
           </div>

@@ -182,7 +182,7 @@ function MoneyPanel({
                   note={
                     signed
                       ? 'Typed by a person, never worked out from the prices. Change it under Details.'
-                      : 'Nobody has typed one yet — add it under Details.'
+                      : 'Nobody has typed one yet. Add it under Details.'
                   }
                 />
 
@@ -242,9 +242,9 @@ function MoneyPanel({
                           ? `These do not close at 100, and ${missing} of ${summary.leaves} rows have no weight at all yet.`
                           : 'These do not close at 100, so every reported percentage is off by the difference.'
                         : missing > 0
-                          ? `They close at 100. ${missing} of ${summary.leaves} rows carry no weight of their own — the rest account for the whole project.`
+                          ? `They close at 100. ${missing} of ${summary.leaves} rows carry no weight of their own, so the rest account for the whole project.`
                           : summary.basis === 'even'
-                            ? 'Spread evenly across the rows — not worked out from money.'
+                            ? 'Spread evenly across the rows, not worked out from money.'
                             : 'Every row has one and they close at 100.'
                     }
                   />
@@ -387,7 +387,7 @@ function PreviewDialog({
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
               {p.basis === 'boq'
                 ? 'The prices cover the whole plan, so the new weights close at 100.'
-                : 'The prices do not cover the whole plan. Some of these weights were entered from a source this calculation cannot see — replacing them would lose them.'}
+                : 'The prices do not cover the whole plan. Some of these weights were entered from a source this calculation cannot see, so replacing them would lose them.'}
             </p>
             <ul className="mt-2 space-y-0.5">
               {p.biggest.map((b) => (

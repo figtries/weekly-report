@@ -121,7 +121,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
       <Empty
         icon={FolderKanban}
         title="No project open"
-        body="Make one, or open one you already keep — every number on this page belongs to a project."
+        body="Make one, or open one you already keep. Every number on this page belongs to a project."
         href="/projects"
         cta="Go to Projects"
       />
@@ -158,7 +158,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
       <Empty
         icon={ChartLine}
         title="No progress data yet"
-        body="Build the WBS and its weights first — every number on this page fills itself in after that."
+        body="Build the WBS and its weights first. Every number on this page fills itself in after that."
         href={`/projects/${projectId}`}
         cta="Open the planner"
       />
@@ -203,11 +203,22 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           rather than only in the sidebar because this page is what somebody
           screenshots into a chat — and a percentage with no project on it is
           the same trap the sidebar mismatch was. */}
-      {/* `flex-1` with a floor on the name, so the picker rides on the same
-          line as the title on a desktop and drops below it on a phone rather
-          than squeezing a 100-character project name into a third of the row. */}
-      <header className="animate-enter flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
-        <div className="min-w-64 flex-1">
+      {/* THE PICKER IS PINNED TOP RIGHT, LEVEL WITH THE FIRST LINE OF THE NAME.
+          That is where it was asked for on 10 September 2026, and both of the
+          obvious alternatives were tried and rejected on the way: bottom-
+          aligned it sat beside the customer line and read as belonging to that
+          line, and wrapped onto its own row it dropped below the heading
+          entirely — which this project's 100-character contract title
+          guarantees at every width, because the name alone fills the row.
+
+          So the name gets `flex-1 min-w-0` and wraps INSIDE its own column
+          rather than pushing the picker anywhere. Nothing here wraps. */}
+      {/* Below `sm` the name takes the whole row and the picker drops under it:
+          a 110px control beside a 20px-per-word contract title leaves the title
+          about 230px on a 390px phone, and clamping it to two lines there loses
+          the words that say which project this is. */}
+      <header className="animate-enter flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <h1 className="line-clamp-2 text-xl font-semibold tracking-tight sm:text-2xl">
             {db.project.name}
           </h1>
@@ -216,14 +227,16 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             {data.currentWeek > 0 ? ` · reported up to week ${data.currentWeek}` : ' · nothing reported yet'}
           </p>
         </div>
-        <WeekSelect
-          weeks={data.weeks}
-          selectedWeek={week}
-          projectCurrentWeek={data.currentWeek}
-          activeTab=""
-          hrefPattern="/?week={week}"
-          prefetch={false}
-        />
+        <div className="shrink-0">
+          <WeekSelect
+            weeks={data.weeks}
+            selectedWeek={week}
+            projectCurrentWeek={data.currentWeek}
+            activeTab=""
+            hrefPattern="/?week={week}"
+            prefetch={false}
+          />
+        </div>
       </header>
 
       {unreported && (
@@ -493,14 +506,22 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 </p>
               )}
 
+              {/* "Not ready to issue" on its own named the STATE and left the
+                  action to be guessed, so a red bar that goes somewhere read as
+                  a red bar that does nothing. The state stays, in smaller type;
+                  the line that looks pressable now says what pressing it does
+                  and where it lands, which is step 2 of this same week. */}
               {!validation.canIssue && (
                 <div className="mt-auto pt-4">
                   <Link
                     href={`/weekly/${week}/control`}
-                    className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-bad-soft px-3 text-sm font-semibold text-bad transition-all duration-300 ease-ios hover:brightness-95 active:scale-[0.99]"
+                    className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-bad-soft px-3 py-2 text-bad transition-all duration-300 ease-ios hover:brightness-95 active:scale-[0.99]"
                   >
-                    Not ready to issue
-                    <ArrowRight className="h-4 w-4" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-[11px] font-medium opacity-80">Not ready to issue</span>
+                      <span className="text-sm font-semibold">Open Check and clear them</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0" />
                   </Link>
                 </div>
               )}

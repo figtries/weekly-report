@@ -32,7 +32,7 @@ async function KlaimBody() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Delay Register</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Every non-effective hour ever recorded, added up across the weeks into material for an
-          extension-of-time claim. Nothing new to fill in — it was all collected daily already,
+          extension-of-time claim. Nothing new to fill in: it was all collected daily already,
           only nobody had ever totalled it.
         </p>
       </header>
@@ -79,7 +79,7 @@ async function KlaimBody() {
           <h2 className="text-sm font-semibold">By cause</h2>
           <p className="text-xs text-muted-foreground">
             Which causes count as claimable is set in{' '}
-            <span className="font-medium text-foreground">Project Settings</span> — the app does
+            <span className="font-medium text-foreground">Project Settings</span>. The app does
             not decide it.
           </p>
         </div>
@@ -162,7 +162,7 @@ async function KlaimBody() {
           <strong>Not every photo can speak for itself yet.</strong>{' '}
           {reg.totalPhotos === 0
             ? 'No photos stored yet.'
-            : `${reg.totalPhotos - reg.verifiedPhotos} of ${reg.totalPhotos} photos carry no timestamp from the camera itself — their date rests on whoever uploaded them.`}{' '}
+            : `${reg.totalPhotos - reg.verifiedPhotos} of ${reg.totalPhotos} photos carry no timestamp from the camera itself, so their date rests on whoever uploaded them.`}{' '}
           A photo uploaded straight from a camera or phone gallery usually carries one; one that
           travelled through WhatsApp almost never does. For a claim that holds, ask the field crew
           to upload the original file.

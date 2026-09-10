@@ -185,7 +185,7 @@ export function RegisterCurve({
         )}
         {undated > 0 && (
           <span className="basis-full text-amber-700">
-            {undated} submissions carry no date — placed on the week they were promised for, so the
+            {undated} submissions carry no date, so they sit on the week they were promised for and the
             shape there is an estimate.
           </span>
         )}

@@ -115,7 +115,7 @@ export default function PasteRows({
                     <h2 className="text-sm font-semibold">Paste rows from Excel</h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       Select the cells in the workbook, copy, and paste here. A task name is the
-                      only column that has to be there — an outline code, dates, a duration and a
+                      only column that has to be there. An outline code, dates, a duration and a
                       price are all read when they are.
                     </p>
                   </div>

@@ -40,9 +40,17 @@ export default function SectionTabs({
   tabs,
   className,
   pillId = 'section-tab',
+  stretch = false,
 }: {
   tabs: SectionTab[];
   className?: string;
+  /**
+   * Fill the width it is given, from `sm` up. See the same prop on WeekSteps:
+   * the two bands sit one above the other and each sized to its own text, so
+   * neither ended where the other did and the right of the header was dead
+   * space. Below `sm` it stays content-sized and scrolls.
+   */
+  stretch?: boolean;
   /**
    * The `layoutId` its sliding pill travels on. Defaults to the only value the
    * app currently needs; it exists so that two SectionTabs rows on one screen
@@ -69,7 +77,12 @@ export default function SectionTabs({
     >
       {/* h-auto overrides the list's own h-8: these are the section's primary
           navigation and the triggers below carry the 44px touch target. */}
-      <TabsList className="group-data-horizontal/tabs:h-auto p-0.5 sm:p-1">
+      <TabsList
+        className={cn(
+          'group-data-horizontal/tabs:h-auto p-0.5 sm:p-1',
+          stretch && 'sm:flex sm:w-full'
+        )}
+      >
         {tabs.map((t) => (
           <TabsTrigger
             key={t.href}
@@ -83,7 +96,10 @@ export default function SectionTabs({
             // px-2.5 on phones: the padding is what runs out first on a narrow
             // row, and the 44px target is `min-h-11`, so tightening it costs
             // nothing you can tap.
-            className="relative h-auto min-h-11 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-300 ease-ios data-[state=active]:bg-transparent data-[state=active]:shadow-none sm:px-3.5"
+            className={cn(
+              'relative h-auto min-h-11 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-300 ease-ios data-[state=active]:bg-transparent data-[state=active]:shadow-none sm:px-3.5',
+              stretch && 'sm:flex-1'
+            )}
           >
             <PressLink
               href={t.href}

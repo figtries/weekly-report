@@ -95,7 +95,7 @@ export default function RowMenu({
         {mode === 'menu' && (
           <label className="mt-3 block text-[11px] font-medium text-muted-foreground sm:hidden">
             Target date
-            <span className="ml-1 font-normal">— should be finished before this</span>
+            <span className="ml-1 font-normal">should be finished before this</span>
             <input
               type="date"
               defaultValue={row.targetDate ?? ''}
@@ -252,7 +252,7 @@ export default function RowMenu({
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              A reporting unit gets its own section in the report, and it is its own contract — even
+              A reporting unit gets its own section in the report, and it is its own contract, even
               when it sits inside another one. SPK-007 lives inside SPK-004 and its value is not
               part of SPK-004&apos;s. The app keeps the units adding up to the contract, and says so
               when they do not.
@@ -311,7 +311,7 @@ export default function RowMenu({
               {row.childCount > 0 ? (
                 <>
                   This row has <strong className="text-foreground">{row.childCount}</strong> rows
-                  under it, and they go with it — along with their dates, prices and any progress
+                  under it, and they go with it, along with their dates, prices and any progress
                   recorded against them.
                 </>
               ) : (

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { DURATION, EASE } from '@/components/motion/Reveal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import NativeSelect from '@/components/ui/NativeSelect';
 import { Textarea } from '@/components/ui/textarea';
 import { addFromDraft, readRegisterFile, saveNumbering, seedRegister } from '@/lib/doc-actions';
 import { parseRegisterPaste, type ColumnMapping } from '@/lib/register-paste';
@@ -16,6 +17,7 @@ import {
   defaultRule, disciplineFor, nextNumber, type NumberingRule,
 } from '@/lib/register-numbering';
 import { outlineCode } from '@/lib/register-outline';
+import { REGISTER_INFO } from '@/lib/register-shared';
 import { templateFor, type TemplateBand } from '@/lib/register-template';
 import type { RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
@@ -188,10 +190,11 @@ export function RegisterBuilder({
     .reduce((n, [, rows]) => n + rows.filter((r) => r.title.trim() !== '').length, 0);
 
   const named = client.trim() !== '' && contractor.trim() !== '';
-  const label = register === 'edl' ? 'EDL' : 'VDRL';
-  const longLabel = register === 'edl'
-    ? 'Engineering Drawing List'
-    : 'Vendor Drawing Register List';
+  // One source for what these two acronyms mean, shared with the tab header
+  // that offers the choice between them. See REGISTER_INFO.
+  const info = REGISTER_INFO[register];
+  const label = info.short;
+  const longLabel = info.long;
 
   /* --------------------------------------------------------- numbering */
 
@@ -371,7 +374,7 @@ export function RegisterBuilder({
               onChange={(e) => setRule((r) => ({ ...r, prefix: e.target.value.toUpperCase() }))}
             />
             <p className="text-sm text-muted-foreground">
-              The short code on your drawings — Petrogas uses <code>WPP</code>, Gundih{' '}
+              The short code on your drawings. Petrogas uses <code>WPP</code>, Gundih{' '}
               <code>PRGG</code>.
             </p>
           </div>
@@ -508,7 +511,7 @@ export function RegisterBuilder({
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Type the title. The number is written for you and can be changed. Press Enter for
-            the next one — or paste a whole list of titles into a title box and each line
+            the next one, or paste a whole list of titles into a title box and each line
             becomes its own document.
           </p>
         </header>
@@ -603,8 +606,8 @@ export function RegisterBuilder({
                           if (index === rows.length - 1) setRows(group, [...rows, blankRow(group, rows)]);
                         }}
                       />
-                      <select
-                        className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:col-start-3 sm:row-start-1 dark:bg-input/30"
+                      <NativeSelect
+                        wrapperClassName="sm:col-start-3 sm:row-start-1"
                         value={row.kind}
                         aria-label="Document or drawing"
                         onChange={(e) => setRows(group, rows.map((r) => (r.id === row.id
@@ -612,7 +615,7 @@ export function RegisterBuilder({
                       >
                         <option value="Doc">Doc</option>
                         <option value="Dwg">Dwg</option>
-                      </select>
+                      </NativeSelect>
                       <Button
                         variant="ghost" size="icon" className="h-11 w-11 sm:col-start-4 sm:row-start-1"
                         aria-label="Remove this row"
@@ -710,9 +713,8 @@ export function RegisterBuilder({
               {([['docNo', 'Number'], ['title', 'Title'], ['kind', 'Type']] as const).map(([key, name]) => (
                 <div key={key} className="flex min-w-40 flex-1 flex-col gap-1.5">
                   <Label htmlFor={`col-${key}`}>{name}</Label>
-                  <select
+                  <NativeSelect
                     id={`col-${key}`}
-                    className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                     value={plan.mapping[key] ?? -1}
                     onChange={(e) => setOverride((o) => ({
                       ...o, [key]: Number(e.target.value) < 0 ? null : Number(e.target.value),
@@ -724,7 +726,7 @@ export function RegisterBuilder({
                         {`${c.index + 1} · ${c.values[0]?.slice(0, 30) || 'empty'}`}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               ))}
             </div>
@@ -792,8 +794,11 @@ export function RegisterBuilder({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
             {hasDocuments ? `Add to the ${label}` : `Build the ${label}`}
           </h1>
+          {/* Whose documents these are comes FIRST, because this is the screen
+              somebody lands on before either register exists, and "Build the
+              VDRL" on its own does not say what to put in it. */}
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Open a section and write what belongs in it. Numbers follow{' '}
+            {info.owes}. Open a section and write what belongs in it. Numbers follow{' '}
             <span className="font-mono">{rule.prefix || 'PROJECT'}-…</span> on their own.
           </p>
         </div>

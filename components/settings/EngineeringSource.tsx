@@ -59,7 +59,7 @@ export function EngineeringSource({
           <p className="max-w-3xl text-sm text-muted-foreground">
             Engineering is measured twice on this project: someone types a percentage into the
             weekly report, and the document register counts one from the dates. Switch a discipline
-            over and its figure is taken from the register instead — nobody types it again.
+            over and its figure is taken from the register instead, and nobody types it again.
           </p>
           <p className="max-w-3xl text-sm text-muted-foreground">
             The register last moved{' '}

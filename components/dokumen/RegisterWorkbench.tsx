@@ -582,7 +582,7 @@ export function RegisterWorkbench({
                         if (result.ok) { setSelectedId(null); setOpenDoc(null); }
                       }}
                     >
-                      {selected.node.documents > 0 ? 'Delete group — empty it first' : 'Delete group'}
+                      {selected.node.documents > 0 ? 'Delete group: empty it first' : 'Delete group'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

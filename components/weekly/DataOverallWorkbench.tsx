@@ -220,6 +220,17 @@ export default function DataOverallWorkbench({
   const [direction, setDirection] = useState<'fwd' | 'back'>('fwd');
   const [levelKey, setLevelKey] = useState(0);
   const [edits, setEdits] = useState<Record<string, EditState>>({});
+  /**
+   * The same map, readable synchronously. `setEdit` needs to know what is
+   * already pending BEFORE React has rendered it — see the comment there — and
+   * this effect puts the ref back in step after every commit, which covers the
+   * two places that write `edits` without going through `setEdit` (discarding,
+   * and the reconcile that drops edits the server has caught up with).
+   */
+  const editsRef = useRef<Record<string, EditState>>({});
+  useEffect(() => {
+    editsRef.current = edits;
+  }, [edits]);
   const [rawInputs, setRawInputs] = useState<Record<string, { cum?: string; plan?: string }>>({});
   const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set());
   const [saving, startSaveTransition] = useTransition();
@@ -227,6 +238,8 @@ export default function DataOverallWorkbench({
   // Set while an item is being moved to quantity mode but has no real total.
   const [askQty, setAskQty] = useState<{ node: RollupNode; total: string; unit: string } | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  /** True from a successful save until the next edit. See `unwritten`. */
+  const [allWritten, setAllWritten] = useState(false);
   const [barLeaving, setBarLeaving] = useState(false);
   const [query, setQuery] = useState('');
   const [showLog, setShowLog] = useState(false);
@@ -242,7 +255,7 @@ export default function DataOverallWorkbench({
     worklist.hasSchedule ? 'queue' : 'browse'
   );
   const [showDone, setShowDone] = useState(false);
-  /** Set when an autosave fails, so it stops retrying and the bar offers Retry. */
+  /** Set when a save fails, which turns the bar into "Couldn't save / Retry". */
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   /** Leaves whose "no progress" write is in flight — the card shows it at once. */
   const [markingNone, setMarkingNone] = useState<Set<string>>(new Set());
@@ -352,6 +365,16 @@ export default function DataOverallWorkbench({
   const currentNode = currentPath.length ? currentPath[currentPath.length - 1] : null;
   const currentNodes = currentNode ? visibleChildren(currentNode) : homeNodes;
   const dirtyCount = Object.keys(edits).length;
+  /**
+   * Whether anything on screen has NOT reached the database.
+   *
+   * `dirtyCount` cannot answer that on its own: a saved edit is kept as an
+   * optimistic overlay until the server's refresh delivers a matching figure,
+   * so the count outlives the write. `allWritten` is set the moment a save
+   * succeeds and cleared by the next edit, which is what makes "unsaved" mean
+   * unsaved.
+   */
+  const unwritten = dirtyCount > 0 && !allWritten;
 
   function navigateInto(node: RollupNode) {
     setDirection('fwd');
@@ -425,31 +448,48 @@ export default function DataOverallWorkbench({
     return round2(edits[node.id]?.planPct ?? planPctOf(node));
   }
 
-  function setEdit(id: string, patch: EditState) {
+  /**
+   * @param patch the fields to merge, or a function given whatever is already
+   * pending for this leaf.
+   *
+   * It works off `editsRef` rather than off the render's `edits`, and that is
+   * what makes a run of taps on the +/- stepper add up. Each tap is its own
+   * event, but several can land before React paints; reading the closure meant
+   * they all started from the same number and only the last one survived.
+   */
+  function setEdit(id: string, patch: EditState | ((current: EditState) => EditState)) {
+    // A new edit is by definition not written yet, whatever the last save did.
+    setAllWritten(false);
     if (justSaved && !saving) {
       setJustSaved(false);
       setBarLeaving(false);
     }
 
-    setEdits((prev) => {
-      const merged = { ...prev[id], ...patch };
-      const node = flatAll.find((n) => n.id === id);
-      if (node) {
-        const cumSame =
-          merged.cumProgressPct === undefined || round2(merged.cumProgressPct) === round2(node.curProgressPct);
-        const planSame = merged.planPct === undefined || round2(merged.planPct) === round2(planPctOf(node));
-        if (cumSame && planSame) {
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        }
+    const prev = editsRef.current;
+    const resolved = typeof patch === 'function' ? patch(prev[id] ?? {}) : patch;
+    const merged = { ...prev[id], ...resolved };
+    const node = flatAll.find((n) => n.id === id);
+    let next: Record<string, EditState>;
+    if (node) {
+      const cumSame =
+        merged.cumProgressPct === undefined || round2(merged.cumProgressPct) === round2(node.curProgressPct);
+      const planSame = merged.planPct === undefined || round2(merged.planPct) === round2(planPctOf(node));
+      if (cumSame && planSame) {
+        next = { ...prev };
+        delete next[id];
+      } else {
+        next = { ...prev, [id]: merged };
       }
-      return { ...prev, [id]: merged };
-    });
+    } else {
+      next = { ...prev, [id]: merged };
+    }
+    editsRef.current = next;
+    setEdits(next);
   }
 
   function adjustCum(node: RollupNode, delta: number) {
-    const next = clamp(round2(currentCum(node) + delta));
+    const base = round2(editsRef.current[node.id]?.cumProgressPct ?? node.curProgressPct);
+    const next = clamp(round2(base + delta));
     setEdit(node.id, { cumProgressPct: next });
     setRawInputs((prev) => ({ ...prev, [node.id]: { ...prev[node.id], cum: String(next) } }));
   }
@@ -461,24 +501,29 @@ export default function DataOverallWorkbench({
   }
 
   /**
-   * Autosave.
+   * Saving is MANUAL, and the bar below is the control rather than a status
+   * line. This screen autosaved 1200ms after each settled edit until September
+   * 2026; it was asked for explicitly then that an edit and a stored number
+   * never be the same act, so what is on screen and what is in the database
+   * can only diverge on purpose.
    *
-   * A week gets filled in one card at a time, often on a phone in a site
-   * office, and under the batch Save button every card typed so far was lost to
-   * a locked screen or a closed tab. Each settled edit now writes on its own.
-   * The bottom bar survives as the status line, and the manual Save stays for
-   * anyone who would rather commit deliberately.
+   * What autosave was protecting against was a phone locking mid-week with
+   * half a card typed, so that risk comes back with it. This guard is the only
+   * thing standing between a closed tab and lost work now.
    *
-   * 1200ms is measured against the fastest control on a card: the quantity
-   * stepper moves a twentieth of the total per tap, so a 0→100 sweep is twenty
-   * taps, and a shorter delay turns one gesture into twenty writes.
+   * It reads `unwritten`, NOT `dirtyCount`. A saved edit stays in `edits` as an
+   * optimistic overlay until the server's own refresh confirms it (see the
+   * reconcile effect below), so a successful save leaves the count above zero
+   * for as long as that takes — and a browser asking "leave without saving?"
+   * about work that IS saved teaches people to click through the one warning
+   * that will one day be real.
    */
   useEffect(() => {
-    if (dirtyCount === 0 || saving || saveFailed) return;
-    const t = setTimeout(() => save(true), 1200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edits, dirtyCount, saving, saveFailed]);
+    if (!unwritten) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unwritten]);
 
   /**
    * "Looked at it, nothing moved this week."
@@ -504,19 +549,18 @@ export default function DataOverallWorkbench({
   }
 
   /**
-   * @param silent autosave. A failed autosave must not alert — it would fire
-   * again on the next tick and trap the page behind a loop of dialogs — so it
-   * parks the reason in `saveFailed`, which stops the retry and turns the
-   * bottom bar into "Couldn't save · Retry".
+   * A failure is reported in the bar rather than in an `alert`, because the bar
+   * is where Retry lives and a modal dialog on a phone covers the very numbers
+   * the person is being asked about.
+   *
+   * The `saving` guard is what makes a second tap on Save a no-op rather than a
+   * second write.
    */
-  function save(silent = false) {
+  function save() {
     if (!dirtyCount || saving) return;
     setJustSaved(false);
     setBarLeaving(false);
-    const report = (msg: string) => {
-      if (silent) setSaveFailed(msg);
-      else alert(msg);
-    };
+    const report = (msg: string) => setSaveFailed(msg);
     startSaveTransition(async () => {
       // Typed percents and plan targets go through one action; counted
       // quantities and ticked milestones go through the other, because for
@@ -558,6 +602,7 @@ export default function DataOverallWorkbench({
       // never flickers back to its pre-save value ("kesave lalu balik lagi").
       setRawInputs({});
       setJustSaved(true);
+      setAllWritten(true);
     });
   }
 
@@ -610,9 +655,11 @@ export default function DataOverallWorkbench({
   }, [justSaved]);
 
   // A fresh edit made while the "saved" toast is still up brings the
-  // unsaved-changes bar straight back.
+  // unsaved-changes bar straight back. Keyed on `unwritten` rather than on
+  // `dirtyCount`: an edit still waiting on the server's refresh has been saved
+  // already and must not reopen the bar behind its own confirmation.
   useEffect(() => {
-    if (dirtyCount > 0 && justSaved && !saving) {
+    if (unwritten && justSaved && !saving) {
       setJustSaved(false);
       setBarLeaving(false);
     }
@@ -993,7 +1040,7 @@ export default function DataOverallWorkbench({
                     further 80px down a screen that already scrolls to reach
                     it — and the headline above already says what it is. */}
                 <p className="mt-0.5 hidden text-muted-foreground sm:block">
-                  They are not in this week&apos;s list — they need a decision, not a number.
+                  They are not in this week&apos;s list. They need a decision, not a number.
                 </p>
               </div>
               <PressLink {...pressMotion}
@@ -1208,12 +1255,11 @@ export default function DataOverallWorkbench({
         </>
       )}
 
-      {/* Floating save bar — morphs through unsaved → saving → saved.
-          Under autosave it is a status line rather than a control: it appears
-          for the second between an edit settling and the write landing, and
-          stays put only when a write FAILED, which is the one case where the
-          person has to know their number is not stored yet. */}
-      {(dirtyCount > 0 || justSaved) && (
+      {/* Floating save bar, which morphs through unsaved → saving → saved.
+          Nothing on this screen writes on its own, so this is the ONLY way a
+          number reaches the database: it stays up for as long as there is
+          anything unsaved, and its Save goes grey the moment there is not. */}
+      {(unwritten || justSaved) && (
         <div
           className={`sticky bottom-3 z-30 px-1 sm:bottom-4 sm:px-0 ${
             barLeaving ? 'animate-save-out' : 'animate-save-bar-in'
@@ -1268,15 +1314,20 @@ export default function DataOverallWorkbench({
                       wide as "Saving…" — swapping text in place used to resize it
                       mid-save and push Cancel across the bar. */}
                   <m.button {...pressMotion}
-                    // Not `onClick={save}`: that hands the MouseEvent to
-                    // `silent`, and a manual save would swallow its own errors.
                     onClick={() => {
                       setSaveFailed(null);
                       save();
                     }}
-                    disabled={saving}
+                    // Nothing to save is a reason the button cannot be pressed,
+                    // not just a reason pressing it does nothing.
+                    disabled={saving || !unwritten}
                     aria-label={saving ? 'Saving' : saveFailed ? 'Retry saving' : 'Save'}
-                    className="grid place-items-center rounded-lg btn-primary px-3 py-2 text-[13px] font-semibold disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5"
+                    // Grey only when there is nothing to save. It keeps its
+                    // primary colour WHILE saving, so the spinner reads as this
+                    // button working rather than as the button going away.
+                    className={`grid place-items-center rounded-lg px-3 py-2 text-[13px] font-semibold disabled:pointer-events-none min-[380px]:px-3.5 min-[380px]:text-[14px] sm:px-5 ${
+                      !unwritten && !saving ? 'bg-muted text-muted-foreground' : 'btn-primary'
+                    }`}
                   >
                     <span
                       className={`col-start-1 row-start-1 transition-opacity duration-150 ${
@@ -1472,7 +1523,7 @@ interface LeafCardProps {
   confirmQty: () => void;
   currentCum: (n: RollupNode) => number;
   currentPlan: (n: RollupNode) => number;
-  setEdit: (id: string, patch: EditState) => void;
+  setEdit: (id: string, patch: EditState | ((current: EditState) => EditState)) => void;
   setRawInputs: React.Dispatch<React.SetStateAction<Record<string, { cum?: string; plan?: string }>>>;
   adjustCum: (n: RollupNode, delta: number) => void;
   toggleDetail: (id: string) => void;
@@ -1661,7 +1712,7 @@ const LeafCard = memo(function LeafCard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[12px] font-medium">Percent complete</p>
-              <p className="text-[11px] text-bad">Typed by hand — nothing on site to check it against</p>
+              <p className="text-[11px] text-bad">Typed by hand, with nothing on site to check it against</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <StepBtn onClick={() => adjustCum(node, -5)} label="Decrease 5%">−</StepBtn>
@@ -1786,12 +1837,18 @@ function QuantityEntry({
   node: RollupNode;
   edit: EditState | undefined;
   snap: LeafSnapshot | undefined;
-  setEdit: (id: string, patch: EditState) => void;
+  setEdit: (id: string, patch: EditState | ((current: EditState) => EditState)) => void;
 }) {
   const total = totalQty(node);
-  const done = edit?.qtyDone ?? snap?.qtyDone ?? 0;
+  const stored = snap?.qtyDone ?? 0;
+  const done = edit?.qtyDone ?? stored;
   const step = Math.max(1, round2(total / 20));
-  const set = (v: number) => setEdit(node.id, { qtyDone: Math.max(0, Math.min(total, round2(v))) });
+  const clampQty = (v: number) => Math.max(0, Math.min(total, round2(v)));
+  const set = (v: number) => setEdit(node.id, { qtyDone: clampQty(v) });
+  // A twentieth of the total per tap means a 0→100 sweep is twenty taps, so
+  // this one has to add up even when several land before a repaint.
+  const nudge = (delta: number) =>
+    setEdit(node.id, (current) => ({ qtyDone: clampQty((current.qtyDone ?? stored) + delta) }));
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1802,7 +1859,7 @@ function QuantityEntry({
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <StepBtn onClick={() => set(done - step)} label={`Subtract ${step}`}>−</StepBtn>
+        <StepBtn onClick={() => nudge(-step)} label={`Subtract ${step}`}>−</StepBtn>
         <label className="flex h-11 min-w-[112px] cursor-text items-center justify-center gap-1.5 rounded-xl border bg-background px-2 shadow-sm transition-all focus-within:border-chart-1 focus-within:ring-4 focus-within:ring-chart-1/15 sm:h-10">
           <input
             type="text"
@@ -1818,7 +1875,7 @@ function QuantityEntry({
             {node.satuan ?? ''}
           </span>
         </label>
-        <StepBtn onClick={() => set(done + step)} label={`Add ${step}`}>+</StepBtn>
+        <StepBtn onClick={() => nudge(step)} label={`Add ${step}`}>+</StepBtn>
       </div>
     </div>
   );
@@ -1834,7 +1891,7 @@ function MilestoneEntry({
   node: RollupNode;
   edit: EditState | undefined;
   snap: LeafSnapshot | undefined;
-  setEdit: (id: string, patch: EditState) => void;
+  setEdit: (id: string, patch: EditState | ((current: EditState) => EditState)) => void;
 }) {
   const ms = node.milestones ?? [];
   const done = edit?.milestonesDone ?? snap?.milestonesDone ?? [];
@@ -1873,7 +1930,7 @@ function MilestoneEntry({
         })}
         {ms.length === 0 && (
           <p className="text-[12px] text-muted-foreground">
-            This item has no milestones yet — set them from Details.
+            This item has no milestones yet. Set them from Details.
           </p>
         )}
       </div>

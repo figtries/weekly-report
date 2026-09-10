@@ -47,7 +47,7 @@ async function ProjectsBody() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Projects</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Every project you keep. Open one and the whole app follows it — dashboard, weekly
+              Every project you keep. Open one and the whole app follows it: dashboard, weekly
               progress, daily, reports and document control.
             </p>
           </div>

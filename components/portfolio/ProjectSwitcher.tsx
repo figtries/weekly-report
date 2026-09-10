@@ -35,7 +35,7 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectCard[] 
     <PressLink
       href="/projects"
       {...pressMotion}
-      aria-label={`${active.name} — go to Projects`}
+      aria-label={`${active.name}, go to Projects`}
       className="flex min-h-14 items-center gap-2.5 rounded-xl border bg-background px-2.5 py-2 shadow-sm transition-colors duration-300 ease-ios hover:border-chart-1/40 hover:bg-muted/40"
     >
       <span

@@ -51,10 +51,22 @@ export default function WeekSteps({
   steps,
   activeKey,
   className,
+  stretch = false,
 }: {
   steps: WeekStep[];
   activeKey: string;
   className?: string;
+  /**
+   * Fill the width it is given, from `sm` up.
+   *
+   * Sized to its own text this band stopped two-thirds of the way across the
+   * screen and left a ragged edge beside the tab row under it, which is the
+   * "berantakan, gak sejajar" reported on 10 September 2026. Stretched, the
+   * two bands are the same width and the row has no dead right-hand side.
+   * Below `sm` it stays content-sized: three full labels do not fit a 360px
+   * screen, and this is a scroller there.
+   */
+  stretch?: boolean;
 }) {
   return (
     <nav
@@ -64,11 +76,16 @@ export default function WeekSteps({
         className
       )}
     >
-      <ol className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 sm:gap-1 sm:p-1">
+      <ol
+        className={cn(
+          'inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 sm:gap-1 sm:p-1',
+          stretch && 'sm:flex sm:w-full'
+        )}
+      >
         {steps.map((s, i) => {
           const active = s.key === activeKey;
           return (
-            <li key={s.key} className="flex items-center">
+            <li key={s.key} className={cn('flex items-center', stretch && 'sm:flex-1')}>
               {/* Hidden below `sm`. Three steps at their real labels overflow a
                   360px screen, and this scroller hides its scrollbar, so what
                   a phone actually showed was "3 Rep" — and at 320px just "3".
@@ -98,6 +115,7 @@ export default function WeekSteps({
                   // horizontal padding tightens on phones instead — width is
                   // what runs out there, never height.
                   'relative flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium sm:gap-1.5 sm:px-3',
+                  stretch && 'sm:w-full sm:justify-center',
                   // `transition-colors`, not `transition-all`: the press is
                   // framer-motion's now, and two writers on one transform is a
                   // press that stutters halfway down.

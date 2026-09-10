@@ -147,7 +147,7 @@ export default function BarStyleEditor({
                       ? 'this one has packages, so the colours follow them'
                       : 'this one has no packages yet, so the colours follow what each row is'}
                   </strong>
-                  . Mark a second package and it moves across on its own — until you pick one
+                  . Mark a second package and it moves across on its own, until you pick one
                   here, and then it stays picked.
                 </p>
               )}
@@ -155,7 +155,7 @@ export default function BarStyleEditor({
               {pruned.length > 0 && (
                 <p className="mt-2 rounded-lg bg-muted p-2 text-[11px] leading-relaxed text-muted-foreground">
                   Left out of this plan: <strong className="text-foreground">{pruned.join(', ')}</strong>{' '}
-                  — every row would have matched, and a colour every row shares tells you nothing.
+                  because every row would have matched, and a colour every row shares says nothing.
                   It comes back as soon as it separates something.
                 </p>
               )}

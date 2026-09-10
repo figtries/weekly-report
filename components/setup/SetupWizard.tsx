@@ -175,7 +175,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Setup</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Five steps. The app works out the weights and the plan curve — you fill in what you have.
+          Five steps. The app works out the weights and the plan curve. You fill in what you have.
         </p>
       </header>
 
@@ -281,8 +281,8 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
             </div>
             {hasExistingProject && (
               <p className="mt-4 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                There is already an active project in this app. Finishing the wizard replaces it —
-                run <code className="font-mono">npm run seed</code> to bring the demo data
+                There is already an active project in this app. Finishing the wizard replaces it. Run
+                <code className="font-mono">npm run seed</code> to bring the demo data
                 back.
               </p>
             )}
@@ -292,12 +292,12 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         {step === 1 && (
           <Section
             title="Build the WBS"
-            desc="Paste from Excel. The hierarchy is read from dotted numbering (1.2.3), indentation, or a level column — whichever you have."
+            desc="Paste from Excel. The hierarchy is read from dotted numbering (1.2.3), indentation, or a level column, whichever you have."
           >
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <Label htmlFor="wbs-paste" className="mb-1.5 block text-xs text-muted-foreground">
-                  Paste here — columns: code, description, quantity, unit
+                  Paste here. Columns: code, description, quantity, unit
                 </Label>
                 <Textarea
                   id="wbs-paste"
@@ -331,7 +331,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
 
               <div className="min-w-0">
                 <div className="mb-1.5 text-xs text-muted-foreground">
-                  Hasil baca — {rows.length} baris, {leafIdx.length} item berbobot
+                  Read {rows.length} rows, {leafIdx.length} of them carrying weight
                 </div>
                 <div className="max-h-80 overflow-auto rounded-md border">
                   {rows.length === 0 ? (
@@ -366,7 +366,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         {step === 2 && (
           <Section
             title="Price per item"
-            desc="Fill in the unit prices from the BOQ — the weights work themselves out and are guaranteed to total 100%. No weight is ever guessed."
+            desc="Fill in the unit prices from the BOQ. The weights work themselves out and are guaranteed to total 100%. No weight is ever guessed."
           >
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border bg-muted/40 px-3 py-2.5">
               <div>
@@ -390,14 +390,14 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                   onChange={(e) => setUseEven(e.target.checked)}
                   className="size-5 accent-primary sm:size-4"
                 />
-                <span>No BOQ yet — use even weights for now</span>
+                <span>No BOQ yet, use even weights for now</span>
               </label>
             </div>
 
             {useEven && (
               <p className="mb-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 Even weights are not real weights. The project still runs, but its deviation cannot
-                be trusted until the BOQ is filled in — and the report cannot speak in money.
+                be trusted until the BOQ is filled in, and the report cannot speak in money.
               </p>
             )}
 
@@ -546,7 +546,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         {step === 4 && (
           <Section
             title="Plan curve"
-            desc="Built from the schedule and weights in the steps before — never imported. Revise the schedule later and this curve recomputes itself."
+            desc="Built from the schedule and weights in the steps before, never imported. Revise the schedule later and this curve recomputes itself."
           >
             {curve && <PlanCurvePreview series={curve.projectPlan} totalWeeks={totalWeeks} />}
 
@@ -588,7 +588,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
         </Button>
         {step < STEPS.length - 1 && (
           <Button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>
-            Lanjut — {STEPS[step + 1].label}
+            Next: {STEPS[step + 1].label}
           </Button>
         )}
       </nav>

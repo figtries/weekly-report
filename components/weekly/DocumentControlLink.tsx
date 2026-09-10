@@ -50,7 +50,7 @@ export default function DocumentControlLink({
               from the dates on {bridge.documents} documents
               {disagrees && (
                 <>
-                  {' '}— a gap of{' '}
+                  {' '}with a gap of{' '}
                   <span className={cn(
                     'font-medium tabular-nums',
                     gap < 0 ? 'text-amber-700' : 'text-emerald-700',

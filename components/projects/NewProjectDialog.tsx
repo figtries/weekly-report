@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, m } from 'framer-motion';
@@ -11,6 +11,8 @@ import { createProjectAction } from '@/lib/project-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import NativeSelect from '@/components/ui/NativeSelect';
+import Spinner from '@/components/ui/Spinner';
 import DateField from '@/components/ui/DateField';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { CURRENCIES } from '@/lib/currency';
@@ -58,6 +60,8 @@ export default function NewProjectDialog() {
   const [valueSeed, setValueSeed] = useState(0);
   const [currency, setCurrency] = useState('IDR');
   const [error, setError] = useState<string | null>(null);
+  /** The row exists; what is left is the navigation to its page. */
+  const [opening, setOpening] = useState(false);
 
   // Portalled for the same reason ProjectDetails is: this button sits inside a
   // header carrying `.animate-enter`, and a transform left behind by that
@@ -78,7 +82,18 @@ export default function NewProjectDialog() {
     setError(null);
   }
 
+  /**
+   * The dialog stays up until the project's own page has taken the screen.
+   *
+   * It used to close the moment the row was written and push afterwards, which
+   * left the projects list sitting there apparently ignoring the click for as
+   * long as the planner took to render — seconds on a cold lambda. Nothing had
+   * hung; there was simply nothing on screen saying so. The transition covers
+   * BOTH the write and the navigation, so the button can say which of the two
+   * it is on, and this component unmounts with the page it is part of.
+   */
   function create() {
+    if (pending) return;
     setError(null);
     startTransition(async () => {
       const res = await createProjectAction({
@@ -93,11 +108,23 @@ export default function NewProjectDialog() {
         setError(res.error);
         return;
       }
-      reset();
-      setOpen(false);
+      setOpening(true);
+      created.current = true;
       router.push(`/projects/${res.id}`);
     });
   }
+
+  // Same reason as NewDailyButton: it stays up for the whole trip, then closes
+  // once the transition (action AND navigation) is finished, so coming back to
+  // the project list never finds the "New project" form still standing.
+  const created = useRef(false);
+  useEffect(() => {
+    if (pending || !created.current) return;
+    created.current = false;
+    setOpening(false);
+    setOpen(false);
+    reset();
+  }, [pending]);
 
   return (
     <>
@@ -173,18 +200,17 @@ export default function NewProjectDialog() {
                       </div>
                       <div className="space-y-1">
                         <Label htmlFor="np-cur">Currency</Label>
-                        <select
+                        <NativeSelect
                           id="np-cur"
                           value={currency}
                           onChange={(e) => setCurrency(e.target.value)}
-                          className="h-11 w-full rounded-md border bg-background px-2 text-sm outline-none focus:border-foreground"
                         >
                           {CURRENCIES.map((c) => (
                             <option key={c.code} value={c.code}>
                               {c.code}
                             </option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </div>
                     </div>
 
@@ -215,8 +241,13 @@ export default function NewProjectDialog() {
                   )}
 
                   <div className="mt-4 flex gap-2">
-                    <Button className="h-11 flex-1" onClick={create} disabled={pending || !ready}>
-                      {pending ? 'Creating…' : 'Create project'}
+                    <Button
+                      className="h-11 flex-1 gap-1.5"
+                      onClick={create}
+                      disabled={pending || !ready}
+                    >
+                      {pending && <Spinner />}
+                      {opening ? 'Opening the project…' : pending ? 'Creating…' : 'Create project'}
                     </Button>
                     <Button
                       variant="ghost"
@@ -230,6 +261,14 @@ export default function NewProjectDialog() {
                       Cancel
                     </Button>
                   </div>
+                  {/* Said in words as well as in the button, because what the
+                      wait is FOR is the part that was missing: the project is
+                      already made by this point. */}
+                  {opening && (
+                    <p role="status" className="animate-fade-in mt-2 text-center text-[11px] text-muted-foreground">
+                      Made. Setting up its work breakdown and schedule…
+                    </p>
+                  )}
                 </m.div>
               </m.div>
             )}

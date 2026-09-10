@@ -155,7 +155,7 @@ export default function PhotoUploadGrid({
       ok = true;
       applyResponse(body);
     } catch {
-      setError('Upload failed — check your connection and try again.');
+      setError('Upload failed. Check your connection and try again.');
     } finally {
       if (!ok) setPreview(slot, null);
       setBusySlot(null);
@@ -180,7 +180,7 @@ export default function PhotoUploadGrid({
       ok = true;
       applyResponse(body);
     } catch {
-      setError('Could not remove photo — check your connection and try again.');
+      setError('Could not remove photo. Check your connection and try again.');
     } finally {
       if (!ok) setLocalPhotos((prev) => prev.map((p, i) => (i === slot ? previous : p)));
       setBusySlot(null);
@@ -204,7 +204,7 @@ export default function PhotoUploadGrid({
       }
       applyResponse(body);
     } catch {
-      setError('Action failed — check your connection and try again.');
+      setError('Action failed. Check your connection and try again.');
     } finally {
       const remaining = MIN_PAGE_BUSY_MS - (performance.now() - startedAt);
       if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));

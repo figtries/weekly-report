@@ -306,6 +306,37 @@ export interface DisciplineLink {
 
 /* ------------------------------------------------------------- constants */
 
+/**
+ * What the two registers are, in one line each.
+ *
+ * "EDL" and "VDRL" are what a document controller says out loud and what
+ * nobody else on the project can decode. The difference between them is not a
+ * naming detail either: it is WHO OWES THE DOCUMENT, and that is why only one
+ * of them carries promised dates and therefore a plan curve and a red overdue
+ * count. Stated wherever the pair is offered as a choice, so opening this
+ * section for the first time does not start with a guess.
+ *
+ * Wording taken from what the code already knew: `lib/register.ts` ("what we
+ * owe the client" / "what our vendors owe us") and RegisterBuilder's own
+ * expansions of the acronyms.
+ */
+export const REGISTER_INFO = {
+  edl: {
+    short: 'EDL',
+    long: 'Engineering Drawing List',
+    owes: 'What you owe the client',
+    detail: 'Every drawing and document your side issues for review, approval and construction. Each one carries a promised date, so this register has a plan to fall behind.',
+  },
+  vdrl: {
+    short: 'VDRL',
+    long: 'Vendor Drawing Register List',
+    owes: 'What your vendors owe you',
+    detail: 'Documents due from suppliers, grouped by package. Nobody gave promised dates for these, so there is no plan line and nothing is marked overdue.',
+  },
+} as const satisfies Record<RegisterKind, {
+  short: string; long: string; owes: string; detail: string;
+}>;
+
 export const STAGE_ORDER: DocStage[] =
   ['IFR', 'RE_IFR', 'IFA', 'RE_IFA', 'AFC', 'RE_AFC1', 'RE_AFC2', 'ASBUILT'];
 

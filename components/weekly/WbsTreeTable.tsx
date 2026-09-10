@@ -54,7 +54,7 @@ export default function WbsTreeTable({
   readOnly = false,
   compact = false,
   title = 'Detail Progress (WBS)',
-  subtitle = 'Edit cumulative progress & target on leaf items — parent rollups recompute on save',
+  subtitle = 'Edit cumulative progress & target on leaf items. Parent rollups recompute on save',
 }: {
   roots: RollupNode[];
   week: number;

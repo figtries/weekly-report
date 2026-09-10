@@ -60,7 +60,7 @@ const FIELDS: {
   {
     key: 'docNoPrefix',
     label: 'Document number prefix',
-    hint: 'Document Control builds every drawing number from this — e.g. PRGG-00-G0',
+    hint: 'Document Control builds every drawing number from this, e.g. PRGG-00-G0',
   },
   { key: 'contractValue', label: 'Contract value', type: 'number', hint: 'The signed figure' },
   { key: 'startDate', label: 'Starts', type: 'date' },
@@ -142,7 +142,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
                 >
                   <h2 className="text-sm font-semibold">Project details</h2>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Saved as you leave each field. The contract value is the signed figure — what
+                    Saved as you leave each field. The contract value is the signed figure. What
                     the prices in the sheet add up to is shown against it on the project page.
                   </p>
 
@@ -213,7 +213,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
 
                   <p className="mt-3 rounded-lg bg-muted p-2.5 text-[11px] leading-relaxed text-muted-foreground">
                     The currency is changed on the project page, next to the contract figure. It
-                    relabels — it never converts.
+                    relabels and never converts.
                   </p>
 
                   {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
