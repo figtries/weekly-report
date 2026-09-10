@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { m } from 'framer-motion';
 import { SlidersHorizontal } from 'lucide-react';
+
+import { pressMotion } from '@/components/motion/Press';
 
 import type { SheetRow } from '@/lib/sheet';
 import {
@@ -110,17 +113,25 @@ function utc(iso: string): number {
 function daysBetween(a: string, b: string): number {
   return Math.round((utc(b) - utc(a)) / MS_PER_DAY);
 }
-/** Same shape as the sheet's, "Sept" trimmed to "Sep" for the same reason. */
+/**
+ * Same shape as the sheet's, "Sept" trimmed to "Sep" for the same reason — and
+ * built once and cached for the same reason too: see `fmtDate` in
+ * ScheduleSheet. Three calls per bar, on every bar in the window.
+ */
+const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: '2-digit',
+  timeZone: 'UTC',
+});
+const dateCache = new Map<string, string>();
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
-    timeZone: 'UTC',
-  })
-    .format(utc(iso))
-    .replace('Sept', 'Sep');
+  const hit = dateCache.get(iso);
+  if (hit !== undefined) return hit;
+  const out = DATE_FMT.format(utc(iso)).replace('Sept', 'Sep');
+  dateCache.set(iso, out);
+  return out;
 }
 /**
  * Days to pixels, chosen per plan AND per pane.
@@ -242,7 +253,7 @@ export default function GanttChart({
   if (!spanStart) {
     return (
       <p className="p-6 text-xs text-muted-foreground">
-        No dates yet — give a row a start and a finish and its bar appears here.
+        No dates yet. Give a row a start and a finish and its bar appears here.
       </p>
     );
   }
@@ -320,7 +331,7 @@ export default function GanttChart({
               aria-hidden
               title={
                 late
-                  ? `Target ${fmtDate(r.targetDate)} — finishes ${r.daysLate} days late`
+                  ? `Target ${fmtDate(r.targetDate)}, finishes ${r.daysLate} days late`
                   : `Target ${fmtDate(r.targetDate)}`
               }
               className="absolute z-[5]"
@@ -465,7 +476,11 @@ export function GanttLegend({
   const groups = rows.filter((r) => r.groupLabel !== null);
   const showsPackages = used.some((u) => u.style.paint === 'unit') && groups.length >= 2;
 
-  if (used.length === 0 && groups.length < 2) return null;
+  // The key can be empty — one package and no rule firing has nothing to
+  // explain. The way IN to the rules must not vanish with it, which is exactly
+  // how "where do I change the colours" became unanswerable.
+  const hasKey = used.length > 0 || groups.length >= 2;
+  if (!hasKey && !onEdit) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
@@ -522,17 +537,50 @@ export function GanttLegend({
         </span>
       )}
 
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          className="ml-auto flex h-9 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <SlidersHorizontal className="size-3.5" />
-          Bar styles
-        </button>
-      )}
+      {/* Stranded at the right of an empty strip it read as a caption, so it
+          only takes the right-hand end once there is a key to sit beside. */}
+      {onEdit && <BarStylesButton onClick={onEdit} className={hasKey ? 'ml-auto' : ''} />}
     </div>
+  );
+}
+
+/**
+ * The way in to the rules — and the only one, so it is drawn as a control.
+ *
+ * It used to be muted grey text with no border, and people read it as a label
+ * rather than something to press: the answer to "where do I set the bar
+ * colours" was on screen the whole time and still could not be found. It now
+ * carries a border, a surface and the app's 44px press target, and it LEADS
+ * WITH THREE OF THE PLAN COLOURS — the swatches say what is behind it before
+ * the label is read, which two words never managed on their own.
+ */
+export function BarStylesButton({
+  onClick,
+  className = '',
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <m.button
+      type="button"
+      onClick={onClick}
+      {...pressMotion}
+      title="Colours, shapes and rules for the bars"
+      className={`flex h-11 shrink-0 items-center gap-2 rounded-lg border bg-background px-3 text-xs font-semibold shadow-xs transition-colors duration-200 ease-ios hover:bg-muted ${className}`}
+    >
+      <span aria-hidden className="flex items-center">
+        {PLAN_COLORS.slice(0, 3).map((c, i) => (
+          <span
+            key={c}
+            className="size-3 rounded-[3px] ring-1 ring-background"
+            style={{ background: c, marginLeft: i === 0 ? 0 : -4 }}
+          />
+        ))}
+      </span>
+      Bar styles
+      <SlidersHorizontal className="size-3.5 text-muted-foreground" />
+    </m.button>
   );
 }
 
