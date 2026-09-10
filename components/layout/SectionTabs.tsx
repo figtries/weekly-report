@@ -79,7 +79,7 @@ export default function SectionTabs({
           navigation and the triggers below carry the 44px touch target. */}
       <TabsList
         className={cn(
-          'group-data-horizontal/tabs:h-auto p-0.5 sm:p-1',
+          'group-data-horizontal/tabs:h-auto bg-track p-0.5 sm:p-1',
           stretch && 'sm:flex sm:w-full'
         )}
       >
@@ -97,7 +97,7 @@ export default function SectionTabs({
             // row, and the 44px target is `min-h-11`, so tightening it costs
             // nothing you can tap.
             className={cn(
-              'relative h-auto min-h-11 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-300 ease-ios data-[state=active]:bg-transparent data-[state=active]:shadow-none sm:px-3.5',
+              'relative isolate h-auto min-h-11 whitespace-nowrap rounded-lg px-2.5 text-foreground/70 transition-colors duration-300 ease-ios hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none sm:px-3.5',
               stretch && 'sm:flex-1'
             )}
           >

@@ -46,6 +46,15 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
+  /* TRACK — the ground a tab row sits on, and the ONLY reason it is not
+     --muted: at oklch(0.97) the strip was the same value as the page behind
+     it and the white pill inside it was invisible, which is the "nyaru"
+     reported on 10 September 2026. A tab row has to read as a row before it
+     can say which tab is active, so its ground is a step darker than any card
+     and the pill on it stays --background. Deliberately NOT --primary: blue in
+     this app means an action that COMMITS (see the block above), and the Save
+     as PDF button sits on the very same row. */
+  --track: oklch(0.925 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
@@ -162,6 +171,7 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
+  --color-track: var(--track);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
@@ -1392,6 +1402,7 @@ a:active {
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
+  --track: oklch(0.32 0 0);
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);

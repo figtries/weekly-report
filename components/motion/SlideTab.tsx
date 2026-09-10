@@ -39,7 +39,7 @@ export function SlideTab({ id, className }: { id: string; className?: string }) 
       layoutId={id}
       transition={MOTION.spring}
       aria-hidden
-      className={cn('absolute inset-0 -z-10 rounded-lg bg-background shadow-sm', className)}
+      className={cn('absolute inset-0 -z-10 rounded-lg bg-background shadow-md ring-1 ring-black/5 dark:ring-white/10', className)}
     />
   );
 }

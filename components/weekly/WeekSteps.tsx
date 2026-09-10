@@ -78,7 +78,7 @@ export default function WeekSteps({
     >
       <ol
         className={cn(
-          'inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 sm:gap-1 sm:p-1',
+          'inline-flex items-center gap-0.5 rounded-lg bg-track p-0.5 sm:gap-1 sm:p-1',
           stretch && 'sm:flex sm:w-full'
         )}
       >
@@ -114,7 +114,7 @@ export default function WeekSteps({
                   // section and have to clear the 44px touch target. The
                   // horizontal padding tightens on phones instead — width is
                   // what runs out there, never height.
-                  'relative flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium sm:gap-1.5 sm:px-3',
+                  'relative isolate flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium sm:gap-1.5 sm:px-3',
                   stretch && 'sm:w-full sm:justify-center',
                   // `transition-colors`, not `transition-all`: the press is
                   // framer-motion's now, and two writers on one transform is a
@@ -122,7 +122,7 @@ export default function WeekSteps({
                   'transition-colors duration-300 ease-ios',
                   // `bg-background` and `shadow-sm` moved to SlideTab, which
                   // draws them while travelling between steps.
-                  active ? 'text-foreground' : 'text-foreground/60 hover:text-foreground'
+                  active ? 'font-semibold text-foreground' : 'text-foreground/70 hover:text-foreground'
                 )}
               >
                 {active && <SlideTab id="week-step" className="rounded-md" />}
@@ -131,7 +131,7 @@ export default function WeekSteps({
                     'flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:size-5',
                     active
                       ? 'bg-foreground text-background'
-                      : 'bg-muted-foreground/25 text-muted-foreground'
+                      : 'bg-foreground/15 text-muted-foreground'
                   )}
                 >
                   {s.n}

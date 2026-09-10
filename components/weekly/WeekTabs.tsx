@@ -189,22 +189,29 @@ export default function WeekTabs({
             />
           )}
         </div>
-      </div>
+        {/* The four sheets are siblings, not stages, so they stay a plain tab
+            row — and only while step 3 is where you are. Showing them
+            permanently put six destinations on a 390px screen and made
+            "Report" look like a heading rather than somewhere to go.
 
-      {/* The four sheets are siblings, not stages, so they stay a plain tab row
-          — and only while step 3 is where you are. Showing them permanently put
-          six destinations on a 390px screen and made "Report" look like a
-          heading rather than somewhere to go. */}
-      {onReport && (
-        <SectionTabs
-          className="-mx-3 mt-2 px-3 sm:mx-0 sm:px-0"
-          stretch
-          tabs={GROUPS.laporan.map((t) => ({
-            href: `/weekly/${selectedWeek}/${t.key}`,
-            label: t.short,
-          }))}
-        />
-      )}
+            It lives INSIDE this grid, on the stepper's own column, and that is
+            the whole fix for the "g rapih" of 10 September 2026. Rendered below
+            the grid it ran the full width of the header while the stepper above
+            it stopped short of the week picker and the Save PDF button, so the
+            two bands were different widths and neither edge lined up with
+            anything. Sharing the column makes them exactly one width, at every
+            breakpoint, without either of them measuring the other. */}
+        {onReport && (
+          <SectionTabs
+            className="col-span-2 col-start-1 row-start-3 -mx-3 min-w-0 px-3 sm:mx-0 sm:px-0 md:col-span-1 md:col-start-2 md:row-start-2"
+            stretch
+            tabs={GROUPS.laporan.map((t) => ({
+              href: `/weekly/${selectedWeek}/${t.key}`,
+              label: t.short,
+            }))}
+          />
+        )}
+      </div>
     </div>
   );
 }
