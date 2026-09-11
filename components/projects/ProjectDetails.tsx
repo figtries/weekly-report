@@ -114,7 +114,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
         onClick={() => setOpen(true)}
         whileTap={{ scale: 0.97 }}
         transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-muted"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-muted sm:h-9"
       >
         <Pencil className="size-3.5" />
         Details

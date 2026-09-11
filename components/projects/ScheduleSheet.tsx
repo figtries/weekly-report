@@ -3,7 +3,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, TriangleAlert } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  MoreHorizontal,
+  Plus,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
 import {
@@ -16,6 +24,7 @@ import {
   deleteRowAction,
   indentRowAction,
   outdentRowAction,
+  undoDeleteRowAction,
 } from '@/lib/sheet-structure';
 import BarStyleEditor from './BarStyleEditor';
 import ShiftPreviewBar from './ShiftPreview';
@@ -78,13 +87,33 @@ const SPLIT_KEY = 'figtries:sheet-split-ratio';
 const SHEET_NATURAL = 800;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
+/**
+ * What the nine declared columns actually need: 40.25rem of columns, eight
+ * 0.375rem gaps, and the sheet's own 0.75rem either side. 716px.
+ *
+ * Both numbers that should have respected it were short. The scrolling body
+ * was floored at 43.75rem, sixteen pixels under, so the grid compressed its
+ * last column instead of scrolling; and the default split handed the sheet
+ * 62% of the shell, which on a 1105px shell is 685px, so Weight opened cut in
+ * half and Row actions opened off-screen entirely with no scrollbar in sight
+ * to say so. The divider still moves wherever you want it; drag under this and
+ * the pane scrolls honestly rather than clipping.
+ */
+const FULL_GRID = 716;
 
 // Under 640px only the outline, the name, the duration and the row menu fit;
 // dates and price move into the row's own panel. Above it, the full sheet.
 // Under 640px the first column is the colour chip alone. A six-level outline
 // code needs ~60px and truncates to nonsense in less, while indentation already
 // carries the structure — and the full code is one tap away in the row panel.
-const GRID_SM = 'grid-cols-[0.75rem_minmax(6rem,1fr)_4.25rem_2.25rem]';
+const GRID_SM = 'grid-cols-[0.75rem_minmax(5rem,1fr)_2.75rem_4.5rem_2.75rem]';
+/**
+ * Two headers for one column, one of them always display:none.
+ *
+ * A grid child that is hidden leaves the grid, so exactly one of these is in
+ * flow at any width and the column count still matches GRID_SM and GRID_LG.
+ * See the note on the hash cell for what happens when that arithmetic slips.
+ */
 const GRID_LG =
   'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_4.25rem_4.25rem_4.25rem_4.25rem_5.25rem_3.5rem_2.25rem]';
 
@@ -146,11 +175,26 @@ function lateBy(target: string | null, finish: string | null): number | null {
 }
 
 type Field = 'name' | 'duration' | 'start' | 'finish' | 'target' | 'price';
-interface Edit {
-  rowId: string;
-  field: Field;
-  before: string;
-}
+
+/** Anything a server action can answer with, as far as the undo stack cares. */
+type ActionResult = { ok: boolean; error?: string; gone?: true; newId?: string; undoId?: string };
+
+/**
+ * One step back.
+ *
+ * A cell edit remembers the value it replaced. A structural change remembers
+ * the MOVE that puts it back instead, because there is no local shape to
+ * restore to: adding a row renumbers the whole outline.
+ *
+ * The two used to be one type and only cell edits were ever pushed, so the
+ * toolbar advertised "Undo Ctrl+Z" beside Add, Indent and Delete and then
+ * quietly undid a rename from ten minutes ago. An undo stack that skips
+ * actions is worse than no undo at all, because nobody can see which step it
+ * is standing on.
+ */
+type Edit =
+  | { kind: 'field'; rowId: string; field: Field; before: string }
+  | { kind: 'structure'; run: () => Promise<ActionResult> };
 
 export default function ScheduleSheet({
   rows: initialRows,
@@ -190,9 +234,13 @@ export default function ScheduleSheet({
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
+  const [menuMode, setMenuMode] = useState<'menu' | 'delete'>('menu');
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [fitTimeline, setFitTimeline] = useState(false);
   const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
+  // The last delete, for as long as it can still be taken back. See UndoBar.
+  const [undoDelete, setUndoDelete] = useState<{ id: string; name: string } | null>(null);
   const [query, setQuery] = useState('');
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
   // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
@@ -477,7 +525,8 @@ export default function ScheduleSheet({
             });
           }
         }
-        if (recordUndo) setUndoStack((s) => [...s.slice(-49), { rowId: row.id, field, before }]);
+        if (recordUndo)
+          setUndoStack((s) => [...s.slice(-49), { kind: 'field', rowId: row.id, field, before }]);
       });
     },
     [patch, chainNodes, chainLinks, nameById]
@@ -490,18 +539,85 @@ export default function ScheduleSheet({
    * hoping the two agree. One refresh is always right.
    */
   const structure = useCallback(
-    (p: Promise<{ ok: boolean; error?: string }>) => {
+    (p: Promise<ActionResult>, onOk?: (res: ActionResult) => void) => {
       setError(null);
       startTransition(async () => {
         const res = await p;
         if (!res.ok) {
+          // A row the server says is gone is not something to put in front of
+          // anybody: this sheet is simply behind. Go and get the current rows.
+          if (res.gone) {
+            router.refresh();
+            return;
+          }
           setError(res.error ?? 'Something went wrong');
           return;
         }
+        onOk?.(res);
         router.refresh();
       });
     },
     [router]
+  );
+
+  /**
+   * A structural change, and the move that takes it back.
+   *
+   * The inverse is built from the RESULT rather than named up front, because
+   * the row an add creates has no id until the server answers.
+   */
+  const structureUndoable = useCallback(
+    (
+      p: Promise<ActionResult>,
+      inverse: (res: ActionResult) => (() => Promise<ActionResult>) | null
+    ) => {
+      structure(p, (res) => {
+        const back = inverse(res);
+        if (back) setUndoStack((s) => [...s.slice(-49), { kind: 'structure', run: back }]);
+      });
+    },
+    [structure]
+  );
+
+  /** Ctrl+Z and the Undo bar are two doors onto the same step back. */
+  const rememberUndo = useCallback((undoId: string) => {
+    setUndoStack((s) => [
+      ...s.slice(-49),
+      { kind: 'structure', run: () => undoDeleteRowAction(undoId) },
+    ]);
+  }, []);
+
+  /**
+   * Delete, and say so afterwards instead of asking first.
+   *
+   * A leaf goes straight away and leaves an Undo behind it; a row with children
+   * still gets the confirmation panel, because what it takes is more than the
+   * row being pointed at. That asymmetry is the point — the dialog is spent
+   * where it buys something, and nowhere else.
+   */
+  const dismissUndo = useCallback(() => setUndoDelete(null), []);
+  const runUndo = useCallback(
+    (id: string) => {
+      structure(undoDeleteRowAction(id));
+      setUndoDelete(null);
+    },
+    [structure]
+  );
+
+  const removeRow = useCallback(
+    (row: SheetRow) => {
+      if (row.childCount > 0) {
+        setMenuMode('delete');
+        setMenuRow(row);
+        return;
+      }
+      structure(deleteRowAction(row.id), (res) => {
+        if (!res.undoId) return;
+        setUndoDelete({ id: res.undoId, name: row.name });
+        rememberUndo(res.undoId);
+      });
+    },
+    [structure, rememberUndo]
   );
 
   /**
@@ -534,11 +650,20 @@ export default function ScheduleSheet({
       },
       done: () => setEditing(null),
       commit: (row, field, value) => commit(row, field, value),
-      menu: (row) => setMenuRow(row),
-      indent: (id, shift) => structure(shift ? outdentRowAction(id) : indentRowAction(id)),
-      enter: (id) => structure(addRowAction(projectId, { afterNodeId: id })),
+      menu: (row) => {
+        setMenuMode('menu');
+        setMenuRow(row);
+      },
+      indent: (id, shift) =>
+        structureUndoable(shift ? outdentRowAction(id) : indentRowAction(id), () =>
+          shift ? () => indentRowAction(id) : () => outdentRowAction(id)
+        ),
+      enter: (id) =>
+        structureUndoable(addRowAction(projectId, { afterNodeId: id }), ({ newId }) =>
+          newId ? () => deleteRowAction(newId) : null
+        ),
     }),
-    [commit, structure, projectId]
+    [commit, structure, structureUndoable, projectId]
   );
 
   const rowsRef = useRef(rows);
@@ -559,10 +684,14 @@ export default function ScheduleSheet({
   const undo = useCallback(() => {
     const last = undoRef.current[undoRef.current.length - 1];
     if (!last) return;
-    const row = rowsRef.current.find((r) => r.id === last.rowId);
     setUndoStack((stack) => stack.slice(0, -1));
+    if (last.kind === 'structure') {
+      structure(last.run());
+      return;
+    }
+    const row = rowsRef.current.find((r) => r.id === last.rowId);
     if (row) commit(row, last.field, last.before, false);
-  }, [commit]);
+  }, [commit, structure]);
 
   // Keyboard: move with the arrows, act with Tab, undo with Ctrl+Z. Ignored
   // while a cell is being typed into, where those keys belong to the input.
@@ -573,7 +702,15 @@ export default function ScheduleSheet({
         undo();
         return;
       }
+      // Asked of the EVENT's target as well as the focused element. A cell
+      // editor commits on Enter and blurs itself doing it, so by the time this
+      // window listener runs the focus has already moved to the body and the
+      // key looked like it had been pressed on the sheet. Enter then added the
+      // row twice: once from the cell, once from here.
+      const from = e.target;
       const typing =
+        from instanceof HTMLInputElement ||
+        from instanceof HTMLTextAreaElement ||
         document.activeElement instanceof HTMLInputElement ||
         document.activeElement instanceof HTMLTextAreaElement;
       if (typing || !selectedId) return;
@@ -587,14 +724,28 @@ export default function ScheduleSheet({
         e.preventDefault();
         setSelectedId(visible[i - 1].id);
       }
+      // The row menu has "Add row below" and the toolbar has Add row, but a
+      // plan is typed one line after another and reaching for either of those
+      // between every line is the reason people go back to Excel. Enter from
+      // inside a cell already did this; a selected row had nothing.
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        structureUndoable(addRowAction(projectId, { afterNodeId: selectedId }), ({ newId }) =>
+          newId ? () => deleteRowAction(newId) : null
+        );
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
-        structure(e.shiftKey ? outdentRowAction(selectedId) : indentRowAction(selectedId));
+        const shift = e.shiftKey;
+        structureUndoable(
+          shift ? outdentRowAction(selectedId) : indentRowAction(selectedId),
+          () => (shift ? () => indentRowAction(selectedId) : () => outdentRowAction(selectedId))
+        );
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, selectedId, visible, structure]);
+  }, [undo, selectedId, visible, structureUndoable, projectId]);
 
   const syncing = useRef(false);
   const mirror = (from: 'l' | 'r') => () => {
@@ -630,7 +781,9 @@ export default function ScheduleSheet({
     shellWidth > 0
       ? Math.min(
           Math.max(
-            splitRatio != null ? shellWidth * splitRatio : Math.min(SHEET_NATURAL, shellWidth * 0.62),
+            splitRatio != null
+              ? shellWidth * splitRatio
+              : Math.min(SHEET_NATURAL, Math.max(shellWidth * 0.62, FULL_GRID)),
             MIN_PANE
           ),
           Math.max(MIN_PANE, shellWidth - MIN_PANE)
@@ -670,13 +823,27 @@ export default function ScheduleSheet({
         selected={selected}
         canUndo={undoStack.length > 0}
         onUndo={undo}
-        onAdd={() => structure(addRowAction(projectId, { afterNodeId: anchor }))}
-        onAddChild={() =>
-          selectedId && structure(addRowAction(projectId, { afterNodeId: selectedId, asChild: true }))
+        onAdd={() =>
+          structureUndoable(addRowAction(projectId, { afterNodeId: anchor }), ({ newId }) =>
+            newId ? () => deleteRowAction(newId) : null
+          )
         }
-        onIndent={() => selectedId && structure(indentRowAction(selectedId))}
-        onOutdent={() => selectedId && structure(outdentRowAction(selectedId))}
-        onDelete={() => selectedId && structure(deleteRowAction(selectedId))}
+        onAddChild={() =>
+          selectedId &&
+          structureUndoable(
+            addRowAction(projectId, { afterNodeId: selectedId, asChild: true }),
+            ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
+          )
+        }
+        onIndent={() =>
+          selectedId &&
+          structureUndoable(indentRowAction(selectedId), () => () => outdentRowAction(selectedId))
+        }
+        onOutdent={() =>
+          selectedId &&
+          structureUndoable(outdentRowAction(selectedId), () => () => indentRowAction(selectedId))
+        }
+        onDelete={() => selected && removeRow(selected)}
         allCollapsed={collapsed.size > 0}
         onToggleAll={() =>
           setCollapsed((c) =>
@@ -742,7 +909,14 @@ export default function ScheduleSheet({
           <BarStylesButton onClick={() => setStylesOpen(true)} className="ml-auto sm:ml-1" />
         </m.div>
       ) : (
-        <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} />
+        // Under 768px the two panes take turns, so on the List tab this row was
+        // 60px of vertical space spent naming colours that are not on screen —
+        // and vertical space is exactly what the first row of the plan was
+        // waiting for. The way into the bar rules is not lost: select any row
+        // and the strip above carries it.
+        <div className={`shrink-0 ${pane === 'sheet' ? 'hidden md:block' : ''}`}>
+          <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} />
+        </div>
       )}
 
       {error && (
@@ -779,7 +953,7 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[43.75rem]">
+          <div className="min-w-[19rem] sm:min-w-[44.75rem]">
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -796,16 +970,43 @@ export default function ScheduleSheet({
                   header used to sit left of figures that sat right, which is
                   what made "DAYS  START" and "PRICE WEIGHT" read as one word
                   each with a hole beside them. */}
-              <span className="text-right">Duration</span>
+              <span className="text-right sm:hidden">Days</span>
+              <span className="hidden text-right sm:block">Duration</span>
               <span className="hidden text-right sm:block">Start</span>
-              <span className="hidden text-right sm:block">Finish</span>
+              <span className="text-right">Finish</span>
               <span className="hidden text-right sm:block">Target</span>
               <span className="hidden text-right sm:block">Price</span>
               <span className="hidden text-right sm:block">Weight</span>
               <span className="sr-only">Row actions</span>
             </div>
 
-            {visible.length === 0 && (
+            {/* A search that matches nothing used to fall through to the
+                first-run empty state below: "Nothing planned yet", with Import
+                from Excel as the loudest thing on screen. Typing three letters
+                made a 285-row plan look deleted and offered the one button that
+                could overwrite it. The plan is still there; say so, and say how
+                to get back to it. */}
+            {visible.length === 0 && query.trim() !== '' && (
+              <div className="animate-enter px-6 py-10 text-center">
+                <p className="text-sm font-semibold">Nothing matches that search</p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  All {rows.length} rows are still here. Clear the search to see them again.
+                </p>
+                <div className="mt-4 flex justify-center">
+                  <m.button
+                    type="button"
+                    {...pressMotion}
+                    onClick={() => setQuery('')}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-4 text-sm font-medium"
+                  >
+                    <X className="size-4" />
+                    Clear search
+                  </m.button>
+                </div>
+              </div>
+            )}
+
+            {visible.length === 0 && query.trim() === '' && (
               <div className="animate-enter px-6 py-10 text-center">
                 <p className="text-sm font-semibold">Nothing planned yet</p>
                 <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
@@ -886,11 +1087,28 @@ export default function ScheduleSheet({
           className="hidden w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-200 hover:bg-foreground md:block"
         />
 
-        <div
-          ref={rightRef}
-          onScroll={mirror('r')}
-          className={`min-h-0 min-w-0 flex-1 overflow-auto ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
-        >
+        <div className={`relative min-h-0 min-w-0 flex-1 ${pane === 'sheet' ? 'max-md:hidden' : ''}`}>
+          {/* Outside the scroller on purpose: a control that scrolls away with
+              the calendar is a control you have to go and find. */}
+          {ganttStart && ganttFinish && (
+            <m.button
+              type="button"
+              {...pressMotion}
+              onClick={() => setFitTimeline((f) => !f)}
+              aria-pressed={fitTimeline}
+              className={`absolute right-2 top-1.5 z-30 flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium shadow-sm ${
+                fitTimeline ? 'bg-foreground text-background' : 'bg-card text-muted-foreground'
+              }`}
+            >
+              <Maximize2 className="size-3" />
+              Fit
+            </m.button>
+          )}
+          <div
+            ref={rightRef}
+            onScroll={mirror('r')}
+            className="h-full min-h-0 min-w-0 overflow-auto"
+          >
           {/* The FULL list, plus the window. The surface has to keep its true
               height or every bar below the fold sits on the wrong line. */}
           <GanttChart
@@ -903,16 +1121,44 @@ export default function ScheduleSheet({
             onSelect={setSelectedId}
             styles={barStyles}
             range={range}
+            fit={fitTimeline}
           />
+          </div>
         </div>
       </div>
 
       {menuRow && (
         <RowMenu
+          // Keyed on the mode as well as the row: `initialMode` is only read
+          // when the panel mounts, so asking an already-open panel to show its
+          // delete step did nothing at all until the key made it a new panel.
+          key={`${menuRow.id}:${menuMode}`}
           row={menuRow}
           projectId={projectId}
-          onClose={() => setMenuRow(null)}
+          initialMode={menuMode}
+          onClose={() => {
+            setMenuRow(null);
+            setMenuMode('menu');
+          }}
           onChanged={() => router.refresh()}
+          onDeleted={(undoId, name) => {
+            if (!undoId) return;
+            setUndoDelete({ id: undoId, name });
+            rememberUndo(undoId);
+          }}
+          onUndoable={(run: () => Promise<ActionResult>) =>
+            setUndoStack((s) => [...s.slice(-49), { kind: 'structure', run }])
+          }
+        />
+      )}
+
+      {undoDelete && (
+        <UndoBar
+          key={undoDelete.id}
+          id={undoDelete.id}
+          name={undoDelete.name}
+          onUndo={runUndo}
+          onDismiss={dismissUndo}
         />
       )}
 
@@ -931,6 +1177,56 @@ export default function ScheduleSheet({
         onClose={() => setStylesOpen(false)}
         onChanged={() => router.refresh()}
       />
+    </div>
+  );
+}
+
+/**
+ * What stands in for the confirmation dialog on a leaf row.
+ *
+ * It has to be reachable with a thumb, so it sits at the foot of the viewport
+ * above the home indicator rather than up beside the toolbar, and Undo is a
+ * full 44px target. Ten seconds rather than the four a toast library defaults
+ * to: this is the only way back, and the person who wants it is usually the one
+ * who has just looked away from the screen.
+ *
+ * Keyed on the delete it belongs to, and handed callbacks that never change
+ * identity: this sheet re-renders on every scroll tick, and a timer that
+ * restarted with its parent would be a bar that never went away.
+ */
+function UndoBar({
+  id,
+  name,
+  onUndo,
+  onDismiss,
+}: {
+  id: string;
+  name: string;
+  onUndo: (id: string) => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 10_000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className="animate-fade-in-up pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
+      style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+    >
+      <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border bg-card py-2 pl-4 pr-2 shadow-lg">
+        <p className="min-w-0 flex-1 truncate text-sm">
+          Deleted <span className="font-semibold">{name}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => onUndo(id)}
+          className="h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold"
+        >
+          Undo
+        </button>
+      </div>
     </div>
   );
 }
@@ -1099,7 +1395,7 @@ const Row = memo(function Row({
         )}
       </div>
 
-      <div className="hidden text-right tabular-nums sm:block">
+      <div className="text-right tabular-nums">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || '—'}</span>
         ) : (
@@ -1169,7 +1465,7 @@ const Row = memo(function Row({
         type="button"
         onClick={onMenu}
         aria-label={`Actions for row ${r.code}`}
-        className="grid size-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-background hover:text-foreground"
+        className="grid h-11 w-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-background hover:text-foreground"
       >
         <MoreHorizontal className="size-4" />
       </button>

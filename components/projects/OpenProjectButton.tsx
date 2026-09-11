@@ -34,7 +34,11 @@ export default function OpenProjectButton({ id, isOpen }: { id: string; isOpen: 
       <Button asChild variant="secondary" className="h-11 shrink-0 gap-1.5">
         <Link href="/">
           <Check className="size-4 text-ok" />
-          Go to dashboard
+          {/* Short on a phone, where this button shares its line with the way
+              back and every pixel it takes is a row of the plan you cannot
+              see. The sentence is still there on any screen with room. */}
+          <span className="sm:hidden">Dashboard</span>
+          <span className="hidden sm:inline">Go to dashboard</span>
         </Link>
       </Button>
     );
@@ -57,7 +61,14 @@ export default function OpenProjectButton({ id, isOpen }: { id: string; isOpen: 
         }
       >
         {pending && <Spinner />}
-        {pending ? 'Opening…' : 'Open this project'}
+        {pending ? (
+          'Opening…'
+        ) : (
+          <>
+            <span className="sm:hidden">Open</span>
+            <span className="hidden sm:inline">Open this project</span>
+          </>
+        )}
       </Button>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>

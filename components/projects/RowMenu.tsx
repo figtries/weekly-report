@@ -23,6 +23,9 @@ import {
   outdentRowAction,
   setReportingUnitAction,
 } from '@/lib/sheet-structure';
+
+/** Anything a server action can answer with, as far as this panel cares. */
+type Res = { ok: boolean; error?: string; gone?: true; newId?: string; undoId?: string };
 import {
   setMilestoneAction,
   updateRowDatesAction,
@@ -45,28 +48,51 @@ import {
 export default function RowMenu({
   row,
   projectId,
+  initialMode = 'menu',
   onClose,
   onChanged,
+  onDeleted,
+  onUndoable,
 }: {
   row: SheetRow;
   projectId: string;
+  /** 'delete' when the sheet opened this panel to ask about a row with children. */
+  initialMode?: 'menu' | 'delete';
   onClose: () => void;
   onChanged: () => void;
+  /** The delete that just happened, and the handle that can take it back. */
+  onDeleted?: (undoId: string | undefined, name: string) => void;
+  /**
+   * A structural move this panel just made, and the move that reverses it.
+   *
+   * Without this the sheet's Ctrl+Z would skip everything done from in here and
+   * then undo whatever came before it, which is the failure the undo stack was
+   * rebuilt to remove.
+   */
+  onUndoable?: (run: () => Promise<Res>) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [unitValue, setUnitValue] = useState('');
-  const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>('menu');
+  const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>(initialMode);
 
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, keepOpen = false) => {
+  const run = (fn: () => Promise<Res>, keepOpen = false, onOk?: (res: Res) => void) => {
     setError(null);
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) {
+        // A row the server says is gone leaves nothing to do here and nothing
+        // worth reading: the sheet behind this panel is what is out of date.
+        if (res.gone) {
+          onChanged();
+          onClose();
+          return;
+        }
         setError(res.error ?? 'Something went wrong');
         return;
       }
+      onOk?.(res);
       onChanged();
       // Structural actions close, because the row they acted on may not be
       // where it was. Field edits stay open: people fill start, finish and
@@ -75,6 +101,13 @@ export default function RowMenu({
       if (!keepOpen) onClose();
     });
   };
+
+  /** Run it, and hand the sheet the move that puts things back. */
+  const undoable = (fn: () => Promise<Res>, inverse: (res: Res) => (() => Promise<Res>) | null) =>
+    run(fn, false, (res) => {
+      const back = inverse(res);
+      if (back) onUndoable?.(back);
+    });
 
   return (
     <div
@@ -161,14 +194,24 @@ export default function RowMenu({
           <div className="mt-3 space-y-0.5">
             <Item
               icon={<Plus className="size-4" />}
-              onClick={() => run(() => addRowAction(projectId, { afterNodeId: row.id }))}
+              onClick={() =>
+                undoable(
+                  () => addRowAction(projectId, { afterNodeId: row.id }),
+                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
+                )
+              }
               disabled={pending}
             >
               Add row below
             </Item>
             <Item
               icon={<CornerDownRight className="size-4" />}
-              onClick={() => run(() => addRowAction(projectId, { afterNodeId: row.id, asChild: true }))}
+              onClick={() =>
+                undoable(
+                  () => addRowAction(projectId, { afterNodeId: row.id, asChild: true }),
+                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
+                )
+              }
               disabled={pending}
             >
               Add row inside
@@ -178,7 +221,7 @@ export default function RowMenu({
 
             <Item
               icon={<ChevronsRight className="size-4" />}
-              onClick={() => run(() => indentRowAction(row.id))}
+              onClick={() => undoable(() => indentRowAction(row.id), () => () => outdentRowAction(row.id))}
               disabled={pending}
               hint="Tab"
             >
@@ -186,7 +229,7 @@ export default function RowMenu({
             </Item>
             <Item
               icon={<ChevronsLeft className="size-4" />}
-              onClick={() => run(() => outdentRowAction(row.id))}
+              onClick={() => undoable(() => outdentRowAction(row.id), () => () => indentRowAction(row.id))}
               disabled={pending}
               hint="Shift+Tab"
             >
@@ -194,14 +237,18 @@ export default function RowMenu({
             </Item>
             <Item
               icon={<MoveUp className="size-4" />}
-              onClick={() => run(() => moveRowAction(row.id, 'up'))}
+              onClick={() =>
+                undoable(() => moveRowAction(row.id, 'up'), () => () => moveRowAction(row.id, 'down'))
+              }
               disabled={pending}
             >
               Move up
             </Item>
             <Item
               icon={<MoveDown className="size-4" />}
-              onClick={() => run(() => moveRowAction(row.id, 'down'))}
+              onClick={() =>
+                undoable(() => moveRowAction(row.id, 'down'), () => () => moveRowAction(row.id, 'up'))
+              }
               disabled={pending}
             >
               Move down
@@ -238,9 +285,18 @@ export default function RowMenu({
 
             <Divider />
 
+            {/* A leaf goes on the press and leaves an Undo behind it. Only a
+                row that would take others with it is worth a question first —
+                see deleteRowAction. */}
             <Item
               icon={<Trash2 className="size-4" />}
-              onClick={() => setMode('delete')}
+              onClick={() =>
+                row.childCount > 0
+                  ? setMode('delete')
+                  : run(() => deleteRowAction(row.id), false, (res) =>
+                      onDeleted?.(res.undoId, row.name)
+                    )
+              }
               disabled={pending}
               danger
             >
@@ -322,7 +378,11 @@ export default function RowMenu({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => run(() => deleteRowAction(row.id))}
+                onClick={() =>
+                  run(() => deleteRowAction(row.id), false, (res) =>
+                    onDeleted?.(res.undoId, row.name)
+                  )
+                }
                 className="h-11 flex-1 rounded-lg bg-destructive text-sm font-medium text-white disabled:opacity-50"
               >
                 {pending ? 'Deleting…' : 'Delete'}

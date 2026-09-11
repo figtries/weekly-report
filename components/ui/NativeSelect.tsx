@@ -47,7 +47,7 @@ export default function NativeSelect({
           'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
           'disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30',
           compact
-            ? 'h-8 pl-2 pr-7 text-[11px] font-medium'
+            ? 'h-8 min-h-11 pl-2 pr-7 text-[11px] font-medium sm:min-h-0'
             : 'h-8 min-h-11 py-1 pl-2.5 pr-8 text-base sm:min-h-0 md:text-sm',
           className
         )}

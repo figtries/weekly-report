@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { eq } from 'drizzle-orm';
 
-import { beforeWrite, db, schema, sqlite } from './sqlite';
+import { beforeWrite, db, flushDbSnapshot, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
 import { completeDates, parsePaste, type ParseResult } from './paste';
 
@@ -209,6 +209,10 @@ export async function applyPasteAction(
     });
 
     revalidatePath('/projects', 'layout');
+    // Awaited, not left to after(): the sheet refreshes the moment this
+    // resolves, and a push still in flight is that refresh being answered from
+    // bytes taken before the paste. Same reasoning as lib/sheet-structure.ts.
+    await flushDbSnapshot();
     return { ok: true, added: values.length };
   } catch (e) {
     return fail(e);

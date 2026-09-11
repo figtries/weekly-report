@@ -80,6 +80,7 @@ export default function SheetToolbar({
         label="Add inside"
         title="Add a row under the selected one"
         disabled={!has}
+        desktopOnly
       />
 
       {slot}
@@ -93,6 +94,7 @@ export default function SheetToolbar({
         hint="Tab"
         disabled={!has}
         compact
+        desktopOnly
       />
       <Action
         onClick={onOutdent}
@@ -101,6 +103,7 @@ export default function SheetToolbar({
         hint="Shift+Tab"
         disabled={!has || selected.depth === 0}
         compact
+        desktopOnly
       />
       <Action
         onClick={onDelete}
@@ -109,9 +112,10 @@ export default function SheetToolbar({
         disabled={!has}
         compact
         danger
+        desktopOnly
       />
 
-      <span className="mx-0.5 h-6 w-px bg-border" aria-hidden />
+      <span className="mx-0.5 hidden h-6 w-px bg-border sm:block" aria-hidden />
 
       <Action
         onClick={onToggleAll}
@@ -128,7 +132,10 @@ export default function SheetToolbar({
         compact
       />
 
-      <span className="ml-auto flex items-center gap-2">
+      {/* Right-aligned only where it shares a line with the buttons. On a
+          phone it wraps to its own row, and pushing it right there left a
+          hole the width of the screen beside it. */}
+      <span className="flex items-center gap-2 sm:ml-auto">
         {/* A native input, not a component: the toolbar is already one row of
             controls and this is the only one people type into. */}
         <span className="relative">
@@ -141,7 +148,7 @@ export default function SheetToolbar({
             onChange={(e) => onQuery(e.target.value)}
             placeholder="Find a row"
             aria-label="Find a row"
-            className="h-9 w-28 rounded-lg border bg-background pl-7 pr-6 text-xs outline-none transition-[width] duration-200 ease-ios focus:w-40 focus:border-foreground sm:w-36 sm:focus:w-56"
+            className="h-11 w-28 rounded-lg border bg-background pl-7 pr-6 text-xs outline-none transition-[width] duration-200 ease-ios focus:w-40 focus:border-foreground sm:h-9 sm:w-36 sm:focus:w-56"
           />
           {query !== '' && (
             <button
@@ -166,7 +173,7 @@ export default function SheetToolbar({
               key={p}
               type="button"
               onClick={() => setPane(p)}
-              className={`h-9 rounded-md px-3 text-xs font-medium transition-colors ${
+              className={`h-11 rounded-md px-3 text-xs font-medium transition-colors sm:h-9 ${
                 pane === p ? 'bg-foreground text-background' : 'text-muted-foreground'
               }`}
             >
@@ -189,6 +196,7 @@ function Action({
   primary,
   danger,
   compact,
+  desktopOnly,
 }: {
   onClick: () => void;
   icon: React.ReactNode;
@@ -203,6 +211,8 @@ function Action({
   danger?: boolean;
   /** Label hides under 640px — the icon and the tooltip carry it there. */
   compact?: boolean;
+  /** Gone entirely under 640px, where the row panel carries it with its name. */
+  desktopOnly?: boolean;
 }) {
   return (
     <m.button
@@ -212,12 +222,18 @@ function Action({
       title={title ?? (hint ? `${label} · ${hint}` : label)}
       aria-label={label}
       {...(disabled ? {} : pressMotion)}
-      className={`flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios disabled:pointer-events-none disabled:opacity-35 ${
-        primary
-          ? 'btn-primary'
-          : danger
-            ? 'text-destructive hover:bg-destructive/10'
-            : 'hover:bg-muted'
+      // A disabled button keeps its colour, and destructive red at 35% is
+      // still the most saturated thing in a row of greys: Delete read as the
+      // one button you were meant to press when nothing was even selected.
+      // Disabled is disabled, whatever the button does when it works.
+      className={`${desktopOnly ? 'hidden sm:flex' : 'flex'} h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios disabled:pointer-events-none disabled:opacity-35 ${
+        disabled
+          ? 'text-muted-foreground'
+          : primary
+            ? 'btn-primary'
+            : danger
+              ? 'text-destructive hover:bg-destructive/10'
+              : 'hover:bg-muted'
       }`}
     >
       {icon}

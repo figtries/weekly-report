@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, TriangleAlert } from 'lucide-react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
@@ -18,6 +18,15 @@ import { getBarStyles } from '@/lib/bar-styles-read';
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
 // is enough — this route resolves per id without it.
+
+/** `11 Dec 26` — the sheet's own format, so two dates on one screen match. */
+function fmtDay(iso: string | null): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d))
+    .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC' })
+    .replace('Sept', 'Sep');
+}
 
 /**
  * A project, and the plan it holds.
@@ -66,6 +75,11 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const weeks = getWeekSpans(id);
   const isOpen = (await getActiveProjectId()) === id;
 
+  // Lexicographic order on ISO dates is chronological, which is most of the
+  // reason every date in this app is stored as one.
+  const planEnd = sheet.spanFinish;
+  const outgrown = Boolean(project.finishDate && planEnd && planEnd > project.finishDate);
+
   const facts = [
     `${contents.wbsRows} rows`,
     `${contents.leaves} measurable`,
@@ -83,31 +97,61 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   return (
     <RouteTransition id="project-home">
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <header className="animate-enter shrink-0 border-b px-3 py-3 sm:px-6">
-          <Link
-            href="/projects"
-            className="inline-flex h-8 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-3.5" />
-            All projects
-          </Link>
-          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
+        <header className="animate-enter shrink-0 border-b px-3 py-2 sm:px-6 sm:py-3">
+          {/* One wrapping row, reordered rather than duplicated.
+              On a phone the way back and the two buttons share the first line
+              and the title takes the second; above 640px the way back has its
+              own line and the buttons return to the right of the title. Three
+              children, one instance of each — a second copy behind a
+              `sm:hidden` would mean two ProjectDetails dialogs mounted, each
+              with its own state, on every project page. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-start">
+            <Link
+              href="/projects"
+              className="order-1 mr-auto inline-flex h-11 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full"
+            >
+              <ArrowLeft className="size-3.5" />
+              All projects
+            </Link>
+            <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3">
+              <ProjectDetails project={project} />
+              <OpenProjectButton id={id} isOpen={isOpen} />
+            </div>
+            <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">
               <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">
                 {project.name}
               </h1>
               <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                 <span>{project.clientName || 'No client named yet'}</span>
-                {facts.map((f) => (
-                  <span key={f as string}>· {f}</span>
+                {facts.map((f, i) => (
+                  <span key={f as string} className={i >= 3 ? 'hidden sm:inline' : ''}>
+                    · {f}
+                  </span>
                 ))}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <ProjectDetails project={project} />
-              <OpenProjectButton id={id} isOpen={isOpen} />
-            </div>
           </div>
+
+          {/* "2 weeks" is counted from the PROJECT's own start and finish, and
+              nothing moves those when a row is dragged past them. So a plan can
+              run months beyond the window its reporting weeks are cut from, and
+              the only sign of it was a week count quietly disagreeing with every
+              date in the sheet. Said out loud instead, with both dates, because
+              which of the two is wrong is the reader's call and not ours. */}
+          {outgrown && (
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-warn/10 px-2 py-1.5 text-[11px] font-medium leading-relaxed text-warn">
+              <TriangleAlert className="mt-px size-3.5 shrink-0" />
+              <span>
+                Plan runs to {fmtDay(planEnd)}, past this project&apos;s finish on{' '}
+                {fmtDay(project.finishDate)}.
+                <span className="hidden sm:inline">
+                  {' '}
+                  Reporting weeks are cut from the project dates, so work after that finish has no
+                  week to be reported in.
+                </span>
+              </span>
+            </div>
+          )}
         </header>
 
         {weights && <ValueStrip summary={weights} projectId={id} />}

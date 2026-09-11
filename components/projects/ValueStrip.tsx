@@ -92,6 +92,13 @@ export default function ValueStrip({
                     {pct < 1 ? pct.toFixed(1) : Math.round(pct)}%
                   </strong>{' '}
                   has a price against it
+                  {/* The Weight column divides what IS priced, so one priced row
+                      out of five reads 100.00% while standing for a tenth of
+                      the contract. Both numbers are right and they look like a
+                      contradiction until this clause sits beside them. Hidden
+                      below 640px for the same reason it is needed above it:
+                      that is exactly where the Weight column exists. */}
+                  <span className="hidden sm:inline"> · weights are shares of that</span>
                 </>
               )}
             </span>
@@ -102,7 +109,7 @@ export default function ValueStrip({
           type="button"
           whileTap={{ scale: 0.97 }}
           onClick={() => setOpen(true)}
-          className="order-2 ml-auto flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:order-3"
+          className="order-2 ml-auto flex h-11 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:order-3 sm:h-9"
         >
           Money
           <ChevronRight className="size-3.5" />

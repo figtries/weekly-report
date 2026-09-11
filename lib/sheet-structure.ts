@@ -2,9 +2,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
-import { beforeWrite, db, schema, sqlite } from './sqlite';
+import { beforeWrite, db, flushDbSnapshot, refreshDbSnapshot, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
 
 /**
@@ -34,12 +34,36 @@ import { getActiveBaselineId } from './sheet';
  * as broken.
  */
 
-export type StructureResult = { ok: true; newId?: string } | { ok: false; error: string };
+export type StructureResult =
+  | { ok: true; newId?: string; undoId?: string }
+  | { ok: false; error: string; gone?: true };
+
+/**
+ * Not "Row not found".
+ *
+ * A row the database cannot find is almost never a mystery: it is a sheet still
+ * showing something that has already been let go of. So the words say that, and
+ * the flag lets the client go and fetch the current rows instead of putting a
+ * red line in front of somebody who did nothing wrong.
+ */
+const GONE = 'That row is no longer in the plan';
+
+/** How a deleted subtree is written down in `audit_log`, so it can be put back. */
+const UNDO_ENTITY = 'wbs_subtree';
+
+type RemovedSubtree = {
+  nodes: (typeof schema.wbsNodes.$inferSelect)[];
+  milestones: (typeof schema.milestones.$inferSelect)[];
+  schedules: (typeof schema.nodeSchedules.$inferSelect)[];
+  progress: (typeof schema.leafProgress.$inferSelect)[];
+  msProgress: (typeof schema.milestoneProgress.$inferSelect)[];
+};
 
 const MS_PER_DAY = 86_400_000;
 
-function fail(err: unknown): { ok: false; error: string } {
-  return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
+function fail(err: unknown): { ok: false; error: string; gone?: true } {
+  const error = err instanceof Error ? err.message : 'Something went wrong';
+  return error === GONE ? { ok: false, error, gone: true } : { ok: false, error };
 }
 function utc(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);
@@ -133,14 +157,39 @@ function renumber(projectId: string, tx: Writer = db) {
   }
 }
 
-function projectOf(nodeId: string): string {
-  const n = db
-    .select({ projectId: schema.wbsNodes.projectId })
-    .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.id, nodeId))
-    .all()[0];
-  if (!n) throw new Error('Row not found');
+async function projectOf(nodeId: string): Promise<string> {
+  const read = () =>
+    db
+      .select({ projectId: schema.wbsNodes.projectId })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.id, nodeId))
+      .all()[0];
+  let n = read();
+  // `beforeWrite` has already pulled, but it pulls CONDITIONALLY and swallows
+  // its own failures, so a row this instance cannot find is the one case where
+  // staleness is proven rather than suspected. Same reasoning, and the same
+  // forced pull, as a project id the URL names in app/projects/[id]/page.tsx.
+  if (!n && (await refreshDbSnapshot())) n = read();
+  if (!n) throw new Error(GONE);
   return n.projectId;
+}
+
+/**
+ * Every structural write ends here.
+ *
+ * `revalidatePath` alone is not enough on a deployment. The client calls
+ * `router.refresh()` the instant one of these resolves, and that refresh lands
+ * on whichever instance the platform picks, which reads the blob snapshot and
+ * not this instance's memory. Left to `after()` the push is still in flight
+ * when that read happens, so the refresh is answered from bytes taken BEFORE
+ * the write and the row just deleted comes straight back. Pressing Delete a
+ * second time then reported the truth, which is how this surfaced: "Row not
+ * found" against a row still on screen (11 Sep 2026). Awaiting costs nothing
+ * where no blob store is attached, since `flushDbSnapshot` returns at once.
+ */
+async function settle(): Promise<void> {
+  revalidatePath('/projects', 'layout');
+  await flushDbSnapshot();
 }
 
 function touchProject(projectId: string, tx: Writer = db) {
@@ -186,7 +235,7 @@ export async function addRowAction(
 
     if (after) {
       const a = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, after)).all()[0];
-      if (!a) throw new Error('Row not found');
+      if (!a) throw new Error(GONE);
       parentId = opts.asChild ? a.id : a.parentId;
       // Sits immediately after the anchor; renumber turns this into a clean
       // depth-first sequence a moment later.
@@ -247,7 +296,7 @@ export async function addRowAction(
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    revalidatePath('/projects', 'layout');
+    await settle();
     return { ok: true, newId: id };
   } catch (e) {
     return fail(e);
@@ -257,11 +306,23 @@ export async function addRowAction(
 /**
  * Deleting takes the subtree with it — `wbs_nodes.parentId` has no cascade of
  * its own, so the children are collected here rather than left orphaned.
+ *
+ * **Everything that goes is written down before it goes.** A delete that cannot
+ * be taken back has to be defended by a dialog, and a dialog in front of every
+ * delete is a toll paid on every row of a plan somebody is still shaping. The
+ * undo is what buys the dialog away, so the dialog is kept only for a row with
+ * children, where what is at stake is more than the row you are looking at.
+ *
+ * The record lives in `audit_log` and not in the browser. On a deployment the
+ * undo is served by a different instance than the delete was, so a payload
+ * carried through the client would have to survive a lambda hop — and a payload
+ * the client hands back is a payload anyone can rewrite on the way. `oldValue`
+ * is exactly what that column is for.
  */
 export async function deleteRowAction(nodeId: string): Promise<StructureResult> {
   await beforeWrite();
   try {
-    const projectId = projectOf(nodeId);
+    const projectId = await projectOf(nodeId);
     const nodes = loadTree(projectId);
     const doomed = new Set<string>([nodeId]);
     let grew = true;
@@ -276,14 +337,119 @@ export async function deleteRowAction(nodeId: string): Promise<StructureResult> 
     }
     if (doomed.size === nodes.length) throw new Error('A project needs at least one row');
 
+    const ids = [...doomed];
+    // Parents first, so putting them back can insert in this same order.
+    const removed: RemovedSubtree = {
+      nodes: db
+        .select()
+        .from(schema.wbsNodes)
+        .where(inArray(schema.wbsNodes.id, ids))
+        .orderBy(schema.wbsNodes.depth, schema.wbsNodes.order)
+        .all(),
+      milestones: db
+        .select()
+        .from(schema.milestones)
+        .where(inArray(schema.milestones.nodeId, ids))
+        .all(),
+      schedules: db
+        .select()
+        .from(schema.nodeSchedules)
+        .where(inArray(schema.nodeSchedules.nodeId, ids))
+        .all(),
+      progress: db
+        .select()
+        .from(schema.leafProgress)
+        .where(inArray(schema.leafProgress.nodeId, ids))
+        .all(),
+      msProgress: [],
+    };
+    const msIds = removed.milestones.map((m) => m.id);
+    if (msIds.length) {
+      // `milestone_progress` hangs off the milestones rather than off the node,
+      // so it would go with them and never come back on its own.
+      removed.msProgress = db
+        .select()
+        .from(schema.milestoneProgress)
+        .where(inArray(schema.milestoneProgress.milestoneId, msIds))
+        .all();
+    }
+
+    const undoId = randomUUID();
     db.transaction((tx) => {
-      for (const id of doomed) {
+      tx.insert(schema.auditLog)
+        .values({
+          id: undoId,
+          projectId,
+          entityType: UNDO_ENTITY,
+          entityId: nodeId,
+          field: 'delete',
+          oldValue: JSON.stringify(removed),
+          at: new Date().toISOString(),
+        })
+        .run();
+      for (const id of ids) {
         tx.delete(schema.wbsNodes).where(eq(schema.wbsNodes.id, id)).run();
       }
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    revalidatePath('/projects', 'layout');
+    await settle();
+    return { ok: true, undoId };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Put back exactly what one delete took, ids and all.
+ *
+ * Rows go in parents first, and a row whose parent has since been deleted too
+ * is re-attached at the top level rather than refused: an undo that fails
+ * because the plan moved on underneath it is an undo nobody trusts a second
+ * time. `onConflictDoNothing` covers the other direction, a second press of the
+ * same Undo, which should be a no-op and not an error.
+ */
+export async function undoDeleteRowAction(undoId: string): Promise<StructureResult> {
+  await beforeWrite();
+  try {
+    const record = db.select().from(schema.auditLog).where(eq(schema.auditLog.id, undoId)).all()[0];
+    if (!record || record.entityType !== UNDO_ENTITY || !record.oldValue) {
+      throw new Error('That delete can no longer be undone');
+    }
+    const projectId = record.projectId;
+    const removed = JSON.parse(record.oldValue) as RemovedSubtree;
+    const alive = new Set(
+      db
+        .select({ id: schema.wbsNodes.id })
+        .from(schema.wbsNodes)
+        .where(eq(schema.wbsNodes.projectId, projectId))
+        .all()
+        .map((r) => r.id)
+    );
+    const coming = new Set(removed.nodes.map((n) => n.id));
+
+    db.transaction((tx) => {
+      for (const n of removed.nodes) {
+        const parentId = n.parentId && (alive.has(n.parentId) || coming.has(n.parentId)) ? n.parentId : null;
+        tx.insert(schema.wbsNodes).values({ ...n, parentId }).onConflictDoNothing().run();
+      }
+      for (const m of removed.milestones) {
+        tx.insert(schema.milestones).values(m).onConflictDoNothing().run();
+      }
+      for (const sc of removed.schedules) {
+        tx.insert(schema.nodeSchedules).values(sc).onConflictDoNothing().run();
+      }
+      for (const pr of removed.progress) {
+        tx.insert(schema.leafProgress).values(pr).onConflictDoNothing().run();
+      }
+      for (const mp of removed.msProgress) {
+        tx.insert(schema.milestoneProgress).values(mp).onConflictDoNothing().run();
+      }
+      tx.delete(schema.auditLog).where(eq(schema.auditLog.id, undoId)).run();
+      renumber(projectId, tx);
+      touchProject(projectId, tx);
+    });
+    await settle();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -294,10 +460,10 @@ export async function deleteRowAction(nodeId: string): Promise<StructureResult> 
 export async function indentRowAction(nodeId: string): Promise<StructureResult> {
   await beforeWrite();
   try {
-    const projectId = projectOf(nodeId);
+    const projectId = await projectOf(nodeId);
     const nodes = loadTree(projectId);
     const me = nodes.find((n) => n.id === nodeId);
-    if (!me) throw new Error('Row not found');
+    if (!me) throw new Error(GONE);
     const siblings = nodes.filter((n) => (n.parentId ?? null) === (me.parentId ?? null));
     const i = siblings.findIndex((n) => n.id === nodeId);
     if (i <= 0) throw new Error('Nothing above this row to sit under');
@@ -310,7 +476,7 @@ export async function indentRowAction(nodeId: string): Promise<StructureResult> 
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    revalidatePath('/projects', 'layout');
+    await settle();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -321,13 +487,13 @@ export async function indentRowAction(nodeId: string): Promise<StructureResult> 
 export async function outdentRowAction(nodeId: string): Promise<StructureResult> {
   await beforeWrite();
   try {
-    const projectId = projectOf(nodeId);
+    const projectId = await projectOf(nodeId);
     const nodes = loadTree(projectId);
     const me = nodes.find((n) => n.id === nodeId);
-    if (!me) throw new Error('Row not found');
+    if (!me) throw new Error(GONE);
     if (!me.parentId) throw new Error('This row is already at the top level');
     const parent = nodes.find((n) => n.id === me.parentId);
-    if (!parent) throw new Error('Row not found');
+    if (!parent) throw new Error(GONE);
 
     db.transaction((tx) => {
       tx.update(schema.wbsNodes)
@@ -342,7 +508,7 @@ export async function outdentRowAction(nodeId: string): Promise<StructureResult>
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    revalidatePath('/projects', 'layout');
+    await settle();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -353,10 +519,10 @@ export async function outdentRowAction(nodeId: string): Promise<StructureResult>
 export async function moveRowAction(nodeId: string, dir: 'up' | 'down'): Promise<StructureResult> {
   await beforeWrite();
   try {
-    const projectId = projectOf(nodeId);
+    const projectId = await projectOf(nodeId);
     const nodes = loadTree(projectId);
     const me = nodes.find((n) => n.id === nodeId);
-    if (!me) throw new Error('Row not found');
+    if (!me) throw new Error(GONE);
     const siblings = nodes.filter((n) => (n.parentId ?? null) === (me.parentId ?? null));
     const i = siblings.findIndex((n) => n.id === nodeId);
     const j = dir === 'up' ? i - 1 : i + 1;
@@ -370,7 +536,7 @@ export async function moveRowAction(nodeId: string, dir: 'up' | 'down'): Promise
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    revalidatePath('/projects', 'layout');
+    await settle();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -396,7 +562,7 @@ export async function setReportingUnitAction(
 ): Promise<StructureResult> {
   await beforeWrite();
   try {
-    const projectId = projectOf(nodeId);
+    const projectId = await projectOf(nodeId);
     db.update(schema.wbsNodes)
       .set({
         isReportingUnit: on,
@@ -409,7 +575,7 @@ export async function setReportingUnitAction(
       .where(eq(schema.wbsNodes.id, nodeId))
       .run();
     touchProject(projectId);
-    revalidatePath('/projects', 'layout');
+    await settle();
     return { ok: true };
   } catch (e) {
     return fail(e);
