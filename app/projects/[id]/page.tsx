@@ -9,6 +9,7 @@ import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
+import { refreshDbSnapshot } from '@/lib/sqlite';
 import { getSheet, getWeekSpans } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
 import ValueStrip from '@/components/projects/ValueStrip';
@@ -48,7 +49,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
 async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = getProject(id);
+  let project = getProject(id);
+  // A project this instance has never heard of is the one case where staleness
+  // is already proven rather than suspected: on a deployment the row may have
+  // been written by a different lambda seconds ago. Pull the snapshot once and
+  // ask again before deciding it does not exist — that redirect landing on a
+  // 404 is exactly what lib/db-snapshot.ts was written for. Costs nothing
+  // locally, where the refresh is a no-op.
+  if (!project && (await refreshDbSnapshot())) project = getProject(id);
   if (!project) notFound();
 
   const contents = getProjectContents(id);

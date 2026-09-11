@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db, flushDbSnapshot, schema } from './sqlite';
 import { isKnownCurrency } from './currency';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
@@ -54,9 +54,15 @@ function touch(projectId: string) {
     .run();
 }
 
-function revalidateEverything() {
+async function revalidateEverything() {
   // Switching project changes what EVERY destination shows, not just this page.
   revalidatePath('/', 'layout');
+  // And on a deployment it changes what OTHER INSTANCES show, which they only
+  // learn from the blob store. Awaited rather than left to after(): every
+  // one of these actions is followed immediately by a navigation, and a push
+  // still in flight is a redirect landing on a project the next lambda has
+  // never heard of. No store attached, no wait — the call returns at once.
+  await flushDbSnapshot();
 }
 
 /**
@@ -150,7 +156,7 @@ export async function createProjectAction(input: {
         .run();
     });
 
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id };
   } catch (e) {
     return fail(e);
@@ -177,7 +183,7 @@ export async function setActiveProjectAction(projectId: string): Promise<Project
       sameSite: 'lax',
       httpOnly: true,
     });
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);
@@ -192,7 +198,7 @@ export async function renameProjectAction(projectId: string, name: string): Prom
       .set({ name: clean, updatedAt: new Date().toISOString() })
       .where(eq(schema.projects.id, projectId))
       .run();
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);
@@ -231,7 +237,7 @@ export async function setProjectArchivedAction(
         .where(eq(schema.appState.id, 'singleton'))
         .run();
     }
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);
@@ -262,7 +268,7 @@ export async function deleteProjectAction(projectId: string): Promise<ProjectRes
           .run();
       }
     }
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);
@@ -319,7 +325,7 @@ export async function updateProjectFieldAction(
       .set({ [field]: next, updatedAt: new Date().toISOString() })
       .where(eq(schema.projects.id, projectId))
       .run();
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);
@@ -345,7 +351,7 @@ export async function setProjectCurrencyAction(
       .set({ currency: code, updatedAt: new Date().toISOString() })
       .where(eq(schema.projects.id, projectId))
       .run();
-    revalidateEverything();
+    await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {
     return fail(e);

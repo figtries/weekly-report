@@ -227,6 +227,33 @@ are wrapped on read and never rewritten until something is actually saved.
 the number it signed is worth nothing in a dispute, so the panel shows drift
 when the week is edited afterwards.
 
+**The deployed app has no disk, so the database is a SNAPSHOT.** On Vercel
+there is no `data/report.db`, so `lib/db-path.ts` falls back to a copy of
+`data/seed.db` in the lambda /tmp — and that copy is per-instance AND
+per-function. Creating a project wrote it inside the function serving
+`/projects`; the redirect to `/projects/[id]` was served by a different
+function whose /tmp still held the untouched seed, so the page 404d on a
+project the previous screen had just made (11 Sep 2026 — the deployed list was
+byte-for-byte the committed seed). `lib/db-snapshot.ts` gives that file one
+durable home: pulled at cold start from `instrumentation.ts` before the first
+query, pushed after every write, and re-checked with a conditional GET before
+a read. The driver stays synchronous, which is the whole point — an async one
+would force `<Suspense>` around every read in the app.
+
+Four things hold it together. Writes are detected in `lib/sqlite.ts` by
+patching the connection rather than by each of the fifty-odd server actions
+remembering, because `insert ... returning` runs through `.all()` and would
+have been missed. `db` is exported through a PROXY so a pulled snapshot can
+close and reopen the database under callers that imported it at module load.
+The push is AWAITED in `lib/project-actions.ts` rather than left to `after()`,
+because each of those actions is followed straight away by a navigation and an
+in-flight upload is a redirect landing on a project the next lambda has never
+heard of. And it is a SINGLE-WRITER design: two people editing in the same
+second can have one file-level snapshot land on top of the other. With no
+`BLOB_READ_WRITE_TOKEN` the whole module is inert and the app behaves exactly
+as it did — ephemeral, but working. A developer machine is never touched
+either: it keeps its own `data/report.db`, which is the gate.
+
 # The v2 rebuild — read this before starting new work
 
 The app is being rebuilt from fundamentals against the CPP Gundih data

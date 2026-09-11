@@ -18,7 +18,7 @@
 import { asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
-import { db, schema } from './sqlite';
+import { db, ensureFreshDb, schema } from './sqlite';
 
 /**
  * WHICH PROJECT IS OPEN LIVES IN THE BROWSER, NOT IN THE DATABASE.
@@ -73,6 +73,12 @@ export interface ProjectCard {
  * days; this keeps that promise.
  */
 export async function getActiveProjectId(): Promise<string | null> {
+  // Every screen that follows the open project passes through here, and it is
+  // already an uncached read, so this is where a deployment catches up with the
+  // writes another instance made before answering from its own stale bytes. A
+  // 304 at most once every 1.5 s, and nothing at all when no blob store is
+  // attached — see lib/db-snapshot.ts.
+  await ensureFreshDb();
   // Reading a cookie is an uncached read, which is the point: it drags every
   // caller out of the prerendered shell, where this answer never belonged.
   const jar = await cookies();
