@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { asc, eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { beforeWrite, db, schema } from './sqlite';
 import {
   PRESETS,
   pickPreset,
@@ -98,6 +98,7 @@ function done() {
 }
 
 export async function addBarStyleAction(projectId: string): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.transaction((tx) => {
       materialise(projectId, tx);
@@ -146,6 +147,7 @@ export async function updateBarStyleAction(
     enabled?: boolean;
   }
 ): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.transaction((tx) => {
       materialise(projectId, tx);
@@ -172,6 +174,7 @@ export async function moveBarStyleAction(
   styleId: string,
   direction: 'up' | 'down'
 ): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.transaction((tx) => {
       materialise(projectId, tx);
@@ -199,6 +202,7 @@ export async function deleteBarStyleAction(
   projectId: string,
   styleId: string
 ): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.transaction((tx) => {
       materialise(projectId, tx);
@@ -221,6 +225,7 @@ export async function deleteBarStyleAction(
 
 /** Back to a ready-made list, which is simply having no rows of one's own again. */
 export async function resetBarStylesAction(projectId: string): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.delete(schema.barStyles).where(eq(schema.barStyles.projectId, projectId)).run();
     return done();
@@ -244,6 +249,7 @@ export async function setBarPresetAction(
   projectId: string,
   preset: BarPreset | null
 ): Promise<StyleResult> {
+  await beforeWrite();
   try {
     if (preset !== null && !PRESETS.some((p) => p.key === preset)) {
       throw new Error('That is not a list this app knows');
@@ -263,6 +269,7 @@ export async function setBarPresetAction(
 
 /** Copy whatever list is showing into the project, so it can be edited. */
 export async function customiseBarStylesAction(projectId: string): Promise<StyleResult> {
+  await beforeWrite();
   try {
     db.transaction((tx) => materialise(projectId, tx));
     return done();

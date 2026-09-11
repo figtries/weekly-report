@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { and, eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { beforeWrite, db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
@@ -66,6 +66,7 @@ export async function updateRowTextAction(
   field: 'name' | 'price',
   value: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     if (field === 'name') {
       const clean = value.trim();
@@ -115,6 +116,7 @@ export async function updateRowTargetAction(
   nodeId: string,
   value: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     const raw = value.trim();
     if (raw && !ISO.test(raw)) throw new Error('That is not a date');
@@ -134,6 +136,7 @@ export async function updateRowDatesAction(
   edited: 'duration' | 'start' | 'finish',
   value: string
 ): Promise<SheetResult> {
+  await beforeWrite();
   try {
     const node = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId)).all()[0];
     if (!node) throw new Error('Row not found');
@@ -213,6 +216,7 @@ export async function updateRowDatesAction(
  * the rest; here a one-day task and a milestone are never confused.
  */
 export async function setMilestoneAction(nodeId: string, on: boolean): Promise<SheetResult> {
+  await beforeWrite();
   try {
     const node = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId)).all()[0];
     if (!node) throw new Error('Row not found');
@@ -272,6 +276,7 @@ export async function shiftFollowersAction(
   nodeId: string,
   deltaDays: number
 ): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     if (!Number.isFinite(deltaDays) || deltaDays === 0) return { ok: true, moved: 0 };
     if (Math.abs(deltaDays) > 3650) throw new Error('That is more than ten years');

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 
-import { db, flushDbSnapshot, schema } from './sqlite';
+import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { isKnownCurrency } from './currency';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
@@ -110,6 +110,7 @@ export async function createProjectAction(input: {
   contractValue?: number | null;
   currency?: string;
 }): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Give the project a name');
@@ -164,6 +165,7 @@ export async function createProjectAction(input: {
 }
 
 export async function setActiveProjectAction(projectId: string): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const p = db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0];
     if (!p) throw new Error('Project not found');
@@ -191,6 +193,7 @@ export async function setActiveProjectAction(projectId: string): Promise<Project
 }
 
 export async function renameProjectAction(projectId: string, name: string): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const clean = name.trim();
     if (!clean) throw new Error('A project needs a name');
@@ -209,6 +212,7 @@ export async function setProjectArchivedAction(
   projectId: string,
   archived: boolean
 ): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const live = db
       .select({ n: sql<number>`count(*)` })
@@ -250,6 +254,7 @@ export async function setProjectArchivedAction(
  * those counts before this is called.
  */
 export async function deleteProjectAction(projectId: string): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const all = db.select({ id: schema.projects.id }).from(schema.projects).all();
     if (all.length <= 1) throw new Error('The last project cannot be deleted');
@@ -304,6 +309,7 @@ export async function updateProjectFieldAction(
   field: ProjectField,
   value: string
 ): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const raw = value.trim();
     let next: string | number | null = raw || null;
@@ -344,6 +350,7 @@ export async function setProjectCurrencyAction(
   projectId: string,
   currency: string
 ): Promise<ProjectResult> {
+  await beforeWrite();
   try {
     const code = currency.trim().toUpperCase();
     if (!isKnownCurrency(code)) throw new Error('That currency is not one this app knows');

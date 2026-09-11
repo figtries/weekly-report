@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { beforeWrite, db, schema } from './sqlite';
 import { previewWeights } from './weights';
 import { loadWeightNodes } from './weights-read';
 
@@ -37,6 +37,7 @@ export interface WeightPreview {
 export async function previewWeightsAction(
   projectId: string
 ): Promise<WeightPreview | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     const nodes = loadWeightNodes(projectId);
     if (nodes.length === 0) throw new Error('This project has no work breakdown yet');
@@ -87,6 +88,7 @@ export async function previewWeightsAction(
 export async function applyWeightsAction(
   projectId: string
 ): Promise<{ ok: true; changed: number } | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     const nodes = loadWeightNodes(projectId);
     const { result } = previewWeights(nodes);

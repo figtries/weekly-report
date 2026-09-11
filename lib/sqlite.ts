@@ -142,4 +142,4 @@ export const db: Orm = snapshotConfigured ? forward(() => orm as Orm) : (orm as 
 export const sqlite: Conn = snapshotConfigured ? forward(() => live) : live;
 
 export { schema, DB_PATH };
-export { ensureFreshDb, flushDbSnapshot, refreshDbSnapshot } from './db-snapshot';
+export { beforeWrite, ensureFreshDb, flushDbSnapshot, refreshDbSnapshot } from './db-snapshot';

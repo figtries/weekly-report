@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { eq } from 'drizzle-orm';
 
-import { db, schema, sqlite } from './sqlite';
+import { beforeWrite, db, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
 import { completeDates, parsePaste, type ParseResult } from './paste';
 
@@ -48,6 +48,7 @@ export interface PastePreview {
 export async function previewPasteAction(
   text: string
 ): Promise<PastePreview | { ok: false; error: string }> {
+  await beforeWrite();
   try {
     const parsed = parsePaste(text);
     if (parsed.rows.length === 0) throw new Error('Nothing in that paste looked like a row');
@@ -96,6 +97,7 @@ export async function applyPasteAction(
   /** Paste under this row instead of at the end of the plan. */
   afterNodeId?: string | null
 ): Promise<PasteResult> {
+  await beforeWrite();
   try {
     const parsed = parsePaste(text);
     if (parsed.rows.length === 0) throw new Error('Nothing in that paste looked like a row');

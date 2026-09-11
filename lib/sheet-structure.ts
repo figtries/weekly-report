@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq } from 'drizzle-orm';
 
-import { db, schema, sqlite } from './sqlite';
+import { beforeWrite, db, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
 
 /**
@@ -178,6 +178,7 @@ export async function addRowAction(
   projectId: string,
   opts: { afterNodeId?: string | null; asChild?: boolean; name?: string } = {}
 ): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const after = opts.afterNodeId ?? null;
     let parentId: string | null = null;
@@ -258,6 +259,7 @@ export async function addRowAction(
  * its own, so the children are collected here rather than left orphaned.
  */
 export async function deleteRowAction(nodeId: string): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const projectId = projectOf(nodeId);
     const nodes = loadTree(projectId);
@@ -290,6 +292,7 @@ export async function deleteRowAction(nodeId: string): Promise<StructureResult> 
 
 /** Indent: the row becomes a child of the sibling above it. Tab, in MS Project. */
 export async function indentRowAction(nodeId: string): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const projectId = projectOf(nodeId);
     const nodes = loadTree(projectId);
@@ -316,6 +319,7 @@ export async function indentRowAction(nodeId: string): Promise<StructureResult> 
 
 /** Outdent: the row moves up a level, landing directly after its old parent. */
 export async function outdentRowAction(nodeId: string): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const projectId = projectOf(nodeId);
     const nodes = loadTree(projectId);
@@ -347,6 +351,7 @@ export async function outdentRowAction(nodeId: string): Promise<StructureResult>
 
 /** Move among siblings. The subtree travels with the row. */
 export async function moveRowAction(nodeId: string, dir: 'up' | 'down'): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const projectId = projectOf(nodeId);
     const nodes = loadTree(projectId);
@@ -389,6 +394,7 @@ export async function setReportingUnitAction(
    */
   unitValue?: number | null
 ): Promise<StructureResult> {
+  await beforeWrite();
   try {
     const projectId = projectOf(nodeId);
     db.update(schema.wbsNodes)

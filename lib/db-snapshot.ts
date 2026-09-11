@@ -248,6 +248,38 @@ export async function ensureFreshDb(): Promise<boolean> {
 }
 
 /**
+ * Called at the top of every server action that WRITES.
+ *
+ * Reads had a freshness path from the start; writes did not, and that asymmetry
+ * is a bug twice over. A server action lands on whichever instance the platform
+ * picks, and that instance's `/tmp` copy may predate the row the action is
+ * about — so `addRowAction` inserted a `wbs_nodes.project_id` pointing at a
+ * project those bytes had never seen, and SQLite answered
+ * `FOREIGN KEY constraint failed` (11 Sep 2026, on a project created minutes
+ * earlier by another lambda). The constraint firing is the LUCKY case: a write
+ * that stale bytes happen to accept is serialized and pushed whole, and the
+ * push overwrites whatever another instance created in the meantime. That is
+ * the "every project vanished" bug again, one layer down.
+ *
+ * Unthrottled, unlike `ensureFreshDb`. A read answering from bytes 1.5 s old
+ * shows a slightly old number; a write on bytes 1.5 s old can delete someone
+ * else's project. The cost is one conditional GET per write, a 304 in the
+ * common case.
+ */
+export async function beforeWrite(): Promise<boolean> {
+  if (!snapshotConfigured) return false;
+  checkedAt = Date.now();
+  try {
+    return await applyRemote(true);
+  } catch (err) {
+    // Same rule as the read path: a store that is reachable but failing must
+    // not make the app unusable. The write proceeds on what this instance has.
+    console.error("[db-snapshot] pre-write refresh failed", err);
+    return false;
+  }
+}
+
+/**
  * The unconditional version, for the one case where staleness is already
  * proven: a row the URL names and this instance cannot find.
  */

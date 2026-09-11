@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { beforeWrite, db, schema } from './sqlite';
 import { STAGE_ORDER } from './register-shared';
 import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
@@ -150,6 +150,7 @@ export interface StageInput {
  * right, the app keeps the arithmetic right.
  */
 export async function saveStage(input: StageInput): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const stage = assertStage(input.stage);
     const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
@@ -218,6 +219,7 @@ export interface DocumentInput {
 
 /** Fix the document itself — its number and its title. */
 export async function saveDocument(input: DocumentInput): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
     const title = input.title.trim();
@@ -256,6 +258,7 @@ export interface NewDocumentInput {
 }
 
 export async function addDocument(input: NewDocumentInput): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const title = input.title.trim();
     if (!title) throw new Error('Document title is required');
@@ -321,6 +324,7 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
  * Next and can therefore be proved by a script.
  */
 export async function seedRegister(input: SeedInput): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const written = writeSeed(input);
     refreshRegister();
@@ -344,6 +348,7 @@ export async function saveNumbering(input: {
   disciplines: Record<string, string>;
   types: Record<string, string>;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const prefix = input.prefix.trim().toUpperCase();
     if (!prefix) throw new Error('A project code is required');
@@ -395,6 +400,7 @@ export async function addFromDraft(input: {
   clientName: string;
   contractorName: string;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const written = writeDraft(input);
     refreshRegister();
@@ -418,6 +424,7 @@ export type ReadFileResult =
  * has always been: one path, one confirmation.
  */
 export async function readRegisterFile(form: FormData): Promise<ReadFileResult> {
+  await beforeWrite();
   try {
     const file = form.get('file');
     if (!(file instanceof File)) throw new Error('No file was chosen');
@@ -446,6 +453,7 @@ export async function readRegisterFile(form: FormData): Promise<ReadFileResult> 
 export async function saveStageWeights(input: {
   projectId: string; register: RegisterKind; weights: { stage: string; weight: number }[];
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const total = input.weights.reduce((a, w) => a + w.weight, 0);
     if (Math.abs(total - 100) > 0.001) throw new Error(`The weights add up to ${total}, not 100`);
@@ -482,6 +490,7 @@ export async function saveStageWeights(input: {
 export async function deleteCategory(input: {
   projectId: string; register: RegisterKind; categoryId: string;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const category = db.select().from(schema.docCategories)
       .where(and(
@@ -521,6 +530,7 @@ function categoryCode(name: string, taken: Set<string>): string {
 export async function addCategory(input: {
   projectId: string; register: RegisterKind; name: string; parentId: string | null;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Group name is required');
@@ -556,6 +566,7 @@ export async function addCategory(input: {
 export async function renameCategory(input: {
   projectId: string; register: RegisterKind; categoryId: string; name: string;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Group name is required');
@@ -585,6 +596,7 @@ export async function renameCategory(input: {
 export async function deleteDocument(input: {
   projectId: string; register: RegisterKind; documentId: string;
 }): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
     db.delete(schema.documents).where(eq(schema.documents.id, doc.id)).run();
@@ -617,6 +629,7 @@ export interface LinkInput {
  * arrives.
  */
 export async function setDisciplineLink(input: LinkInput): Promise<ActionResult> {
+  await beforeWrite();
   try {
     const leaves = db.select().from(schema.wbsNodes)
       .where(and(eq(schema.wbsNodes.parentId, input.nodeId), eq(schema.wbsNodes.isLeaf, true)))
