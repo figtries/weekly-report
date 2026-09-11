@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, m } from 'framer-motion';
-import { ClipboardPaste, CornerDownRight, TriangleAlert } from 'lucide-react';
+import { ClipboardPaste, CornerDownRight, FileSpreadsheet, TriangleAlert } from 'lucide-react';
 
 import { MOTION } from '@/lib/design';
 import { applyPasteAction, previewPasteAction, type PastePreview } from '@/lib/paste-actions';
@@ -49,17 +49,53 @@ export default function PasteRows({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  /** Where the text came from, when it was not typed. */
+  const [source, setSource] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
   function close() {
     setOpen(false);
     setText('');
     setPreview(null);
     setError(null);
+    setSource(null);
   }
 
   function read(next: string) {
     setText(next);
     setPreview(null);
     setError(null);
+    setSource(null);
+  }
+
+  /**
+   * The file is POSTed as the raw body, not as a form: a server action caps
+   * the body at 1 MB and these workbooks are seven. The route streams it and
+   * returns the same tab-separated grid a paste would have produced, so
+   * everything below this point is the path a paste already takes.
+   */
+  async function chooseFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setPreview(null);
+    setReading(true);
+    try {
+      const res = await fetch('/api/plan/xlsx', { method: 'POST', body: file });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.error ?? 'That file could not be read');
+        return;
+      }
+      setText(data.text);
+      const who = data.banner?.projectName ? ` · ${data.banner.projectName}` : '';
+      setSource(`${file.name} · sheet “${data.sheet}” · ${data.rows} rows${who}`);
+    } catch {
+      setError('That file could not be sent. It may be too large for the server to accept.');
+    } finally {
+      setReading(false);
+      if (fileInput.current) fileInput.current.value = '';
+    }
   }
 
   function look() {
@@ -112,15 +148,46 @@ export default function PasteRows({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="shrink-0 border-b p-4">
-                    <h2 className="text-sm font-semibold">Paste rows from Excel</h2>
+                    <h2 className="text-sm font-semibold">Bring the plan in from Excel</h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      Select the cells in the workbook, copy, and paste here. A task name is the
-                      only column that has to be there. An outline code, dates, a duration and a
-                      price are all read when they are.
+                      Choose the workbook and the plan is read out of its “Data Overall” sheet, or
+                      select the cells yourself and paste them here. A task name is the only column
+                      that has to be there. An outline code, dates, a duration and a price are all
+                      read when they are.
                     </p>
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-auto p-4">
+                    {/* The other door. Nobody copies 285 rows out of a 451
+                        column sheet by hand if the file itself will do. */}
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      className="hidden"
+                      onChange={(e) => void chooseFile(e.target.files?.[0])}
+                    />
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInput.current?.click()}
+                        disabled={reading || pending}
+                        className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium disabled:opacity-60"
+                      >
+                        <FileSpreadsheet className="size-4" />
+                        {reading ? 'Reading the workbook…' : 'Choose an .xlsx file'}
+                      </button>
+                      <span className="text-[11px] text-muted-foreground">
+                        or paste the cells below
+                      </span>
+                    </div>
+
+                    {source && (
+                      <p className="animate-fade-in-up mb-3 rounded-lg bg-muted px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {source}
+                      </p>
+                    )}
+
                     <textarea
                       autoFocus
                       value={text}

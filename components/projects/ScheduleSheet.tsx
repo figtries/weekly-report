@@ -699,11 +699,11 @@ export default function ScheduleSheet({
                 type="button"
                 onClick={open}
                 {...pressMotion}
-                title="Paste rows copied from a workbook"
+                title="Read the plan from a workbook, or paste rows copied out of one"
                 className="flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios hover:bg-muted"
               >
                 <ClipboardPaste className="size-4" />
-                <span className="hidden sm:inline">Paste</span>
+                <span className="hidden sm:inline">Import</span>
               </m.button>
             )}
           />
@@ -809,7 +809,7 @@ export default function ScheduleSheet({
               <div className="animate-enter px-6 py-10 text-center">
                 <p className="text-sm font-semibold">Nothing planned yet</p>
                 <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                  Paste the plan straight out of the workbook, or add the first row and use{' '}
+                  Read the plan out of the workbook itself, or add the first row and use{' '}
                   <kbd className="rounded border px-1">Tab</kbd> to put a row underneath another.
                 </p>
                 {/* Paste leads. Every plan that matters already exists somewhere
@@ -828,7 +828,7 @@ export default function ScheduleSheet({
                         className="btn-primary inline-flex h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium"
                       >
                         <ClipboardPaste className="size-4" />
-                        Paste from Excel
+                        Import from Excel
                       </m.button>
                     )}
                   />
