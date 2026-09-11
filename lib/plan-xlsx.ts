@@ -40,6 +40,13 @@
  * Reading the weights back would make the app agree with the workbook by
  * copying it instead of by calculating, which is the check worth keeping.
  *
+ * **Hierarchy can live in the indent button.** W56, a workbook from another
+ * contractor, carries an outline code on 84 of its 1090 rows and types no
+ * leading spaces at all: its five levels are held in Excel's own cell indent.
+ * That is read and re-expressed as leading spaces, so the shared parser needs
+ * to learn nothing, and it is why this reader asks for styles rather than
+ * ignoring them.
+ *
  * exceljs is driven through `WorkbookReader` over a STREAM, never `readFile`:
  * these workbooks run to 11.8 MB and plain `readFile` died at a 2 GB heap on
  * one. The route hands the request body straight in.
@@ -98,6 +105,46 @@ function text(raw: unknown): string {
 /** The same cell with no indent, for matching labels and testing shapes. */
 function flat(raw: unknown): string {
   return text(raw).trim();
+}
+
+/** A cell's value together with how far Excel itself pushes it in. */
+interface RawCell {
+  v: unknown;
+  indent: number;
+}
+
+function cellOf(cell: ExcelJS.Cell | undefined): RawCell {
+  const indent = cell?.alignment?.indent;
+  return { v: cell?.value ?? null, indent: typeof indent === 'number' ? indent : 0 };
+}
+
+/** How many spaces one level of Excel indent becomes. */
+const INDENT_UNIT = 2;
+
+/**
+ * Excel's own indentation, re-expressed as the leading spaces `lib/paste.ts`
+ * already reads.
+ *
+ * This is the whole reason the reader now asks for styles. In W56, a workbook
+ * from another contractor, only 84 of 1090 rows carry an outline code and
+ * none of the names are typed with leading spaces: the hierarchy is held
+ * entirely in the indent button, five levels of it. Read it and the file is a
+ * tree; ignore it and 1090 rows arrive in one flat list.
+ *
+ * Translating rather than teaching the parser a new signal is deliberate. The
+ * parser is shared with the clipboard path, and "depth came from the leading
+ * spaces" is a rule it has had all along; this only puts the spaces where a
+ * person would have typed them. The parser takes the SMALLEST non-zero indent
+ * as one level, so the multiplier here just has to be consistent.
+ *
+ * A cell that already carries its own leading spaces keeps them. Gundih's
+ * names are indented that way and its Excel indent is zero throughout, so
+ * nothing about that file changes.
+ */
+function indented(value: string, indent: number): string {
+  if (!value || indent <= 0) return value;
+  if (/^[\s ]/.test(value)) return value;
+  return ' '.repeat(indent * INDENT_UNIT) + value;
 }
 
 function norm(s: string): string {
@@ -165,7 +212,10 @@ function headerIsDate(s: string): boolean {
 /* --------------------------------------------------------------- columns */
 
 const LABELS: Record<Field, string[]> = {
-  code: ['wbs', 'wbscode', 'code', 'kode', 'outline', 'outlinenumber', 'no', 'nomor', 'item'],
+  // `id` is here because MS Project names its outline column that. When it
+  // holds a plain sequence rather than a dotted code the parser sees no dots
+  // in it and falls through to the indentation, which is the right answer.
+  code: ['wbs', 'wbscode', 'code', 'kode', 'outline', 'outlinenumber', 'id', 'no', 'nomor', 'item'],
   name: [
     'taskname', 'task', 'name', 'activity', 'description', 'desc', 'scope',
     'deskripsi', 'uraian', 'uraianpekerjaan', 'uraiankegiatan', 'pekerjaan', 'kegiatan',
@@ -306,7 +356,13 @@ export async function readPlanWorkbook(
   want?: string | null
 ): Promise<PlanWorkbookRead> {
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(source, {
-    entries: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'ignore', worksheets: 'emit',
+    // Styles are CACHED, not ignored, and that is measured rather than assumed:
+    // on this project's 6.8 MB weekly workbook it costs 1.5 s and 63 MB either
+    // way, and on W56 20 s and 78 MB either way. The 2 GB heap this repo
+    // remembers came from `readFile` swallowing a whole workbook, not from
+    // styles. What they buy is `alignment.indent`, which is where a plan with
+    // no outline code keeps its hierarchy.
+    entries: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'cache', worksheets: 'emit',
   });
 
   const sheets: string[] = [];
@@ -321,7 +377,7 @@ export async function readPlanWorkbook(
     sheets.push(name);
 
     const head = new Map<number, string[]>();
-    const early: { number: number; values: unknown[] }[] = [];
+    const early: { number: number; cells: RawCell[] }[] = [];
     let header: Header | null = null;
     const grid: string[][] = [];
 
@@ -330,12 +386,13 @@ export async function readPlanWorkbook(
      * decides DEPTH downstream and nothing else, so requiring one here is what
      * made a plan numbered `A`, or numbered not at all, come in as zero rows.
      */
-    const take = (rowNo: number, values: unknown[]) => {
+    const take = (rowNo: number, cells: RawCell[]) => {
       if (!header || rowNo <= header.row || grid.length >= MAX_ROWS) return;
-      if (!flat(values[header.at.name! - 1])) return;
+      if (!flat(cells[header.at.name! - 1]?.v)) return;
       const line: string[] = [];
       for (let c = 1; c < header.endsAt; c += 1) {
-        const cell = text(values[c - 1]);
+        const raw = cells[c - 1];
+        const cell = indented(text(raw?.v), raw?.indent ?? 0);
         const bare = stripWeekday(cell);
         // A weekday is only in the way when a date is behind it.
         const clean = bare && (asProjectDate(bare) || looksLikeDate(bare)) ? bare : cell;
@@ -363,31 +420,31 @@ export async function readPlanWorkbook(
       }
 
       if (!header) {
-        const values: unknown[] = [];
-        for (let c = 1; c <= row.cellCount; c += 1) values[c - 1] = row.getCell(c).value;
-        head.set(row.number, values.map(text));
-        early.push({ number: row.number, values });
+        const cells: RawCell[] = [];
+        for (let c = 1; c <= row.cellCount; c += 1) cells[c - 1] = cellOf(row.getCell(c));
+        head.set(row.number, cells.map((x) => text(x.v)));
+        early.push({ number: row.number, cells });
         if (row.number < HEADER_SCAN_ROWS) continue;
         // Settled ONCE, against every scanned row: the label a column needs
         // may sit a row lower than the one naming the WBS column, and the week
         // labels that say where the plan ends sit lower still.
         header = bestHeader(head);
         if (header) {
-          for (const e of early) take(e.number, e.values);
+          for (const e of early) take(e.number, e.cells);
         }
         early.length = 0;
         continue;
       }
 
-      const values: unknown[] = [];
-      for (let c = 1; c < header.endsAt; c += 1) values[c - 1] = row.getCell(c).value;
-      take(row.number, values);
+      const cells: RawCell[] = [];
+      for (let c = 1; c < header.endsAt; c += 1) cells[c - 1] = cellOf(row.getCell(c));
+      take(row.number, cells);
     }
 
     // A sheet shorter than the scan window never reached the settle above.
     if (!header && head.size > 0) {
       header = bestHeader(head);
-      if (header) for (const e of early) take(e.number, e.values);
+      if (header) for (const e of early) take(e.number, e.cells);
     }
 
     if (!header || grid.length === 0) continue;

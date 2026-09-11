@@ -511,7 +511,7 @@ export function parsePaste(text: string): ParseResult {
   if (codesUsable) {
     depthFrom = 'code';
     depths = codes.map((c) => (CODE_RE.test(c) ? c.replace(/\.$/, '').split('.').length - 1 : 0));
-    notes.push('Depth came from the outline code — 1.4.3 is three levels in.');
+    notes.push('Depth came from the outline code, so 1.4.3 is three levels in.');
   } else {
     // Leading whitespace, if any survived the copy. The unit is the smallest
     // non-zero indent seen, so both two-space and four-space files work.
@@ -526,7 +526,7 @@ export function parsePaste(text: string): ParseResult {
     if (Number.isFinite(unit) && unit > 0) {
       depthFrom = 'indent';
       depths = indents.map((n) => Math.round(n / unit));
-      notes.push(`Depth came from the leading spaces — ${unit} space${unit === 1 ? '' : 's'} per level.`);
+      notes.push(`Depth came from the leading spaces, at ${unit} space${unit === 1 ? '' : 's'} per level.`);
     } else {
       depthFrom = 'flat';
       depths = body.map(() => 0);

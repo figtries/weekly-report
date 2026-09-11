@@ -101,7 +101,7 @@ export async function applyPasteAction(
   try {
     const parsed = parsePaste(text);
     if (parsed.rows.length === 0) throw new Error('Nothing in that paste looked like a row');
-    if (parsed.rows.length > 5000) throw new Error('That is more than 5,000 rows — split it up');
+    if (parsed.rows.length > 5000) throw new Error('That is more than 5,000 rows. Split it up');
 
     const project = db
       .select({ id: schema.projects.id })
