@@ -5,8 +5,16 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, m } from 'framer-motion';
 import { ClipboardPaste, CornerDownRight, FileSpreadsheet, TriangleAlert } from 'lucide-react';
 
+import NativeSelect from '@/components/ui/NativeSelect';
 import { MOTION } from '@/lib/design';
 import { applyPasteAction, previewPasteAction, type PastePreview } from '@/lib/paste-actions';
+import {
+  FIELDS,
+  FIELD_LABEL,
+  planToPaste,
+  type Field,
+  type PlanWorkbookRead,
+} from '@/lib/plan-grid';
 
 /**
  * The plan already exists in a workbook. This is the door.
@@ -49,8 +57,10 @@ export default function PasteRows({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  /** Where the text came from, when it was not typed. */
-  const [source, setSource] = useState<string | null>(null);
+  /** The workbook, when the text came from one. Null for a plain paste. */
+  const [book, setBook] = useState<PlanWorkbookRead | null>(null);
+  const [mapping, setMapping] = useState<Partial<Record<Field, number>>>({});
+  const [file, setFile] = useState<File | null>(null);
   const [reading, setReading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -59,43 +69,60 @@ export default function PasteRows({
     setText('');
     setPreview(null);
     setError(null);
-    setSource(null);
+    setBook(null);
+    setMapping({});
+    setFile(null);
   }
 
   function read(next: string) {
     setText(next);
     setPreview(null);
     setError(null);
-    setSource(null);
+    // Typing over it means the workbook is no longer what is on screen.
+    setBook(null);
+    setFile(null);
   }
 
   /**
    * The file is POSTed as the raw body, not as a form: a server action caps
-   * the body at 1 MB and these workbooks are seven. The route streams it and
-   * returns the same tab-separated grid a paste would have produced, so
-   * everything below this point is the path a paste already takes.
+   * the body at 1 MB and these workbooks are seven. What comes back is the
+   * whole left block of the sheet plus a SUGGESTED mapping, so re-mapping a
+   * column below is local and instant rather than another seven megabytes.
    */
-  async function chooseFile(file: File | undefined) {
-    if (!file) return;
+  async function readFile(chosen: File, sheet?: string) {
     setError(null);
     setPreview(null);
     setReading(true);
     try {
-      const res = await fetch('/api/plan/xlsx', { method: 'POST', body: file });
+      const url = sheet ? `/api/plan/xlsx?sheet=${encodeURIComponent(sheet)}` : '/api/plan/xlsx';
+      const res = await fetch(url, { method: 'POST', body: chosen });
       const data = await res.json();
       if (!data.ok) {
         setError(data.error ?? 'That file could not be read');
         return;
       }
-      setText(data.text);
-      const who = data.banner?.projectName ? ` · ${data.banner.projectName}` : '';
-      setSource(`${file.name} · sheet “${data.sheet}” · ${data.rows} rows${who}`);
+      const next = data as PlanWorkbookRead;
+      setBook(next);
+      setMapping(next.mapping);
+      setText(planToPaste(next.grid, next.mapping));
+      setFile(chosen);
     } catch {
       setError('That file could not be sent. It may be too large for the server to accept.');
     } finally {
       setReading(false);
       if (fileInput.current) fileInput.current.value = '';
     }
+  }
+
+  /** A corrected column re-makes the text on the spot; nothing is re-read. */
+  function remap(field: Field, column: number | null) {
+    if (!book) return;
+    const next = { ...mapping };
+    if (column === null) delete next[field];
+    else next[field] = column;
+    setMapping(next);
+    setText(planToPaste(book.grid, next));
+    setPreview(null);
   }
 
   function look() {
@@ -150,10 +177,11 @@ export default function PasteRows({
                   <div className="shrink-0 border-b p-4">
                     <h2 className="text-sm font-semibold">Bring the plan in from Excel</h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      Choose the workbook and the plan is read out of its “Data Overall” sheet, or
-                      select the cells yourself and paste them here. A task name is the only column
-                      that has to be there. An outline code, dates, a duration and a price are all
-                      read when they are.
+                      Choose the workbook and the app looks for the sheet the plan is on, then says
+                      which column it read as what so you can correct it. Or select the cells
+                      yourself and paste them here. A task name is the only column that has to be
+                      there. An outline code, dates, a duration and a price are all read when they
+                      are.
                     </p>
                   </div>
 
@@ -165,7 +193,10 @@ export default function PasteRows({
                       type="file"
                       accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       className="hidden"
-                      onChange={(e) => void chooseFile(e.target.files?.[0])}
+                      onChange={(e) => {
+                        const chosen = e.target.files?.[0];
+                        if (chosen) void readFile(chosen);
+                      }}
                     />
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <button
@@ -182,10 +213,77 @@ export default function PasteRows({
                       </span>
                     </div>
 
-                    {source && (
-                      <p className="animate-fade-in-up mb-3 rounded-lg bg-muted px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                        {source}
-                      </p>
+                    {book && file && (
+                      <div className="animate-fade-in-up mb-3 space-y-3 rounded-lg border p-3">
+                        <p className="text-[11px] leading-relaxed text-muted-foreground">
+                          {file.name}
+                          {book.banner.projectName ? ` · ${book.banner.projectName}` : ''}
+                        </p>
+
+                        {/* A guess, shown as a guess. The app picks the sheet
+                            that looks most like a plan and says so out loud,
+                            because a workbook with twenty sheets will not
+                            always have the plan on the one it scored highest. */}
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor="plan-sheet"
+                            className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                          >
+                            Sheet
+                          </label>
+                          <NativeSelect
+                            id="plan-sheet"
+                            value={book.sheet}
+                            disabled={reading || pending}
+                            onChange={(e) => void readFile(file, e.target.value)}
+                          >
+                            {book.candidates.map((c) => (
+                              <option key={c.name} value={c.name}>
+                                {`${c.name} · ${c.rows} rows`}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                            Which column is which?
+                          </p>
+                          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                            {FIELDS.map((f) => (
+                              <div key={f} className="flex flex-col gap-1.5">
+                                <label htmlFor={`plan-col-${f}`} className="text-xs">
+                                  {FIELD_LABEL[f]}
+                                </label>
+                                <NativeSelect
+                                  id={`plan-col-${f}`}
+                                  value={mapping[f] ?? -1}
+                                  disabled={reading || pending}
+                                  onChange={(e) =>
+                                    remap(f, Number(e.target.value) < 0 ? null : Number(e.target.value))
+                                  }
+                                >
+                                  <option value={-1}>not in this file</option>
+                                  {book.columns.map((c, i) => (
+                                    <option key={c.at} value={i}>
+                                      {`${c.at} · ${c.label || c.sample[0]?.slice(0, 24) || 'empty'}`}
+                                    </option>
+                                  ))}
+                                </NativeSelect>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <ul className="space-y-1 text-[11px] leading-relaxed text-muted-foreground">
+                          {book.notes.map((n) => (
+                            <li key={n} className="flex gap-1.5">
+                              <span aria-hidden>·</span>
+                              {n}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
 
                     <textarea

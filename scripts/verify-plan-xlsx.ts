@@ -1,81 +1,89 @@
 /**
- * Runs a real weekly workbook through the plan reader and the paste parser.
+ * Runs real workbooks through the plan reader and the paste parser.
  *
- * Run: npx tsx scripts/verify-plan-xlsx.ts "<path to .xlsx>"
+ * Run: npx tsx scripts/verify-plan-xlsx.ts "<a.xlsx>" ["<b.xlsx>" ...]
  *
- * The point is not that it does not throw. The point is that the tree it
- * produces is the tree the workbook draws: the same number of rows, the same
- * depths, dates on the rows that have them, and the money adding up to the
- * contract when only the TOP priced rows are counted (prices nest — summing
- * every priced row counts the same money three times, see lib/weights.ts).
+ * The point is not that it does not throw. The point is that it picks the
+ * right SHEET out of twenty, finds the columns without being told where they
+ * are, and builds the same tree the workbook draws. Give it several weeks of
+ * the same report and the columns move between them, which is the whole reason
+ * nothing here is allowed to be a constant.
  */
 import { createReadStream } from 'node:fs';
+import path from 'node:path';
 
 import { readPlanWorkbook } from '../lib/plan-xlsx';
+import { planToPaste, FIELDS } from '../lib/plan-grid';
 import { completeDates, parsePaste } from '../lib/paste';
 
-const file = process.argv[2];
-if (!file) {
-  console.error('usage: npx tsx scripts/verify-plan-xlsx.ts "<path to .xlsx>"');
+const files = process.argv.slice(2);
+if (files.length === 0) {
+  console.error('usage: npx tsx scripts/verify-plan-xlsx.ts "<a.xlsx>" ["<b.xlsx>" ...]');
   process.exit(1);
 }
 
-async function main() {
-const read = await readPlanWorkbook(createReadStream(file));
+async function one(file: string) {
+  console.log('\n' + '='.repeat(72));
+  console.log(path.basename(file));
+  console.log('='.repeat(72));
 
-console.log('sheets   :', read.sheets.join(' | '));
-console.log('sheet    :', read.sheet);
-console.log('rows     :', read.rows);
-console.log('banner   :', JSON.stringify(read.banner, null, 2));
-console.log('notes    :');
-for (const n of read.notes) console.log('  ·', n);
-
-const parsed = parsePaste(read.text);
-console.log('\n--- through lib/paste.ts ---');
-console.log('parsed rows :', parsed.rows.length);
-console.log('depth from  :', parsed.depthFrom);
-console.log('columns     :', JSON.stringify(parsed.columns));
-console.log('skipped     :', parsed.skipped.length);
-for (const s of parsed.skipped.slice(0, 5)) console.log('   line', s.line, JSON.stringify(s.text.slice(0, 60)));
-if (parsed.notes.length) {
-  console.log('notes       :');
-  for (const n of parsed.notes) console.log('  ·', n);
-}
-
-const depths = new Map<number, number>();
-let withDates = 0;
-let priced = 0;
-for (const r of parsed.rows) {
-  depths.set(r.depth, (depths.get(r.depth) ?? 0) + 1);
-  if (completeDates(r).startDate) withDates += 1;
-  if (r.price != null && r.price > 0) priced += 1;
-}
-console.log('\ndepths      :', [...depths].sort((a, b) => a[0] - b[0]).map(([d, n]) => `L${d}:${n}`).join('  '));
-console.log('with dates  :', withDates, 'of', parsed.rows.length);
-console.log('priced rows :', priced);
-
-// Money, counted the way lib/weights.ts counts it: a priced row whose ancestor
-// is also priced is already inside that ancestor's number.
-let top = 0;
-const pricedAt: { depth: number; price: number }[] = [];
-for (const r of parsed.rows) pricedAt.push({ depth: r.depth, price: r.price ?? 0 });
-const stack: number[] = [];
-parsed.rows.forEach((r, i) => {
-  stack.length = r.depth;
-  const covered = stack.some((p) => p > 0);
-  if (!covered && (r.price ?? 0) > 0) top += r.price ?? 0;
-  stack[r.depth] = pricedAt[i].price;
-});
-console.log('top-level money :', top.toLocaleString('en-US'));
-
-console.log('\nfirst 12 rows:');
-for (const r of parsed.rows.slice(0, 12)) {
-  const d = completeDates(r);
+  const read = await readPlanWorkbook(createReadStream(file));
+  console.log('sheets in file :', read.sheets.length);
+  console.log('could be a plan:', read.candidates.map((c) => `${c.name} (${c.rows} rows, ${c.score})`).join(' | '));
+  console.log('CHOSE          :', read.sheet);
+  console.log('columns        :', read.columns.length);
   console.log(
-    '  ' + '  '.repeat(r.depth) +
-      [r.sourceCode, r.name.slice(0, 44), d.startDate ?? '-', d.finishDate ?? '-', r.price ?? '-'].join('  |  ')
+    'mapping        :',
+    FIELDS.map((f) => {
+      const i = read.mapping[f];
+      return `${f}=${i === undefined ? '-' : `col${read.columns[i].at}"${read.columns[i].label}"`}`;
+    }).join('  ')
   );
+  console.log('banner         :', read.banner.projectName ?? '(none)', '|', read.banner.weeklyNo ?? '');
+  for (const n of read.notes) console.log('  ·', n);
+
+  const text = planToPaste(read.grid, read.mapping);
+  const parsed = parsePaste(text);
+
+  const depths = new Map<number, number>();
+  let withDates = 0;
+  let priced = 0;
+  for (const r of parsed.rows) {
+    depths.set(r.depth, (depths.get(r.depth) ?? 0) + 1);
+    if (completeDates(r).startDate) withDates += 1;
+    if (r.price != null && r.price > 0) priced += 1;
+  }
+
+  console.log('--- through lib/paste.ts ---');
+  console.log('rows       :', parsed.rows.length);
+  console.log('depth from :', parsed.depthFrom);
+  console.log('depths     :', [...depths].sort((a, b) => a[0] - b[0]).map(([d, n]) => `L${d}:${n}`).join('  '));
+  console.log('with dates :', withDates);
+  console.log('priced     :', priced);
+  console.log('skipped    :', parsed.skipped.length);
+  for (const n of parsed.notes) console.log('  ·', n);
+
+  return { file: path.basename(file), sheet: read.sheet, rows: parsed.rows.length, withDates, priced };
 }
+
+async function main() {
+  const results = [];
+  for (const f of files) {
+    try {
+      results.push(await one(f));
+    } catch (e) {
+      console.log('FAILED:', e instanceof Error ? e.message : e);
+      results.push({ file: path.basename(f), sheet: 'FAILED', rows: 0, withDates: 0, priced: 0 });
+    }
+  }
+  console.log('\n' + '='.repeat(72));
+  console.log('summary');
+  for (const r of results) {
+    console.log(
+      `  ${r.rows.toString().padStart(5)} rows · ${r.withDates.toString().padStart(5)} dated · ` +
+        `${r.priced.toString().padStart(4)} priced · ${r.sheet.padEnd(16)} · ${r.file}`
+    );
+  }
 }
 
 main();

@@ -1,86 +1,67 @@
 /**
- * A project plan, read straight out of the weekly workbook.
+ * A project plan, read out of whatever workbook somebody actually has.
  *
  * This is the same door `lib/register-xlsx.ts` opens for the document
- * register, and it makes the same promise: the file is turned into the grid a
- * PASTE produces, and `lib/paste.ts` does the rest. There is no second
- * importer here with its own idea of what a row is, no second preview, and no
- * second write path — `previewPasteAction` and `applyPasteAction` are reached
- * unchanged, so a plan that arrives as a file is checked and written exactly
- * like a plan that arrives on the clipboard.
+ * register, and it makes the same promise: the file becomes the grid a PASTE
+ * produces and `lib/paste.ts` does the rest. There is no second importer with
+ * its own idea of what a row is, no second preview, and no second write path.
  *
- * **Columns are DETECTED, never counted.** `scripts/gundih-source.ts` hard-codes
- * them (`PLAN_FROM = 16`) because it reads one known file for one known test.
- * That constant is already wrong for W31 of the same project, where the PLAN
- * block starts at column 13 — the earlier weeks carry one set of dates and the
- * later ones carry two baselines side by side. A reader people point at their
- * own workbook cannot hold a column number.
+ * The first version of this file read ONE workbook: it required a sheet
+ * literally named "Data Overall", required a WBS column, and threw away every
+ * row whose code was not `1.2.3`. A plan that was merely SIMILAR did not come
+ * in slightly wrong, it was refused outright, which is the opposite of useful
+ * when half the point is that people arrive with their own file. Three rules
+ * replace that.
  *
- * **It stops where the weeks start.** "Data Overall" is 305 rows by 451
- * columns: eleven columns of plan, then four horizontal blocks of weekly
- * numbers (PLAN, DATA PLAN, DATA ACTUAL, ACTUAL) 156 columns wide. Only the
- * left block describes the plan; the rest is progress, which is imported
- * elsewhere and must not arrive through a screen that says "plan".
+ * **The sheet is chosen by what is ON it, never by its name.** Every sheet is
+ * scored on what a plan actually needs: a column of names, an outline code,
+ * start and finish, a price. Row count is only a tie-breaker, because "Detail
+ * Overall" has MORE rows than "Data Overall" and no dates at all, so counting
+ * rows alone picks the wrong sheet in the very file this was written for. The
+ * name is worth a nudge and nothing more, and every candidate is returned so a
+ * person can pick a different one without uploading again.
  *
- * **Weights are not read, deliberately.** The sheet has `WF per SPK` and
- * `WF Overall` and they are tempting and they are also derived numbers. In this
- * app weight comes from price over contract value (`lib/setup.ts`), so the
- * columns imported are the ones weight is COMPUTED FROM. Reading them back in
- * would make the app agree with the workbook by copying it instead of by
- * calculating, which is exactly the check worth keeping.
+ * **A row is a row when it has a NAME.** An outline code is how depth is best
+ * known, not what makes a row exist. `lib/paste.ts` has always been able to
+ * take depth from leading spaces instead, and the old reader could never reach
+ * that because it collapsed the whitespace before handing the cell over. The
+ * indentation is preserved here now, so a workbook with no code column still
+ * comes in as a tree rather than as nothing.
  *
- * **Duration is not read either.** The sheet has two columns called Duration —
- * one under `Workstep` holding something else entirely (620 against a row
- * whose span is 124 days). Start and finish are unambiguous and duration falls
- * out of them, so the ambiguous column is left alone rather than guessed at.
+ * **The guess is offered, not imposed.** The columns come back with their
+ * labels and sample values and the mapping is just a suggestion the panel can
+ * overrule, which is the shape `RegisterBuilder` already uses. That is why the
+ * whole left block is returned rather than five chosen columns: re-mapping a
+ * column must not mean uploading seven megabytes again.
+ *
+ * **Weights are still not read, deliberately.** `WF per SPK` and `WF Overall`
+ * are derived numbers. Weight here comes from price over contract value
+ * (`lib/setup.ts`), so the column imported is the one weight is COMPUTED FROM.
+ * Reading the weights back would make the app agree with the workbook by
+ * copying it instead of by calculating, which is the check worth keeping.
  *
  * exceljs is driven through `WorkbookReader` over a STREAM, never `readFile`:
  * these workbooks run to 11.8 MB and plain `readFile` died at a 2 GB heap on
- * one. The route hands the request body straight in, so the file is never held
- * whole in memory on the way through either.
+ * one. The route hands the request body straight in.
  */
 import type { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 
+import { looksLikeDate } from './paste';
+import type { Field, PlanColumn, PlanWorkbookRead } from './plan-grid';
+
+export type { Field, PlanColumn, PlanSheet, PlanWorkbookRead } from './plan-grid';
+
 /**
  * exceljs's own `WorksheetReader` type omits the `name` the streaming reader
- * actually puts on it, and picking sheets by name is the whole navigation
- * strategy for a 21-sheet file.
+ * actually puts on it, and picking sheets is the whole navigation strategy for
+ * a 21-sheet file.
  */
 type NamedWorksheetReader = ExcelJS.stream.xlsx.WorksheetReader & { name: string };
 
-export interface PlanWorkbookRead {
-  /** The sheet the plan was taken from, as the workbook spells it. */
-  sheet: string;
-  /** Tab-separated, canonical header, ISO dates — ready for `parsePaste`. */
-  text: string;
-  rows: number;
-  /** Every sheet in the file, so an error can say what was there instead. */
-  sheets: string[];
-  /** What the reader worked out, in the same voice the paste preview uses. */
-  notes: string[];
-  /**
-   * The banner "Detail Overall" prints: contract, project, customer, week.
-   * Shown before anything is written so a person can see they picked the file
-   * they meant to.
-   */
-  banner: {
-    contractNo: string | null;
-    projectName: string | null;
-    clientName: string | null;
-    weeklyNo: string | null;
-  };
-}
-
 /* ----------------------------------------------------------------- cells */
 
-/**
- * Cell values are unwrapped ONCE, as the row streams past, and the plain
- * results are what the rest of this file works on. Holding on to the reader's
- * own `Row` objects to re-read them later would be trusting a streaming API to
- * keep rows alive after it has moved on.
- */
-function cellValue(v: unknown): unknown {
+function unwrap(v: unknown): unknown {
   if (v === null || v === undefined) return null;
   if (v instanceof Date) return v;
   if (typeof v === 'object') {
@@ -95,11 +76,28 @@ function cellValue(v: unknown): unknown {
   return v;
 }
 
+/**
+ * A cell as text, KEEPING its leading spaces.
+ *
+ * Those spaces are how a workbook with no outline code says how deep a row
+ * sits, and `lib/paste.ts` reads them. Collapsing them, which the first version
+ * of this file did on every cell, quietly removed the only fallback the parser
+ * had. Everything after the indent is still normalised, because a newline
+ * inside a cell would otherwise become a row break downstream.
+ */
 function text(raw: unknown): string {
-  const v = cellValue(raw);
+  const v = unwrap(raw);
   if (v === null) return '';
   if (v instanceof Date) return v.toISOString().slice(0, 10);
-  return String(v).replace(/\s+/g, ' ').trim();
+  const s = String(v);
+  const indent = /^[\s ]*/.exec(s)?.[0] ?? '';
+  const body = s.slice(indent.length).replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trimEnd();
+  return body ? indent.replace(/[\r\n\t]/g, ' ') + body : '';
+}
+
+/** The same cell with no indent, for matching labels and testing shapes. */
+function flat(raw: unknown): string {
+  return text(raw).trim();
 }
 
 function norm(s: string): string {
@@ -111,290 +109,419 @@ function norm(s: string): string {
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
   jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-  mei: 5, agu: 8, okt: 10, des: 12,
+  mei: 5, agu: 8, agt: 8, okt: 10, des: 12,
 };
 
-/** Serial 25569 is 1970-01-01 — the same convention as `lib/pdf.ts`. */
-function fromSerial(serial: number): string | null {
-  if (!Number.isFinite(serial) || serial < 1 || serial > 80_000) return null;
-  return new Date((serial - 25569) * 86_400_000).toISOString().slice(0, 10);
+/**
+ * `Oct 27 '25` into `2025-10-27`.
+ *
+ * MS Project writes its dates as TEXT in this order, and it is the ONE common
+ * date shape `lib/paste.ts` cannot read: its own reader handles `27 Oct 25`,
+ * ISO, and slashes, but not month-first-with-an-apostrophe. Converting it here
+ * is safe whatever column it lands in, because nothing but a date looks like
+ * this, which is what lets a person re-map the columns afterwards without the
+ * dates having to be read again.
+ */
+function asProjectDate(s: string): string | null {
+  const m = /^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})\s*'?\s*(\d{2,4})$/.exec(s.trim());
+  if (!m) return null;
+  const month = MONTHS[m[1].toLowerCase()];
+  if (!month) return null;
+  const day = Number(m[2]);
+  if (day < 1 || day > 31) return null;
+  const y = Number(m[3]);
+  const year = y >= 1000 ? y : y < 70 ? 2000 + y : 1900 + y;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 /**
- * MS Project writes its dates as TEXT — `Oct 27 '25`, and `Dec 3 '25` with no
- * padding — which no spreadsheet reader recognises as a date and which
- * `lib/paste.ts` would have to guess at. Normalised to ISO here, where the
- * source is known, rather than left for the parser to puzzle over downstream.
+ * `Tue 01/11/22` into `01/11/22`.
  *
- * Anything not recognised is passed through untouched: the paste parser has
- * its own date reader and says out loud which day-order it assumed, and that
- * is a better answer than a blank.
+ * MS Project prints the weekday in front of its dates and it is the reason W1
+ * of this project read 56 rows and nought of them dated: the column was
+ * labelled Start, held a date in every row, and not one of them could be
+ * parsed. Only stripped when what is left actually is a date, so a task called
+ * "Monday shutdown" survives.
  */
-function isoDate(raw: unknown): string {
-  const v = cellValue(raw);
-  if (v === null) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'number') return fromSerial(v) ?? '';
+function stripWeekday(s: string): string | null {
+  const m = /^(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*\.?,?\s+(.+)$/i.exec(s.trim());
+  return m ? m[2].trim() : null;
+}
 
-  const written = String(v).trim();
-  if (!written) return '';
-  const m = /^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})\s*'?(\d{2,4})$/.exec(written);
-  if (!m) return written;
-  const month = MONTHS[m[1].toLowerCase()];
-  if (!month) return written;
-  const day = Number(m[2]);
-  const y = Number(m[3]);
-  const year = y >= 1000 ? y : y < 70 ? 2000 + y : 1900 + y;
-  if (day < 1 || day > 31) return written;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+/** A header cell that is itself a date, which is how a weekly block starts. */
+function headerIsDate(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  if (asProjectDate(t)) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return true;
+  // Excel serials, in the window a schedule can occupy: 1990 to 2079.
+  if (/^\d{5}$/.test(t)) {
+    const n = Number(t);
+    return n >= 32874 && n <= 65380;
+  }
+  return false;
 }
 
 /* --------------------------------------------------------------- columns */
 
-/** The five things a plan row is. Everything else on the sheet is progress. */
-type Field = 'code' | 'name' | 'start' | 'finish' | 'price';
-
 const LABELS: Record<Field, string[]> = {
-  code: ['wbs', 'wbscode', 'code', 'kode'],
-  name: ['taskname', 'task', 'name', 'activity', 'description', 'deskripsi', 'uraian', 'uraianpekerjaan', 'pekerjaan'],
-  start: ['start', 'startdate', 'mulai', 'tanggalmulai', 'tglmulai'],
-  finish: ['finish', 'finishdate', 'end', 'enddate', 'selesai', 'tanggalselesai', 'tglselesai'],
-  price: ['price', 'value', 'amount', 'cost', 'harga', 'nilai'],
+  code: ['wbs', 'wbscode', 'code', 'kode', 'outline', 'outlinenumber', 'no', 'nomor', 'item'],
+  name: [
+    'taskname', 'task', 'name', 'activity', 'description', 'desc', 'scope',
+    'deskripsi', 'uraian', 'uraianpekerjaan', 'uraiankegiatan', 'pekerjaan', 'kegiatan',
+    'namatugas', 'namapekerjaan', 'jenispekerjaan',
+  ],
+  start: ['start', 'startdate', 'begin', 'mulai', 'tanggalmulai', 'tglmulai', 'awal', 'mulaitanggal'],
+  finish: [
+    'finish', 'finishdate', 'end', 'enddate', 'complete', 'completion',
+    'selesai', 'tanggalselesai', 'tglselesai', 'akhir', 'berakhir',
+  ],
+  price: [
+    'price', 'value', 'amount', 'cost', 'contractvalue', 'totalprice',
+    'harga', 'nilai', 'nilaikontrak', 'hargasatuan', 'jumlahharga', 'totalharga', 'rab',
+  ],
 };
 
-/** An outline code — `1`, `1.2`, `1.2.1.1`. What makes a row a row. */
+/** An outline code. Not what makes a row a row, only the best way to read depth. */
 const CODE_RE = /^\d+(\.\d+)*\.?$/;
-/** A weekly column's label. Where the plan stops and the progress starts. */
-const WEEK_RE = /^w\d+$/;
-/** The banners Excel puts over each block of weekly numbers. */
-const BLOCK_RE = /^(plan|actual|dataplan|dataactual)$/;
+/** A weekly column's label. */
+const WEEK_RE = /^[wm]\d{1,3}$/;
+/** The banners Excel prints over a block of weekly numbers. */
+const BLOCK_RE = /^(plan|actual|aktual|dataplan|dataactual|rencana|realisasi)$/;
+/**
+ * Nothing sensible puts a plan more than this many columns from the left, and
+ * it is the backstop for a sheet whose progress block announces itself in no
+ * way at all.
+ */
+const MAX_PLAN_COLUMNS = 40;
+const HEADER_SCAN_ROWS = 25;
+/**
+ * The same ceiling `applyPasteAction` enforces. The grid crosses the wire so a
+ * column can be re-mapped without sending the file again, and a sheet with no
+ * ceiling at all would make that response worse than the upload.
+ */
+const MAX_ROWS = 5_000;
 
 interface Header {
-  /** Row number carrying the column names. */
   row: number;
-  /** Field → column index, 1-based. */
+  /** Field to sheet column, 1-based. */
   at: Partial<Record<Field, number>>;
-  /** First column belonging to the weekly blocks; the plan stops before it. */
-  weeksFrom: number;
+  /** First column of the weekly blocks; the plan is everything left of it. */
+  endsAt: number;
+  /** How well this row works as a header. */
+  score: number;
+  /** Both header tiers merged, by column, so the panel can name each one. */
+  labels: string[];
 }
 
 /**
- * The header of this sheet is two rows deep and staggered: `Task Name` sits on
- * one and `Price` on the next, because Excel merged the cells above them. So
- * labels are collected from the row that names the WBS column AND the row
- * under it, first non-blank wins — reading either row alone finds half the
- * columns and silently drops the other half.
+ * Where the plan stops and the progress starts.
+ *
+ * The week labels decide it, then dates in the header, and the block banners
+ * are only a fallback: "Data Overall" prints PLAN and ACTUAL over its daily
+ * progress box in column 3 as well, and trusting those first cut the plan off
+ * at column 4 and lost the price with it.
  */
-function readHeader(rows: Map<number, string[]>): Header | null {
-  for (const [rowNo, cells] of rows) {
-    const hasCode = cells.some((c) => LABELS.code.includes(norm(c)));
-    const hasName = cells.some((c) => LABELS.name.includes(norm(c)));
-    if (!hasCode || !hasName) continue;
-
-    const below = rows.get(rowNo + 1) ?? [];
-    const merged: string[] = [];
-    const width = Math.max(cells.length, below.length);
-    for (let i = 0; i < width; i += 1) merged[i] = (cells[i] || below[i] || '').trim();
-
-    const at: Partial<Record<Field, number>> = {};
-    merged.forEach((label, i) => {
-      const key = norm(label);
-      if (!key) return;
-      for (const field of Object.keys(LABELS) as Field[]) {
-        if (at[field] !== undefined) continue;
-        if (LABELS[field].includes(key)) at[field] = i + 1;
-      }
+function planEndsAt(rows: Map<number, string[]>, after: number): number {
+  const mark = (candidate: number, into: number[]) => {
+    if (candidate > after) into.push(candidate);
+  };
+  const weeks: number[] = [];
+  const dates: number[] = [];
+  const banners: number[] = [];
+  for (const [, line] of rows) {
+    line.forEach((cell, i) => {
+      const t = cell.trim();
+      if (!t) return;
+      if (WEEK_RE.test(norm(t))) mark(i + 1, weeks);
+      else if (headerIsDate(t)) mark(i + 1, dates);
+      // A banner sits one column to the left of the block it names.
+      else if (BLOCK_RE.test(norm(t))) mark(i + 2, banners);
     });
-
-    // Where the weekly blocks begin, so the note can say what was left alone
-    // and a stray label out in the progress columns can never be mistaken for
-    // part of the plan.
-    //
-    // The week labels decide it. The block banners (`PLAN`, `ACTUAL`) are only
-    // a fallback, because this sheet ALSO prints those two words at the top of
-    // its daily-progress box in column 3 — trusting them first cut the plan off
-    // at column 4 and lost the price.
-    const lastPlanColumn = Math.max(0, ...Object.values(at));
-    let weeksFrom = Number.POSITIVE_INFINITY;
-    const mark = (candidate: number) => {
-      if (candidate > lastPlanColumn) weeksFrom = Math.min(weeksFrom, candidate);
-    };
-    for (const [, line] of rows) {
-      line.forEach((cell, i) => {
-        if (WEEK_RE.test(norm(cell))) mark(i + 1);
-      });
-    }
-    if (!Number.isFinite(weeksFrom)) {
-      for (const [, line] of rows) {
-        line.forEach((cell, i) => {
-          // The banner sits one column to the left of the block it names.
-          if (BLOCK_RE.test(norm(cell))) mark(i + 2);
-        });
-      }
-    }
-
-    // A field resolved out in the progress blocks is not a field.
-    for (const field of Object.keys(at) as Field[]) {
-      if ((at[field] ?? 0) >= weeksFrom) delete at[field];
-    }
-
-    return { row: rowNo, at, weeksFrom };
   }
-  return null;
+  const found = [...weeks, ...dates].sort((a, b) => a - b)[0] ?? banners.sort((a, b) => a - b)[0];
+  return Math.min(found ?? Number.POSITIVE_INFINITY, after + MAX_PLAN_COLUMNS);
 }
+
+/**
+ * The header is often two rows deep and staggered: `Task Name` on one row and
+ * `Price` on the next, because Excel merged the cells above them. Labels are
+ * taken from the row and the one under it, first non-blank winning. Reading
+ * either row alone finds half the columns and silently drops the other half,
+ * which is exactly how the price went missing the first time.
+ */
+function headerAt(rows: Map<number, string[]>, rowNo: number): Header | null {
+  const cells = rows.get(rowNo);
+  if (!cells) return null;
+  const below = rows.get(rowNo + 1) ?? [];
+  const width = Math.max(cells.length, below.length);
+  const merged: string[] = [];
+  for (let i = 0; i < width; i += 1) merged[i] = (cells[i]?.trim() || below[i]?.trim() || '');
+
+  const at: Partial<Record<Field, number>> = {};
+  merged.forEach((label, i) => {
+    const key = norm(label);
+    if (!key) return;
+    for (const field of Object.keys(LABELS) as Field[]) {
+      if (at[field] !== undefined) continue;
+      if (LABELS[field].includes(key)) at[field] = i + 1;
+    }
+  });
+
+  // A name is the one column a plan cannot do without.
+  if (at.name === undefined) return null;
+
+  const endsAt = planEndsAt(rows, Math.max(...Object.values(at)));
+  for (const field of Object.keys(at) as Field[]) {
+    if ((at[field] ?? 0) >= endsAt) delete at[field];
+  }
+  if (at.name === undefined) return null;
+
+  // What a plan needs, weighted by how much it says. Dates together are worth
+  // as much as the names, because a schedule without them is a list.
+  let score = 3;
+  if (at.code !== undefined) score += 2;
+  if (at.start !== undefined && at.finish !== undefined) score += 3;
+  else if (at.start !== undefined || at.finish !== undefined) score += 1;
+  if (at.price !== undefined) score += 1;
+
+  return { row: rowNo, at, endsAt, score, labels: merged };
+}
+
+/** The name is a nudge, never a gate. */
+const SHEET_HINTS = ['dataoverall', 'wbs', 'schedule', 'jadwal', 'plan', 'rencana', 'boq', 'rab', 'master'];
 
 /* ------------------------------------------------------------------ read */
 
-const HEADER_SCAN_ROWS = 25;
+interface Candidate {
+  name: string;
+  header: Header;
+  grid: string[][];
+  score: number;
+}
 
-export async function readPlanWorkbook(source: Readable): Promise<PlanWorkbookRead> {
+export async function readPlanWorkbook(
+  source: Readable,
+  /** Force a sheet by name, for when a person overrules the choice. */
+  want?: string | null
+): Promise<PlanWorkbookRead> {
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(source, {
     entries: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'ignore', worksheets: 'emit',
   });
 
   const sheets: string[] = [];
+  const candidates: Candidate[] = [];
   const banner: PlanWorkbookRead['banner'] = {
     contractNo: null, projectName: null, clientName: null, weeklyNo: null,
   };
-  let picked: { name: string; lines: string[][]; header: Header } | null = null;
 
   for await (const sheet of reader) {
     const worksheet = sheet as NamedWorksheetReader;
     const name = worksheet.name ?? `Sheet ${sheets.length + 1}`;
     sheets.push(name);
 
-    // "Detail Overall" prints the banner the signed PDF carries. Read so the
-    // preview can quote the client's own file back rather than a filename.
-    if (norm(name) === 'detailoverall') {
-      for await (const row of worksheet) {
-        if (row.number > 12) continue;
+    const head = new Map<number, string[]>();
+    const early: { number: number; values: unknown[] }[] = [];
+    let header: Header | null = null;
+    const grid: string[][] = [];
+
+    /**
+     * A row is kept when the name column has something in it. The outline code
+     * decides DEPTH downstream and nothing else, so requiring one here is what
+     * made a plan numbered `A`, or numbered not at all, come in as zero rows.
+     */
+    const take = (rowNo: number, values: unknown[]) => {
+      if (!header || rowNo <= header.row || grid.length >= MAX_ROWS) return;
+      if (!flat(values[header.at.name! - 1])) return;
+      const line: string[] = [];
+      for (let c = 1; c < header.endsAt; c += 1) {
+        const cell = text(values[c - 1]);
+        const bare = stripWeekday(cell);
+        // A weekday is only in the way when a date is behind it.
+        const clean = bare && (asProjectDate(bare) || looksLikeDate(bare)) ? bare : cell;
+        line.push(asProjectDate(clean) ?? clean);
+      }
+      grid.push(line);
+    };
+
+    for await (const row of worksheet) {
+      // The banner a weekly report prints over itself. Read from any sheet
+      // that carries it rather than from one particular name.
+      if (row.number <= 12) {
         for (let c = 1; c <= Math.min(row.cellCount, 12); c += 1) {
-          const label = text(row.getCell(c));
+          const label = flat(row.getCell(c).value);
           if (!label) continue;
-          const after = (prefix: string) =>
-            label.slice(prefix.length).replace(/^\s*:\s*/, '').trim() || null;
           const key = norm(label);
-          if (key.startsWith('contractno')) banner.contractNo = after(label.split(':')[0]);
-          else if (key.startsWith('projectname')) banner.projectName = after(label.split(':')[0]);
-          else if (key.startsWith('customer')) banner.clientName = after(label.split(':')[0]);
-          else if (key.startsWith('weeklyno')) {
-            banner.weeklyNo = after(label.split(':')[0]) ?? (text(row.getCell(c + 1)) || null);
+          const after = () => label.split(':').slice(1).join(':').trim() || null;
+          if (!banner.contractNo && key.startsWith('contractno')) banner.contractNo = after();
+          else if (!banner.projectName && key.startsWith('projectname')) banner.projectName = after();
+          else if (!banner.clientName && key.startsWith('customer')) banner.clientName = after();
+          else if (!banner.weeklyNo && key.startsWith('weeklyno')) {
+            banner.weeklyNo = after() ?? (flat(row.getCell(c + 1).value) || null);
           }
         }
       }
-      continue;
-    }
 
-    // Only the sheet that holds a plan is read in full. Every other one is
-    // still drained: the streaming reader will not move to the next entry
-    // while rows are outstanding.
-    if (norm(name) !== 'dataoverall') {
-      for await (const _row of worksheet) void _row;
-      continue;
-    }
-
-    const head = new Map<number, string[]>();
-    const lines: string[][] = [];
-    let header: Header | null = null;
-
-    /**
-     * The first rows are BUFFERED rather than read as they arrive. The header
-     * is two rows deep, so resolving it the moment the row naming the WBS
-     * column appears reads it against a row that has not been streamed yet:
-     * `Price` sits one row lower and came back missing, and the week labels
-     * that say where the plan ends were not there to be seen either.
-     */
-    const early: { number: number; values: unknown[] }[] = [];
-
-    const take = (rowNo: number, values: unknown[]) => {
-      if (!header || rowNo <= header.row) return;
-      const codeAt = header.at.code;
-      const nameAt = header.at.name;
-      if (!codeAt || !nameAt) return;
-      const code = text(values[codeAt - 1]);
-      if (!CODE_RE.test(code)) return;
-
-      lines.push([
-        code.replace(/\.$/, ''),
-        text(values[nameAt - 1]),
-        header.at.start ? isoDate(values[header.at.start - 1]) : '',
-        header.at.finish ? isoDate(values[header.at.finish - 1]) : '',
-        header.at.price ? text(values[header.at.price - 1]) : '',
-      ]);
-    };
-
-    // Only the plan columns are ever unwrapped. Reading all 451 of them for
-    // every row would be reading the whole progress history to throw it away.
-    const upto = () => (header && Number.isFinite(header.weeksFrom) ? header.weeksFrom - 1 : 0);
-
-    for await (const row of worksheet) {
       if (!header) {
         const values: unknown[] = [];
         for (let c = 1; c <= row.cellCount; c += 1) values[c - 1] = row.getCell(c).value;
         head.set(row.number, values.map(text));
         early.push({ number: row.number, values });
         if (row.number < HEADER_SCAN_ROWS) continue;
-        header = readHeader(head);
-        // No header in the first rows means no plan on this sheet. The rest is
-        // still drained: the reader will not move on with rows outstanding.
+        // Settled ONCE, against every scanned row: the label a column needs
+        // may sit a row lower than the one naming the WBS column, and the week
+        // labels that say where the plan ends sit lower still.
+        header = bestHeader(head);
         if (header) {
           for (const e of early) take(e.number, e.values);
-          early.length = 0;
         }
+        early.length = 0;
         continue;
       }
-      const width = Math.min(row.cellCount, upto() || row.cellCount);
+
       const values: unknown[] = [];
-      for (let c = 1; c <= width; c += 1) values[c - 1] = row.getCell(c).value;
+      for (let c = 1; c < header.endsAt; c += 1) values[c - 1] = row.getCell(c).value;
       take(row.number, values);
     }
 
-    // A sheet shorter than the scan window never reached the flush above.
+    // A sheet shorter than the scan window never reached the settle above.
     if (!header && head.size > 0) {
-      header = readHeader(head);
+      header = bestHeader(head);
       if (header) for (const e of early) take(e.number, e.values);
     }
 
-    if (header) picked = { name, lines, header };
+    if (!header || grid.length === 0) continue;
+    candidates.push({ name, header, grid, score: scoreSheet(name, header, grid) });
   }
 
   if (sheets.length === 0) throw new Error('That file has no sheets in it');
+  candidates.sort((a, b) => b.score - a.score);
+
+  const picked = want
+    ? candidates.find((c) => c.name === want) ?? candidates[0]
+    : candidates[0];
   if (!picked) {
     throw new Error(
-      `No plan was found. This reads the sheet called "Data Overall" — the file has ${sheets.length} sheets: ${sheets.slice(0, 8).join(', ')}`
+      `No sheet in this file looks like a plan. A plan needs a column of task names. The sheets are: ${sheets.slice(0, 10).join(', ')}`
     );
   }
-  if (picked.lines.length === 0) {
-    throw new Error(`"${picked.name}" has a header but no rows with an outline code under it`);
+
+  const { header, grid } = picked;
+  const columns: PlanColumn[] = [];
+  for (let c = 1; c < header.endsAt; c += 1) {
+    const sample: string[] = [];
+    for (const line of grid) {
+      const v = (line[c - 1] ?? '').trim();
+      if (v && sample.length < 3) sample.push(v);
+      if (sample.length === 3) break;
+    }
+    columns.push({ at: c, label: header.labels[c - 1] ?? '', sample });
   }
 
-  const { at, weeksFrom } = picked.header;
+  const mapping: Partial<Record<Field, number>> = {};
+  for (const field of Object.keys(LABELS) as Field[]) {
+    const at = header.at[field];
+    if (at !== undefined) mapping[field] = at - 1;
+  }
+
   const notes: string[] = [];
-  notes.push(
-    `Read from the sheet "${picked.name}", header on row ${picked.header.row}.`
-  );
-  if (Number.isFinite(weeksFrom)) {
+  notes.push(`Read from the sheet “${picked.name}”, with the header on row ${header.row}.`);
+  if (candidates.length > 1) {
     notes.push(
-      `Columns ${weeksFrom} and beyond are the weekly PLAN and ACTUAL blocks; they are progress, not plan, and were left alone.`
+      `${candidates.length} sheets could have held a plan; this one scored highest. Change it above if it is the wrong one.`
     );
   }
-  if (!at.price) notes.push('No price column was found, so weights cannot be derived from this file yet.');
-  if (!at.start || !at.finish) notes.push('No start or finish column was found, so the rows arrive without dates.');
-  notes.push('WF per SPK and WF Overall were ignored on purpose: weight is computed here from price over contract value, not copied.');
-
-  // A canonical header, so the paste parser matches columns by name instead of
-  // guessing them from their contents. Everything below it is already
-  // normalised — ISO dates, plain numbers — which is why the preview for a
-  // file has nothing to apologise for.
-  const head = ['WBS', 'Task Name', 'Start', 'Finish', 'Price'].join('\t');
-  const body = picked.lines.map((cells) => cells.join('\t'));
+  if (Number.isFinite(header.endsAt) && header.endsAt <= MAX_PLAN_COLUMNS) {
+    notes.push(
+      `Column ${header.endsAt} onwards looked like weekly progress rather than plan, so it was left alone.`
+    );
+  }
+  if (mapping.code === undefined) {
+    notes.push('No outline code column was found, so depth will come from the indentation in the names.');
+  }
+  if (mapping.start === undefined || mapping.finish === undefined) {
+    notes.push('No start or finish column was found, so the rows arrive without dates.');
+  }
+  if (mapping.price === undefined) {
+    notes.push('No price column was found, so weights cannot be derived from this file yet.');
+  }
+  notes.push('Any weight column was ignored on purpose: weight is computed here from price over contract value, not copied.');
 
   return {
     sheet: picked.name,
-    text: [head, ...body].join('\n'),
-    rows: picked.lines.length,
+    candidates: candidates.map((c) => ({ name: c.name, rows: c.grid.length, score: Number(c.score.toFixed(2)) })),
     sheets,
+    columns,
+    grid,
+    mapping,
     notes,
     banner,
   };
+}
+
+/** Up to this many values decide what a column actually holds. */
+const SAMPLE = 30;
+
+function sampleOf(grid: string[][], column: number | undefined): string[] {
+  if (column === undefined) return [];
+  const out: string[] = [];
+  for (const row of grid) {
+    const v = (row[column - 1] ?? '').trim();
+    if (v) out.push(v);
+    if (out.length === SAMPLE) break;
+  }
+  return out;
+}
+
+function mostly(values: string[], test: (s: string) => boolean): boolean {
+  if (values.length === 0) return false;
+  return values.filter(test).length / values.length >= 0.6;
+}
+
+/**
+ * How much a sheet looks like a plan, judged on its VALUES.
+ *
+ * The header alone is not enough and W1 of this project is why: its S-curve
+ * sheet has a column headed `Start`, and scoring the label gave it three
+ * points for dates it did not have. A column earns the date points by holding
+ * dates.
+ *
+ * Row count is a TIE-BREAKER and never more. "Detail Overall" has MORE rows
+ * than "Data Overall" and no dates at all, so a score led by row count picks
+ * the wrong sheet in the very file this was written for. The sheet's NAME is
+ * worth a nudge on top, for when two sheets are otherwise equal.
+ */
+function scoreSheet(name: string, header: Header, grid: string[][]): number {
+  let score = 3; // it has names, which is the one thing it could not be without
+
+  const codes = sampleOf(grid, header.at.code);
+  if (mostly(codes, (c) => CODE_RE.test(c))) score += 2;
+
+  const starts = sampleOf(grid, header.at.start);
+  const finishes = sampleOf(grid, header.at.finish);
+  const hasStart = mostly(starts, looksLikeDate);
+  const hasFinish = mostly(finishes, looksLikeDate);
+  if (hasStart && hasFinish) score += 3;
+  else if (hasStart || hasFinish) score += 1;
+
+  const prices = sampleOf(grid, header.at.price);
+  if (prices.some((p) => Number(p.replace(/[^0-9.-]/g, '')) > 0)) score += 1;
+
+  if (SHEET_HINTS.some((h) => norm(name).includes(h))) score += 1.5;
+  return score + Math.min(grid.length, 500) / 500;
+}
+
+/** Every scanned row is tried as the header and the best-scoring one wins. */
+function bestHeader(rows: Map<number, string[]>): Header | null {
+  let best: Header | null = null;
+  for (const [rowNo] of rows) {
+    const candidate = headerAt(rows, rowNo);
+    if (!candidate) continue;
+    // On a TIE the later row wins, because a header stacked two rows deep
+    // resolves to the same labels from either tier and the data begins under
+    // the LOWER one. Taking the upper tier made W56's own header row come in
+    // as a task called "Description".
+    if (!best || candidate.score >= best.score) best = candidate;
+  }
+  return best;
 }

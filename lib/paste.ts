@@ -173,7 +173,9 @@ function detectDateOrder(values: string[]): DateOrder | null {
   return null;
 }
 
-function looksLikeDate(s: string): boolean {
+/** Exported for `lib/plan-xlsx.ts`, which scores a workbook column on whether
+ * its VALUES are dates rather than on what its header calls them. */
+export function looksLikeDate(s: string): boolean {
   const t = s.trim();
   if (!t) return false;
   if (parseUnambiguousDate(t)) return true;

@@ -28,8 +28,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ ok: false, error: 'No file arrived' }, { status: 400 });
   }
   try {
+    // `?sheet=` is how a person overrules the choice. Switching sheets does
+    // mean sending the file again, which is the honest cost of not holding a
+    // 7 MB workbook in a lambda between two requests; the columns can be
+    // re-mapped without it, and that is the common correction.
+    const want = new URL(request.url).searchParams.get('sheet');
     const stream = Readable.fromWeb(request.body as unknown as NodeWebReadableStream<Uint8Array>);
-    const read = await readPlanWorkbook(stream);
+    const read = await readPlanWorkbook(stream, want);
     return Response.json({ ok: true, ...read });
   } catch (err) {
     const message =
