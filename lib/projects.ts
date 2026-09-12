@@ -73,15 +73,33 @@ export interface ProjectCard {
  * days; this keeps that promise.
  */
 export async function getActiveProjectId(): Promise<string | null> {
+  // THE COOKIE IS READ FIRST, AND THE ORDER IS CORRECTNESS.
+  //
+  // `ensureFreshDb()` throttles itself on `Date.now()`, and under
+  // `cacheComponents` reading the clock BEFORE any request data has been read
+  // is a static-generation bailout: "used `Date.now()` before accessing either
+  // uncached data or Request data". It only bites where the snapshot layer is
+  // actually configured — that is, on the deployment and nowhere else — which
+  // is why it survived every local build and every local `next start`.
+  //
+  // It cost Document Control outright (12 Sep 2026). Every `/dokumen/[week]`
+  // path that was NOT in `generateStaticParams` 500d on Vercel, because this is
+  // the first thing the section's tab row asks for; weeks 1–60 only looked
+  // alive because they were being served from the build-time ISR entry, whose
+  // revalidation had been failing silently since the deploy (`X-Vercel-Cache:
+  // STALE`, `Age` climbing forever). `/weekly` escaped it by accident:
+  // `LegacyChromeGate` calls `connection()` before it ever gets here.
+  //
+  // Reading the cookie first costs nothing and legitimises the clock for every
+  // caller in the app, so no screen has to remember to call `connection()`
+  // before asking which project is open.
+  const jar = await cookies();
   // Every screen that follows the open project passes through here, and it is
   // already an uncached read, so this is where a deployment catches up with the
   // writes another instance made before answering from its own stale bytes. A
   // 304 at most once every 1.5 s, and nothing at all when no blob store is
   // attached — see lib/db-snapshot.ts.
   await ensureFreshDb();
-  // Reading a cookie is an uncached read, which is the point: it drags every
-  // caller out of the prerendered shell, where this answer never belonged.
-  const jar = await cookies();
   const chosen = jar.get(OPEN_PROJECT_COOKIE)?.value;
   if (chosen && isOpenable(chosen)) return chosen;
 
