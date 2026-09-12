@@ -16,6 +16,7 @@ import Spinner from '@/components/ui/Spinner';
 import DateField from '@/components/ui/DateField';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { CURRENCIES } from '@/lib/currency';
+import { ALIAS_MAX_LENGTH, deriveAlias } from '@/lib/alias';
 
 /**
  * Six fields, one screen, one Save — not a wizard.
@@ -52,6 +53,7 @@ export default function NewProjectDialog() {
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [alias, setAlias] = useState('');
   const [client, setClient] = useState('');
   const [start, setStart] = useState('');
   const [finish, setFinish] = useState('');
@@ -74,6 +76,7 @@ export default function NewProjectDialog() {
 
   function reset() {
     setName('');
+    setAlias('');
     setClient('');
     setStart('');
     setFinish('');
@@ -98,6 +101,7 @@ export default function NewProjectDialog() {
     startTransition(async () => {
       const res = await createProjectAction({
         name,
+        alias,
         clientName: client,
         startDate: start,
         finishDate: finish,
@@ -170,6 +174,28 @@ export default function NewProjectDialog() {
                         placeholder="e.g. Relocation of 2 GTG units"
                         className="h-11"
                       />
+                    </div>
+
+                    {/* The guess is the PLACEHOLDER, not the value. Pre-filling
+                        the input would mean anyone who edits the name
+                        afterwards keeps an alias derived from the name they
+                        abandoned, with nothing on screen saying so. As a
+                        placeholder it follows the name until somebody types
+                        over it, and after that it never interferes again. */}
+                    <div className="space-y-1">
+                      <Label htmlFor="np-alias">Short name</Label>
+                      <Input
+                        id="np-alias"
+                        value={alias}
+                        onChange={(e) => setAlias(e.target.value)}
+                        placeholder={deriveAlias(name) || 'For lists and titles'}
+                        maxLength={ALIAS_MAX_LENGTH}
+                        className="h-11"
+                      />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        Used wherever the full name will not fit. Leave it blank and we use the one
+                        shown here.
+                      </p>
                     </div>
 
                     <div className="space-y-1">
