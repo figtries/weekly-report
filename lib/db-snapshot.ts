@@ -212,13 +212,16 @@ async function attempt<T>(run: (mode: 'private' | 'public') => Promise<T>): Prom
  * The remote image, or null when it is missing or unchanged.
  *
  * `get` answers a wrong `access` with NULL, not with an error — and null is
- * also how it says "nothing has been written yet". `attempt` cannot tell those
- * apart, so an object uploaded as public was read as an empty store forever:
- * the push worked, the pull returned null, `applyRemote` reported no change,
- * and the page 404d on a project the blob already held (12 Sep 2026, proven
- * against the deployed app — `list` showed a 1.99 MB object while every read
- * came back empty). Both modes are therefore tried on their own here, and only
- * two nulls mean the object is really absent.
+ * also how it says "nothing has been written yet". `attempt` retries only on a
+ * THROWN error, so it cannot tell those apart: one null from the wrong mode and
+ * the store reads as empty, `applyRemote` reports no change, and the page 404s
+ * on a project the blob already holds. Both modes are therefore tried on their
+ * own here, and only two nulls mean the object is really absent.
+ *
+ * Defensive, not a post-mortem: this store answers to `private`, and the bug it
+ * guards against has never fired here. It is written down because the failure
+ * would be silent — no error, no log line, just an empty database — and that is
+ * the expensive kind.
  */
 async function download(conditional: boolean): Promise<Buffer | null> {
   const { get, BlobNotFoundError } = await import('@vercel/blob');
