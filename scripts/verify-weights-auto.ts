@@ -8,13 +8,18 @@
  *
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-weights-auto.ts
  */
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { copyDbFixture } from './db-fixture.ts';
+
 const src = path.join(process.cwd(), 'data', 'report.db');
 const work = path.join(os.tmpdir(), `weights-auto-${Date.now()}.db`);
-fs.copyFileSync(src, work);
+// NOT `fs.copyFileSync`: report.db is in WAL mode and a plain file copy leaves
+// recent writes behind in the -wal. It did exactly that when `projects` gained
+// `alias`, and this script died with `no such column: "alias"` — a failure that
+// looks like a bug in weights-auto and is not. See scripts/db-fixture.ts.
+copyDbFixture(src, work);
 process.env.REPORT_DB_PATH = work;
 
 const { db, schema } = await import('../lib/sqlite.ts');
