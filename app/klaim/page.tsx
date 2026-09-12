@@ -1,28 +1,36 @@
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { ScrollReveal } from '@/components/motion/ScrollReveal';
-import { getDb } from '@/lib/data';
+import { Suspense } from 'react';
+
+import SectionSkeleton from '@/components/ui/SectionSkeleton';
+import { getOpenJsonDb } from '@/lib/data';
 import { claimableCauseLabels } from '@/lib/catalogs';
 import { buildDelayRegister, fmtNum } from '@/lib/analysis';
-import LegacyGate from '@/components/projects/LegacyGate';
 
 export const metadata = { title: 'Delay Register' };
 
 /**
- * The gate is asked PER REQUEST (see components/projects/LegacyGate.tsx): this
- * page's static HTML used to carry the open project's NAME, and the CDN served
- * it to whoever had a different one open.
+ * The delay register follows the daily reports, and those belong to whichever
+ * project is open now (see lib/legacy-bridge.ts) — so this does too. It used to
+ * stand behind `LegacyGate`, which was right while every daily report in the
+ * store belonged to one project and is simply wrong now: a crew that records
+ * non-effective hours has to be able to total them.
+ *
+ * Behind `<Suspense>` because the open project is a cookie: this page's static
+ * HTML used to carry the open project's NAME, and the CDN served it to whoever
+ * had a different one open.
  */
 export default function KlaimPage() {
   return (
-    <LegacyGate what="delay records">
+    <Suspense fallback={<SectionSkeleton />}>
       <KlaimBody />
-    </LegacyGate>
+    </Suspense>
   );
 }
 
 async function KlaimBody() {
 
-  const db = await getDb();
+  const db = await getOpenJsonDb();
   const reg = buildDelayRegister(db, claimableCauseLabels(db));
 
   return (
