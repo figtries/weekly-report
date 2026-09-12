@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekMeta } from '@/lib/data';
+import { getOpenDb, getWeekMeta } from '@/lib/data';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -20,7 +20,7 @@ export const unstable_instant = {
  */
 export default function DocumentationPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <DocumentationPageBody params={params} />
     </LegacyGate>
   );
@@ -30,7 +30,7 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const db = await getDb();
+  const db = await getOpenDb();
   const meta = getWeekMeta(db, week);
   if (!meta) notFound();
 

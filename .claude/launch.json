@@ -94,7 +94,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set NEXT_DIST_DIR=.next-verifydb&& set REPORT_DB_PATH=C:/Users/LENOVO/AppData/Local/Temp/claude/E--Figtries-Prototype-Report/86961aa2-491e-4fb0-ad1d-c03fc5fadcfe/scratchpad/verify.db&& npx next dev -p 3221"
+        "set NEXT_DIST_DIR=.next-verifydb&& set REPORT_DB_PATH=data/verify.db&& npx next dev -p 3221"
       ],
       "port": 3221
     }

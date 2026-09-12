@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup } from '@/lib/data';
+import { getOpenWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
 import PageHeader from '@/components/layout/PageHeader';
@@ -46,7 +46,7 @@ export const unstable_instant = {
  */
 export default function SummaryPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <SummaryPageBody params={params} />
     </LegacyGate>
   );
@@ -56,7 +56,7 @@ async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }
   const { week: weekParam } = await params;
   const week = Number(weekParam);
 
-  const result = await getCachedWeekRollup(week);
+  const result = await getOpenWeekRollup(week);
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);

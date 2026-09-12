@@ -55,12 +55,20 @@ export default function WeekTabs({
   weeks,
   selectedWeek,
   projectCurrentWeek,
+  derivedCurrent = false,
   dueCount,
   checkCount,
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
+  /**
+   * True where the current week is WORKED OUT rather than set — a project in
+   * SQLite, whose current week is whichever one was last filled in. There is
+   * nothing for the button to write, so it is not offered: a control that can
+   * only fail is worse than no control.
+   */
+  derivedCurrent?: boolean;
   /** Items the schedule says are due this week and not yet dealt with. */
   dueCount: number;
   /** Validation findings that are errors or warnings. */
@@ -170,7 +178,7 @@ export default function WeekTabs({
             group is justify-end, so the print button at the right edge never
             moves. */}
         <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2 md:col-start-3">
-          {!isCurrent && (
+          {!isCurrent && !derivedCurrent && (
             <m.button {...pressMotion}
               onClick={setAsCurrent}
               disabled={isPending}

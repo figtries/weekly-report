@@ -1,9 +1,10 @@
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getDb, getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { validateWeek } from '@/lib/analysis';
 import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { LegacyChromeGate } from '@/components/projects/LegacyGate';
+import { getOpenProject } from '@/lib/legacy-bridge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 
@@ -20,8 +21,54 @@ export const unstable_instant = {
 };
 
 export async function generateStaticParams() {
+  // `getDb()`, not `getOpenDb()`: this runs at BUILD time, where there is no
+  // request and therefore no open project. It only decides which week numbers
+  // get a prerendered shell, and a project whose weeks are not in that list
+  // still renders — the params are a head start, not a whitelist.
   const db = await getDb();
   return db.weeks.map((w) => ({ week: String(w.week) }));
+}
+
+/**
+ * The week picker and its two counts, read INSIDE the gate.
+ *
+ * These reads used to sit at the top of the layout, and the moment they became
+ * project-aware that broke the build: the open project is a cookie, an uncached
+ * read, and a layout is not behind `<Suspense>` — "Uncached data was accessed
+ * outside of `<Suspense>`", exactly as AGENTS.md warns twice. `LegacyChromeGate`
+ * already provides the boundary and already calls `connection()`, so the reads
+ * belong on this side of it. The layout itself now reads nothing at all.
+ */
+async function WeeklyTabsFor({ week }: { week: number }) {
+  const db = await getOpenDb();
+  const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);
+
+  // The step counts. Both are read straight off data the section already
+  // computes for its own pages, so the header costs a cached rollup and no
+  // extra source of truth — a badge that disagreed with the screen it points
+  // at would be worse than no badge.
+  const rollup = await getOpenWeekRollup(week);
+  const dueCount = rollup
+    ? buildWorklist({
+        roots: rollup.roots,
+        schedule: db.schedule,
+        week,
+        changeLog: db.changeLog,
+      }).due.length
+    : 0;
+  const validation = validateWeek(db, week);
+  const open = await getOpenProject();
+
+  return (
+    <WeekTabs
+      weeks={weeks}
+      selectedWeek={week}
+      projectCurrentWeek={db.project.currentWeek}
+      derivedCurrent={!!open && !open.hasLegacyData}
+      dueCount={dueCount}
+      checkCount={validation.errors + validation.warnings}
+    />
+  );
 }
 
 export default async function WeeklyWeekLayout({
@@ -33,26 +80,6 @@ export default async function WeeklyWeekLayout({
 }) {
   const { week } = await params;
   const weekNo = Number(week);
-
-
-  const db = await getDb();
-  const weeks = db.weeks.map((w) => w.week).sort((a, b) => a - b);
-
-  // The step counts. Both are read straight off data the section already
-  // computes for its own pages, so the header costs a cached rollup and no
-  // extra source of truth — a badge that disagreed with the screen it points
-  // at would be worse than no badge.
-  const rollup = await getCachedWeekRollup(weekNo);
-  const dueCount = rollup
-    ? buildWorklist({
-        roots: rollup.roots,
-        schedule: db.schedule,
-        week: weekNo,
-        changeLog: db.changeLog,
-      }).due.length
-    : 0;
-  const validation = validateWeek(db, weekNo);
-  const checkCount = validation.errors + validation.warnings;
 
   return (
     // 'weekly' is stable across every tab and every week, so this boundary
@@ -75,14 +102,8 @@ export default async function WeeklyWeekLayout({
           never renders comes back as "the target segment was prevented from
           rendering for an unknown reason". So only the chrome is gated, and
           the page below says the rest. */}
-      <LegacyChromeGate fallback={<WeekTabsFallback />}>
-        <WeekTabs
-          weeks={weeks}
-          selectedWeek={weekNo}
-          projectCurrentWeek={db.project.currentWeek}
-          dueCount={dueCount}
-          checkCount={checkCount}
-        />
+      <LegacyChromeGate planned fallback={<WeekTabsFallback />}>
+        <WeeklyTabsFor week={weekNo} />
       </LegacyChromeGate>
 
       {/* scrollbar-none: the global 10px classic scrollbar would otherwise

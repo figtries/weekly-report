@@ -90,6 +90,30 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     .orderBy(asc(schema.weeks.weekNo))
     .all();
 
+  // Milestones ride along, because a milestone item's percentage IS its
+  // milestones — `resolveLeafProgress` reads them off the item, and without
+  // them every milestone leaf resolves to zero no matter what was recorded.
+  const msRows = sqlite
+    .select({
+      id: schema.milestones.id,
+      nodeId: schema.milestones.nodeId,
+      label: schema.milestones.label,
+      weight: schema.milestones.weight,
+      order: schema.milestones.order,
+    })
+    .from(schema.milestones)
+    .innerJoin(schema.wbsNodes, eq(schema.wbsNodes.id, schema.milestones.nodeId))
+    .where(eq(schema.wbsNodes.projectId, projectId))
+    .orderBy(asc(schema.milestones.order))
+    .all();
+  const msByNode = new Map<string, { id: string; label: string; weight: number }[]>();
+  for (const m of msRows) {
+    const list = msByNode.get(m.nodeId);
+    const entry = { id: m.id, label: m.label, weight: m.weight };
+    if (list) list.push(entry);
+    else msByNode.set(m.nodeId, [entry]);
+  }
+
   const wbsItems: WbsItem[] = nodes.map((n) => ({
     id: n.id,
     parentId: n.parentId,
@@ -100,6 +124,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     satuan: n.satuan,
     order: n.order,
     progressMethod: legacyMethod(n.progressMethod),
+    milestones: msByNode.get(n.id),
   }));
 
   // Dates come from the ACTIVE baseline, like every other reader: the
@@ -124,11 +149,37 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
         .all()
     : [];
 
-  const byWeek = new Map<string, Map<string, number>>();
+  // The EVIDENCE, not just the percentage. `lib/progress.ts` is the single
+  // origin of a leaf's figure and it reads `qtyDone`/`milestonesDone` off the
+  // snapshot; dropping them here meant the Fill in screen showed an empty
+  // quantity box over a leaf that had one recorded, and re-saving it would
+  // have written that emptiness back.
+  const msDone = weekIds.length
+    ? sqlite
+        .select({
+          weekId: schema.milestoneProgress.weekId,
+          milestoneId: schema.milestoneProgress.milestoneId,
+          achieved: schema.milestoneProgress.achieved,
+          nodeId: schema.milestones.nodeId,
+        })
+        .from(schema.milestoneProgress)
+        .innerJoin(schema.milestones, eq(schema.milestones.id, schema.milestoneProgress.milestoneId))
+        .where(inArray(schema.milestoneProgress.weekId, weekIds))
+        .all()
+    : [];
+
+  const byWeek = new Map<string, Map<string, { pct: number; qtyDone: number | null }>>();
   for (const row of progress) {
     let m = byWeek.get(row.weekId);
     if (!m) byWeek.set(row.weekId, (m = new Map()));
-    m.set(row.nodeId, row.cumProgressPct ?? 0);
+    m.set(row.nodeId, { pct: row.cumProgressPct ?? 0, qtyDone: row.qtyDone ?? null });
+  }
+  const msByWeekNode = new Map<string, Map<string, string[]>>();
+  for (const row of msDone) {
+    if (!row.achieved) continue;
+    let m = msByWeekNode.get(row.weekId);
+    if (!m) msByWeekNode.set(row.weekId, (m = new Map()));
+    m.set(row.nodeId, [...(m.get(row.nodeId) ?? []), row.milestoneId]);
   }
 
   // The last week anybody recorded anything. The S-curve draws its actual line
@@ -138,19 +189,28 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
   for (const w of weekRows) if (byWeek.has(w.id)) currentWeek = Math.max(currentWeek, w.weekNo);
 
   // Carried forward across the whole run, so a leaf with no row this week holds
-  // the figure it last had rather than falling back to zero.
-  const carried = new Map<string, number>();
+  // the figure it last had rather than falling back to zero. The EVIDENCE is
+  // carried with it: a quantity that stopped being reported has not stopped
+  // being done.
+  const carried = new Map<string, { pct: number; qtyDone: number | null }>();
+  const carriedMs = new Map<string, string[]>();
   const weeks: WeeklyMeta[] = weekRows.map((w) => {
     const recorded = byWeek.get(w.id);
+    const recordedMs = msByWeekNode.get(w.id);
     const leafData: WeeklyLeafData = {};
     for (const node of nodes) {
       if (!leafIds.has(node.id)) continue;
       const fresh = recorded?.get(node.id);
       if (fresh !== undefined) carried.set(node.id, fresh);
+      const freshMs = recordedMs?.get(node.id);
+      if (freshMs !== undefined) carriedMs.set(node.id, freshMs);
+      const held = carried.get(node.id);
       const d = dates.get(node.id);
       leafData[node.id] = {
-        cumProgressPct: carried.get(node.id) ?? 0,
+        cumProgressPct: held?.pct ?? 0,
         targetWF: d ? (node.bobot ?? 0) * leafPlanFraction(d.startDate, d.finishDate, w.endDate) : 0,
+        ...(held?.qtyDone != null ? { qtyDone: held.qtyDone } : {}),
+        ...(carriedMs.has(node.id) ? { milestonesDone: carriedMs.get(node.id) } : {}),
       };
     }
     return {

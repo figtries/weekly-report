@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup } from '@/lib/data';
+import { getOpenWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
 import PageHeader from '@/components/layout/PageHeader';
@@ -22,7 +22,7 @@ export const unstable_instant = {
  */
 export default function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <DetailProgressPageBody params={params} />
     </LegacyGate>
   );
@@ -32,7 +32,7 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const result = await getCachedWeekRollup(week);
+  const result = await getOpenWeekRollup(week);
   if (!result) notFound();
   const { roots } = result;
   // The same leaves the page itself counts: zero-weight rows are milestone

@@ -3,7 +3,19 @@ import { connection } from 'next/server';
 
 import NoLegacyData from './NoLegacyData';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
+import { buildProjectDashboardData } from '@/lib/dashboard-db';
 import { getOpenProject } from '@/lib/legacy-bridge';
+
+/**
+ * A project with no v1 data is not automatically a project with nothing to
+ * show. The WEEKLY pages read SQLite for it now (`getOpenDb` in lib/data.ts),
+ * so what stops them is not the store the project is in — it is whether it has
+ * a plan to report against at all. Daily, Reports and Klaim have no SQLite path
+ * yet (board item 14) and pass `planned={false}`, which is the old behaviour.
+ */
+function hasPlan(projectId: string): boolean {
+  return buildProjectDashboardData(projectId)?.hasPlan ?? false;
+}
 
 /**
  * "Does the open project have v1 data?" — asked PER REQUEST, never baked in.
@@ -34,26 +46,41 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  * state was never safely prerenderable — the static version was simply wrong
  * faster.
  */
-async function Decide({ what, children }: { what: string; children: ReactNode }) {
+async function Decide({
+  what,
+  planned,
+  children,
+}: {
+  what: string;
+  planned: boolean;
+  children: ReactNode;
+}) {
   await connection();
   const open = await getOpenProject();
-  if (open && !open.hasLegacyData) return <NoLegacyData what={what} />;
+  if (open && !open.hasLegacyData && !(planned && hasPlan(open.id))) {
+    return <NoLegacyData what={what} />;
+  }
   return <>{children}</>;
 }
 
 export default function LegacyGate({
   what,
+  planned = false,
   fallback,
   children,
 }: {
   /** Plural, lowercase, as it reads in the sentence: "has no weekly reports yet". */
   what: string;
+  /** True where the page can render a SQLite project with a plan. */
+  planned?: boolean;
   fallback?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Suspense fallback={fallback ?? <SectionSkeleton />}>
-      <Decide what={what}>{children}</Decide>
+      <Decide what={what} planned={planned}>
+        {children}
+      </Decide>
     </Suspense>
   );
 }
@@ -63,20 +90,26 @@ export default function LegacyGate({
  * data, and NOTHING when it does not — a week picker and a stepper belonging to
  * another project are worse than no chrome at all.
  */
-async function DecideChrome({ children }: { children: ReactNode }) {
+async function DecideChrome({ planned, children }: { planned: boolean; children: ReactNode }) {
   await connection();
   const open = await getOpenProject();
-  if (open && !open.hasLegacyData) return null;
+  if (open && !open.hasLegacyData && !(planned && hasPlan(open.id))) return null;
   return <>{children}</>;
 }
 
 export function LegacyChromeGate({
+  planned = false,
   fallback,
   children,
 }: {
+  planned?: boolean;
   fallback?: ReactNode;
   children: ReactNode;
 }) {
-  return <Suspense fallback={fallback ?? null}>{<DecideChrome>{children}</DecideChrome>}</Suspense>;
+  return (
+    <Suspense fallback={fallback ?? null}>
+      <DecideChrome planned={planned}>{children}</DecideChrome>
+    </Suspense>
+  );
 }
 

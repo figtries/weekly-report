@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { computeHealth, validateWeek } from '@/lib/analysis';
-import { getDb } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
 import WeekChecks from '@/components/weekly/WeekChecks';
 import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -41,7 +41,7 @@ export const unstable_instant = {
  */
 export default function CheckPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <CheckPageBody params={params} />
     </LegacyGate>
   );
@@ -51,7 +51,7 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
 
-  const db = await getDb();
+  const db = await getOpenDb();
   // computeHealth still gates the 404 — it returns null for a week that does
   // not exist, which is the cheapest way to reject a bad :week param.
   const health = computeHealth(db, week);

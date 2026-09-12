@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import { buildSCurveSeries } from '@/lib/scurve';
 import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
@@ -23,7 +23,7 @@ export const unstable_instant = {
  */
 export default function WeeklyPrintPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <WeeklyPrintPageBody params={params} />
     </LegacyGate>
   );
@@ -33,7 +33,7 @@ async function WeeklyPrintPageBody({ params }: { params: Promise<{ week: string 
 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
+  const [db, result] = await Promise.all([getOpenDb(), getOpenWeekRollup(week)]);
   if (!result) notFound();
   const { meta, roots, grandTotal } = result;
   const summaryRows = getSummaryRows(roots);

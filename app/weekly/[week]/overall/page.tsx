@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { weekPeriodShort } from '@/lib/weeks';
 import { buildWorklist } from '@/lib/worklist';
 import DataOverallWorkbench from '@/components/weekly/DataOverallWorkbench';
@@ -28,7 +28,7 @@ export const unstable_instant = {
  */
 export default function DataOverallPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <DataOverallPageBody params={params} />
     </LegacyGate>
   );
@@ -37,7 +37,7 @@ export default function DataOverallPage({ params }: { params: Promise<{ week: st
 async function DataOverallPageBody({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
+  const [db, result] = await Promise.all([getOpenDb(), getOpenWeekRollup(week)]);
   if (!result) notFound();
   const { roots, grandTotal } = result;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getDb, getWeekMeta, getCachedSCurveSeries } from '@/lib/data';
+import { getOpenDb, getWeekMeta, getOpenSCurveSeries } from '@/lib/data';
 import SCurveClient from '@/components/weekly/SCurveClient';
 import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -20,7 +20,7 @@ export const unstable_instant = {
  */
 export default function SCurvePage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports">
+    <LegacyGate what="weekly reports" planned>
       <SCurvePageBody params={params} />
     </LegacyGate>
   );
@@ -31,8 +31,8 @@ async function SCurvePageBody({ params }: { params: Promise<{ week: string }> })
   const { week: weekParam } = await params;
   const week = Number(weekParam);
   const [db, series] = await Promise.all([
-    getDb(),
-    getCachedSCurveSeries(week),
+    getOpenDb(),
+    getOpenSCurveSeries(week),
   ]);
   const meta = getWeekMeta(db, week);
   if (!meta) notFound();

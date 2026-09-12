@@ -19,6 +19,15 @@ import {
   markNoProgress,
   type FieldProgressUpdate,
 } from './mutations';
+import { isLegacyProject } from './legacy-bridge';
+import { getActiveProjectId } from './projects';
+import {
+  markNoProgressSqlite,
+  saveFieldProgressSqlite,
+  saveWeekUpdatesSqlite,
+  setProgressMethodSqlite,
+} from './progress-sqlite';
+import { beforeWrite, flushDbSnapshot } from './sqlite';
 import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
 import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
@@ -28,6 +37,42 @@ import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod
 // your own writes) and streams the re-rendered page back in the same response.
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * WHICH STORE THIS WRITE BELONGS TO.
+ *
+ * The weekly pages read whichever project is open (`getOpenDb` in lib/data.ts),
+ * so they now render for a project that has never been near `db.json`. Their
+ * writes have to follow, or Fill in is a form that throws — `mutateDb` refuses
+ * a project db.json has never heard of, and it is right to: it edits whatever
+ * db.json calls active, which would be somebody else's project.
+ *
+ * Null means "this is a db.json project" — the imported one — and every action
+ * below then behaves exactly as it always has.
+ */
+async function sqliteProject(): Promise<string | null> {
+  const id = await getActiveProjectId();
+  if (!id || isLegacyProject(id)) return null;
+  return id;
+}
+
+/**
+ * A SQLite write, wrapped the way every other one in this app is: the snapshot
+ * pulled before it and pushed after it (see lib/db-snapshot.ts), and the read
+ * caches expired so the page that called it renders its own write.
+ */
+async function sqliteWrite(run: () => void): Promise<ActionResult> {
+  try {
+    await beforeWrite();
+    run();
+    await flushDbSnapshot();
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
 
 function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
@@ -119,6 +164,8 @@ export async function saveWeekUpdatesAction(
   week: number,
   updates: Record<string, Partial<LeafSnapshot>>
 ): Promise<ActionResult> {
+  const projectId = await sqliteProject();
+  if (projectId) return sqliteWrite(() => saveWeekUpdatesSqlite(projectId, week, updates));
   try {
     await mutateDb((db) => applyWeekUpdates(db, week, updates));
     updateTag('db');
@@ -161,6 +208,8 @@ export async function saveFieldProgressAction(
   week: number,
   updates: FieldProgressUpdate[]
 ): Promise<ActionResult> {
+  const projectId = await sqliteProject();
+  if (projectId) return sqliteWrite(() => saveFieldProgressSqlite(projectId, week, updates));
   try {
     await mutateDb((db) => applyFieldProgress(db, week, updates));
     updateTag('db');
@@ -181,6 +230,8 @@ export async function markNoProgressAction(
   week: number,
   leafIds: string[]
 ): Promise<ActionResult> {
+  const projectId = await sqliteProject();
+  if (projectId) return sqliteWrite(() => markNoProgressSqlite(projectId, week, leafIds));
   try {
     await mutateDb((db) => markNoProgress(db, week, leafIds));
     updateTag('db');
@@ -196,6 +247,8 @@ export async function setProgressMethodAction(
   method: ProgressMethod,
   opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
 ): Promise<ActionResult> {
+  const projectId = await sqliteProject();
+  if (projectId) return sqliteWrite(() => setProgressMethodSqlite(leafId, method, opts));
   try {
     await mutateDb((db) => applyProgressMethod(db, leafId, method, opts));
     updateTag('db');

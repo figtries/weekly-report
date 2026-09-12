@@ -35,6 +35,22 @@ export interface OpenProject {
   hasLegacyData: boolean;
 }
 
+/**
+ * Does this project's data live in `db.json`?
+ *
+ * Synchronous on purpose: `lib/data.ts` asks this to choose a STORE, and an
+ * async answer would force `<Suspense>` around every read in the app (see
+ * AGENTS.md). A sync embedded-database query is deterministic and prerenders.
+ */
+export function isLegacyProject(projectId: string): boolean {
+  const p = db
+    .select({ legacyJsonId: schema.projects.legacyJsonId })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  return !!p?.legacyJsonId;
+}
+
 export async function getOpenProject(): Promise<OpenProject | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
