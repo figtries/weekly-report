@@ -176,7 +176,6 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           spanFinish={sheet.spanFinish}
           projectStart={project.startDate}
           projectFinish={project.finishDate}
-          currency={project.currency}
           projectId={id}
           barStyles={bars.styles}
           barStyleSource={bars.source}

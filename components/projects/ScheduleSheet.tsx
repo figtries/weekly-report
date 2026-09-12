@@ -9,7 +9,6 @@ import {
   Maximize2,
   MoreHorizontal,
   Plus,
-  TriangleAlert,
   X,
 } from 'lucide-react';
 
@@ -37,7 +36,7 @@ import {
 } from '@/lib/chains';
 import GanttChart, { BarStylesButton, GanttLegend, paintColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
-import { formatMoney, groupAmount, stripAmount } from '@/lib/currency';
+import { groupAmount, stripAmount } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
 import SheetToolbar from './SheetToolbar';
@@ -78,34 +77,51 @@ const INITIAL_WINDOW = 30;
 // every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
 // window, which is what "the Gantt is cut off" meant.
 const SPLIT_KEY = 'figtries:sheet-split-ratio';
-// The eight fixed columns come to 30.75rem, plus eight 6px gaps and 12px of
-// padding either side: 564px of furniture. The default leaves the NAME about
-// 225px on top of that, which is what "Detail Engineering" needs — at 712 the
+// The five fixed columns come to 19.25rem, plus five 6px gaps and 12px of
+// padding either side: 362px of furniture, down from 588px when this sheet
+// still carried Target, Price and Weight. The default leaves the NAME about
+// 258px on top of that, which is what "Detail Engineering" needs — at 712 the
 // name was down to its 8rem floor and every branch read "Detail…". The divider
 // still moves; this is only where it starts. A fixed ratio instead of a width
 // cut the price column off at 1240px and wasted half the timeline at 1920.
-const SHEET_NATURAL = 800;
+//
+// Dropping three columns freed 226px at any given pane width, and this hands
+// back rather more than half of it to the TIMELINE (620 rather than 800): the
+// name gains 46px and the Gantt gains 180, because a name that reads and a
+// timeline you can see are the same screen's two halves and the Gantt was the
+// one being starved.
+const SHEET_NATURAL = 620;
 /** Neither pane is useful below this, so the drag stops there. */
 const MIN_PANE = 300;
 /**
- * What the nine declared columns actually need: 40.25rem of columns, eight
- * 0.375rem gaps, and the sheet's own 0.75rem either side. 716px.
+ * What the six declared columns actually need: 19.25rem of fixed columns plus
+ * an 8rem name, five 0.375rem gaps, and the sheet's own 0.75rem either side.
+ * 490px, down from 716px when Target, Price and Weight were still here.
  *
- * Both numbers that should have respected it were short. The scrolling body
- * was floored at 43.75rem, sixteen pixels under, so the grid compressed its
- * last column instead of scrolling; and the default split handed the sheet
- * 62% of the shell, which on a 1105px shell is 685px, so Weight opened cut in
- * half and Row actions opened off-screen entirely with no scrollbar in sight
- * to say so. The divider still moves wherever you want it; drag under this and
- * the pane scrolls honestly rather than clipping.
+ * Both numbers that should have respected the old figure were short of it. The
+ * scrolling body was floored at 43.75rem, sixteen pixels under, so the grid
+ * compressed its last column instead of scrolling; and the default split handed
+ * the sheet 62% of the shell, which on a 1105px shell is 685px, so Weight
+ * opened cut in half and Row actions opened off-screen entirely with no
+ * scrollbar in sight to say so. The divider still moves wherever you want it;
+ * drag under this and the pane scrolls honestly rather than clipping.
  */
-const FULL_GRID = 716;
+const FULL_GRID = 490;
 
 // Under 640px only the outline, the name, the duration and the row menu fit;
 // dates and price move into the row's own panel. Above it, the full sheet.
 // Under 640px the first column is the colour chip alone. A six-level outline
 // code needs ~60px and truncates to nonsense in less, while indentation already
 // carries the structure — and the full code is one tap away in the row panel.
+// UNCHANGED by the nine-to-four column cut, and that is a measured decision
+// rather than an omission. Start was briefly added here too, since the freed
+// width made all four columns FIT below 640px: six tracks come to 370px, which
+// clears even a 375px iPhone SE. But fitting is not the test. Measured on
+// Gundih at 390px, the name column went from 170px to 100px, and "Relokasi 2
+// Unit Ta…" became "Relok…" while three branches read "D…", "G.." and "I." —
+// the one column you identify a row by, destroyed to show a date that is one
+// tap away in the row panel. The phone keeps the name, the duration and the
+// finish; Start joins the others below.
 const GRID_SM = 'grid-cols-[0.75rem_minmax(5rem,1fr)_2.75rem_4.5rem_2.75rem]';
 /**
  * Two headers for one column, one of them always display:none.
@@ -115,7 +131,7 @@ const GRID_SM = 'grid-cols-[0.75rem_minmax(5rem,1fr)_2.75rem_4.5rem_2.75rem]';
  * See the note on the hash cell for what happens when that arithmetic slips.
  */
 const GRID_LG =
-  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_4.25rem_4.25rem_4.25rem_4.25rem_5.25rem_3.5rem_2.25rem]';
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_4.25rem_4.25rem_4.25rem_2.25rem]';
 
 /**
  * `04 Sep 26` — and every one of them exactly that wide.
@@ -202,7 +218,6 @@ export default function ScheduleSheet({
   spanFinish,
   projectStart,
   projectFinish,
-  currency,
   projectId,
   barStyles = DEFAULT_BAR_STYLES,
   barStyleSource = 'type',
@@ -215,7 +230,7 @@ export default function ScheduleSheet({
   spanFinish: string | null;
   projectStart: string | null;
   projectFinish: string | null;
-  currency: string;
+  /* `currency` left with the Price column: the sheet has no money on it now. */
   projectId: string;
   /** The project's ordered rule list; a ready-made one until someone edits it. */
   barStyles?: BarStyle[];
@@ -953,7 +968,12 @@ export default function ScheduleSheet({
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
-          <div className="min-w-[19rem] sm:min-w-[44.75rem]">
+          {/* 30.625rem is 490px, matching FULL_GRID: the six desktop tracks plus
+              their gaps and the sheet's padding. Floor the body under what the
+              grid needs and it compresses its last column instead of scrolling,
+              with no scrollbar in sight to say so. The 19rem mobile floor is
+              unchanged, because the mobile grid is. */}
+          <div className="min-w-[19rem] sm:min-w-[30.625rem]">
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -972,11 +992,11 @@ export default function ScheduleSheet({
                   each with a hole beside them. */}
               <span className="text-right sm:hidden">Days</span>
               <span className="hidden text-right sm:block">Duration</span>
+              {/* Desktop only, so GRID_SM stays at five children and GRID_LG at
+                  six. See the note on GRID_SM for why the phone does not take
+                  this column even though it now fits. */}
               <span className="hidden text-right sm:block">Start</span>
               <span className="text-right">Finish</span>
-              <span className="hidden text-right sm:block">Target</span>
-              <span className="hidden text-right sm:block">Price</span>
-              <span className="hidden text-right sm:block">Weight</span>
               <span className="sr-only">Row actions</span>
             </div>
 
@@ -1060,7 +1080,6 @@ export default function ScheduleSheet({
                 key={r.id}
                 highlight={term}
                 row={r}
-                currency={currency}
                 selected={r.id === selectedId}
                 collapsed={collapsed.has(r.id)}
                 editing={editing?.rowId === r.id ? editing.field : null}
@@ -1249,7 +1268,6 @@ type RowHandlers = {
 
 const Row = memo(function Row({
   row: r,
-  currency,
   selected,
   collapsed,
   editing,
@@ -1258,7 +1276,6 @@ const Row = memo(function Row({
   on,
 }: {
   row: SheetRow;
-  currency: string;
   selected: boolean;
   collapsed: boolean;
   editing: Field | null;
@@ -1337,19 +1354,10 @@ const Row = memo(function Row({
             {r.unitLabel || 'Unit'}
           </span>
         )}
-        {/* Beside the name, not only in the Target column, because that column
-            is gone below 640px and this is the row's most important fact when
-            it is true. Written as days rather than a colour alone — the app is
-            used by people who should never have to decode a hue. */}
-        {r.daysLate != null && (
-          <span
-            title={`${r.daysLate} days past its target date`}
-            className="flex shrink-0 items-center gap-0.5 rounded bg-warn/10 px-1 py-px text-[9px] font-semibold tabular-nums text-warn"
-          >
-            <TriangleAlert className="size-2.5" />
-            {r.daysLate}d late
-          </span>
-        )}
+        {/* The "Nd late" badge stood here, reading `daysLate`, which is derived
+            from `targetDate`. It went with the Target column: an alert nobody
+            on this screen can create, clear, or explain is the same problem as
+            a 0% bar with no way to move it. */}
       </div>
 
       {/* The unit travels with the number — `97 d`, the way MS Project writes
@@ -1378,6 +1386,8 @@ const Row = memo(function Row({
         )}
       </div>
 
+      {/* Desktop only, matching its header. On a phone the start date lives in
+          the row panel, where reading it does not cost the name 70px. */}
       <div className="hidden text-right tabular-nums sm:block">
         {locked ? (
           <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || '—'}</span>
@@ -1412,55 +1422,17 @@ const Row = memo(function Row({
         )}
       </div>
 
-      {/* Typed on EVERY row, summaries included — the one date a branch owns,
-          because it is a promise rather than an observation about its children.
-          `locked` deliberately does not gate it. */}
-      <div className="hidden text-right tabular-nums sm:block">
-        <EditableCell
-          value={r.targetDate ?? ''}
-          display={fmtDate(r.targetDate) || '—'}
-          active={editing === 'target'}
-          onEdit={() => onEdit('target')}
-          onDone={onDone}
-          onCommit={(v) => onCommit('target', v)}
-          type="date"
-          className={`text-right text-[11px] ${r.daysLate != null ? 'font-medium text-warn' : ''}`}
-        />
-      </div>
-
-      <div className="hidden text-right tabular-nums sm:block">
-        {(() => (
-          <EditableCell
-            value={r.price == null ? '' : String(r.price)}
-            // An empty price is not a warning. Scheduling and pricing are two
-            // jobs, often two people — a column of exclamation marks would tell
-            // the scheduler they had failed at something they were not doing.
-            display={r.price == null ? '—' : formatMoney(r.price, currency)}
-            active={editing === 'price'}
-            onEdit={() => onEdit('price')}
-            onDone={onDone}
-            onCommit={(v) => onCommit('price', v)}
-            group
-            className="text-right text-[11px]"
-            inputMode="decimal"
-          />
-        ))()}
-      </div>
-
-      {/* Derived, never typed — and now visible. */}
-      <div className="hidden text-right tabular-nums sm:block">
-        {r.bobot == null ? (
-          <span className="text-[11px] text-muted-foreground">—</span>
-        ) : (
-          <span className="text-[11px] tabular-nums" title={`${r.bobot.toFixed(4)}% of the contract`}>
-            {r.bobot < 0.005 ? '<0.01' : r.bobot.toFixed(2)}%
-          </span>
-        )}
-      </div>
+      {/* Target, Price and Weight stood here until 12 Sep 2026.
+          Scheduling a plan and pricing one are two jobs, and this screen is for
+          the first: per-row money and the weights derived from it belong to Data
+          Overall. Target went with them because nothing here can create one any
+          more, and a date that shows but cannot be typed is worse than a date
+          that is somewhere else. The columns are gone; `targetDate`, `price` and
+          `bobot` are untouched in the database and still arrive through the
+          importer and through paste-from-Excel. */}
 
       {/* Always drawn, never hover-only: there is no hover on a phone, and this
-          app's rule is that no control lives there. On small screens it is also
-          the only way to the dates and the price. */}
+          app's rule is that no control lives there. */}
       <button
         type="button"
         onClick={onMenu}
