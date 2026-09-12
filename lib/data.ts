@@ -1,5 +1,5 @@
 import { cacheLife, cacheTag } from 'next/cache';
-import { readDb, readWorkspace } from './db';
+import { readDb, readJsonProject, readWorkspace } from './db';
 import {
   computeGrandTotal,
   computeRollup,
@@ -10,7 +10,7 @@ import {
 import { buildSCurveSeries, type SCurveRow } from './scurve';
 import { listProjects, type ProjectSummary, type Workspace } from './workspace';
 import { buildProjectDashboardData } from './dashboard-db';
-import { isLegacyProject } from './legacy-bridge';
+import { isLegacyProject, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 import type { Database, WeeklyMeta } from './types';
 
@@ -164,6 +164,43 @@ export async function getOpenDb(): Promise<Database> {
   const id = await getActiveProjectId();
   if (!id || isLegacyProject(id)) return getDb();
   return buildProjectDashboardData(id)?.db ?? NO_PROJECT;
+}
+
+/* ------------------------------------ the JSON store, read PER PROJECT */
+
+/**
+ * One project's JSON record, cached by its key.
+ *
+ * Cacheable precisely because the key is an ARGUMENT: `getDb()` can only ever
+ * cache "whatever the file calls active", which is the shared answer that made
+ * every project's daily report Gundih's. Keyed, each project gets its own
+ * entry and the same 'db' tag expires them all on any write.
+ */
+async function getJsonProject(key: string): Promise<Database | null> {
+  'use cache';
+  cacheTag('db');
+  cacheLife('max');
+
+  return readJsonProject(key);
+}
+
+/**
+ * Daily reports and the project's own catalogs, for whichever project is open.
+ *
+ * A project that has never saved one gets the seed rather than nothing, so the
+ * screen opens on an empty list belonging to THIS project — with its name and
+ * contract already in the header — instead of refusing to draw at all.
+ */
+export async function getOpenJsonDb(): Promise<Database> {
+  const id = await getActiveProjectId();
+  if (!id) return NO_PROJECT;
+  return (await getJsonProject(jsonKeyFor(id))) ?? jsonSeedFor(id);
+}
+
+/** The same, for the PDF — told which project rather than asking. See `getPrintDb`. */
+export async function getPrintJsonDb(projectId: string | null): Promise<Database> {
+  if (!projectId) return getOpenJsonDb();
+  return (await getJsonProject(jsonKeyFor(projectId))) ?? jsonSeedFor(projectId);
 }
 
 export async function getOpenWeekRollup(week: number): Promise<WeekRollup | null> {

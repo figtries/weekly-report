@@ -25,6 +25,8 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { getActiveProjectId } from './projects';
+import { emptyDatabase } from './workspace';
+import type { Database } from './types';
 
 export interface OpenProject {
   id: string;
@@ -65,6 +67,50 @@ export async function getOpenProject(): Promise<OpenProject | null> {
     .all()[0];
   if (!p) return null;
   return { ...p, hasLegacyData: !!p.legacyJsonId };
+}
+
+/**
+ * WHICH JSON RECORD A PROJECT READS AND WRITES.
+ *
+ * `db.json` was never one project — `lib/workspace.ts` has held a map of them
+ * since the portfolio tier — it was one project that everybody shared, because
+ * `readDb()` always returned whichever one the FILE called active. That is why
+ * the daily report could only ever belong to Gundih.
+ *
+ * The key is the answer: the imported project keeps reading `p-utama` through
+ * its `legacyJsonId`, and every other project reads and writes a record of its
+ * own, keyed by its SQLite id. Nothing moves, nothing is migrated, and two
+ * projects can no longer write over each other's days.
+ *
+ * Synchronous for the same reason as `isLegacyProject`: callers use it to pick
+ * a STORE, and an async answer would drag a `<Suspense>` around every read.
+ */
+export function jsonKeyFor(projectId: string): string {
+  const p = db
+    .select({ legacyJsonId: schema.projects.legacyJsonId })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  return p?.legacyJsonId ?? projectId;
+}
+
+/**
+ * The record a project starts from the first time it saves a daily report.
+ *
+ * Seeded with the identity SQLite already holds rather than left blank: the
+ * printed daily report puts the project name, the contract number and both
+ * companies in its header, and asking somebody to type them a second time —
+ * into a second store — is how the two drift apart.
+ */
+export function jsonSeedFor(projectId: string): Database {
+  const p = db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0];
+  const seeded = emptyDatabase(p?.name ?? '');
+  if (p) {
+    seeded.project.contractNo = p.contractNo ?? '';
+    seeded.project.customer = p.clientName ?? '';
+    seeded.project.contractor = p.contractorName ?? '';
+  }
+  return seeded;
 }
 
 /**

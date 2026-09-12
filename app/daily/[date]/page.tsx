@@ -3,8 +3,8 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
-import { getDb } from '@/lib/data';
-import { readDb } from '@/lib/db';
+import { getDb, getOpenJsonDb } from '@/lib/data';
+import { readOpenDb } from '@/lib/db';
 import DailyForm from '@/components/daily/DailyForm';
 import CreateReportHere from '@/components/daily/CreateReportHere';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
@@ -16,13 +16,23 @@ import DailyDetailLoading from './loading';
 // the loading skeleton — the rest of the payload never streamed in, so day
 // clicks appeared to hang.
 
+/**
+ * A HEAD START, NOT A WHITELIST — and it cannot be per project.
+ *
+ * This runs at build time, where there is no request and therefore no open
+ * project (see the weekly layout's copy of this note). It names the imported
+ * project's dates because those are the only ones a build can see; every other
+ * project's day renders on demand, which is correct — the whole body of this
+ * page sits behind `<Suspense>` and is resolved per request anyway.
+ */
 export async function generateStaticParams() {
   const db = await getDb();
   return db.daily.map((d) => ({ date: d.date }));
 }
 
 async function DailyDetail({ date }: { date: string }) {
-  const db = await getDb();
+  // The OPEN project's day, not the file's. See lib/legacy-bridge.ts.
+  const db = await getOpenJsonDb();
   const labels = weatherLabels(db);
   let report = db.daily.find((d) => d.date === date);
 
@@ -33,12 +43,12 @@ async function DailyDetail({ date }: { date: string }) {
     // path's cached entry until the next mutation. With connection() the miss
     // is dynamic — every visit re-checks.
     await connection();
-    // The cached getDb() above can lag behind a just-created or just-edited
+    // The cached read above can lag behind a just-created or just-edited
     // report on such a lambda. Re-check the source of truth before declaring
     // the report missing, so tapping an existing report never lands on the
     // empty "no report" state.
-    const fresh = await readDb();
-    report = fresh.daily.find((d) => d.date === date);
+    const fresh = await readOpenDb();
+    report = fresh?.daily.find((d) => d.date === date);
   }
 
   if (!report) {

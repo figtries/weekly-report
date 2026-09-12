@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
+import { getActiveProjectId } from '@/lib/projects';
 
 export const maxDuration = 60;
 
@@ -8,6 +9,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ date
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return new Response('Bad date', { status: 400 });
 
   const target = new URL(`/print/daily/${date}`, req.nextUrl.origin);
+  // WHICH PROJECT, decided here and carried in the URL — same as the weekly
+  // route. This handler runs in the user's own request and can read the cookie
+  // that holds their open project; the headless browser that renders the page
+  // cannot. See getPrintJsonDb.
+  const projectId = await getActiveProjectId();
+  if (projectId) target.searchParams.set('project', projectId);
   let pdf: Uint8Array;
   try {
     pdf = await renderReportPdf(target.toString());

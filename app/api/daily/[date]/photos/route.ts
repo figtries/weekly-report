@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
-import { mutateDb } from '@/lib/db';
+import { mutateOpenDb } from '@/lib/db';
 import { deleteUploadedPhoto, preparePhotoUpload } from '@/lib/upload';
 
 const PAGE_SIZE = 6;
@@ -24,7 +24,7 @@ export async function POST(
     // Photo write and db mutation run concurrently — neither needs the
     // other's result, only the precomputed path.
     const [updated] = await Promise.all([
-      mutateDb((db) => {
+      mutateOpenDb((db) => {
         const report = db.daily.find((d) => d.date === date);
         if (!report) throw new Error(`Daily report for ${date} not found`);
         if (slot >= report.photos.length) throw new Error(`Slot ${slot} out of range`);
@@ -64,7 +64,7 @@ export async function DELETE(
 
   try {
     let removedPath: string | null = null;
-    const updated = await mutateDb((db) => {
+    const updated = await mutateOpenDb((db) => {
       const report = db.daily.find((d) => d.date === date);
       if (!report) throw new Error(`Daily report for ${date} not found`);
       removedPath = report.photos[slot] ?? null;
@@ -86,7 +86,7 @@ export async function PATCH(
   const { action } = (await request.json()) as { action?: string };
 
   try {
-    const updated = await mutateDb((db) => {
+    const updated = await mutateOpenDb((db) => {
       const report = db.daily.find((d) => d.date === date);
       if (!report) throw new Error(`Daily report for ${date} not found`);
       if (action === 'addPage') {

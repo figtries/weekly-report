@@ -2,8 +2,9 @@ import { Suspense } from 'react';
 import { weatherLabels } from '@/lib/catalogs';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import { getDb } from '@/lib/data';
-import { readDb } from '@/lib/db';
+import { getPrintJsonDb } from '@/lib/data';
+import { readJsonProject, readOpenDb } from '@/lib/db';
+import { jsonKeyFor } from '@/lib/legacy-bridge';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
 
 // The page headless Chromium renders into the daily PDF (see lib/pdf.ts).
@@ -11,17 +12,26 @@ import DailyPrintReport from '@/components/print/DailyPrintReport';
 // with "Uncached data was accessed outside of <Suspense>" (cacheComponents).
 // A null fallback is fine: lib/pdf.ts waits for the .print-sheet-a4 selector
 // before it snapshots anything.
-export default function DailyPrintPage({ params }: { params: Promise<{ date: string }> }) {
+type Props = {
+  params: Promise<{ date: string }>;
+  // `project` is set by app/api/pdf/daily/[date]/route.ts, which resolves the
+  // open project in the USER's request — headless Chromium carries no cookie,
+  // and a daily report belongs to one project now (see lib/legacy-bridge.ts).
+  searchParams: Promise<{ project?: string }>;
+};
+
+export default function DailyPrintPage(props: Props) {
   return (
     <Suspense fallback={null}>
-      <DailyPrintBody params={params} />
+      <DailyPrintBody {...props} />
     </Suspense>
   );
 }
 
-async function DailyPrintBody({ params }: { params: Promise<{ date: string }> }) {
-  const { date } = await params;
-  const db = await getDb();
+async function DailyPrintBody({ params, searchParams }: Props) {
+  const [{ date }, { project: projectParam }] = await Promise.all([params, searchParams]);
+  const projectId = projectParam ?? null;
+  const db = await getPrintJsonDb(projectId);
   const labels = weatherLabels(db);
   let report = db.daily.find((d) => d.date === date);
   let project = db.project;
@@ -32,9 +42,9 @@ async function DailyPrintBody({ params }: { params: Promise<{ date: string }> })
     // source of truth before giving up — a print that 404s on a report the user
     // is looking at would be baffling.
     await connection();
-    const fresh = await readDb();
-    report = fresh.daily.find((d) => d.date === date);
-    project = fresh.project;
+    const fresh = projectId ? await readJsonProject(jsonKeyFor(projectId)) : await readOpenDb();
+    report = fresh?.daily.find((d) => d.date === date) ?? report;
+    if (fresh) project = fresh.project;
   }
   if (!report) notFound();
 

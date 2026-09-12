@@ -6,7 +6,8 @@ import { revalidateTag } from 'next/cache';
 import { redisConfigured, redisGet, redisSet } from './storage';
 import { activeProject, migrate, type StoredShape, type Workspace } from './workspace';
 import type { Database } from './types';
-import { assertLegacyWritable } from './legacy-bridge';
+import { assertLegacyWritable, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
+import { getActiveProjectId } from './projects';
 
 const SOURCE_PATH = path.join(process.cwd(), 'data', 'db.json');
 const IS_VERCEL = !!process.env.VERCEL;
@@ -70,6 +71,56 @@ async function writeWorkspace(ws: Workspace): Promise<void> {
   }
   await ensureWritable();
   await fs.writeFile(WRITABLE_PATH, json, 'utf-8');
+}
+
+/* ------------------------------------------------ one project at a time */
+
+/**
+ * One project's JSON record, by workspace key. Null when it has none yet —
+ * which is every project that has not saved a daily report, and is a state the
+ * callers render rather than an error.
+ */
+export async function readJsonProject(key: string): Promise<Database | null> {
+  const ws = migrate(await readStored());
+  return ws.projects[key] ?? null;
+}
+
+/**
+ * The OPEN project's record, uncached.
+ *
+ * The read-your-own-writes path: the cached copy in `lib/data.ts` can lag a
+ * lambda that has not seen the latest tag purge, and a daily report that was
+ * just created must never look missing to the person who created it.
+ */
+export async function readOpenDb(): Promise<Database | null> {
+  const id = await getActiveProjectId();
+  if (!id) return null;
+  return readJsonProject(jsonKeyFor(id));
+}
+
+/**
+ * Mutate the OPEN project's record, creating it on the first write.
+ *
+ * This is what `mutateDb` could never be. `mutateDb` edits whatever the FILE
+ * calls active, so it had to be guarded (`assertLegacyWritable`) to stop a
+ * daily report being filed under Gundih — the guard was correct and the price
+ * was that no other project could keep a daily report at all. Here the project
+ * decides the record, so there is nothing to guard against: each one writes
+ * into its own.
+ */
+export async function mutateOpenDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
+  const id = await getActiveProjectId();
+  if (!id) throw new Error('No project is open.');
+  const key = jsonKeyFor(id);
+  return mutateWorkspace(async (ws) => {
+    let project = ws.projects[key];
+    if (!project) {
+      project = jsonSeedFor(id);
+      ws.projects[key] = project;
+      if (!ws.order.includes(key)) ws.order.push(key);
+    }
+    return mutator(project);
+  });
 }
 
 /** Mutate the active project. Every existing caller keeps working unchanged. */

@@ -2,7 +2,7 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { after } from 'next/server';
-import { mutateDb, mutateWorkspace } from './db';
+import { mutateDb, mutateOpenDb, mutateWorkspace } from './db';
 import type { CatalogKey } from './catalogs';
 import { emptyDatabase, newProjectId } from './workspace';
 import {
@@ -94,7 +94,7 @@ export async function setCurrentWeekAction(week: number): Promise<ActionResult> 
 
 export async function createDailyAction(date: string): Promise<ActionResult> {
   try {
-    await mutateDb((db) => applyCreateDaily(db, date));
+    await mutateOpenDb((db) => applyCreateDaily(db, date));
     // No refresh() here: the caller navigates straight to the new report, so
     // re-rendering the origin page would be wasted work. updateTag makes that
     // navigation render with fresh data (read-your-own-writes). Navigation
@@ -115,7 +115,7 @@ export async function deleteDailyAction(date: string): Promise<ActionResult> {
     // (a stale list can show rows that no longer exist) is treated as done,
     // and the refresh below re-renders the list fresh — healing the staleness
     // instead of surfacing a "not found" error.
-    const removed = await mutateDb((db) => applyDeleteDaily(db, date));
+    const removed = await mutateOpenDb((db) => applyDeleteDaily(db, date));
     if (removed) {
       // Best-effort cleanup of the report's stored photos — after the
       // response, so the refresh isn't held up by storage round trips.
@@ -151,7 +151,7 @@ export async function saveDailyAction(
   patch: Partial<Omit<DailyReport, 'date'>>
 ): Promise<ActionResult> {
   try {
-    await mutateDb((db) => applyPatchDaily(db, date, patch));
+    await mutateOpenDb((db) => applyPatchDaily(db, date, patch));
     updateTag('db');
     refresh();
     return { ok: true };
@@ -264,7 +264,7 @@ export async function saveCatalogAction(
   entries: CatalogEntry[]
 ): Promise<ActionResult> {
   try {
-    await mutateDb((db) => applyCatalog(db, key, entries));
+    await mutateOpenDb((db) => applyCatalog(db, key, entries));
     updateTag('db');
     refresh();
     return { ok: true };

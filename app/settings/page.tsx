@@ -2,13 +2,12 @@ import { Suspense } from 'react';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { getDb } from '@/lib/data';
+import { getOpenJsonDb } from '@/lib/data';
 import { getCatalogs } from '@/lib/catalogs';
 import CatalogEditor from '@/components/settings/CatalogEditor';
 import { EngineeringSource } from '@/components/settings/EngineeringSource';
 import { getDisciplineLinks, getRegisterSummary } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
-import { isLegacyProject } from '@/lib/legacy-bridge';
 
 
 export const metadata = { title: 'Project Settings' };
@@ -30,9 +29,10 @@ async function SettingsBody() {
   // The open project comes from a cookie now, so this is a per-request read
   // and cannot be baked into a shell. See lib/projects.ts.
   const projectId = (await getActiveProjectId()) ?? '';
-  const db = await getDb();
+  // This project's own lists, not the one set the file used to share out. See
+  // getOpenJsonDb in lib/data.ts.
+  const db = await getOpenJsonDb();
   const cat = getCatalogs(db);
-  const ownsCatalogs = !projectId || isLegacyProject(projectId);
   // Left at its own last movement rather than a chosen week: this decides where
   // a number comes from, so what matters is what the register currently knows.
   const edl = getRegisterSummary(projectId, 'edl');
@@ -59,34 +59,21 @@ async function SettingsBody() {
             registerDate={edl.evidenceDate}
           />
         )}
-        {/* THE LISTS BELONG TO A PROJECT, and these ones live in db.json,
-            which holds exactly one. Shown under any other project they would be
-            somebody else's — and editing them throws, because that is the same
-            guard that stops a daily report being written into the wrong
-            project (lib/legacy-bridge.ts). They come back for every project
-            when the daily report moves to SQLite: that needs tables this
-            database does not have yet, and a deployment restores its schema
-            from a snapshot rather than from a migration, so adding them is a
-            deployment question before it is a code one. */}
-        {ownsCatalogs ? (
-          <>
-            <CatalogEditor catalogKey="weather" entries={cat.weather} />
-            <CatalogEditor catalogKey="delayCause" entries={cat.delayCause} />
-            <CatalogEditor catalogKey="hse" entries={cat.hse} />
-            <CatalogEditor catalogKey="crew" entries={cat.crew} />
-          </>
-        ) : (
-          <div className="animate-enter rounded-xl border bg-card p-5">
-            <h2 className="text-sm font-semibold">Daily report lists are not set up here yet</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Weather, delay causes, HSE rows and crew groups are filled in from the daily
-              report, and this project does not keep daily reports yet. Its weekly report,
-              schedule and document register all work as normal.
-            </p>
-          </div>
-        )}
+        {/* THE LISTS BELONG TO A PROJECT, and now they actually do. They live
+            in db.json, which used to hand every project the same record — so
+            under any other project these were somebody else's lists, and
+            editing them threw. Each project keeps its own record now
+            (lib/legacy-bridge.ts), seeded from the template in lib/catalogs.ts
+            the first time anything is saved. */}
+        <>
+          <CatalogEditor catalogKey="weather" entries={cat.weather} />
+          <CatalogEditor catalogKey="delayCause" entries={cat.delayCause} />
+          <CatalogEditor catalogKey="hse" entries={cat.hse} />
+          <CatalogEditor catalogKey="crew" entries={cat.crew} />
+        </>
       </div>
     </div>
     </RouteTransition>
   );
 }
+
