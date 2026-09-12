@@ -270,6 +270,59 @@ store answers a list — so the three causes that look identical from outside (n
 store, a failing store, a write that never ran) can be told apart in one
 request. Check it before theorising; the token itself is never printed.
 
+# Which store a project reads, and which one it writes
+
+**`legacy_json_id` decides, and only ONE project has it.** `db.json` holds
+exactly one project; SQLite holds them all. Dashboard, Weekly Progress and
+Reports now read whichever project is OPEN through `getOpenDb` /
+`getOpenWeekRollup` / `getOpenSCurveSeries` in `lib/data.ts`: a project with
+`legacyJsonId` reads db.json through the same cached functions it always did,
+every other project reads SQLite through `lib/dashboard-db.ts`. Their writes
+follow the same fork — `lib/actions.ts` asks `sqliteProject()` first and hands
+off to `lib/progress-sqlite.ts`, which calls `lib/progress.ts` for every figure
+so the evidence still decides the percentage.
+
+**Gundih stays on db.json on purpose.** Both stores hold it and they do not
+agree: week by week (`scripts/verify-weekly-store.ts`) they differ by up to
+12.85 points, because db.json's later weeks carry leaves that fall back to zero
+while SQLite carries each leaf forward. Whichever is nearer the truth, moving a
+signed report onto a different number is not a migration. It moves when board
+item 08 reconciles it deliberately.
+
+**`targetWF` is never written on the SQLite side.** The curve comes from the
+dates. `applyWeekUpdates` accepts a target only because db.json stores the curve
+per leaf per week; `saveWeekUpdatesSqlite` drops it.
+
+**A PDF cannot ask which project is open, so the URL tells it.** `lib/pdf.ts`
+launches headless Chromium with no cookies, so `/print/*` would resolve the open
+project from `app_state` — and on a deployment the cookie and that row are
+exactly the pair that disagree. `app/api/pdf/weekly/[week]/route.ts` resolves it
+in the USER's request and passes `?project=`; `getPrintDb` renders an empty sheet
+for an id it does not know, never somebody else's.
+
+**Still db.json only: Daily, Klaim, and the Settings catalogs.** They need tables
+SQLite does not have, and **a deployment restores its schema from the blob
+snapshot, not from a migration** (`instrumentation.ts` pulls the file; nothing
+runs `drizzle-kit migrate`). So adding a table is a deployment question before
+it is a code one — answer that first. Until then those screens say what is
+missing rather than showing another project's rows.
+
+**An index route that redirects must resolve the project behind `<Suspense>`.**
+`/weekly` and `/dokumen` send you to a week number, and reading db.json's sent a
+two-week project to week 36. The open project is a cookie, so the redirect lives
+in a child component with `connection()` and a `null` fallback — an uncached read
+in the page body fails the build.
+
+**Weight follows price, unless the weights are authoritative.** `weight_basis =
+'boq'` is the LOCK: an imported project carries it, and so does one whose owner
+has applied a derivation covering the whole plan. Everything else re-derives on
+every price edit, every structural change (`renumber()` is the funnel) and every
+pasted BOQ — see `lib/weights-auto.ts`. A leaf no price reaches takes an even
+share of what is LEFT of the contract, because a leaf with no weight is
+invisible to every report; `fromGap` then keeps the plan from calling itself
+value-based off the back of that division. And a row that stops being a leaf
+stops carrying a weight, the same stale-flag family as `isMilestone`.
+
 # The v2 rebuild — read this before starting new work
 
 The app is being rebuilt from fundamentals against the CPP Gundih data

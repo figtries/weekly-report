@@ -4,8 +4,16 @@ import EmptyState from '@/components/ui/EmptyState';
 import { getOpenProject } from '@/lib/legacy-bridge';
 
 /**
- * What Weekly Progress, Daily, Reports and Klaim show when the open project has
- * no v1 data — which is every project made inside the app.
+ * What Daily and Klaim show when the open project has no v1 data — which is
+ * every project made inside the app.
+ *
+ * WEEKLY PROGRESS AND REPORTS NO LONGER REACH HERE. They read whichever project
+ * is open, out of SQLite (`getOpenDb` in lib/data.ts), so the copy below had to
+ * stop saying that a project holding "only its plan" cannot be reported on: it
+ * can, and telling somebody to go and build a schedule they have already built
+ * is the kind of dead end this card exists to end. What is left is genuinely
+ * missing — the daily report has no home in SQLite yet, and the claim register
+ * is assembled out of daily photos and delay causes.
  *
  * The alternative was drawing those pages from an empty dataset: a curve at
  * zero, a laggards list with nothing in it, "Week 0 of 0". That reads as broken
@@ -28,10 +36,8 @@ export default async function NoLegacyData({ what }: { what: string }) {
     <EmptyState
       icon={FolderKanban}
       title={open ? `“${open.name}” has no ${what} yet` : `No ${what} yet`}
-      body={`This project was made in the app and holds only its plan so far. ${what} start once there is work to measure. Build the schedule first, or switch back to a project that already has one.`}
-      primary={
-        open ? { href: `/projects/${open.id}`, label: 'Build the schedule' } : undefined
-      }
+      body={`Weekly progress, the schedule and the document register all work for this project — ${what} are the part that does not have a home here yet, and they are being rebuilt. Its weekly report is filled in and issued as normal in the meantime.`}
+      primary={open ? { href: '/weekly', label: 'Go to Weekly Progress' } : undefined}
       secondary={{ href: '/projects', label: 'Open another project' }}
     />
   );

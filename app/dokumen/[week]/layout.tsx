@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { RegisterTabs } from '@/components/dokumen/RegisterTabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { getDb, getLatestWeek } from '@/lib/data';
+import { getLatestWeek, getOpenDb } from '@/lib/data';
 import { getAllRegisterWeekNumbers, getRegisterWeeks } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -86,7 +86,7 @@ export default async function DocumentControlLayout({
 async function RegisterTabsForOpenProject({ week }: { week: number }) {
   const projectId = (await getActiveProjectId()) ?? '';
   const weeks = getRegisterWeeks(projectId).map((w) => w.weekNo);
-  const db = await getDb();
+  const db = await getOpenDb();
 
   return <RegisterTabs weeks={weeks} selectedWeek={week} projectCurrentWeek={getLatestWeek(db) || 1} />;
 }
