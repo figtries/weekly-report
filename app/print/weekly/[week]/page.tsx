@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { getCachedWeekRollup, getDb } from '@/lib/data';
+import { getPrintDb, getPrintWeekRollup } from '@/lib/data';
 import { getSummaryRows } from '@/lib/rollup';
 import { buildSCurveSeries } from '@/lib/scurve';
 import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
@@ -20,7 +20,9 @@ type ReportKey = 'summary' | 'detail' | 'scurve' | 'documentation';
 
 type Props = {
   params: Promise<{ week: string }>;
-  searchParams: Promise<{ only?: string }>;
+  // `project` is set by app/api/pdf/weekly/[week]/route.ts, which resolves the
+  // open project in the USER's request — headless Chromium carries no cookie.
+  searchParams: Promise<{ only?: string; project?: string }>;
 };
 
 // Reading searchParams is dynamic, and under cacheComponents dynamic reads must
@@ -36,9 +38,13 @@ export default function WeeklyPrintTarget(props: Props) {
 }
 
 async function WeeklyPrintBody({ params, searchParams }: Props) {
-  const [{ week: weekParam }, { only }] = await Promise.all([params, searchParams]);
+  const [{ week: weekParam }, { only, project }] = await Promise.all([params, searchParams]);
   const week = Number(weekParam);
-  const [db, result] = await Promise.all([getDb(), getCachedWeekRollup(week)]);
+  const projectId = project ?? null;
+  const [db, result] = await Promise.all([
+    getPrintDb(projectId),
+    getPrintWeekRollup(projectId, week),
+  ]);
   if (!result) notFound();
   const { meta, roots, grandTotal } = result;
 

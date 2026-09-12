@@ -179,3 +179,35 @@ export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]
   const db = buildProjectDashboardData(id)?.db;
   return db ? buildSCurveSeries(db, upToWeek) : [];
 }
+
+/**
+ * The same choice of store, for the PDF — but told WHICH project rather than
+ * asked.
+ *
+ * The PDF is rendered by a headless Chromium that `lib/pdf.ts` launches with no
+ * cookies, so `/print/*` cannot ask which project is open: it would fall back
+ * to `app_state`, and on a deployment where somebody chose a project in their
+ * own browser those two are exactly the pair that disagree. A PDF of the wrong
+ * project is the worst bug this app has, because it is the one that leaves the
+ * building. So the API route resolves the project in the USER's request and
+ * names it in the URL — explicit beats ambient, and the file then says which
+ * project it was built for.
+ *
+ * An unknown id yields an empty database rather than somebody else's: this page
+ * is reachable without the route in front of it.
+ */
+export async function getPrintDb(projectId: string | null): Promise<Database> {
+  if (!projectId) return getOpenDb();
+  if (isLegacyProject(projectId)) return getDb();
+  return buildProjectDashboardData(projectId)?.db ?? NO_PROJECT;
+}
+
+export async function getPrintWeekRollup(
+  projectId: string | null,
+  week: number
+): Promise<WeekRollup | null> {
+  if (!projectId) return getOpenWeekRollup(week);
+  if (isLegacyProject(projectId)) return getCachedWeekRollup(week);
+  const db = buildProjectDashboardData(projectId)?.db;
+  return db ? getWeekRollup(db, week) : null;
+}

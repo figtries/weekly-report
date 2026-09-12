@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
+import { getActiveProjectId } from '@/lib/projects';
 
 // Chromium is slow to boot: give the function room. (No `runtime`/`dynamic`
 // segment config — cacheComponents rejects both; a route handler is dynamic by
@@ -25,6 +26,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ week
 
   const target = new URL(`/print/weekly/${week}`, req.nextUrl.origin);
   if (key) target.searchParams.set('only', key);
+  // WHICH PROJECT, decided here and carried in the URL. This handler runs in the
+  // user's own request and can read the cookie that holds their open project;
+  // the headless browser that renders the page cannot. See getPrintDb.
+  const projectId = await getActiveProjectId();
+  if (projectId) target.searchParams.set('project', projectId);
 
   let pdf: Uint8Array;
   try {
