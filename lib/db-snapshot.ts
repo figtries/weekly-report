@@ -101,9 +101,19 @@ const BUILD = process.env.NEXT_PHASE === 'phase-production-build';
  * own `data/report.db` and must never have a deployment's data pulled over it,
  * even with credentials in the environment — `REPORT_DB_SNAPSHOT=1` is the
  * deliberate opt-in for testing this path locally.
+ *
+ * And never during the production build. `BLOB_STORE_ID` is set while the build
+ * runs too, and on Vercel the repo ships no `data/report.db`, so gating on the
+ * store rather than on a token is what first made this module live at BUILD
+ * time: `restoreDbSnapshot()` from `instrumentation.ts`, then a conditional GET
+ * behind every prerendered page. The push path was already guarded by `BUILD`;
+ * the pull path was not, because until now it could never be reached. A build
+ * has no runtime data to restore, so the whole module stays inert there.
  */
 export const snapshotConfigured =
-  Boolean(STORE_ID) && (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
+  Boolean(STORE_ID) &&
+  !BUILD &&
+  (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
 
 /**
  * Derived rather than fixed, so the object's path cannot be guessed from the
