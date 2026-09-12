@@ -1,11 +1,12 @@
 /**
  * What the deployed instance actually has.
  *
- * Every "the project I just made is gone" report on Vercel has the same three
- * candidate causes — no blob store attached, a store that is attached but
- * failing, or a write that never ran — and from outside the lambda they look
- * identical: a 404 on a project the previous screen created. This route makes
- * the instance say which one it is, without ever printing the token.
+ * Every "the project I just made is gone" report on Vercel has the same
+ * candidate causes — no store attached, a store attached under credentials the
+ * app does not recognise, a store that answers but fails, or a write that never
+ * ran — and from outside the lambda they look identical: a 404 on a project the
+ * previous screen created. This route makes the instance say which one it is.
+ * Names and ids only; no credential is ever printed.
  *
  * GET /api/health/db
  */
@@ -13,7 +14,7 @@ import { connection } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from '@/lib/db-path';
-import { blobTokenName, snapshotConfigured } from '@/lib/db-snapshot';
+import { blobStoreId, blobTokenName, snapshotConfigured } from '@/lib/db-snapshot';
 import { db, schema } from '@/lib/sqlite';
 
 /** Per-instance, so two calls landing on two lambdas are distinguishable. */
@@ -31,19 +32,23 @@ export async function GET() {
     projects = { error: (err as Error).message };
   }
 
-  const token = blobTokenName ? process.env[blobTokenName] : undefined;
-
-  let blob: unknown = { skipped: 'no blob token in this environment' };
-  if (token) {
+  // Exercised exactly the way the snapshot layer does it: an explicit token if
+  // one exists, otherwise nothing at all so the library reaches for the
+  // deployment's OIDC identity. A store that cannot be listed here is a store
+  // the app cannot use either, whatever the dashboard says.
+  let blob: unknown = { skipped: 'no store attached' };
+  if (blobStoreId) {
+    const token = blobTokenName ? process.env[blobTokenName] : undefined;
     try {
       const { list } = await import('@vercel/blob');
-      const res = await list({ token, limit: 10 });
+      const res = await list({ ...(token ? { token } : {}), limit: 10 });
       blob = {
         ok: true,
+        auth: token ? 'read-write token' : 'oidc',
         objects: res.blobs.map((b) => ({ pathname: b.pathname, size: b.size, at: b.uploadedAt })),
       };
     } catch (err) {
-      blob = { ok: false, error: (err as Error).message };
+      blob = { ok: false, auth: token ? 'read-write token' : 'oidc', error: (err as Error).message };
     }
   }
 
@@ -53,13 +58,12 @@ export async function GET() {
       upMs: Date.now() - BOOTED,
       region: process.env.VERCEL_REGION ?? null,
       vercelEnv: process.env.VERCEL_ENV ?? null,
-      productionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL ?? null,
       commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
-      // Names only. A store connected under a prefix is the failure this
-      // exists to name, and the name is the whole diagnosis.
       blobTokenName,
+      blobStoreId: blobStoreId || null,
+      hasOidc: Boolean(process.env.VERCEL_OIDC_TOKEN),
       storeEnvNames: Object.keys(process.env)
-        .filter((n) => /BLOB|KV_|REDIS|STORE/i.test(n))
+        .filter((n) => /BLOB|KV_|REDIS|STORE|OIDC/i.test(n))
         .sort(),
       snapshotConfigured,
       dbIsEphemeral: DB_IS_EPHEMERAL,

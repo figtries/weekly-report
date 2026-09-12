@@ -39,51 +39,83 @@ import path from 'node:path';
 import { DB_PATH, DB_IS_EPHEMERAL } from './db-path';
 
 /**
- * The store's token, under whichever name it was connected as.
+ * How this process proves it may use the store — and there are now two ways.
  *
- * A Vercel project with more than one store — this one already had Upstash
- * Redis — is offered an environment-variable PREFIX when a second store is
- * attached, so connecting `report-blob` can produce
- * `REPORT_BLOB_READ_WRITE_TOKEN` rather than the bare name. It is the same
- * token for the same store; only the label moved. Matching the bare name alone
- * made an attached, healthy, connected store read as no store at all, and the
- * app went on quietly discarding every write (12 Sep 2026).
+ * `BLOB_READ_WRITE_TOKEN` is no longer what Vercel hands a project. Connecting
+ * a store today sets `BLOB_STORE_ID` (plus a webhook key) and nothing else:
+ * `resolveBlobAuth` in @vercel/blob 2.8 tries an explicit token, THEN the
+ * deployment's own OIDC identity paired with that store id, and only then the
+ * read-write token. Gating this module on the token alone therefore left it
+ * inert against a store that was attached, private, healthy and connected —
+ * so the app went on discarding every write, and creating the store changed
+ * nothing at all (12 Sep 2026, after two redeploys chasing a variable that was
+ * never going to appear).
  *
- * The bare name still wins when it is present, so nothing about an existing
- * deployment changes. `@vercel/blob` is always passed the token explicitly, so
- * it never has to find one for itself.
+ * A read-write token still wins when one exists, which is how local testing
+ * and any older deployment keep working. `blobAuth()` is what every call
+ * spreads: an explicit token, or nothing at all so the library reaches for the
+ * OIDC identity itself.
  */
-function resolveBlobTokenName(): string | null {
+function resolveTokenName(): string | null {
   if (process.env.BLOB_READ_WRITE_TOKEN) return 'BLOB_READ_WRITE_TOKEN';
+  // A project with a second store is offered a variable PREFIX, so the same
+  // token can arrive as e.g. REPORT_BLOB_READ_WRITE_TOKEN.
   for (const name of Object.keys(process.env).sort()) {
     if (/_BLOB_READ_WRITE_TOKEN$/.test(name) && process.env[name]) return name;
   }
   return null;
 }
 
-/** Which variable the token came from — a name, never a value. For diagnostics. */
-export const blobTokenName = resolveBlobTokenName();
+/** Which variable a token came from — a name, never a value. For diagnostics. */
+export const blobTokenName = resolveTokenName();
 
 const TOKEN = blobTokenName ? process.env[blobTokenName] : undefined;
+
+/**
+ * The store's identity, and the one thing stable enough to name the object by.
+ *
+ * Read from `BLOB_STORE_ID` when the platform sets it, and otherwise parsed
+ * out of the read-write token, whose format is
+ * `vercel_blob_rw_<storeId>_<random>`. Deriving the path from the store rather
+ * than from the credential is what keeps it pointing at the same object when a
+ * token is rotated, or when a deployment that had a token starts authenticating
+ * by OIDC instead.
+ */
+const STORE_ID = (() => {
+  const raw = process.env.BLOB_STORE_ID ?? TOKEN?.match(/^vercel_blob_rw_([^_]+)_/)?.[1] ?? '';
+  const trimmed = raw.trim();
+  return trimmed.startsWith('store_') ? trimmed.slice('store_'.length) : trimmed;
+})();
+
+/** What every @vercel/blob call spreads. Empty means "use the OIDC identity". */
+function blobAuth(): { token?: string } {
+  return TOKEN ? { token: TOKEN } : {};
+}
+
+export { STORE_ID as blobStoreId };
+
 const BUILD = process.env.NEXT_PHASE === 'phase-production-build';
 
 /**
  * Only where the database is already throwaway. A developer machine keeps its
  * own `data/report.db` and must never have a deployment's data pulled over it,
- * even with a token in the environment — `REPORT_DB_SNAPSHOT=1` is the
+ * even with credentials in the environment — `REPORT_DB_SNAPSHOT=1` is the
  * deliberate opt-in for testing this path locally.
  */
 export const snapshotConfigured =
-  Boolean(TOKEN) && (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
+  Boolean(STORE_ID) && (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
 
 /**
- * Derived from the token rather than fixed, so the object's path cannot be
- * guessed from the store URL alone. Private access is asked for first and
- * public is the fallback (see `attempt`), because a store created before
- * private blobs existed only answers to the latter.
+ * Derived rather than fixed, so the object's path cannot be guessed from the
+ * store URL alone. The seed is the STORE id, not the credential: a token can be
+ * rotated and a deployment can move from a token to the OIDC identity, and
+ * either would have renamed this object and left the database looking wiped.
+ * Private access is asked for first and public is the fallback (see `attempt`),
+ * because a store created before private blobs existed only answers to the
+ * latter.
  */
-const PATHNAME = TOKEN
-  ? `report-db/${createHash('sha256').update(TOKEN).digest('hex').slice(0, 24)}/report.db`
+const PATHNAME = STORE_ID
+  ? `report-db/${createHash('sha256').update(STORE_ID).digest('hex').slice(0, 24)}/report.db`
   : '';
 
 /** How long a downloaded image is trusted before the next conditional GET. */
@@ -156,7 +188,7 @@ async function download(conditional: boolean): Promise<Buffer | null> {
     const res = await attempt((mode) =>
       get(PATHNAME, {
         access: mode,
-        token: TOKEN,
+        ...blobAuth(),
         // The CDN copy can be seconds behind, and seconds is exactly the
         // window this whole module exists to close.
         useCache: false,
@@ -180,7 +212,7 @@ async function upload(bytes: Buffer): Promise<string> {
   const res = await attempt((mode) =>
     put(PATHNAME, bytes, {
       access: mode,
-      token: TOKEN,
+      ...blobAuth(),
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/octet-stream',
