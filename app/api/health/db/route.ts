@@ -13,7 +13,7 @@ import { connection } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from '@/lib/db-path';
-import { snapshotConfigured } from '@/lib/db-snapshot';
+import { blobTokenName, snapshotConfigured } from '@/lib/db-snapshot';
 import { db, schema } from '@/lib/sqlite';
 
 /** Per-instance, so two calls landing on two lambdas are distinguishable. */
@@ -31,11 +31,13 @@ export async function GET() {
     projects = { error: (err as Error).message };
   }
 
-  let blob: unknown = { skipped: 'no BLOB_READ_WRITE_TOKEN in this environment' };
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  const token = blobTokenName ? process.env[blobTokenName] : undefined;
+
+  let blob: unknown = { skipped: 'no blob token in this environment' };
+  if (token) {
     try {
       const { list } = await import('@vercel/blob');
-      const res = await list({ token: process.env.BLOB_READ_WRITE_TOKEN, limit: 10 });
+      const res = await list({ token, limit: 10 });
       blob = {
         ok: true,
         objects: res.blobs.map((b) => ({ pathname: b.pathname, size: b.size, at: b.uploadedAt })),
@@ -50,8 +52,15 @@ export async function GET() {
       instance: INSTANCE,
       upMs: Date.now() - BOOTED,
       region: process.env.VERCEL_REGION ?? null,
+      vercelEnv: process.env.VERCEL_ENV ?? null,
+      productionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL ?? null,
       commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
-      hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      // Names only. A store connected under a prefix is the failure this
+      // exists to name, and the name is the whole diagnosis.
+      blobTokenName,
+      storeEnvNames: Object.keys(process.env)
+        .filter((n) => /BLOB|KV_|REDIS|STORE/i.test(n))
+        .sort(),
       snapshotConfigured,
       dbIsEphemeral: DB_IS_EPHEMERAL,
       dbPath: DB_PATH,

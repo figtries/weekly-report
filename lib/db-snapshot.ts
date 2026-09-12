@@ -38,7 +38,33 @@ import path from 'node:path';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from './db-path';
 
-const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+/**
+ * The store's token, under whichever name it was connected as.
+ *
+ * A Vercel project with more than one store — this one already had Upstash
+ * Redis — is offered an environment-variable PREFIX when a second store is
+ * attached, so connecting `report-blob` can produce
+ * `REPORT_BLOB_READ_WRITE_TOKEN` rather than the bare name. It is the same
+ * token for the same store; only the label moved. Matching the bare name alone
+ * made an attached, healthy, connected store read as no store at all, and the
+ * app went on quietly discarding every write (12 Sep 2026).
+ *
+ * The bare name still wins when it is present, so nothing about an existing
+ * deployment changes. `@vercel/blob` is always passed the token explicitly, so
+ * it never has to find one for itself.
+ */
+function resolveBlobTokenName(): string | null {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return 'BLOB_READ_WRITE_TOKEN';
+  for (const name of Object.keys(process.env).sort()) {
+    if (/_BLOB_READ_WRITE_TOKEN$/.test(name) && process.env[name]) return name;
+  }
+  return null;
+}
+
+/** Which variable the token came from — a name, never a value. For diagnostics. */
+export const blobTokenName = resolveBlobTokenName();
+
+const TOKEN = blobTokenName ? process.env[blobTokenName] : undefined;
 const BUILD = process.env.NEXT_PHASE === 'phase-production-build';
 
 /**
