@@ -14,7 +14,12 @@ import { connection } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from '@/lib/db-path';
-import { blobStoreId, blobTokenName, snapshotConfigured } from '@/lib/db-snapshot';
+import {
+  blobStoreId,
+  blobTokenName,
+  snapshotConfigured,
+  snapshotDiagnostics,
+} from '@/lib/db-snapshot';
 import { db, schema } from '@/lib/sqlite';
 
 /** Per-instance, so two calls landing on two lambdas are distinguishable. */
@@ -66,6 +71,7 @@ export async function GET() {
         .filter((n) => /BLOB|KV_|REDIS|STORE|OIDC/i.test(n))
         .sort(),
       snapshotConfigured,
+      snapshot: await snapshotDiagnostics(),
       dbIsEphemeral: DB_IS_EPHEMERAL,
       dbPath: DB_PATH,
       projects,

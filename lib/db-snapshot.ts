@@ -146,6 +146,23 @@ let dirty = false;
 let scheduled = false;
 let queue: Promise<void> = Promise.resolve();
 
+/**
+ * The last swallowed failure, kept so it can be asked for.
+ *
+ * Every failure in here is deliberately non-fatal — a store that is reachable
+ * but failing must not take the app down — which for two days meant the only
+ * record of WHY the database looked empty was a console line inside a lambda,
+ * reachable only by someone logged into the dashboard. Keeping the last one in
+ * memory costs nothing and is what `/api/health/db` reports.
+ */
+let lastFailure: { phase: string; message: string; at: string } | null = null;
+
+function note(phase: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  lastFailure = { phase, message, at: new Date().toISOString() };
+  console.error(`[db-snapshot] ${phase} failed`, err);
+}
+
 /** Resolved once at boot so a write never waits on a module load. */
 let afterFn: ((cb: () => unknown) => void) | null = null;
 if (snapshotConfigured) {
@@ -191,30 +208,55 @@ async function attempt<T>(run: (mode: 'private' | 'public') => Promise<T>): Prom
   }
 }
 
-/** The remote image, or null when it is missing or unchanged. */
+/**
+ * The remote image, or null when it is missing or unchanged.
+ *
+ * `get` answers a wrong `access` with NULL, not with an error — and null is
+ * also how it says "nothing has been written yet". `attempt` cannot tell those
+ * apart, so an object uploaded as public was read as an empty store forever:
+ * the push worked, the pull returned null, `applyRemote` reported no change,
+ * and the page 404d on a project the blob already held (12 Sep 2026, proven
+ * against the deployed app — `list` showed a 1.99 MB object while every read
+ * came back empty). Both modes are therefore tried on their own here, and only
+ * two nulls mean the object is really absent.
+ */
 async function download(conditional: boolean): Promise<Buffer | null> {
   const { get, BlobNotFoundError } = await import('@vercel/blob');
-  try {
-    const res = await attempt((mode) =>
-      get(PATHNAME, {
+  const modes: Array<'private' | 'public'> =
+    access === 'private' ? ['private', 'public'] : ['public', 'private'];
+
+  let firstError: unknown = null;
+  for (const mode of modes) {
+    let res;
+    try {
+      res = await get(PATHNAME, {
         access: mode,
         ...blobAuth(),
         // The CDN copy can be seconds behind, and seconds is exactly the
         // window this whole module exists to close.
         useCache: false,
         ...(conditional && etag ? { ifNoneMatch: etag } : {}),
-      })
-    );
-    // null is a blob that is not there yet (the first deploy, before anything
-    // has been written); 304 is one this instance already holds.
-    if (!res || res.statusCode === 304) return null;
+      });
+    } catch (err) {
+      if (!(err instanceof BlobNotFoundError)) firstError ??= err;
+      continue;
+    }
+    // 304 is an object this instance already holds — which also confirms the
+    // mode, so remember it and stop.
+    if (res?.statusCode === 304) {
+      access = mode;
+      return null;
+    }
+    if (!res) continue;
+    access = mode;
     const bytes = Buffer.from(await new Response(res.stream).arrayBuffer());
     etag = res.blob.etag;
     return bytes;
-  } catch (err) {
-    if (err instanceof BlobNotFoundError) return null;
-    throw err;
   }
+
+  // Nothing answered. An error from either mode is worth more than silence.
+  if (firstError) throw firstError;
+  return null;
 }
 
 async function upload(bytes: Buffer): Promise<string> {
@@ -252,7 +294,7 @@ export function flushDbSnapshot(): Promise<void> {
       }
     })
     .catch((err) => {
-      console.error('[db-snapshot] upload failed', err);
+      note('upload', err);
     });
   return queue;
 }
@@ -310,7 +352,7 @@ export async function ensureFreshDb(): Promise<boolean> {
   } catch (err) {
     // A reachable-but-failing store must not take the app down; the instance
     // keeps serving what it has.
-    console.error('[db-snapshot] refresh failed', err);
+    note('refresh', err);
     return false;
   }
 }
@@ -342,7 +384,7 @@ export async function beforeWrite(): Promise<boolean> {
   } catch (err) {
     // Same rule as the read path: a store that is reachable but failing must
     // not make the app unusable. The write proceeds on what this instance has.
-    console.error("[db-snapshot] pre-write refresh failed", err);
+    note('pre-write refresh', err);
     return false;
   }
 }
@@ -357,7 +399,7 @@ export async function refreshDbSnapshot(): Promise<boolean> {
   try {
     return await applyRemote(false);
   } catch (err) {
-    console.error('[db-snapshot] forced refresh failed', err);
+    note('forced refresh', err);
     return false;
   }
 }
@@ -371,6 +413,36 @@ export async function restoreDbSnapshot(): Promise<void> {
   try {
     await applyRemote(false);
   } catch (err) {
-    console.error('[db-snapshot] restore failed', err);
+    note('restore', err);
   }
+}
+
+/**
+ * What this instance's pull path actually does, right now.
+ *
+ * Read-only: it downloads the object and reports on it without adopting the
+ * bytes, so asking the question cannot change what the instance is serving.
+ * It exists because "the push worked and the pull returned nothing" and "no
+ * store at all" produced exactly the same symptom from outside — a 404 on a
+ * project that had just been created — and telling them apart otherwise means
+ * reading a lambda's console.
+ */
+export async function snapshotDiagnostics(): Promise<Record<string, unknown>> {
+  if (!snapshotConfigured) return { configured: false, lastFailure };
+  const out: Record<string, unknown> = {
+    configured: true,
+    pathname: PATHNAME,
+    accessMode: access,
+    heldEtag: etag,
+  };
+  try {
+    const bytes = await download(false);
+    out.pull = bytes
+      ? { ok: true, bytes: bytes.length, accessMode: access }
+      : { ok: true, bytes: 0, note: 'no object at that pathname', accessMode: access };
+  } catch (err) {
+    out.pull = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  out.lastFailure = lastFailure;
+  return out;
 }
