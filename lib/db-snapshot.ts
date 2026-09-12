@@ -418,6 +418,36 @@ export async function restoreDbSnapshot(): Promise<void> {
 }
 
 /**
+ * Which projects the DOWNLOADED BYTES hold — opened as their own throwaway
+ * file, never adopted.
+ *
+ * "The upload happened" and "the upload contained the row" are different
+ * claims, and from outside they looked the same: the object's timestamp moved
+ * to the second the project was created, its size did not change by a byte, and
+ * the project still 404d. Reading the image directly is the only way to say
+ * which half of the round trip is broken.
+ */
+async function peekProjects(bytes: Buffer): Promise<string[] | { error: string }> {
+  const probePath = path.join(path.dirname(DB_PATH), `probe-${process.pid}-${Date.now()}.db`);
+  try {
+    fs.writeFileSync(probePath, bytes);
+    const { default: Database } = await import('better-sqlite3');
+    const probe = new Database(probePath, { readonly: true });
+    try {
+      return (probe.prepare('select id from projects').all() as Array<{ id: string }>).map(
+        (r) => r.id
+      );
+    } finally {
+      probe.close();
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    fs.rmSync(probePath, { force: true });
+  }
+}
+
+/**
  * What this instance's pull path actually does, right now.
  *
  * Read-only: it downloads the object and reports on it without adopting the
@@ -438,7 +468,7 @@ export async function snapshotDiagnostics(): Promise<Record<string, unknown>> {
   try {
     const bytes = await download(false);
     out.pull = bytes
-      ? { ok: true, bytes: bytes.length, accessMode: access }
+      ? { ok: true, bytes: bytes.length, accessMode: access, projects: await peekProjects(bytes) }
       : { ok: true, bytes: 0, note: 'no object at that pathname', accessMode: access };
   } catch (err) {
     out.pull = { ok: false, error: err instanceof Error ? err.message : String(err) };

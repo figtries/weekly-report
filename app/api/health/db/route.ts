@@ -17,6 +17,7 @@ import { DB_PATH, DB_IS_EPHEMERAL } from '@/lib/db-path';
 import {
   blobStoreId,
   blobTokenName,
+  ensureFreshDb,
   snapshotConfigured,
   snapshotDiagnostics,
 } from '@/lib/db-snapshot';
@@ -28,6 +29,10 @@ const BOOTED = Date.now();
 
 export async function GET() {
   await connection();
+
+  // The same refresh every page does, so this list is what a READ would see
+  // rather than whatever this instance happened to boot with.
+  const refreshed = await ensureFreshDb();
 
   let projects: { count: number; ids: string[] } | { error: string };
   try {
@@ -71,6 +76,7 @@ export async function GET() {
         .filter((n) => /BLOB|KV_|REDIS|STORE|OIDC/i.test(n))
         .sort(),
       snapshotConfigured,
+      refreshed,
       snapshot: await snapshotDiagnostics(),
       dbIsEphemeral: DB_IS_EPHEMERAL,
       dbPath: DB_PATH,
