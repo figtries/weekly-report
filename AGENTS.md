@@ -270,6 +270,25 @@ store answers a list — so the three causes that look identical from outside (n
 store, a failing store, a write that never ran) can be told apart in one
 request. Check it before theorising; the token itself is never printed.
 
+**A clock read before a request read 500s on the DEPLOYMENT and nowhere else.**
+Under `cacheComponents`, `Date.now()` in a server component before any uncached
+or Request data has been read ("`cookies()`, `headers()`, `connection()`,
+`searchParams`") is a static-generation bailout. `ensureFreshDb()` throttles
+itself on the clock, and `getActiveProjectId()` used to call it BEFORE reading
+the cookie — harmless locally, where no blob store is attached and the function
+returns before it ever looks at the time. On Vercel it took out every
+`/dokumen/[week]` path that was not in `generateStaticParams` (12 Sep 2026).
+Anything that reads a clock in a render must come after a request read.
+
+Which is also how a broken route hides: **a prerendered page still answering
+`X-Vercel-Cache: STALE` with `Age` climbing past `X-Nextjs-Stale-Time` is a
+FAILING function, not a warm cache** — its regeneration has been throwing since
+the deploy while the CDN serves the build-time entry. Compare against a route
+you know is healthy (`/weekly/60/summary` answered `REVALIDATED`, then `HIT`
+with `Age: 0`). The 500 page itself carries no digest, so read the real error
+with `npx vercel logs <deployment-url> --json` — tail it in the background,
+curl the failing path, and each entry's `logs` array holds the Next.js message.
+
 # Which store a project reads, and which one it writes
 
 **`legacy_json_id` decides, and only ONE project has it.** `db.json` holds
@@ -300,12 +319,22 @@ exactly the pair that disagree. `app/api/pdf/weekly/[week]/route.ts` resolves it
 in the USER's request and passes `?project=`; `getPrintDb` renders an empty sheet
 for an id it does not know, never somebody else's.
 
-**Still db.json only: Daily, Klaim, and the Settings catalogs.** They need tables
-SQLite does not have, and **a deployment restores its schema from the blob
-snapshot, not from a migration** (`instrumentation.ts` pulls the file; nothing
-runs `drizzle-kit migrate`). So adding a table is a deployment question before
-it is a code one — answer that first. Until then those screens say what is
-missing rather than showing another project's rows.
+**Still db.json for Daily, Klaim and the Settings catalogs — but PER PROJECT
+now.** They need tables SQLite does not have, and **a deployment restores its
+schema from the blob snapshot, not from a migration** (`instrumentation.ts`
+pulls the file; nothing runs `drizzle-kit migrate`), so adding a table is a
+deployment question before it is a code one — answer that first. What did not
+need a table: `db.json` has held a MAP of projects since the portfolio tier, and
+only `readDb()` insisted on returning whichever one the file called active.
+`jsonKeyFor()` in `lib/legacy-bridge.ts` answers which record a project reads
+and writes — `legacyJsonId` for the imported one, its own SQLite id for
+everybody else, created on first write and seeded with the identity SQLite
+already holds. Read through `getOpenJsonDb()` / `getPrintJsonDb()`, write
+through `mutateOpenDb()`; `mutateDb()` and its `assertLegacyWritable` guard are
+left for the weekly and setup paths, which still belong to the one project.
+A daily report is a form filled in from the site, not something derived from a
+plan — there was never a reason a project had to be imported before it could
+have one.
 
 **An index route that redirects must resolve the project behind `<Suspense>`.**
 `/weekly` and `/dokumen` send you to a week number, and reading db.json's sent a
