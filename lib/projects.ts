@@ -47,6 +47,8 @@ export const OPEN_PROJECT_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 export interface ProjectCard {
   id: string;
   name: string;
+  /** Short handle. Null on projects made before 12 Sep 2026. */
+  alias: string | null;
   clientName: string | null;
   contractorName: string | null;
   contractNo: string | null;
@@ -181,6 +183,7 @@ export async function listProjects(opts: { includeArchived?: boolean } = {}): Pr
     .map((p) => ({
       id: p.id,
       name: p.name,
+      alias: p.alias,
       clientName: p.clientName,
       contractorName: p.contractorName,
       contractNo: p.contractNo,

@@ -36,6 +36,13 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+// The DRIVER, not the connection. This module must never import `./sqlite`
+// (that is what lets `instrumentation.ts` run it before any route module opens
+// the file), but opening a throwaway handle on a file we have just written is a
+// different thing entirely, and `ensureSchema` needs it synchronously.
+// `better-sqlite3` is in `serverExternalPackages`, the same as in `lib/sqlite.ts`.
+import Database from 'better-sqlite3';
+
 import { DB_PATH, DB_IS_EPHEMERAL } from './db-path';
 
 /**
@@ -178,6 +185,58 @@ export function registerConnection(conn: Connection): void {
   connection = conn;
 }
 
+/**
+ * Columns this build needs that a stored snapshot may predate.
+ *
+ * A DEPLOYMENT DOES NOT RUN MIGRATIONS. `instrumentation.ts` pulls the blob
+ * over the database file before the first query, so the snapshot's schema IS
+ * the deployed schema and the freshly built file is overwritten by it. A
+ * column added by a migration therefore reaches Vercel only if something puts
+ * it back after the download, and this list is that something.
+ *
+ * Append one line per column added from here on. Keep it to COLUMNS: a new
+ * table would also need its indexes and its foreign keys, and adding one here
+ * would create neither. That remains a deployment question to answer before
+ * writing the code, exactly as AGENTS.md says.
+ */
+const EXPECTED_COLUMNS: Array<{ table: string; column: string; decl: string }> = [
+  { table: 'projects', column: 'alias', decl: 'text' },
+];
+
+/**
+ * Bring a database file up to the columns this build needs.
+ *
+ * Idempotent, additive, and it never drops or rewrites anything: the worst it
+ * can do to a file that is already current is read one `pragma` per table.
+ * Returns what it had to add, so a repair is said out loud in the log rather
+ * than happening in silence.
+ *
+ * **It runs only on bytes that arrived from the store**, called from
+ * `writeDbFile`, which is the single place incoming bytes land. It deliberately
+ * does NOT run against a developer's own `data/report.db`: that file's
+ * authority is the drizzle journal, and silently adding a column to it would
+ * leave the journal disagreeing with the file and make the next
+ * `drizzle-kit migrate` fail on a duplicate column. A local database is
+ * migrated, not repaired.
+ */
+export function ensureSchema(dbPath: string): string[] {
+  const added: string[] = [];
+  const db = new Database(dbPath);
+  try {
+    for (const { table, column, decl } of EXPECTED_COLUMNS) {
+      const cols = db.prepare(`pragma table_info("${table}")`).all() as Array<{ name: string }>;
+      // A table this build does not have yet is not this function's problem.
+      if (cols.length === 0) continue;
+      if (cols.some((c) => c.name === column)) continue;
+      db.prepare(`alter table "${table}" add column "${column}" ${decl}`).run();
+      added.push(`${table}.${column}`);
+    }
+  } finally {
+    db.close();
+  }
+  return added;
+}
+
 function writeDbFile(bytes: Buffer): void {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const incoming = `${DB_PATH}.incoming`;
@@ -187,6 +246,21 @@ function writeDbFile(bytes: Buffer): void {
   fs.rmSync(`${DB_PATH}-wal`, { force: true });
   fs.rmSync(`${DB_PATH}-shm`, { force: true });
   fs.renameSync(incoming, DB_PATH);
+  // AFTER the rename, so the repair lands on the file the app will open rather
+  // than on a temporary name that is about to move. Every path that adopts
+  // foreign bytes comes through here, so this covers the cold-start restore and
+  // the mid-life refresh alike.
+  try {
+    const repaired = ensureSchema(DB_PATH);
+    if (repaired.length) {
+      console.log(`[db-snapshot] schema repaired after restore: ${repaired.join(', ')}`);
+    }
+  } catch (err) {
+    // A snapshot we cannot repair is still a snapshot worth serving: the app
+    // will fail loudly on the missing column if it needs it, which is more
+    // useful than refusing to start.
+    note('schema repair', err);
+  }
 }
 
 export { writeDbFile };

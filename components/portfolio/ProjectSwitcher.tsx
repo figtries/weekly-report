@@ -46,8 +46,17 @@ export default function ProjectSwitcher({ projects }: { projects: ProjectCard[] 
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
-          {active.name}
+        {/* The one place the alias REPLACES the name rather than sitting beside
+            it. This line is a single truncated row about 150px wide, and a
+            seventy-character contract title truncated into it reads
+            "RELOKASI 2 …", which identifies nothing. A short name identifies.
+            The full one is still on the `aria-label` above and in the `title`,
+            and it is the heading of the page this card links to. */}
+        <span
+          title={active.name}
+          className="block truncate text-[13px] font-semibold leading-tight text-foreground"
+        >
+          {active.alias || active.name}
         </span>
         <span className="block truncate text-[11px] leading-tight text-muted-foreground">
           {/* When there is somewhere to switch TO, say so — otherwise the card

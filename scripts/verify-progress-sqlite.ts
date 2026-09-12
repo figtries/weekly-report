@@ -11,13 +11,16 @@
  *
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-progress-sqlite.ts
  */
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { copyDbFixture } from './db-fixture.ts';
+
 const src = path.join(process.cwd(), 'data', 'report.db');
 const work = path.join(os.tmpdir(), `progress-sqlite-${Date.now()}.db`);
-fs.copyFileSync(src, work);
+// NOT `fs.copyFileSync`: report.db is in WAL mode and a plain file copy leaves
+// recent writes behind in the -wal. See scripts/db-fixture.ts.
+copyDbFixture(src, work);
 process.env.REPORT_DB_PATH = work;
 
 const { db, schema } = await import('../lib/sqlite.ts');

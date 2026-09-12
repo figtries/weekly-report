@@ -159,6 +159,46 @@ logistic, so an item lands on exactly 1.0 at its finish week; a curve that
 asymptotes leaves every item at 99.x% forever and leaks a permanent phantom
 deviation into the project total.
 
+**A project's INITIAL is three letters, and it is stored in `projects.alias`.**
+`deriveInitial` in `lib/initial.ts` guesses it from the name: initials of the
+first three significant words, or for a one- or two-word name its first letter
+plus the last two consonants, which is what makes "Gundih" into "GDH". The cap
+is enforced in `createProjectAction` as well as on the input, because
+`maxLength` is a courtesy to whoever is typing and not a rule. The column keeps
+the name `alias` deliberately: renaming it would mean a second migration
+through the snapshot-restore path for a word, and `drizzle-kit` has eaten child
+rows here before when it chose to rebuild a table rather than alter it. The
+first version of this allowed twelve characters and produced "JPICSPUCS", which
+is not a handle but an unpronounceable second name; three is the length people
+write by hand.
+
+**The planner asks for a schedule, and nothing else.** Four columns: task name,
+duration, start, finish. Target, Price and Weight were removed on 12 Sep 2026
+and the reason is not tidiness. With per-row money out of it, the sheet's
+client-side model only has to hold name, dates, duration, order and depth,
+which is what makes instant editing tractable at all; with Price in it, that
+model would also have to carry weight derivation. Per-row prices, weights and
+the `weight_basis = 'boq'` lock live in Data Overall (board item 12), and until
+it exists a project made in the app cannot be marked value-based and takes
+`evenWeights()`. `ValueStrip` keeps the contract figure and the currency,
+because that is one number belonging to the project and it is asked when the
+project is created. The pricing bar went with the columns rather than staying
+behind: with no price to type it would have read 0% forever with nothing on
+screen able to move it, and a number that cannot be acted on reads as broken
+rather than as empty. Nothing is deleted underneath — `targetDate`, `price` and
+`bobot` are still stored, still written by the importer and by
+paste-from-Excel, and their actions are untouched.
+
+**The phone keeps THREE of those four columns, and that is measured.** `GRID_SM`
+has five tracks against `GRID_LG`'s six, and `scripts/verify-sheet-columns.ts`
+asserts both numbers. All four DO fit below 640px once the money columns are
+gone — six tracks come to 370px, clearing even a 375px iPhone SE — and fitting
+was the wrong test: on Gundih at 390px the name column went from 170px to
+100px, "Relokasi 2 Unit Ta…" became "Relok…", and three branches read "D…",
+"G.." and "I.". The start date is one tap away in the row panel; the column you
+identify a row by is not. Re-measure the name column, not just the overflow,
+before adding anything to that grid.
+
 **Adding a weekly tab means setting `printable`.** `TABS` in
 `components/weekly/WeekTabs.tsx` carries an explicit flag that must match the
 `ReportKey` union in `app/print/weekly/[week]/page.tsx`. It used to be inferred
@@ -253,6 +293,38 @@ second can have one file-level snapshot land on top of the other. With no
 `BLOB_READ_WRITE_TOKEN` the whole module is inert and the app behaves exactly
 as it did — ephemeral, but working. A developer machine is never touched
 either: it keeps its own `data/report.db`, which is the gate.
+
+**A new COLUMN reaches the deployment through `ensureSchema()`, not through a
+migration.** Nothing runs `drizzle-kit migrate` on Vercel: `instrumentation.ts`
+pulls the blob snapshot over the database file before the first query, so the
+snapshot's schema IS the deployed schema and the file that was just built gets
+overwritten by it. `EXPECTED_COLUMNS` in `lib/db-snapshot.ts` is the list that
+is put back after every restore, called from `writeDbFile` because that is the
+single place incoming bytes land; append one line per column added from here on.
+It runs ONLY on bytes from the store: repairing a developer's own
+`data/report.db` would leave the drizzle journal disagreeing with the file and
+break the next `migrate` on a duplicate column. A local database is migrated,
+not repaired. This does not solve new TABLES, which would also need their
+indexes and foreign keys, so that remains a deployment question to answer before
+writing the code.
+
+**`data/seed.db` is TRACKED, and a migration must reach it too.** It is the file
+`lib/db-path.ts` copies into `/tmp` when there is no disk, so a deployment with
+no blob store attached opens it directly and no snapshot layer is awake to
+repair anything. Migrate it with `REPORT_DB_PATH=data/seed.db npm run db:migrate`
+— and then CHECKPOINT it, because the write lands in `seed.db-wal` and leaves
+the committed file untouched, which git reports as no change at all:
+`new Database('data/seed.db').pragma('wal_checkpoint(TRUNCATE)')`.
+
+**`fs.copyFileSync` on a WAL database silently copies the past.** Every script
+that builds a throwaway fixture from `data/report.db` hits this: recent writes
+live in `report.db-wal` and a file copy leaves them there. It stayed invisible
+while the missing writes were rows nobody asserted on, and stopped being
+invisible when `projects` gained `alias` — two verify scripts died with
+`no such column: "alias"`, which looks exactly like a bug in the code under
+test. Use `copyDbFixture` from `scripts/db-fixture.ts` (it serializes, the same
+image the snapshot push uploads). `scripts/backfill-schedule.ts` still copies by
+file for its backup and has the same latent gap.
 
 **Attaching the store is a deploy-time act, not a dashboard act.** Creating the
 Blob store and connecting it to the project is only half of it: Vercel bakes
@@ -394,8 +466,12 @@ FASE 4 — yang mengisi laporan
 15 Modul Document Control  selesai   EDL + VDRL · 5 layar · per minggu · jalur menulis · tautan
 FASE 5 — membuat proyek dari nol
 16 Project management        selesai   bikin · pilih · arsip · hapus · identitas
-17 Planner                   selesai   WBS · harga · tanggal · target · Gantt
-                                       tempel dari Excel · bar styles · rantai
+17 Planner                   selesai   WBS · tanggal · Gantt · tempel dari
+                                       Excel · bar styles · rantai
+                                       12 Sep 26: turun ke 4 kolom (jadwal
+                                       saja); harga, bobot dan target pindah
+                                       ke papan 12. Initial proyek (tiga
+                                       huruf) ditanya saat proyek dibuat.
 18 Baseline berversi
 FASE 6 — dashboard yang berpikir
 19 Dashboard bulanan                   ahead · outstanding · warning · problem

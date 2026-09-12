@@ -86,12 +86,12 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
     contents.reportingUnits ? `${contents.reportingUnits} reporting units` : null,
     `${contents.weeks} weeks`,
     contents.documents ? `${contents.documents} documents` : null,
-    // Said as a count rather than hidden: pricing is a separate job from
-    // scheduling, and this is how far along it is.
-    sheet.pricedRows ? `${sheet.pricedRows} priced` : 'no prices yet',
-    // The contract figure is NOT repeated here. It is stated once, in the strip
-    // directly below, where it stands next to what has actually been allocated
-    // against it.
+    // The priced-rows count stood here. It went with the Price column: this
+    // page has no pricing to report on any more, and Data Overall is where
+    // "how far along is the pricing" will be asked and answered.
+    //
+    // The contract figure is NOT repeated here either. It is stated once, in
+    // the strip directly below.
   ].filter(Boolean);
 
   return (
@@ -118,7 +118,18 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
               <OpenProjectButton id={id} isOpen={isOpen} />
             </div>
             <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">
+              {/* The badge is INLINE, inside the heading, not a flex sibling of
+                  it. As a flex row the heading needed `truncate` to stay on one
+                  line, and at 390px that cut a seventy-character contract title
+                  down to "Jasa Pengadaan Instrument dan Con…" where it used to
+                  wrap and be readable in full. Inline, it sits at the start of
+                  the first line and the title wraps exactly as it did before. */}
               <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">
+                {project.alias && (
+                  <span className="mr-2 inline-block rounded bg-muted px-1.5 py-px align-[0.15em] text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {project.alias}
+                  </span>
+                )}
                 {project.name}
               </h1>
               <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -165,7 +176,6 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           spanFinish={sheet.spanFinish}
           projectStart={project.startDate}
           projectFinish={project.finishDate}
-          currency={project.currency}
           projectId={id}
           barStyles={bars.styles}
           barStyleSource={bars.source}

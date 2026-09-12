@@ -29,8 +29,6 @@ type Res = { ok: boolean; error?: string; gone?: true; newId?: string; undoId?: 
 import {
   setMilestoneAction,
   updateRowDatesAction,
-  updateRowTargetAction,
-  updateRowTextAction,
 } from '@/lib/sheet-actions';
 
 /**
@@ -121,36 +119,20 @@ export default function RowMenu({
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Row {row.code}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
 
-        {/* The target date is here for EVERY row, summaries included — it is the
-            one date a branch owns, and the Target column disappears below
-            640px. It sits outside the block below because that block is
-            leaf-only. */}
-        {mode === 'menu' && (
-          <label className="mt-3 block text-[11px] font-medium text-muted-foreground sm:hidden">
-            Target date
-            <span className="ml-1 font-normal">should be finished before this</span>
-            <input
-              type="date"
-              defaultValue={row.targetDate ?? ''}
-              onBlur={(e) =>
-                e.target.value !== (row.targetDate ?? '') &&
-                run(() => updateRowTargetAction(row.id, e.target.value), true)
-              }
-              className={`mt-1 h-11 w-full rounded-lg border px-2 text-sm outline-none focus:border-foreground ${
-                row.daysLate != null ? 'border-warn text-warn' : 'text-foreground'
-              }`}
-            />
-            {row.daysLate != null && (
-              <span className="mt-1 block font-semibold text-warn">
-                Finishes {row.daysLate} days past it
-              </span>
-            )}
-          </label>
-        )}
+        {/* The target date stood here, mirroring the Target column for phones.
+            Both are gone: the user's decision was that the target leaves the
+            PLANNER, not merely the grid, and leaving the field behind would
+            have made the sheet's own removal incoherent — a date creatable in
+            the panel, invisible in the row, and driving a lateness warning the
+            sheet no longer draws. `updateRowTargetAction` and `targetDate` are
+            untouched, and targets still arrive through the importer and
+            paste-from-Excel. */}
 
-        {/* Dates live here on small screens because the sheet cannot show six
-            columns and a readable name at 390px. Above `sm` the columns are
-            back and this would be a second place to change the same thing. */}
+        {/* Dates live here on small screens because the sheet cannot show all
+            four columns and a readable name at 390px: measured on Gundih, the
+            fourth column costs the name 70px and turns "Relokasi 2 Unit Ta…"
+            into "Relok…". Above `sm` the columns are back and this would be a
+            second place to change the same thing. */}
         {mode === 'menu' && !row.isSummary && (
           <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
             <label className="text-[11px] font-medium text-muted-foreground">
@@ -177,16 +159,12 @@ export default function RowMenu({
                 className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
               />
             </label>
-            <label className="col-span-2 text-[11px] font-medium text-muted-foreground">
-              Price
-              <MoneyInput
-                defaultValue={row.price == null ? '' : String(row.price)}
-                resetKey={row.id + String(row.price)}
-                placeholder="Leave empty until there is a BOQ"
-                onCommit={(raw) => run(() => updateRowTextAction(row.id, 'price', raw), true)}
-                className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </label>
+            {/* Price stood here until 12 Sep 2026, and it was the planner's last
+                door into per-row money. It moved to Data Overall along with the
+                Price and Weight columns: scheduling a plan and pricing one are
+                two jobs, often two people, and this panel belongs to the first.
+                `updateRowTextAction(row.id, 'price', …)` is untouched and is
+                what Data Overall will call. */}
           </div>
         )}
 
