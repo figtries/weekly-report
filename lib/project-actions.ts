@@ -8,6 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
 import { isKnownCurrency } from './currency';
+import { deriveAlias } from './alias';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
 /**
@@ -98,6 +99,12 @@ function weekRowsFor(projectId: string, startDate: string, finishDate: string) {
 
 export async function createProjectAction(input: {
   name: string;
+  /**
+   * A short handle for this project. Blank is normal: `deriveAlias` fills it
+   * from the name, and the dialog shows that guess as its placeholder so
+   * nobody is surprised by what lands.
+   */
+  alias?: string | null;
   clientName?: string;
   /** Not asked for at creation — it belongs to the project page, once one exists. */
   contractorName?: string;
@@ -121,6 +128,12 @@ export async function createProjectAction(input: {
       throw new Error('The finish date is before the start date');
     }
 
+    // Typed wins; otherwise the guess. Empty after both means a name with no
+    // letters or digits in it at all, and null is the honest answer for that.
+    // Derived HERE rather than in the dialog so a project created by any other
+    // path — a script, a future importer — gets one too.
+    const alias = (input.alias?.trim() || deriveAlias(name)) || null;
+
     const id = `p${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
     const now = new Date().toISOString();
     const weeks = weekRowsFor(id, input.startDate, input.finishDate);
@@ -130,6 +143,12 @@ export async function createProjectAction(input: {
         .values({
           id,
           name,
+          alias,
+          // The document number prefix starts as the alias because they want
+          // the same thing: a short, stable handle for this project. It stays
+          // separately editable on the project page, and nothing here ever
+          // overwrites a prefix that already exists.
+          docNoPrefix: alias,
           clientName: input.clientName?.trim() || null,
           contractorName: input.contractorName?.trim() || null,
           startDate: input.startDate,
