@@ -16,7 +16,7 @@ import Spinner from '@/components/ui/Spinner';
 import DateField from '@/components/ui/DateField';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { CURRENCIES } from '@/lib/currency';
-import { ALIAS_MAX_LENGTH, deriveAlias } from '@/lib/alias';
+import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
 
 /**
  * Six fields, one screen, one Save — not a wizard.
@@ -178,23 +178,31 @@ export default function NewProjectDialog() {
 
                     {/* The guess is the PLACEHOLDER, not the value. Pre-filling
                         the input would mean anyone who edits the name
-                        afterwards keeps an alias derived from the name they
+                        afterwards keeps an initial derived from the name they
                         abandoned, with nothing on screen saying so. As a
                         placeholder it follows the name until somebody types
-                        over it, and after that it never interferes again. */}
+                        over it, and after that it never interferes again.
+
+                        Uppercased as you type, and three characters wide rather
+                        than full width: the field's own size is what says three
+                        letters, before anyone reads the sentence under it. */}
                     <div className="space-y-1">
-                      <Label htmlFor="np-alias">Short name</Label>
+                      <Label htmlFor="np-initial">Project initial</Label>
                       <Input
-                        id="np-alias"
+                        id="np-initial"
                         value={alias}
-                        onChange={(e) => setAlias(e.target.value)}
-                        placeholder={deriveAlias(name) || 'For lists and titles'}
-                        maxLength={ALIAS_MAX_LENGTH}
-                        className="h-11"
+                        onChange={(e) => setAlias(e.target.value.toUpperCase())}
+                        placeholder={deriveInitial(name) || 'ABC'}
+                        maxLength={INITIAL_LENGTH}
+                        inputMode="text"
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="h-11 w-24 text-center text-base font-semibold uppercase tracking-[0.2em]"
                       />
                       <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Used wherever the full name will not fit. Leave it blank and we use the one
-                        shown here.
+                        Three letters, used wherever the full name will not fit. Leave it blank and
+                        we use the one shown here.
                       </p>
                     </div>
 

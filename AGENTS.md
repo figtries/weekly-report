@@ -159,6 +159,19 @@ logistic, so an item lands on exactly 1.0 at its finish week; a curve that
 asymptotes leaves every item at 99.x% forever and leaks a permanent phantom
 deviation into the project total.
 
+**A project's INITIAL is three letters, and it is stored in `projects.alias`.**
+`deriveInitial` in `lib/initial.ts` guesses it from the name: initials of the
+first three significant words, or for a one- or two-word name its first letter
+plus the last two consonants, which is what makes "Gundih" into "GDH". The cap
+is enforced in `createProjectAction` as well as on the input, because
+`maxLength` is a courtesy to whoever is typing and not a rule. The column keeps
+the name `alias` deliberately: renaming it would mean a second migration
+through the snapshot-restore path for a word, and `drizzle-kit` has eaten child
+rows here before when it chose to rebuild a table rather than alter it. The
+first version of this allowed twelve characters and produced "JPICSPUCS", which
+is not a handle but an unpronounceable second name; three is the length people
+write by hand.
+
 **The planner asks for a schedule, and nothing else.** Four columns: task name,
 duration, start, finish. Target, Price and Weight were removed on 12 Sep 2026
 and the reason is not tidiness. With per-row money out of it, the sheet's
@@ -457,8 +470,8 @@ FASE 5 — membuat proyek dari nol
                                        Excel · bar styles · rantai
                                        12 Sep 26: turun ke 4 kolom (jadwal
                                        saja); harga, bobot dan target pindah
-                                       ke papan 12. Alias proyek ditanya saat
-                                       proyek dibuat.
+                                       ke papan 12. Initial proyek (tiga
+                                       huruf) ditanya saat proyek dibuat.
 18 Baseline berversi
 FASE 6 — dashboard yang berpikir
 19 Dashboard bulanan                   ahead · outstanding · warning · problem

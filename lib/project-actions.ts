@@ -8,7 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
 import { isKnownCurrency } from './currency';
-import { deriveAlias } from './alias';
+import { deriveInitial, INITIAL_LENGTH } from './initial';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
 /**
@@ -100,9 +100,10 @@ function weekRowsFor(projectId: string, startDate: string, finishDate: string) {
 export async function createProjectAction(input: {
   name: string;
   /**
-   * A short handle for this project. Blank is normal: `deriveAlias` fills it
-   * from the name, and the dialog shows that guess as its placeholder so
-   * nobody is surprised by what lands.
+   * The project's INITIAL, three letters. Blank is normal: `deriveInitial`
+   * fills it from the name, and the dialog shows that guess as its placeholder
+   * so nobody is surprised by what lands. Longer than three is truncated here
+   * rather than rejected — there is nothing to tell a caller off about.
    */
   alias?: string | null;
   clientName?: string;
@@ -132,7 +133,12 @@ export async function createProjectAction(input: {
     // letters or digits in it at all, and null is the honest answer for that.
     // Derived HERE rather than in the dialog so a project created by any other
     // path — a script, a future importer — gets one too.
-    const alias = (input.alias?.trim() || deriveAlias(name)) || null;
+    //
+    // The cap is enforced here as well as on the input. `maxLength` on a text
+    // field is a courtesy to whoever is typing, not a rule: a payload that
+    // never went through the dialog would otherwise store a fourth letter.
+    const alias =
+      (input.alias?.trim().toUpperCase().slice(0, INITIAL_LENGTH) || deriveInitial(name)) || null;
 
     const id = `p${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
     const now = new Date().toISOString();
