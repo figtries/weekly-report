@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
+import { syncDerivedWeights } from './weights-auto';
 import { isKnownCurrency } from './currency';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
@@ -138,6 +139,9 @@ export async function createProjectAction(input: {
           currency: input.currency && isKnownCurrency(input.currency) ? input.currency : 'IDR',
           // Weight comes from prices, and there are none yet. `even` is the
           // honest label until a BOQ exists — see AGENTS.md.
+          // Not 'boq': 'boq' is the LOCK that keeps a derivation away from
+          // weights nobody could re-derive, and a project with no prices yet
+          // has none to protect. See lib/weights-auto.ts.
           weightBasis: 'even',
         })
         .run();
@@ -170,6 +174,15 @@ export async function setActiveProjectAction(projectId: string): Promise<Project
     const p = db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0];
     if (!p) throw new Error('Project not found');
     if (p.archivedAt) throw new Error('That project is archived');
+    // Weights, before the dashboard is asked for them.
+    //
+    // Every edit keeps them in step now (lib/weights-auto.ts), but a project
+    // priced BEFORE that was true sits there with prices and no weights, and
+    // the front page answers "has no weights yet" for a plan that is finished.
+    // Opening a project is the moment to settle that: it already writes, it is
+    // the last thing to happen before every figure in the app is read, and on
+    // a project with nothing to change it writes nothing and costs nothing.
+    syncDerivedWeights(projectId);
     const now = new Date().toISOString();
     db.insert(schema.appState)
       .values({ id: 'singleton', activeProjectId: projectId, updatedAt: now })

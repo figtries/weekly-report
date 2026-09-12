@@ -88,6 +88,15 @@
         "set NEXT_DIST_DIR=.next-empty&& set REPORT_DB_PATH=data/empty.db&& npx next dev -p 3220"
       ],
       "port": 3220
+    },
+    {
+      "name": "dev-verify-db",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set NEXT_DIST_DIR=.next-verifydb&& set REPORT_DB_PATH=C:/Users/LENOVO/AppData/Local/Temp/claude/E--Figtries-Prototype-Report/86961aa2-491e-4fb0-ad1d-c03fc5fadcfe/scratchpad/verify.db&& npx next dev -p 3221"
+      ],
+      "port": 3221
     }
   ]
 }

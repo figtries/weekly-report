@@ -147,5 +147,26 @@ check(
   `signed 1,000,000 with only 400,000 allocated → gap ${partial.gap.toFixed(0)}`
 );
 
+// A leaf no price reaches still has to carry a figure, or it is invisible to
+// every report — but the plan must not then call itself value-based.
+const gapFilled = deriveWeights(partlyPriced, 1000000);
+check(
+  'a leaf no price reaches still gets a weight, and the plan admits it guessed',
+  gapFilled.basis === 'partial' &&
+    Math.abs(gapFilled.total - 100) < 1e-9 &&
+    gapFilled.fromGap === 1 &&
+    Math.abs((gapFilled.bobotOf.get('a') ?? 0) - 40) < 1e-9 &&
+    Math.abs((gapFilled.bobotOf.get('b') ?? 0) - 60) < 1e-9,
+  `priced leaf 40.00, unpriced leaf ${(gapFilled.bobotOf.get('b') ?? 0).toFixed(2)} out of the 600,000 gap, basis ${gapFilled.basis}`
+);
+
+// And the guard that protects an imported project: Gundih’s nested prices
+// already derive past 100, so there is no remainder and nothing is invented.
+check(
+  'no remainder means nothing is invented',
+  result.fromGap === 0,
+  `Gundih derives to ${result.total.toFixed(4)} with ${result.leaves - result.covered} leaves uncovered and 0 filled from a gap`
+);
+
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

@@ -71,6 +71,13 @@ export interface WeightResult {
    *   honestly beats a project that never gets set up.
    */
   basis: 'boq' | 'partial' | 'even';
+  /**
+   * How many leaves were weighted by splitting the unpriced remainder of the
+   * contract rather than by a price of their own. Above zero, the figure is
+   * real for what it covers and an even guess for the rest — and the screen
+   * has to say so.
+   */
+  fromGap: number;
 }
 
 const EPSILON = 0.01;
@@ -187,6 +194,36 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
     covered += 1;
   }
 
+  // Leaves no price reaches take an even share of what is LEFT of the contract.
+  //
+  // Without this a half-priced plan leaves rows weighing nothing at all, and a
+  // row with no weight is invisible: it never reaches the S-curve, it can never
+  // be reported against, and the project total closes at whatever the prices
+  // happened to cover. On screen that reads as work that does not exist rather
+  // than as work nobody has priced yet. Splitting the remainder is the same
+  // rule this function already applies at every other level of the tree —
+  // unpriced siblings share what their parent has left — reached one level
+  // higher, at the contract itself.
+  //
+  // ONLY EVER A POSITIVE REMAINDER. Gundih's prices nest, and derived over its
+  // own tree they already reach 154.58 with two leaves uncovered; there is
+  // nothing left to hand out, and inventing some would make a bad figure worse.
+  const uncovered = leaves.filter((l) => !bobotOf.has(l.id));
+  let fromGap = 0;
+  if (anyPrice && uncovered.length > 0 && contract > 0) {
+    const remaining = 100 - total;
+    if (remaining > EPSILON) {
+      const each = remaining / uncovered.length;
+      for (const leaf of uncovered) {
+        bobotOf.set(leaf.id, each);
+        valueOf.set(leaf.id, (each / 100) * contract);
+      }
+      total += remaining;
+      covered += uncovered.length;
+      fromGap = uncovered.length;
+    }
+  }
+
   // No prices anywhere: every leaf counts the same, and the caller must label
   // the project as not value-based.
   let basis: WeightResult['basis'] = 'boq';
@@ -201,11 +238,24 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
       total = 100;
       covered = leaves.length;
     }
-  } else if (covered < leaves.length || Math.abs(total - 100) > 0.5) {
+  } else if (fromGap > 0 || covered < leaves.length || Math.abs(total - 100) > 0.5) {
+    // `fromGap` is what keeps a plan honest about itself. Sharing the remainder
+    // makes the total close at 100 with every leaf carrying a figure, which is
+    // exactly what `boq` claims — so without this clause a plan with a single
+    // price on it would be labelled value-based off the back of a division.
     basis = 'partial';
   }
 
-  return { contractValue: contract, valueOf, bobotOf, total, covered, leaves: leaves.length, basis };
+  return {
+    contractValue: contract,
+    valueOf,
+    bobotOf,
+    total,
+    covered,
+    leaves: leaves.length,
+    basis,
+    fromGap,
+  };
 }
 
 export interface WeightChange {

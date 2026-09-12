@@ -69,3 +69,4 @@ next-env.d.ts
 # Sisi-berkas WAL dari snapshot; snapshot-nya sendiri (data/seed.db) ikut di-commit.
 /data/seed.db-shm
 /data/seed.db-wal
+/.next-verifydb/

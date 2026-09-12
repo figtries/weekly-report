@@ -52,7 +52,9 @@
     ".next-build/types/**/*.ts",
     ".next-build/dev/types/**/*.ts",
     ".next-empty/types/**/*.ts",
-    ".next-empty/dev/types/**/*.ts"
+    ".next-empty/dev/types/**/*.ts",
+    ".next-verifydb/types/**/*.ts",
+    ".next-verifydb/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

@@ -7,6 +7,7 @@ import { beforeWrite, db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
+import { projectOfNode, syncDerivedWeights } from './weights-auto';
 
 /**
  * The schedule sheet — the writes.
@@ -82,17 +83,25 @@ export async function updateRowTextAction(
       const n = raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a price');
       db.update(schema.wbsNodes).set({ price: n }).where(eq(schema.wbsNodes.id, nodeId)).run();
-      // NO automatic recompute here, and that is the important part.
+      // Weight follows the price — BUT ONLY WHERE THERE IS NOTHING TO LOSE.
       //
-      // It used to rewrite every weight in the project from the sum of all
-      // prices. On Gundih that would have been a disaster twice over: prices
-      // are nested, so the sum triple-counts, and only 95 of its 176 stored
-      // weights can be re-derived from prices at all — the other 81 came from
-      // the workbook. One keystroke in this column would have replaced them and
-      // broken a total that closes at exactly 100.000000.
+      // This once rewrote every weight in the project from the sum of all
+      // prices, and on Gundih that was a disaster twice over: prices nest, so
+      // the sum triple-counts, and only 95 of its 176 stored weights can be
+      // re-derived from prices at all — the other 81 came from the workbook.
+      // One keystroke in this column would have replaced them and broken a
+      // total that closes at exactly 100.000000.
       //
-      // Weight is still derived, never typed. It is derived when someone asks,
-      // after being shown what would change: `previewWeights` in lib/weights.ts.
+      // Doing nothing at all was the other extreme, and it cost the app its
+      // whole front page for projects made in it: prices typed, weights NULL,
+      // dashboard answering "has no weights yet". `syncDerivedWeights` is the
+      // line between the two — it refuses to touch a project whose weights are
+      // authoritative (`weight_basis = 'boq'`) and keeps every other project's
+      // weights in step with what its prices now say. Weight is still derived,
+      // never typed; on a locked project it is derived only when someone asks,
+      // after being shown what would change (`previewWeights` in lib/weights.ts).
+      const projectId = projectOfNode(nodeId);
+      if (projectId) syncDerivedWeights(projectId);
     }
     revalidatePath('/projects', 'layout');
     return { ok: true };

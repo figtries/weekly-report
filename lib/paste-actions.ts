@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
+import { syncDerivedWeights } from './weights-auto';
 import { completeDates, parsePaste, type ParseResult } from './paste';
 
 /**
@@ -202,6 +203,10 @@ export async function applyPasteAction(
       }
 
       renumberProject(projectId, tx);
+      // A pasted BOQ arrives with its prices, so the weights it implies exist
+      // the moment the rows land. Refused on a project whose weights are
+      // authoritative — see lib/weights-auto.ts.
+      syncDerivedWeights(projectId, tx);
       tx.update(schema.projects)
         .set({ updatedAt: new Date().toISOString() })
         .where(eq(schema.projects.id, projectId))

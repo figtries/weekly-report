@@ -34,6 +34,25 @@ export interface WeightPreview {
   biggest: { code: string; name: string; before: number | null; after: number | null }[];
 }
 
+/**
+ * The SIGNED contract value, which is what weight is measured against.
+ *
+ * Reading it here is not a detail. Without it the derivation falls back to the
+ * sum of whatever prices have been typed, which closes at 100 by definition and
+ * can never show work that has no price on it yet — so the panel and the dialog
+ * quoted two different sets of weights for the same project, and applying moved
+ * rows the preview had not mentioned. `summariseWeights` has always passed it;
+ * these two had not.
+ */
+function signedValueOf(projectId: string): number | null {
+  const row = db
+    .select({ contractValue: schema.projects.contractValue })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  return row?.contractValue ?? null;
+}
+
 export async function previewWeightsAction(
   projectId: string
 ): Promise<WeightPreview | { ok: false; error: string }> {
@@ -41,7 +60,7 @@ export async function previewWeightsAction(
   try {
     const nodes = loadWeightNodes(projectId);
     if (nodes.length === 0) throw new Error('This project has no work breakdown yet');
-    const { result, changes, storedTotal } = previewWeights(nodes);
+    const { result, changes, storedTotal } = previewWeights(nodes, signedValueOf(projectId));
 
     const meta = new Map(
       db
@@ -91,7 +110,8 @@ export async function applyWeightsAction(
   await beforeWrite();
   try {
     const nodes = loadWeightNodes(projectId);
-    const { result } = previewWeights(nodes);
+    const signed = signedValueOf(projectId);
+    const { result } = previewWeights(nodes, signed);
     if (result.contractValue <= 0) throw new Error('Give the plan some prices first');
 
     let changed = 0;
@@ -104,7 +124,11 @@ export async function applyWeightsAction(
       }
       tx.update(schema.projects)
         .set({
-          contractValue: result.contractValue,
+          // THE SIGNED FIGURE IS NOT A CACHE OF THE PRICES, so this only fills
+          // in a project that never had one typed. Overwriting it deleted the
+          // one check this app can make for free — signed minus allocated, the
+          // work still carrying no price — by forcing the two to be equal.
+          contractValue: signed != null && signed > 0 ? signed : result.contractValue,
           // `boq` only when the prices actually cover the plan. A partial BOQ
           // labelled `boq` is a report claiming a whole it does not have.
           weightBasis: result.basis === 'boq' ? 'boq' : 'even',

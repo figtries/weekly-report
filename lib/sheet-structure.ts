@@ -6,6 +6,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, refreshDbSnapshot, schema, sqlite } from './sqlite';
 import { getActiveBaselineId } from './sheet';
+import { syncDerivedWeights } from './weights-auto';
 
 /**
  * Building a plan from nothing — add a row, indent it, move it, delete it.
@@ -155,6 +156,14 @@ function renumber(projectId: string, tx: Writer = db) {
       .where(eq(schema.wbsNodes.id, f.id))
       .run();
   }
+
+  // AND THE WEIGHTS, because this pass is what decides which rows are leaves.
+  // Indenting a row makes its parent a branch and the parent's weight belongs
+  // to its children from that moment on; deleting a row hands its share back.
+  // Leaving that until someone opens the Money panel is how a plan comes to
+  // total 94% and nobody can say which change spent the other six. Locked
+  // projects are refused inside — see lib/weights-auto.ts.
+  syncDerivedWeights(projectId, tx);
 }
 
 async function projectOf(nodeId: string): Promise<string> {
