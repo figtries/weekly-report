@@ -159,13 +159,38 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
           >
             {p.name}
           </Link>
-          <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {/* `flex-wrap`, and it is load-bearing rather than tidy. These cards
+              sit in a grid whose single column below 640px is sized `auto`,
+              which means MAX MIN-CONTENT ACROSS EVERY CARD. A `shrink-0` badge
+              contributes its full width to that, so adding the alias grew the
+              track from 366px to 421.7px and every one of the four cards with
+              it: the row actions button ended up clipped at 390px on cards that
+              had no badge at all. Wrapping caps this row's min-content at its
+              widest single item instead of the sum, so a long client name drops
+              to its own line rather than widening the card. */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
             {p.isActive && (
               <span className="rounded bg-foreground px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-background">
                 Open
               </span>
             )}
-            <span className="truncate">{p.clientName || 'No client named yet'}</span>
+            {/* In the META line, not in front of the name: the name above is
+                `line-clamp-3`, and a badge inserted into a clamped block
+                becomes part of what gets clamped. This row already exists to
+                carry badges, and it has the gap for one. */}
+            {p.alias && (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {p.alias}
+              </span>
+            )}
+            {/* `min-w-0` is what makes `truncate` actually truncate HERE. A
+                flex item's default `min-width` is `auto`, so a nowrap span
+                refuses to shrink below its text and widens the row instead.
+                With two badges in front of it the card grew past its grid
+                column and the row actions button was clipped at 390px:
+                measured, docOver stayed 0 because an ancestor clips, so the
+                page never scrolled and nothing said the button had gone. */}
+            <span className="min-w-0 truncate">{p.clientName || 'No client named yet'}</span>
           </p>
         </div>
         <button
