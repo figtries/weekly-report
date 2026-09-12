@@ -172,6 +172,28 @@ first version of this allowed twelve characters and produced "JPICSPUCS", which
 is not a handle but an unpronounceable second name; three is the length people
 write by hand.
 
+**Every column the project page shows must be in `ProjectField`, or it is
+write-once.** The initial shipped reachable only from `createProjectAction`,
+which meant a typo was permanent and the three projects predating the column
+could never be given one. `ProjectField` and the `FIELDS` list in
+`ProjectDetails` are the pair to check: the same audit found
+`documentNoWeekly` and `documentNoDaily` had been READ into the printed report
+header since the importer wrote them and had no way in either. Still
+unreachable and deliberately so: `weightBasis` (it belongs to Data Overall),
+and `signatureLeft` / `signatureRight`, which are worse than unreachable —
+`lib/dashboard-db.ts:252` fills them from `contractorName` and `clientName`
+rather than from their own columns, so a signature block is a stand-in and the
+columns are dead. Fix that when the report header gets its own screen; reading
+the real columns without a fallback would blank the signature on Gundih's
+signed reports, because its columns are null.
+
+**An imported project's report header does NOT come from these columns.** A
+project with `legacyJsonId` reads db.json, so typing a report number into
+Project details looks like it worked and changes nothing on the paper. The
+dialog says so, in warn colour, on those two fields only. Say it rather than
+hide the fields: the fork is deliberate and the admission is the same kind
+`/klaim` makes about photos carrying no timestamps.
+
 **The planner asks for a schedule, and nothing else.** Four columns: task name,
 duration, start, finish. Target, Price and Weight were removed on 12 Sep 2026
 and the reason is not tidiness. With per-row money out of it, the sheet's

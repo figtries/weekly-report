@@ -333,11 +333,24 @@ export async function deleteProjectAction(projectId: string): Promise<ProjectRes
  */
 export type ProjectField =
   | 'name'
+  /**
+   * The three-letter initial. It was writable only by `createProjectAction`
+   * until 12 Sep 2026, which left it stranded: a typo was permanent, and the
+   * three projects that predate the column had no way to be given one at all.
+   */
+  | 'alias'
   | 'clientName'
   | 'contractorName'
   | 'contractNo'
   | 'workLocation'
   | 'docNoPrefix'
+  /**
+   * The two report document numbers. `lib/dashboard-db.ts` has always READ
+   * these into the printed header, and until 12 Sep 2026 nothing could write
+   * them: two columns the client's own deliverable prints, with no way in.
+   */
+  | 'documentNoWeekly'
+  | 'documentNoDaily'
   | 'contractValue'
   | 'startDate'
   | 'finishDate';
@@ -353,6 +366,11 @@ export async function updateProjectFieldAction(
     let next: string | number | null = raw || null;
 
     if (field === 'name' && !raw) throw new Error('A project needs a name');
+
+    // The same shaping the creation path does, for the same reason: `maxLength`
+    // on the input is a courtesy to whoever is typing, not a rule. Cleared on
+    // purpose is allowed — null means the UI falls back to the full name.
+    if (field === 'alias') next = raw.toUpperCase().slice(0, INITIAL_LENGTH) || null;
 
     if (field === 'contractValue') {
       const n = raw === '' ? null : Number(raw.replace(/[^0-9.]/g, ''));

@@ -8,6 +8,7 @@ import { Check, Pencil } from 'lucide-react';
 
 import { MOTION } from '@/lib/design';
 import { formatMoney } from '@/lib/currency';
+import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
 import { updateProjectFieldAction, type ProjectField } from '@/lib/project-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,11 @@ import { Label } from '@/components/ui/label';
 interface Project {
   id: string;
   name: string;
+  alias: string | null;
+  documentNoWeekly: string | null;
+  documentNoDaily: string | null;
+  /** Set on the one imported project, whose reports still read db.json. */
+  legacyJsonId: string | null;
   clientName: string | null;
   contractorName: string | null;
   contractNo: string | null;
@@ -51,8 +57,19 @@ const FIELDS: {
   label: string;
   hint?: string;
   type?: 'text' | 'date' | 'number';
+  /** Caps the input, for the initial. */
+  maxLength?: number;
+  /** Uppercases as you type, for the initial. */
+  upper?: boolean;
 }[] = [
   { key: 'name', label: 'Project name' },
+  {
+    key: 'alias',
+    label: 'Project initial',
+    hint: 'Three letters, used wherever the full name will not fit. Clear it to go back to the full name.',
+    maxLength: INITIAL_LENGTH,
+    upper: true,
+  },
   { key: 'clientName', label: 'Client', hint: 'Who the work is for' },
   { key: 'contractorName', label: 'Contractor', hint: 'Who signs for the work' },
   { key: 'contractNo', label: 'Contract number', hint: 'Several SPK numbers can share one line' },
@@ -61,6 +78,16 @@ const FIELDS: {
     key: 'docNoPrefix',
     label: 'Document number prefix',
     hint: 'Document Control builds every drawing number from this, e.g. PRGG-00-G0',
+  },
+  {
+    key: 'documentNoWeekly',
+    label: 'Weekly report number',
+    hint: 'Printed in the weekly report header, e.g. PRGG-00-G0-RPT-002',
+  },
+  {
+    key: 'documentNoDaily',
+    label: 'Daily report number',
+    hint: 'Printed in the daily report header',
   },
   { key: 'contractValue', label: 'Contract value', type: 'number', hint: 'The signed figure' },
   { key: 'startDate', label: 'Starts', type: 'date' },
@@ -189,8 +216,32 @@ export default function ProjectDetails({ project }: { project: Project }) {
                             type={f.type === 'date' ? 'date' : 'text'}
                             defaultValue={valueOf(f.key)}
                             disabled={pending}
+                            maxLength={f.maxLength}
+                            // Uncontrolled, so the uppercasing is done to the
+                            // element rather than through state: the whole
+                            // dialog commits on blur and a controlled input
+                            // here would be a second source of truth.
+                            onChange={
+                              f.upper
+                                ? (e) => {
+                                    e.target.value = e.target.value.toUpperCase();
+                                  }
+                                : undefined
+                            }
                             onBlur={(e) => commit(f.key, e.target.value)}
-                            className="h-11"
+                            // The guess, for a project that has no initial yet
+                            // — which is every project made before the column
+                            // existed, Gundih included.
+                            placeholder={
+                              f.key === 'alias' ? deriveInitial(project.name) || 'ABC' : undefined
+                            }
+                            autoCapitalize={f.upper ? 'characters' : undefined}
+                            spellCheck={f.upper ? false : undefined}
+                            className={
+                              f.upper
+                                ? 'h-11 w-24 text-center text-base font-semibold uppercase tracking-[0.2em]'
+                                : 'h-11'
+                            }
                           />
                         )}
                         {/* The value field keeps its raw digits — 5920000.006405001
@@ -207,6 +258,23 @@ export default function ProjectDetails({ project }: { project: Project }) {
                         ) : (
                           f.hint && <p className="text-[11px] text-muted-foreground">{f.hint}</p>
                         )}
+                        {/* Said out loud rather than hidden. An imported
+                            project's reports still read their header from
+                            db.json, not from these columns, so typing here
+                            would look like it worked and change nothing on the
+                            paper. The fork is deliberate (see lib/data.ts:
+                            moving a signed report onto a different number is
+                            not a migration) and this is the admission that
+                            goes with it, the same way /klaim admits its photos
+                            carry no timestamps. */}
+                        {project.legacyJsonId &&
+                          (f.key === 'documentNoWeekly' || f.key === 'documentNoDaily') && (
+                            <p className="text-[11px] leading-relaxed text-warn">
+                              This project was imported, and its reports still take this number
+                              from the imported file. Setting it here will not change the printed
+                              header yet.
+                            </p>
+                          )}
                       </div>
                     ))}
                   </div>
