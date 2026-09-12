@@ -53,6 +53,15 @@ export type WeightBasis = 'boq' | 'even';
 export const projects = sqliteTable('projects', {
   id: id(),
   name: text('name').notNull(),
+  /**
+   * A short handle for the project, for every place the full name does not fit.
+   *
+   * Asked when the project is created and pre-filled by `deriveAlias` in
+   * `lib/alias.ts`, so it is rarely null on anything made after 12 Sep 2026.
+   * Null on everything made before: deriving an alias for a project already
+   * running is the owner's decision, not a migration's side effect.
+   */
+  alias: text('alias'),
   clientName: text('client_name'),
   contractorName: text('contractor_name'),
   contractNo: text('contract_no'),

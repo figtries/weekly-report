@@ -78,6 +78,13 @@
       "when": 1788706055629,
       "tag": "0010_solid_shriek",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789221208894,
+      "tag": "0011_chief_wither",
+      "breakpoints": true
     }
   ]
 }
