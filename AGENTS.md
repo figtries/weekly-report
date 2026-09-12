@@ -179,13 +179,22 @@ could never be given one. `ProjectField` and the `FIELDS` list in
 `ProjectDetails` are the pair to check: the same audit found
 `documentNoWeekly` and `documentNoDaily` had been READ into the printed report
 header since the importer wrote them and had no way in either. Still
-unreachable and deliberately so: `weightBasis` (it belongs to Data Overall),
-and `signatureLeft` / `signatureRight`, which are worse than unreachable —
-`lib/dashboard-db.ts:252` fills them from `contractorName` and `clientName`
-rather than from their own columns, so a signature block is a stand-in and the
-columns are dead. Fix that when the report header gets its own screen; reading
-the real columns without a fallback would blank the signature on Gundih's
-signed reports, because its columns are null.
+unreachable and deliberately so: `weightBasis`, which belongs to Data Overall.
+
+**The signature blocks were printing the wrong company on the wrong side.**
+`lib/dashboard-db.ts` built them from `contractorName` and `clientName` instead
+of from `signature_left` / `signature_right`, which dropped the signatory's name
+entirely and put the contractor where the client belongs: the imported project's
+own signed reports print the CLIENT on the left (PT PERTAMINA EP ZONA 11 /
+Andika Wijaya Kusumah) and the contractor on the right. Both columns were
+populated by the importer all along, so the right values were sitting there
+being ignored. They are read properly now, through `lib/signature.ts` — the one
+module that knows the JSON shape, because a `'use server'` file cannot export
+the sync reader — and the four halves are editable in Project details. The
+fallback keeps the old shape for a project whose columns really are empty, with
+the sides the right way round. Gundih on the SQLite path now prints byte for
+byte what db.json prints, which is what makes moving it later a migration
+rather than a change of number.
 
 **An imported project's report header does NOT come from these columns.** A
 project with `legacyJsonId` reads db.json, so typing a report number into

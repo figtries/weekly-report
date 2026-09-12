@@ -35,6 +35,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { leafPlanFraction } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
 import { db as sqlite, schema } from './sqlite';
+import { parseSignature } from './signature';
 import type {
   Database,
   ProgressMethod,
@@ -249,8 +250,28 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     workLocation: project.workLocation ?? '',
     documentNoWeekly: project.documentNoWeekly ?? '',
     documentNoDaily: project.documentNoDaily ?? '',
-    signatureLeft: { company: project.contractorName ?? '', name: '' },
-    signatureRight: { company: project.clientName ?? '', name: '' },
+    // READ FROM THEIR OWN COLUMNS, which until 12 Sep 2026 they were not.
+    //
+    // These two lines used to fabricate a block from `contractorName` and
+    // `clientName`, and both halves of that were wrong. The signatory's NAME
+    // was dropped entirely, so a report printed a company over an empty rule.
+    // And the sides were SWAPPED against the convention the imported project
+    // actually prints by: db.json's `p-utama` has the client on the left
+    // (PT PERTAMINA EP ZONA 11 / Andika Wijaya Kusumah) and the contractor on
+    // the right (PT. INDOTURBINE / Yopi Budiana Perkasa). Every project on
+    // this path was signing the wrong way round.
+    //
+    // The fallback keeps a report from printing two blank rules on a project
+    // whose columns are still null, and keeps the sides the right way round
+    // while doing it.
+    signatureLeft: parseSignature(project.signatureLeft) ?? {
+      company: project.clientName ?? '',
+      name: '',
+    },
+    signatureRight: parseSignature(project.signatureRight) ?? {
+      company: project.contractorName ?? '',
+      name: '',
+    },
     weekAnchorEndDate: weekRows.length ? weekRows[weekRows.length - 1].endDate : '',
     currentWeek,
     contractValue: project.contractValue ?? undefined,

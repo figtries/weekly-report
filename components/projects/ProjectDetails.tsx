@@ -9,6 +9,7 @@ import { Check, Pencil } from 'lucide-react';
 import { MOTION } from '@/lib/design';
 import { formatMoney } from '@/lib/currency';
 import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
+import { SIGNATURE_PARTS, signaturePart, type SignatureField } from '@/lib/signature';
 import { updateProjectFieldAction, type ProjectField } from '@/lib/project-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,9 @@ interface Project {
   documentNoDaily: string | null;
   /** Set on the one imported project, whose reports still read db.json. */
   legacyJsonId: string | null;
+  /** JSON `{ company, name }` each. Read through lib/signature.ts. */
+  signatureLeft: string | null;
+  signatureRight: string | null;
   clientName: string | null;
   contractorName: string | null;
   contractNo: string | null;
@@ -92,7 +96,41 @@ const FIELDS: {
   { key: 'contractValue', label: 'Contract value', type: 'number', hint: 'The signed figure' },
   { key: 'startDate', label: 'Starts', type: 'date' },
   { key: 'finishDate', label: 'Finishes', type: 'date' },
+  // The two blocks at the foot of every printed report. LEFT is the client and
+  // RIGHT is the contractor, which is the order the imported project's own
+  // signed reports print in — `lib/dashboard-db.ts` had them the other way
+  // round and dropped both names.
+  {
+    key: 'signatureLeftCompany',
+    label: 'Signature, left: company',
+    hint: 'The client side of the printed signature block',
+  },
+  { key: 'signatureLeftName', label: 'Signature, left: name', hint: 'Who signs for them' },
+  {
+    key: 'signatureRightCompany',
+    label: 'Signature, right: company',
+    hint: 'The contractor side',
+  },
+  { key: 'signatureRightName', label: 'Signature, right: name', hint: 'Who signs for them' },
 ];
+
+/**
+ * Fields whose ONLY reader is the printed report header.
+ *
+ * On an imported project every one of them is read from db.json rather than
+ * from these columns, so typing here looks like it worked and changes nothing
+ * on the paper. The dialog says so on exactly these fields. The fork is
+ * deliberate — see `lib/data.ts`: moving a signed report onto a different
+ * number is not a migration — and this is the admission that goes with it.
+ */
+const PRINT_ONLY = new Set<ProjectField>([
+  'documentNoWeekly',
+  'documentNoDaily',
+  'signatureLeftCompany',
+  'signatureLeftName',
+  'signatureRightCompany',
+  'signatureRightName',
+]);
 
 export default function ProjectDetails({ project }: { project: Project }) {
   const router = useRouter();
@@ -111,6 +149,9 @@ export default function ProjectDetails({ project }: { project: Project }) {
   useEffect(() => setMounted(true), []);
 
   const valueOf = (k: ProjectField): string => {
+    // The four signature halves are not columns: two JSON columns hold them,
+    // so they are read through the one module that knows that shape.
+    if (k in SIGNATURE_PARTS) return signaturePart(project, k as SignatureField);
     const v = project[k as keyof Project];
     if (v == null) return '';
     return String(v);
@@ -267,14 +308,12 @@ export default function ProjectDetails({ project }: { project: Project }) {
                             not a migration) and this is the admission that
                             goes with it, the same way /klaim admits its photos
                             carry no timestamps. */}
-                        {project.legacyJsonId &&
-                          (f.key === 'documentNoWeekly' || f.key === 'documentNoDaily') && (
-                            <p className="text-[11px] leading-relaxed text-warn">
-                              This project was imported, and its reports still take this number
-                              from the imported file. Setting it here will not change the printed
-                              header yet.
-                            </p>
-                          )}
+                        {project.legacyJsonId && PRINT_ONLY.has(f.key) && (
+                          <p className="text-[11px] leading-relaxed text-warn">
+                            This project was imported, and its reports still read this from the
+                            imported file. Setting it here will not change the printed report yet.
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

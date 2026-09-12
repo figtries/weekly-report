@@ -9,6 +9,7 @@ import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
 import { isKnownCurrency } from './currency';
 import { deriveInitial, INITIAL_LENGTH } from './initial';
+import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 
 /**
@@ -351,6 +352,18 @@ export type ProjectField =
    */
   | 'documentNoWeekly'
   | 'documentNoDaily'
+  /**
+   * The four halves of the two signature blocks. NOT columns: `signature_left`
+   * and `signature_right` each hold one JSON `{ company, name }`, so these are
+   * merged into it rather than assigned. Before this the columns were dead
+   * weight — `lib/dashboard-db.ts` fabricated a block from the contractor and
+   * client names, dropped the signatory, and put the two sides the wrong way
+   * round.
+   */
+  | 'signatureLeftCompany'
+  | 'signatureLeftName'
+  | 'signatureRightCompany'
+  | 'signatureRightName'
   | 'contractValue'
   | 'startDate'
   | 'finishDate';
@@ -381,6 +394,29 @@ export async function updateProjectFieldAction(
     if (field === 'startDate' || field === 'finishDate') {
       if (raw && !ISO_DATE.test(raw)) throw new Error('That is not a date');
       next = raw || null;
+    }
+
+    // The four signature halves are merged into one of two JSON columns, so
+    // they cannot go through the assignment below. Read, merge, write: the
+    // other half of the block has to survive editing this one.
+    const sig = SIGNATURE_PARTS[field as SignatureField];
+    if (sig) {
+      const row = db
+        .select({ left: schema.projects.signatureLeft, right: schema.projects.signatureRight })
+        .from(schema.projects)
+        .where(eq(schema.projects.id, projectId))
+        .get();
+      if (!row) throw new Error('That project is gone');
+      const stored = sig.column === 'signatureLeft' ? row.left : row.right;
+      db.update(schema.projects)
+        .set({
+          [sig.column]: mergeSignature(stored, field as SignatureField, raw),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.projects.id, projectId))
+        .run();
+      await revalidateEverything();
+      return { ok: true, id: projectId };
     }
 
     db.update(schema.projects)
