@@ -86,12 +86,12 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
     contents.reportingUnits ? `${contents.reportingUnits} reporting units` : null,
     `${contents.weeks} weeks`,
     contents.documents ? `${contents.documents} documents` : null,
-    // Said as a count rather than hidden: pricing is a separate job from
-    // scheduling, and this is how far along it is.
-    sheet.pricedRows ? `${sheet.pricedRows} priced` : 'no prices yet',
-    // The contract figure is NOT repeated here. It is stated once, in the strip
-    // directly below, where it stands next to what has actually been allocated
-    // against it.
+    // The priced-rows count stood here. It went with the Price column: this
+    // page has no pricing to report on any more, and Data Overall is where
+    // "how far along is the pricing" will be asked and answered.
+    //
+    // The contract figure is NOT repeated here either. It is stated once, in
+    // the strip directly below.
   ].filter(Boolean);
 
   return (
