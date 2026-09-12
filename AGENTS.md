@@ -254,6 +254,22 @@ second can have one file-level snapshot land on top of the other. With no
 as it did — ephemeral, but working. A developer machine is never touched
 either: it keeps its own `data/report.db`, which is the gate.
 
+**Attaching the store is a deploy-time act, not a dashboard act.** Creating the
+Blob store and connecting it to the project is only half of it: Vercel bakes
+environment variables into a deployment when that deployment is built, so the
+instance already serving traffic keeps running WITHOUT the token it was never
+given, and the app goes on silently losing every write. It has to be REDEPLOYED
+after the store is connected. This cost 12 Sep 2026 — the store was created and
+connected, the 404 did not budge, and the running deployment still reported
+`hasBlobToken: false`.
+
+Which is what `/api/health/db` is for. It makes the deployed instance answer for
+itself — token present, `snapshotConfigured`, which file it opened, whether that
+file is the throwaway `/tmp` copy, which projects it can see, and whether the
+store answers a list — so the three causes that look identical from outside (no
+store, a failing store, a write that never ran) can be told apart in one
+request. Check it before theorising; the token itself is never printed.
+
 # The v2 rebuild — read this before starting new work
 
 The app is being rebuilt from fundamentals against the CPP Gundih data
