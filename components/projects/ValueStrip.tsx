@@ -39,7 +39,11 @@ export default function ValueStrip({
   const signed = summary.contractValue > 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-2 sm:px-6">
+    // Second in the page's cascade, after the header and before the sheet. The
+    // route crossfade only fades the page's opacity; what the eye actually
+    // follows on a route change is the sections arriving in order, and this
+    // line was sitting still while the one above it moved.
+    <div className="animate-enter stagger-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-2 sm:px-6">
       <span className="flex items-center gap-2">
         <strong className="text-base font-semibold tabular-nums sm:text-lg">
           {signed ? formatMoney(summary.contractValue, summary.currency) : 'No contract value yet'}

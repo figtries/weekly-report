@@ -1042,6 +1042,19 @@ export default function ScheduleSheet({
   const anchor = selectedId ?? rows.at(-1)?.id ?? null;
 
   return (
+    // NO `.animate-enter` HERE, and that is deliberate rather than an omission.
+    // It was added so the plan would arrive with the same cascade as the header
+    // and the value strip above it, and photographed at 1280 the cost was
+    // obvious: PlannerSkeleton had already drawn sixteen rows of frame, the
+    // route crossfaded into the real sheet, and the sheet then spent 120ms of
+    // stagger plus 550ms of fade climbing from opacity 0 — so a screen that was
+    // full of rows went BLANK and refilled. The entrance meant for arriving at
+    // an empty page was undoing the skeleton's whole job.
+    //
+    // The route transition already carries this element: `RouteTransition` in
+    // app/projects/[id]/page.tsx fades the page in over 200ms, skeleton and
+    // plan alike. The cascade stays on the two bands above, which are small
+    // enough that the frame under them is a couple of grey bars.
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <SheetToolbar
         rowCount={rows.length}

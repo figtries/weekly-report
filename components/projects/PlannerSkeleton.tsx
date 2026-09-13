@@ -16,9 +16,17 @@ import { ArrowLeft } from 'lucide-react';
  * the id is known". That confused the CONTENT with the FRAME. Which project it
  * is decides the words; it decides nothing about the shape. Every project gets
  * the same header band, the same value strip, the same toolbar and the same
- * 44px rows under the same eight column headings — so the frame can be drawn
+ * 44px rows under the same column headings — so the frame can be drawn
  * truthfully, and the words arrive into a layout that does not move when they
  * land.
+ *
+ * WHICH MAKES THIS FILE A COPY THAT GOES STALE. It was written against the
+ * nine-column sheet and stayed there: after the 12 Sep column cut it drew
+ * Target, Price and Weight, a pricing bar ValueStrip no longer has, four
+ * desktop-only toolbar buttons on a phone, a legend the phone hides, and a pane
+ * 180px wider than the plan opens. Every one of those is a jump at the exact
+ * moment the plan lands — the failure it exists to prevent, inverted. Change
+ * the sheet, change this, and photograph the two side by side at 390px.
  *
  * Two details are load-bearing:
  *
@@ -46,98 +54,157 @@ export default function PlannerSkeleton() {
         Loading the plan
       </span>
 
-      <header className="shrink-0 border-b px-3 py-3 sm:px-6">
-        <Link
-          href="/projects"
-          className="inline-flex h-8 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" />
-          All projects
-        </Link>
-        <div className="mt-1 flex animate-pulse flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
+      {/* One wrapping row, ordered exactly as the real header orders it: on a
+          phone the way back and the two buttons share the first line and the
+          title takes the second; above 640px the way back has a line to itself
+          and the buttons return to the right of the title. Drawn as a column
+          instead — back link, then title, then buttons — this band was 33px
+          taller than the one it stands in for, and the whole plan slid up when
+          the words arrived. */}
+      <header className="shrink-0 border-b px-3 py-2 sm:px-6 sm:py-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-start">
+          <Link
+            href="/projects"
+            className="order-1 mr-auto inline-flex h-11 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full"
+          >
+            <ArrowLeft className="size-3.5" />
+            All projects
+          </Link>
+          <div className="order-2 flex shrink-0 animate-pulse items-center gap-2 sm:order-3">
+            <Block className="h-9 w-20 rounded-lg" />
+            {/* "Dashboard" on a phone, "Go to dashboard" above it. */}
+            <Block className="h-9 w-28 rounded-lg sm:w-36" />
+          </div>
+          {/* `sm:w-[38rem] sm:max-w-full` IS THE WRAP, not decoration. The real
+              title block is `sm:w-auto`, so the width flexbox lays this row out
+              with is the project NAME's max-content — about 610px for a
+              contract title — and 610 + the two buttons do not fit until the
+              content area passes ~870px. That is why the buttons take a line of
+              their own at 768 and 1024 and return to the title's right at 1280.
+              A placeholder has no text to be that wide, so it says the number:
+              38rem reproduces all three, and `max-w-full` keeps it from
+              overflowing a 640px screen. Left at `w-auto` the band was 41px
+              short at 768 and 49px at 1024, and the plan dropped by a row and a
+              half when it arrived. */}
+          <div className="order-3 w-full min-w-0 animate-pulse sm:order-2 sm:mr-auto sm:w-[38rem] sm:max-w-full">
             {/* Two title lines below `sm`, one above it. Every project here is
                 named after a contract — "RELOKASI 2 UNIT TAURUS 60 GTG DARI
                 TANJUNG FIELD..." — and at 390px that wraps. Reserving one line
                 for it made the whole page jump down by two when the name
                 landed. The second line is short, the way a wrapped line is. */}
-            <Block className="h-5 w-full max-w-md sm:h-6" />
+            <Block className="h-5 w-full max-w-md sm:h-6 sm:max-w-none" />
             <Block className="mt-1 h-5 w-2/3 max-w-sm sm:hidden" />
             <Block className="mt-1.5 h-3 w-11/12 max-w-lg" />
             <Block className="mt-1 h-3 w-2/3 max-w-md sm:hidden" />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Block className="h-9 w-20 rounded-lg" />
-            <Block className="h-9 w-24 rounded-lg" />
-          </div>
         </div>
       </header>
 
-      {/* The value strip. */}
+      {/* The value strip: the contract figure and the currency picker beside
+          it, and NOTHING else. The 10rem bar drawn here was the pricing
+          progress bar, which left ValueStrip on 12 Sep 2026 with the per-row
+          prices it measured — a placeholder for a control that no longer
+          exists. */}
       <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-2 sm:px-6">
-        <Block className="h-6 w-40" />
-        <Block className="order-3 h-1.5 w-full max-w-[10rem] rounded-full sm:order-2" />
-        <Block className="order-2 ml-auto h-9 w-16 rounded-lg sm:order-3" />
+        <Block className="h-6 w-40 sm:h-7" />
+        {/* The currency picker is a 44px target, not the 36px a `Block` here
+            guessed — and it is the tallest thing on the line, so it alone sets
+            the band. Eight pixels short, this strip held the whole plan 8px
+            above where it lands. Above 640px it drops to 32px, the way every
+            control in this app trades a thumb target for a pointer. */}
+        <Block className="h-11 w-16 rounded-lg sm:h-8" />
       </div>
 
       {/* The toolbar. Its buttons are 44px targets, and it WRAPS TO TWO ROWS at
-          every width — eight actions and then the search, which carries
-          `ml-auto` and is pushed onto a line of its own. Photographed side by
-          side, a one-row placeholder here left the sheet 70px too high and the
-          whole page hopped down when the real bar landed. The widths shrink
-          below `sm` because that is where the buttons drop their labels. */}
+          every width — the actions, then the search, which carries `sm:ml-auto`
+          and is pushed onto a line of its own. Photographed side by side, a
+          one-row placeholder here left the sheet 70px too high and the whole
+          page hopped down when the real bar landed; drawing the four
+          desktop-only actions on a phone cost the same 70px in the other
+          direction. Which buttons exist is as much of the shape as how wide
+          they are — see TOOLBAR. */}
       <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-1 border-b px-2 py-1.5 sm:px-3">
         {TOOLBAR.map((t, i) =>
-          t === 'gap' ? (
-            <span key={i} className="mx-0.5 h-6 w-px bg-border" aria-hidden />
+          t.startsWith('gap') ? (
+            <span
+              key={i}
+              className={`mx-0.5 h-6 w-px bg-border ${t === 'gap-lg' ? 'hidden sm:block' : ''}`}
+              aria-hidden
+            />
           ) : (
             <Block key={i} className={`h-11 rounded-lg ${t}`} />
           )
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <Block className="h-11 w-32 rounded-lg sm:w-40" />
-          <Block className="h-4 w-14" />
+        {/* `sm:ml-auto`, not `ml-auto` — the search is pushed right only where
+            it shares a line with the buttons. The real toolbar says the same
+            thing in the same words, and a phone that pushed it right left a
+            screen-wide hole beside it. */}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <Block className="h-11 w-28 rounded-lg sm:h-9 sm:w-36" />
+          <Block className="hidden h-4 w-14 sm:block" />
+          {/* List / Timeline. Below 768px the two panes take turns, so this
+              control is on screen exactly where the timeline pane is not. */}
+          <Block className="h-[3.125rem] w-32 rounded-lg sm:h-[2.625rem] md:hidden" />
         </div>
       </div>
 
       {/* The legend band that sits under the toolbar while no row is selected.
           It wraps to two lines at 390px on a project with packages, which is
-          the case worth matching. */}
-      <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
-        <Block className="h-3 w-24" />
-        <Block className="h-3 w-20" />
-        <Block className="h-3 w-24" />
-        <Block className="h-3 w-16" />
-        <Block className="h-3 w-20" />
+          the case worth matching.
+
+          `hidden md:flex`, because under 768px the sheet opens on the List tab
+          and ScheduleSheet hides the legend there — 60px spent naming colours
+          for bars that are not on screen. Drawn unconditionally, this pushed
+          the phone's first row 60px down and then let it snap back up. */}
+      <div className="hidden shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 md:flex">
+        <Block className="h-4 w-24" />
+        <Block className="h-4 w-20" />
+        <Block className="h-4 w-24" />
+        <Block className="h-4 w-16" />
+        <Block className="h-4 w-20" />
+        {/* Bar styles, on the right. It is a 44px button and therefore the
+            tallest thing on the line, so it alone decides this band: 57px with
+            it, 25px without, and the plan opened 32px high without it. */}
+        <Block className="ml-auto h-11 w-28 rounded-lg" />
       </div>
 
       <div className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">
         {/* The sheet pane, at the split the planner opens on.
-            `min(SHEET_NATURAL, shellWidth * 0.62)` in ScheduleSheet is
-            `min(800px, 62%)` here, which is the same arithmetic said in CSS —
-            and it has to be said, because an even flex split put the divider
-            130px left of where the real one lands and the whole timeline slid
-            sideways the moment the plan arrived. Anyone who has dragged the
-            divider has a stored ratio this cannot know; the default is the case
-            worth matching. Below `md` it is the full width, which is what the
-            real one does until you switch to the Timeline tab. */}
-        <div className="min-h-0 min-w-0 shrink-0 overflow-hidden max-md:!w-full md:w-[min(800px,62%)]">
-          <div className="min-w-[19rem] sm:min-w-[43.75rem]">
+            `min(SHEET_NATURAL, max(shellWidth * 0.62, FULL_GRID))` in
+            ScheduleSheet is `min(620px, max(62%, 490px))` here, which is the
+            same arithmetic said in CSS — and it has to be said, because an even
+            flex split put the divider 130px left of where the real one lands
+            and the whole timeline slid sideways the moment the plan arrived.
+            Anyone who has dragged the divider has a stored ratio this cannot
+            know; the default is the case worth matching. Below `md` it is the
+            full width, which is what the real one does until you switch to the
+            Timeline tab.
+
+            Both numbers moved with the column cut: SHEET_NATURAL 800 → 620 and
+            the body's floor 43.75rem → 30.625rem, which is the 490px six
+            columns now need. Left at the old pair, the frame opened the sheet
+            180px wider than the plan does and the divider jumped left the
+            moment it landed. */}
+        <div className="min-h-0 min-w-0 shrink-0 overflow-hidden max-md:!w-full md:w-[min(620px,max(62%,490px))]">
+          <div className="min-w-[19rem] sm:min-w-[30.625rem]">
             <div
               className={`grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground ${GRID}`}
               style={{ height: HEAD_H }}
             >
               {/* The headings are the real words. They are identical on every
                   project, they cost nothing, and a column you can already read
-                  is worth more than a grey bar of the same size. */}
+                  is worth more than a grey bar of the same size.
+
+                  Cell for cell the sheet's own header, `invisible` hash and
+                  Days/Duration pair included — one of that pair is always
+                  display:none, which is what keeps the child count at five
+                  below 640px and six above it. */}
               <span className="invisible sm:visible">#</span>
               <span>Task name</span>
-              <span className="text-right">Duration</span>
+              <span className="text-right sm:hidden">Days</span>
+              <span className="hidden text-right sm:block">Duration</span>
               <span className="hidden text-right sm:block">Start</span>
-              <span className="hidden text-right sm:block">Finish</span>
-              <span className="hidden text-right sm:block">Target</span>
-              <span className="hidden text-right sm:block">Price</span>
-              <span className="hidden text-right sm:block">Weight</span>
+              <span className="text-right">Finish</span>
               <span className="sr-only">Row actions</span>
             </div>
 
@@ -157,12 +224,12 @@ export default function PlannerSkeleton() {
                     className="h-3.5"
                     style={{ width: `${r.name}%`, marginLeft: r.indent * 14 }}
                   />
-                  <Block className="h-3 w-8 justify-self-end" />
+                  {/* Days / Duration, then Start above 640px only, then Finish
+                      — five cells in flow on a phone and six on a desktop, the
+                      same arithmetic as the header above. */}
+                  <Block className="h-3 w-7 justify-self-end sm:w-9" />
                   <Block className="hidden h-3 w-12 justify-self-end sm:block" />
-                  <Block className="hidden h-3 w-12 justify-self-end sm:block" />
-                  <Block className="hidden h-3 w-10 justify-self-end sm:block" />
-                  <Block className="hidden h-3 w-16 justify-self-end sm:block" />
-                  <Block className="hidden h-3 w-8 justify-self-end sm:block" />
+                  <Block className="h-3 w-11 justify-self-end sm:w-12" />
                   <span />
                 </div>
               ))}
@@ -193,29 +260,51 @@ export default function PlannerSkeleton() {
   );
 }
 
-/** The sheet's own geometry, copied deliberately — see ScheduleSheet. */
+/**
+ * The sheet's own geometry, copied deliberately — see ScheduleSheet.
+ *
+ * COPIED MEANS KEPT IN STEP. These four lines were the pre-12-September sheet:
+ * nine columns with Target, Price and Weight among them, a body floored at
+ * 43.75rem and the pane opening at `min(800px, 62%)`. The sheet dropped to four
+ * columns and every one of those numbers stayed here, so the frame drew three
+ * headings the plan does not have and then reflowed the moment it landed — the
+ * exact jump this file exists to prevent, arriving from the other direction.
+ *
+ * `scripts/verify-sheet-columns.ts` counts the tracks in ScheduleSheet. Nothing
+ * counts these, so they are written as the same two strings under the same two
+ * names: a mismatch is then something you can see by reading the two files side
+ * by side rather than something you have to measure.
+ */
 const ROW_H = 44;
 const HEAD_H = 36;
-const GRID =
-  'grid-cols-[0.75rem_minmax(6rem,1fr)_4.25rem_2.25rem] sm:grid-cols-[0.75rem_minmax(9rem,1fr)_4.25rem_5.5rem_5.5rem_5.5rem_7rem_4rem_2.25rem]';
+const GRID_SM = 'grid-cols-[0.75rem_minmax(5rem,1fr)_2.75rem_4.5rem_2.75rem]';
+const GRID_LG =
+  'sm:grid-cols-[4.25rem_minmax(8rem,1fr)_4.25rem_4.25rem_4.25rem_2.25rem]';
+const GRID = `${GRID_SM} ${GRID_LG}`;
 
 /**
  * The eight toolbar actions, at the widths their labels actually take: Add row,
- * Add inside, Paste, then Indent / Outdent / Delete, then Collapse all / Undo.
- * Below `sm` most of them are an icon alone, which is why every entry has two
- * widths.
+ * Add inside, Import, then Indent / Outdent / Delete, then Collapse all / Undo.
+ *
+ * Below `sm` FOUR OF THEM ARE NOT THERE AT ALL. Add inside, Indent, Outdent and
+ * Delete are `desktopOnly` in SheetToolbar — the row panel carries them on a
+ * phone — and drawing a placeholder for each put a third row under the toolbar
+ * that the real bar never has. Measured at 390px, the plan's first row landed
+ * 70px above where the frame had promised it, so the whole sheet jumped up the
+ * moment it arrived. Of the four that stay, three are an icon alone, which is
+ * why every entry still carries two widths.
  */
 const TOOLBAR = [
-  'w-24 sm:w-28',
-  'w-11 sm:w-32',
-  'w-11 sm:w-24',
+  'w-24 sm:w-28', // Add row — the only one that keeps its label on a phone
+  'hidden sm:block sm:w-32', // Add inside — desktop only
+  'w-11 sm:w-24', // Import
   'gap',
-  'w-11 sm:w-28',
-  'w-11 sm:w-36',
-  'w-11 sm:w-24',
-  'gap',
-  'w-11 sm:w-32',
-  'w-11 sm:w-28',
+  'hidden sm:block sm:w-28', // Indent — desktop only
+  'hidden sm:block sm:w-36', // Outdent — desktop only
+  'hidden sm:block sm:w-24', // Delete — desktop only
+  'gap-lg',
+  'w-11 sm:w-32', // Collapse all
+  'w-11 sm:w-28', // Undo
 ] as const;
 
 /**
@@ -253,12 +342,12 @@ const ROWS = [
 /**
  * A placeholder shape, and NOT an animation.
  *
- * The pulse lives on the six band wrappers instead, one animation each. It was
+ * The pulse lives on the seven band wrappers instead, one animation each. It was
  * on every block, which is about 170 of them once the sixteen rows are counted,
  * and a throttled phone spent the whole wait ticking 170 opacity animations and
  * then tearing them down at the exact moment the real plan wanted the main
  * thread: measured at 4x throttle, the plan landed 200 ms later than with no
- * skeleton at all. Six wrappers cost nothing and look identical, since blocks
+ * skeleton at all. Seven wrappers cost nothing and look identical, since blocks
  * that all start together were pulsing in unison anyway.
  *
  * The wrappers are placed so that no REAL text sits inside one — the back link

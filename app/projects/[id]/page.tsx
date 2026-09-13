@@ -49,8 +49,29 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // client chunks that are not requested until the click — happened on a blank
   // screen. 496 ms on a five-row project, 1.4 s on Gundih, on localhost with no
   // network in the way. The frame does not depend on the id; only the words do.
+  //
+  // THE FALLBACK IS WRAPPED IN `RouteTransition` TOO, and that is what makes
+  // opening a project look like a route change instead of a cut. The body's
+  // wrapper is the only one that used to exist, and the body is exactly the
+  // part that is NOT on screen when the navigation commits — React shows this
+  // shell instead. So the list played `page-exit` and faded away over an
+  // incoming page that had no `page-enter` name at all, which means it was
+  // never captured and simply appeared, whole, in one frame. Every other route
+  // in the app crossfades; this one snapped, and then snapped a second time
+  // when the plan replaced the shell.
+  //
+  // Named on both branches, the swap is a crossfade at each step: list → shell
+  // → plan. The id is the SAME on purpose. It says the two are one page in two
+  // states, and the pair being in different slots of the boundary is what still
+  // gives React a genuine unmount/mount to animate.
   return (
-    <Suspense fallback={<PlannerSkeleton />}>
+    <Suspense
+      fallback={
+        <RouteTransition id="project-home">
+          <PlannerSkeleton />
+        </RouteTransition>
+      }
+    >
       <ProjectBody params={params} />
     </Suspense>
   );
