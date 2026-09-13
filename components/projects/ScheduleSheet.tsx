@@ -284,8 +284,6 @@ export default function ScheduleSheet({
   const [stylesOpen, setStylesOpen] = useState(false);
   const [fitTimeline, setFitTimeline] = useState(false);
   const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
-  // The last delete, for as long as it can still be taken back. See UndoBar.
-  const [undoDelete, setUndoDelete] = useState<{ id: string; name: string } | null>(null);
   const [query, setQuery] = useState('');
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
   // and 2,162 buttons; only what fits on screen, plus a margin, is built now.
@@ -807,7 +805,7 @@ export default function ScheduleSheet({
     [structure, projectId]
   );
 
-  /** Ctrl+Z and the Undo bar are two doors onto the same step back. */
+  /** Ctrl+Z and the toolbar's Undo are two doors onto the same step back. */
   const rememberUndo = useCallback((undoId: string) => {
     setUndoStack((s) => [
       ...s.slice(-49),
@@ -818,19 +816,16 @@ export default function ScheduleSheet({
   /**
    * Delete, and say so afterwards instead of asking first.
    *
-   * A leaf goes straight away and leaves an Undo behind it; a row with children
-   * still gets the confirmation panel, because what it takes is more than the
-   * row being pointed at. That asymmetry is the point — the dialog is spent
-   * where it buys something, and nowhere else.
+   * A leaf goes straight away and lands on the undo stack, where the toolbar's
+   * Undo and Ctrl+Z take it back; a row with children still gets the
+   * confirmation panel, because what it takes is more than the row being
+   * pointed at. That asymmetry is the point — the dialog is spent where it buys
+   * something, and nowhere else.
+   *
+   * It used to drop a toast at the foot of the screen as well, carrying its own
+   * Undo button. Removed 13 Sep 2026: on a phone it covered the bottom rows of
+   * the sheet to offer a second copy of a button already in the toolbar.
    */
-  const dismissUndo = useCallback(() => setUndoDelete(null), []);
-  const runUndo = useCallback(
-    (id: string) => {
-      structure(undoDeleteRowAction(id));
-      setUndoDelete(null);
-    },
-    [structure]
-  );
 
   const removeRow = useCallback(
     (row: SheetRow) => {
@@ -843,9 +838,7 @@ export default function ScheduleSheet({
         deleteRowAction(row.id),
         (rs) => predictDelete(rs, row.id),
         (res) => {
-          if (!res.undoId) return;
-          setUndoDelete({ id: res.undoId, name: row.name });
-          rememberUndo(res.undoId);
+          if (res.undoId) rememberUndo(res.undoId);
         }
       );
     },
@@ -1378,10 +1371,8 @@ export default function ScheduleSheet({
             setMenuMode('menu');
           }}
           onChanged={applySheet}
-          onDeleted={(undoId, name) => {
-            if (!undoId) return;
-            setUndoDelete({ id: undoId, name });
-            rememberUndo(undoId);
+          onDeleted={(undoId) => {
+            if (undoId) rememberUndo(undoId);
           }}
           onUndoable={(run: () => Promise<ActionResult>) =>
             setUndoStack((s) => [...s.slice(-49), { kind: 'structure', run }])
@@ -1394,16 +1385,6 @@ export default function ScheduleSheet({
             if (message) setError(message);
             syncRows();
           }}
-        />
-      )}
-
-      {undoDelete && (
-        <UndoBar
-          key={undoDelete.id}
-          id={undoDelete.id}
-          name={undoDelete.name}
-          onUndo={runUndo}
-          onDismiss={dismissUndo}
         />
       )}
 
@@ -1422,56 +1403,6 @@ export default function ScheduleSheet({
         onClose={() => setStylesOpen(false)}
         onChanged={applySheet}
       />
-    </div>
-  );
-}
-
-/**
- * What stands in for the confirmation dialog on a leaf row.
- *
- * It has to be reachable with a thumb, so it sits at the foot of the viewport
- * above the home indicator rather than up beside the toolbar, and Undo is a
- * full 44px target. Ten seconds rather than the four a toast library defaults
- * to: this is the only way back, and the person who wants it is usually the one
- * who has just looked away from the screen.
- *
- * Keyed on the delete it belongs to, and handed callbacks that never change
- * identity: this sheet re-renders on every scroll tick, and a timer that
- * restarted with its parent would be a bar that never went away.
- */
-function UndoBar({
-  id,
-  name,
-  onUndo,
-  onDismiss,
-}: {
-  id: string;
-  name: string;
-  onUndo: (id: string) => void;
-  onDismiss: () => void;
-}) {
-  useEffect(() => {
-    const t = setTimeout(onDismiss, 10_000);
-    return () => clearTimeout(t);
-  }, [onDismiss]);
-
-  return (
-    <div
-      className="animate-fade-in-up pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-    >
-      <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border bg-card py-2 pl-4 pr-2 shadow-lg">
-        <p className="min-w-0 flex-1 truncate text-sm">
-          Deleted <span className="font-semibold">{name}</span>
-        </p>
-        <button
-          type="button"
-          onClick={() => onUndo(id)}
-          className="h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold"
-        >
-          Undo
-        </button>
-      </div>
     </div>
   );
 }

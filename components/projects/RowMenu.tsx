@@ -84,7 +84,7 @@ export default function RowMenu({
    */
   onChanged: (sheet?: Sheet) => void;
   /** The delete that just happened, and the handle that can take it back. */
-  onDeleted?: (undoId: string | undefined, name: string) => void;
+  onDeleted?: (undoId: string | undefined) => void;
   /**
    * A structural move this panel just made, and the move that reverses it.
    *
@@ -360,9 +360,9 @@ export default function RowMenu({
 
             <Divider />
 
-            {/* A leaf goes on the press and leaves an Undo behind it. Only a
-                row that would take others with it is worth a question first —
-                see deleteRowAction. */}
+            {/* A leaf goes on the press and lands on the sheet's undo stack.
+                Only a row that would take others with it is worth a question
+                first — see deleteRowAction. */}
             <Item
               icon={<Trash2 className="size-4" />}
               onClick={() =>
@@ -371,7 +371,7 @@ export default function RowMenu({
                   : run(
                       () => deleteRowAction(row.id),
                       false,
-                      (res) => onDeleted?.(res.undoId, row.name),
+                      (res) => onDeleted?.(res.undoId),
                       (rs) => predictDelete(rs, row.id)
                     )
               }
@@ -460,7 +460,7 @@ export default function RowMenu({
                   run(
                     () => deleteRowAction(row.id),
                     false,
-                    (res) => onDeleted?.(res.undoId, row.name),
+                    (res) => onDeleted?.(res.undoId),
                     (rs) => predictDelete(rs, row.id)
                   )
                 }
