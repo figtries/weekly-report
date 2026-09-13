@@ -45,8 +45,12 @@ async function WeightsPageBody() {
     <RouteTransition id="weekly-weights">
       <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
         <PageHeader section="Data Overall" title="Prices and weights" className="mb-0 animate-enter">
+          {/* The promise, said once, at the top, in the words that remove the
+              fear. Nobody arrives here with a complete BOQ, and believing you
+              need one is what stops a project getting set up at all. */}
           <span className="font-semibold text-foreground">
-            These belong to the project, not to one week.
+            Type only the prices you have. Everything else takes an even share, and the total
+            always closes at 100%.
           </span>
         </PageHeader>
 

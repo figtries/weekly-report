@@ -108,6 +108,13 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
     });
   }
 
+  /** How many activities carry a price now, counting what is only typed. */
+  const pricedCount = useMemo(
+    () => patched.filter((n) => n.isLeaf && (n.price ?? 0) > 0).length,
+    [patched]
+  );
+  const leafCount = useMemo(() => patched.filter((n) => n.isLeaf).length, [patched]);
+
   const unit = openUnit ? (screen.units.find((u) => u.id === openUnit) ?? null) : null;
 
   return (
@@ -118,7 +125,13 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
         </p>
       )}
 
-      <ContractStrip screen={screen} live={live} gap={gap} />
+      <PricingHero
+        screen={screen}
+        live={live}
+        gap={gap}
+        priced={pricedCount}
+        total={leafCount}
+      />
 
       {unit ? (
         <UnitRows
@@ -177,40 +190,91 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
 }
 
 /**
- * The contract, what is still unpriced, and what the weights come to.
+ * How far the pricing has got, as a thing with a shape rather than a sentence.
  *
- * The last of those must always read 100.00. Showing it is not decoration: it
- * is the screen taking responsibility for the number, so that closing at 100
- * stops being a thing the person has to check by hand every time they change
- * something. If it ever reads anything else, that is a bug here, not a job for
- * whoever is typing.
+ * The first version of this was one thin line of grey text, and it was the
+ * wrong shape for what it says. This screen is a job someone works THROUGH, so
+ * the top of it has to answer "how far am I" at a glance and move while they
+ * work. A bar does that; a sentence makes you read three numbers and subtract.
+ *
+ * The 100.00% is not decoration either. It is the screen taking responsibility
+ * for the one thing people get wrong by hand, so that closing at 100 stops
+ * being something to check. If it ever reads anything else, that is a bug here,
+ * not a job for whoever is typing.
  */
-function ContractStrip({
+function PricingHero({
   screen,
   live,
   gap,
+  priced,
+  total,
 }: {
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
   gap: number;
+  priced: number;
+  total: number;
 }) {
   const { summary } = screen;
   const signed = summary.contractValue > 0;
+  const allocated = Math.max(0, summary.contractValue - gap);
+  const pct = signed ? Math.min(100, (allocated / summary.contractValue) * 100) : 0;
+  const done = gap <= 0.5 && signed;
 
   return (
-    <Card size="sm" className="gap-2">
-      <CardContent className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-        <span className="text-lg font-semibold tabular-nums">
-          {signed ? formatMoney(summary.contractValue, summary.currency) : 'No contract value yet'}
-        </span>
-        {gap > 0.5 && (
-          <span className="text-sm text-muted-foreground">
-            {formatMoney(gap, summary.currency)} still has no price on it
-          </span>
+    <Card className="gap-3 bg-gradient-to-br from-chart-1/8 to-transparent ring-chart-1/20">
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Contract value
+            </p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
+              {signed
+                ? formatMoney(summary.contractValue, summary.currency)
+                : 'No contract value yet'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Weights total
+            </p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-chart-1 sm:text-3xl">
+              {live.total.toFixed(2)}%
+            </p>
+          </div>
+        </div>
+
+        {signed && (
+          <>
+            {/* Priced against the contract. It fills as prices are typed, which
+                is the only moving thing on the screen that says "progress". */}
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-foreground/8">
+              <div
+                className="h-full rounded-full bg-chart-1 transition-[width] duration-300 ease-ios"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              {done ? (
+                <span className="font-medium text-ok">
+                  Every activity has a price. These weights come from the money.
+                </span>
+              ) : (
+                <>
+                  <strong className="tabular-nums text-foreground">
+                    {formatMoney(allocated, summary.currency)}
+                  </strong>{' '}
+                  priced, <strong className="tabular-nums text-foreground">
+                    {formatMoney(gap, summary.currency)}
+                  </strong>{' '}
+                  still open · {priced} of {total} activities
+                </>
+              )}
+            </p>
+          </>
         )}
-        <span className="ml-auto text-sm tabular-nums text-muted-foreground">
-          Weights total <strong className="text-foreground">{live.total.toFixed(2)}%</strong>
-        </span>
       </CardContent>
     </Card>
   );
@@ -330,6 +394,16 @@ function RowList({
   showBoth: boolean;
   scopeLabel: string;
 }) {
+  const maxScope =
+    against > 0
+      ? Math.max(
+          ...rows
+            .filter((r) => r.isLeaf)
+            .map((r) => ((live.bobotOf.get(r.id) ?? 0) / against) * 100),
+          0
+        )
+      : 0;
+
   return (
     <>
       {/* Column captions, and only from `sm` up, because below that the row is
@@ -347,6 +421,12 @@ function RowList({
           const overall = row.isLeaf ? (live.bobotOf.get(row.id) ?? 0) : subtreeOf(row.id, rows, live);
           const inScope = against > 0 ? (overall / against) * 100 : 0;
           const priced = (typed[row.id] ?? String(row.price ?? '')) !== '';
+          // Scaled against the BIGGEST row here, not against 100. Thirteen rows
+          // of 7.69% drawn on a 0-100 scale are thirteen identical slivers, and
+          // a bar that cannot tell two rows apart is worse than no bar. Against
+          // the largest, the list becomes a shape you read in one look, and
+          // typing one price visibly redraws the whole column.
+          const bar = maxScope > 0 ? Math.max(2, (inScope / maxScope) * 100) : 0;
 
           // At most one line, and never the same number twice. Inside an SPK
           // the project figure is a different question and earns its place;
@@ -367,7 +447,12 @@ function RowList({
               // "3 Procurement Material Solar" both came out as
               // "Procurement ..." and the list became unreadable. Same lesson
               // the planner learned about its own name column.
-              className="rounded-lg bg-card px-3 py-2 ring-1 ring-foreground/10 sm:flex sm:items-center sm:gap-3"
+              className={cn(
+                'rounded-lg bg-card px-3 py-2.5 ring-1 transition-colors duration-300 ease-ios sm:flex sm:items-center sm:gap-3',
+                // A priced row is visibly settled. Reading down the list you can
+                // see how far you got without counting anything.
+                priced ? 'ring-chart-1/35' : 'ring-foreground/10'
+              )}
               style={{ marginLeft: `${Math.min(row.depth, 4) * 12}px` }}
             >
               <div className="min-w-0 sm:flex-1">
@@ -384,23 +469,52 @@ function RowList({
               <div className="mt-2 flex items-center gap-3 sm:mt-0 sm:shrink-0">
                 <MoneyInput
                   defaultValue={row.price != null ? String(row.price) : ''}
-                  placeholder="0"
-                  className="min-h-11 flex-1 rounded-lg bg-background px-2 text-right text-sm tabular-nums ring-1 ring-foreground/10 focus:ring-2 focus:ring-chart-1 focus:outline-none sm:w-36 sm:flex-none"
+                  placeholder="Add price"
+                  className="min-h-11 flex-1 rounded-lg bg-background px-3 text-right text-sm tabular-nums ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground focus:ring-2 focus:ring-chart-1 focus:outline-none sm:w-40 sm:flex-none"
                   onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
                   onCommit={(raw) => onCommit(row.id, raw)}
                 />
 
-                <div className="w-28 shrink-0 text-right">
-                  <span
-                    className={cn(
-                      'block text-sm font-semibold tabular-nums',
-                      !priced && 'text-muted-foreground'
-                    )}
-                  >
-                    {inScope.toFixed(2)}%
-                  </span>
+                <div className="w-28 shrink-0">
+                  <div className="flex items-baseline justify-end gap-1.5">
+                    <span
+                      className={cn(
+                        'text-sm font-semibold tabular-nums',
+                        priced ? 'text-foreground' : 'text-muted-foreground'
+                      )}
+                    >
+                      {inScope.toFixed(2)}%
+                    </span>
+                  </div>
+                  {/* The weight as a shape. Everything the digits say, said
+                      again in a form you can compare across rows at a glance,
+                      and the only part of the row that MOVES while you type. */}
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-foreground/8">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-[width] duration-300 ease-ios',
+                        priced ? 'bg-chart-1' : 'text-foreground/30'
+                      )}
+                      style={{
+                        width: `${bar}%`,
+                        // HATCHED while the figure is provisional. Solid bars on
+                        // an unpriced plan are thirteen identical full blocks
+                        // that read as "done" or as a stuck progress bar; the
+                        // hatch reads as "placeholder", which is what an even
+                        // share is. It turns solid the moment a price decides it.
+                        ...(priced
+                          ? null
+                          : {
+                              backgroundImage:
+                                'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 5px)',
+                            }),
+                      }}
+                    />
+                  </div>
                   {note && (
-                    <span className="block text-xs tabular-nums text-muted-foreground">{note}</span>
+                    <span className="mt-1 block text-right text-xs tabular-nums text-muted-foreground">
+                      {note}
+                    </span>
                   )}
                 </div>
               </div>
