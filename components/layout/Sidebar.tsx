@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -175,7 +175,58 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
   );
 }
 
+/**
+ * WHICH LINK IS THE CURRENT ONE — and why this is not behind `<Suspense>`.
+ *
+ * `usePathname()` is request data, so under `cacheComponents` calling it during
+ * a prerender postpones, and this used to sit inside a `<Suspense>` with an
+ * unhighlighted `NavList` as the fallback. That boundary cost the app a
+ * whole-shell re-render on five routes, and the mechanism is worth writing
+ * down because nothing about it is guessable:
+ *
+ * React numbers its streamed Suspense boundaries `S:0…S:n`. Next numbers the
+ * PPR resume segments it splices into a prerendered shell `S:3…S:n` — the SAME
+ * namespace, always starting at 3 (measured on 13 Sep 2026 across every route:
+ * remove one boundary and the resume segments still start at 3). The shell had
+ * exactly four boundaries, so React's last one was `S:3` and the two collided.
+ *
+ * They collide because the splices are not simultaneous. `$RC` resolves both
+ * elements and QUEUES the reveal, flushing up to ~300ms later to batch it; in
+ * that window React's `<div hidden id="S:3">` is still in the document, so
+ * Next's `$RS("S:3","P:3")` — which resolves by id, at call time — took the
+ * SIDEBAR and spliced it into a summary card. React then found a DOM it had
+ * not produced, threw #418, and regenerated `.section-shell`: week picker,
+ * stepper and tab row rebuilt on every load of
+ * `/weekly/[w]/summary`, `/weekly/[w]/control`, `/weekly/[w]/overall`,
+ * `/dokumen/[w]/summary` and `/dokumen/[w]/vdrl`. Measured cost, 390px at 4x
+ * CPU: 308ms to first contentful paint against 156ms on a page without it.
+ *
+ * This is a Next bug, and the only lever the app has is to own fewer streamed
+ * boundaries than three. So the pathname is read AFTER mount instead: nothing
+ * postpones, no boundary is emitted, the nav ships complete in the shell, and
+ * the active link lights up on hydration. Client-side navigation still updates
+ * it, because `LiveNavList` keeps the real hook.
+ *
+ * `scripts/verify-hydration.mjs` fails the moment a fourth boundary comes back.
+ */
 function ActiveNavList({ currentWeek }: { currentWeek: number }) {
+  // `useSyncExternalStore` rather than a mounted flag in an effect: it takes a
+  // server snapshot and a client one directly, so there is no setState during
+  // an effect and no extra render pass to get there.
+  const live = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  return live ? (
+    <LiveNavList currentWeek={currentWeek} />
+  ) : (
+    <NavList pathname={null} currentWeek={currentWeek} />
+  );
+}
+
+/** Mounted only after hydration, which is what keeps `usePathname()` off the prerender. */
+function LiveNavList({ currentWeek }: { currentWeek: number }) {
   return <NavList pathname={usePathname()} currentWeek={currentWeek} />;
 }
 
@@ -309,9 +360,7 @@ export default function Sidebar({
 
           {switcher}
 
-          <Suspense fallback={<NavList pathname={null} currentWeek={currentWeek} />}>
-            <ActiveNavList currentWeek={currentWeek} />
-          </Suspense>
+          <ActiveNavList currentWeek={currentWeek} />
         </div>
       </aside>
     </>

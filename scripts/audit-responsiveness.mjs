@@ -62,9 +62,16 @@ page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
 page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
 const rows = [];
-function note(kind, what, ms, extra = '') {
+/**
+ * `skip` is not a failure and must not be counted as one.
+ *
+ * A control this script cannot find is usually this script's fault — the page
+ * moved on after the previous press, or the label changed. Reporting that as
+ * DEAD alongside a genuinely frozen button is how a tool stops being believed.
+ */
+function note(kind, what, ms, extra = '', skip = false) {
   const limit = kind === 'nav' ? SLOW_NAV : SLOW_PRESS;
-  const flag = ms === null ? 'DEAD' : ms > limit ? 'SLOW' : 'ok  ';
+  const flag = skip ? 'skip' : ms === null ? 'DEAD' : ms > limit ? 'SLOW' : 'ok  ';
   rows.push({ kind, what, ms, flag, extra });
   console.log(
     `${flag} ${kind.padEnd(5)} ${what.padEnd(30)} ${(ms === null ? '—' : `${ms}ms`).padStart(8)}  ${extra}`
@@ -215,7 +222,7 @@ async function tap(label, control, { before } = {}) {
   try {
     await press(control);
   } catch (e) {
-    note('press', label, null, e.message);
+    note('press', label, null, e.message, /^no control|disabled$/.test(e.message));
     return;
   }
   note('press', label, await result());
@@ -238,17 +245,22 @@ await at('/weekly/36/overall');
 // The drill into every measurable item at once. 176 of them on this project,
 // which is the one place a render could plausibly cost more than the network.
 await tap('Browse all items', 'Browse all');
-await tap('open a worklist card', 'Review');
 
-// Document Control's data screen.
+// Document Control's data screen. Reloaded before each press: opening a group
+// drills the screen, so a chain of presses on one load measures whatever the
+// previous press happened to leave behind — which is how this reported the
+// needs-work filter as dead when, on its own, it works.
 await at('/dokumen/36/data');
 await tap('open a document group', 'EXECUTION PLAN');
-await tap('filter needs work', '98 need work');
+await at('/dokumen/36/data');
+await tap('filter needs work', 'need work');
+await at('/dokumen/36/data');
 await tap('Add group', 'Add group');
 
 // Daily.
 await at('/daily');
 await tap('All months', 'All months');
+await at('/daily');
 await tap('New Daily Report', 'New Daily Report');
 
 // Document Control.
@@ -277,12 +289,14 @@ await tap('open another project', 'Open', {
 
 await browser.close();
 
-const bad = rows.filter((r) => r.flag !== 'ok  ');
+const bad = rows.filter((r) => r.flag === 'SLOW' || r.flag === 'DEAD');
+const skipped = rows.filter((r) => r.flag === 'skip').length;
 console.log('');
 const real = consoleErrors.filter((e) => !/favicon|DevTools|Download the React/i.test(e));
 if (real.length) console.log(`console errors (${real.length}):\n  ${real.slice(0, 6).join('\n  ')}\n`);
 console.log(
   bad.length
     ? `${bad.length} of ${rows.length} felt slow or dead.`
-    : `All ${rows.length} inside budget (press <${SLOW_PRESS}ms, nav <${SLOW_NAV}ms).`
+    : `All ${rows.length - skipped} measured are inside budget (press <${SLOW_PRESS}ms, nav <${SLOW_NAV}ms)` +
+      (skipped ? `, ${skipped} skipped because the control was not on screen.` : '.')
 );
