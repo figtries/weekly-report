@@ -215,7 +215,10 @@ Logika murni, bisa diuji tanpa React dan tanpa browser. Task inilah yang membukt
 **Interfaces:**
 - Consumes: `loadWeightNodes(projectId)` dari `lib/weights-read.ts`; `deriveWeights(nodes, contractValue)`, `summariseWeights(nodes, currency, signedValue)`, tipe `WeightNode` dan `WeightSummary` dari `lib/weights.ts`; `db`, `schema` dari `lib/sqlite.ts`.
 - Produces:
-  - `interface WeightsRow { id: string; code: string; name: string; depth: number; isLeaf: boolean; price: number | null; bobotOverall: number; bobotInUnit: number; fromGap: boolean }`
+  - `type WeightShare = 'price' | 'factor' | 'even'`
+  - `interface WeightsRow { id: string; code: string; name: string; depth: number; isLeaf: boolean; price: number | null; bobotOverall: number; bobotInUnit: number; share: WeightShare }`
+
+  **Dikoreksi saat implementasi, 13 Sep.** Rencana ini semula menulis `fromGap: boolean` dengan definisi "tidak punya harga sendiri DAN tidak punya leluhur berharga". Itu salah untuk kasus paling umum: baris di bawah SPK yang berharga tapi belum diketik harganya sendiri tetap mengambil jatah rata, dan justru itu yang orang perlu lihat. Dan baris ber-`workstepFactor` (Gundih memakai 0,5 / 0,3 / 0,2 untuk IFR / IFA / AFC) mengambil pecahan yang DINYATAKAN, bukan jatah rata — melabelinya "even share" memberi tahu orang bahwa angkanya tebakan padahal itu satu-satunya hal di baris itu yang diputuskan sengaja. Tiga keadaan, bukan dua.
   - `interface WeightsUnit { id: string; code: string; name: string; unitValue: number | null; bobotOverall: number; pricedRows: number; totalRows: number; rows: WeightsRow[] }`
   - `interface WeightsScreen { summary: WeightSummary; units: WeightsUnit[]; hasUnits: boolean }`
   - `export function buildWeightsScreen(nodes: WeightNode[], meta: Map<string, { code: string; name: string }>, currency: string, signedValue: number | null): WeightsScreen`
@@ -775,15 +778,18 @@ dan di sebelahnya **dua bobot**, plus label untuk baris yang tidak diketik. Dua,
 
 ```tsx
 <div className="flex shrink-0 flex-col items-end">
-  <span className={cn('text-sm font-semibold tabular-nums', row.fromGap && 'text-muted-foreground')}>
+  <span className={cn('text-sm font-semibold tabular-nums', row.share !== 'price' && 'text-muted-foreground')}>
     {liveInUnit(row).toFixed(2)}%
   </span>
   <span className="text-xs tabular-nums text-muted-foreground">
     {liveOverall(row).toFixed(2)}% of project
   </span>
 </div>
-{row.fromGap && <Badge variant="secondary">even share</Badge>}
+{row.share === 'even' && <Badge variant="secondary">even share</Badge>}
+{row.share === 'factor' && <Badge variant="secondary">set fraction</Badge>}
 ```
+
+Tiga keadaan, bukan dua, dan labelnya berbeda karena maknanya berbeda: `even` berarti tidak ada yang memutuskan angka ini, `factor` berarti ada yang memutuskannya sebagai pecahan induknya. Menyamakan keduanya membuat baris yang justru paling sengaja terbaca paling asal.
 
 Judul kolomnya menyebut keduanya sekali di atas daftar, jadi angka kecil di bawah tidak perlu mengulang kata "in {unit.code}":
 
