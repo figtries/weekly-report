@@ -40,6 +40,11 @@ const GROUPS = {
   progress: [
     { key: 'overall', label: 'Fill in', short: 'Fill in', printable: false },
     { key: 'control', label: 'Check', short: 'Check', printable: false },
+    // Not a step, and deliberately not in `steps` below: the stepper is the
+    // order a WEEK is worked through, and prices belong to the project. Being
+    // listed here is what makes the tab detect as active and get prefetched;
+    // its visible entry is the pill in the action group.
+    { key: 'weights', label: 'Prices and weights', short: 'Weights', printable: false },
   ],
   laporan: [
     { key: 'summary', label: 'Overall Summary', short: 'Summary', printable: true },

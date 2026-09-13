@@ -152,5 +152,59 @@ check(
   erows.map((r) => `${r.id}=${r.bobotOverall.toFixed(2)}/${r.share}`).join(' ')
 );
 
+/**
+ * A FLAT plan: every top-level row is a leaf, nothing nested under anything.
+ *
+ * This is what a project made in the app looks like before anyone indents a
+ * row, and the first version of this screen showed thirteen cards all reading
+ * 0.00% and "0 of 0 rows priced" on exactly such a project. The cards were
+ * built from the top-level rows and then filled with their DESCENDANTS, and a
+ * leaf has none — so every card excluded the only row it was about.
+ *
+ * Same trap as `assignColorGroups`, which took the top rows as packages
+ * without checking they were branches. A card is a BRANCH. A top-level leaf is
+ * a row, and it belongs in `looseRows` where it can be given a price.
+ */
+const flat: WeightNode[] = [
+  node({ id: 'F1', order: 1, isLeaf: true }),
+  node({ id: 'F2', order: 2, isLeaf: true }),
+  node({ id: 'F3', order: 3, isLeaf: true, price: 500 }),
+];
+const flatScreen = buildWeightsScreen(
+  flat,
+  new Map(flat.map((n) => [n.id, { code: n.id, name: n.id }])),
+  'IDR',
+  1000
+);
+
+check(
+  'a flat plan makes no empty cards',
+  flatScreen.units.length === 0,
+  `${flatScreen.units.length} cards`
+);
+
+check(
+  'its rows are reachable, and priceable, on the first screen',
+  flatScreen.looseRows.length === 3 && flatScreen.looseRows.every((r) => r.bobotOverall > 0),
+  flatScreen.looseRows.map((r) => `${r.id}=${r.bobotOverall.toFixed(2)}`).join(' ')
+);
+
+check(
+  'and a flat plan still closes at 100',
+  Math.abs(flatScreen.looseRows.reduce((s, r) => s + r.bobotOverall, 0) - 100) < 0.01,
+  `total ${flatScreen.looseRows.reduce((s, r) => s + r.bobotOverall, 0).toFixed(4)}`
+);
+
+check(
+  'every leaf reaches exactly one place on the screen, never zero and never twice',
+  (() => {
+    const seen = [...screen.units.flatMap((u) => u.rows), ...screen.looseRows]
+      .filter((r) => r.isLeaf)
+      .map((r) => r.id);
+    const leaves = nodes.filter((n) => n.isLeaf).map((n) => n.id);
+    return seen.length === leaves.length && leaves.every((id) => seen.filter((s) => s === id).length === 1);
+  })()
+);
+
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

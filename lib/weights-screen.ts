@@ -70,7 +70,34 @@ export interface WeightsUnit {
 
 export interface WeightsScreen {
   summary: WeightSummary;
+  /**
+   * The cards. A card is always a BRANCH, or a reporting unit.
+   *
+   * Never a leaf. Building cards out of the top-level rows and then filling
+   * each with its descendants gave a flat plan thirteen cards reading 0.00% and
+   * "0 of 0 rows priced", because a leaf has no descendants and so every card
+   * excluded the only row it was about. It is the same trap `assignColorGroups`
+   * fell into when it took the top rows as packages without checking they were
+   * branches.
+   */
   units: WeightsUnit[];
+  /**
+   * Rows that no card contains: top-level leaves, and anything outside every
+   * reporting unit. They are shown and priced on the first screen. Without
+   * them a flat plan has nowhere at all to type a price.
+   */
+  looseRows: WeightsRow[];
+  /**
+   * The rows the derivation ran over, carried through so the screen can run it
+   * AGAIN on the client while someone is typing a price.
+   *
+   * `lib/weights.ts` imports nothing at all, so the browser calls the very same
+   * `deriveWeights` the server did. That is the point of shipping these: a
+   * second, approximate formula written for the live preview would eventually
+   * disagree with the one the report is built on, and the person typing would
+   * be the last to find out.
+   */
+  nodes: WeightNode[];
   /**
    * False where nobody has marked an SPK yet. The WBS roots stand in as the
    * cards instead — a plan with no units still has weights, and hiding the
@@ -118,7 +145,18 @@ export function buildWeightsScreen(
 
   const unitNodes = nodes.filter((n) => n.isReportingUnit);
   const hasUnits = unitNodes.length > 0;
-  const anchors = hasUnits ? unitNodes : nodes.filter((n) => n.parentId == null);
+  // A CARD IS A BRANCH. Where SPK are marked they are the cards, because a
+  // unit earns its own section in the report whatever its shape. Where none
+  // are, the top-level BRANCHES stand in and top-level leaves fall through to
+  // `looseRows` instead of becoming cards about nothing.
+  const anchors = hasUnits ? unitNodes : nodes.filter((n) => n.parentId == null && !n.isLeaf);
+  const anchorIds = new Set(anchors.map((a) => a.id));
+
+  /** Which card holds this row, or null when no card does. */
+  const cardOf = (n: WeightNode): string | null => {
+    const owner = hasUnits ? unitOf(n) : rootOf(n);
+    return owner && owner.id !== n.id && anchorIds.has(owner.id) ? owner.id : null;
+  };
 
   // A leaf's weight is read straight off the derivation. A branch carries no
   // weight of its own — its figure is its leaves added up — so subtree sums are
@@ -132,22 +170,15 @@ export function buildWeightsScreen(
     for (const a of ancestors(leaf)) subtree.set(a.id, (subtree.get(a.id) ?? 0) + b);
   }
 
-  const units: WeightsUnit[] = anchors.map((anchor) => {
-    const members = nodes.filter((n) => {
-      if (n.id === anchor.id) return false;
-      const owner = hasUnits ? unitOf(n) : rootOf(n);
-      return owner?.id === anchor.id;
-    });
-
-    // The unit's own figure EXCLUDES any unit nested inside it. SPK-007 sits at
-    // 1.4.4 inside SPK-004's 1.4 and is still its own contract; counting it in
-    // both is how a project total reaches 114%.
-    const leafTotal = members
-      .filter((n) => n.isLeaf)
-      .reduce((s, n) => s + (result.bobotOf.get(n.id) ?? 0), 0);
-
-    const anchorDepth = depthOf(anchor);
-    const rows: WeightsRow[] = [...members]
+  /**
+   * Turn a set of rows into screen rows, measured against `against`.
+   *
+   * `against` is the denominator for the in-unit column: a card's own leaf
+   * total, so its rows close at 100 within it. For rows no card holds it is the
+   * project, where in-unit and overall are the same question.
+   */
+  const toRows = (members: WeightNode[], baseDepth: number, against: number): WeightsRow[] =>
+    [...members]
       .sort((a, b) => a.order - b.order)
       .map((n) => {
         const overall = n.isLeaf ? (result.bobotOf.get(n.id) ?? 0) : (subtree.get(n.id) ?? 0);
@@ -155,15 +186,25 @@ export function buildWeightsScreen(
           id: n.id,
           code: meta.get(n.id)?.code ?? '',
           name: meta.get(n.id)?.name ?? '',
-          depth: Math.max(0, depthOf(n) - anchorDepth - 1),
+          depth: Math.max(0, depthOf(n) - baseDepth),
           isLeaf: n.isLeaf,
           price: n.price,
           bobotOverall: overall,
-          // Guarded: a unit whose leaves all weigh zero must show 0, not NaN.
-          bobotInUnit: leafTotal > 0 ? (overall / leafTotal) * 100 : 0,
+          // Guarded: a card whose leaves all weigh zero must show 0, not NaN.
+          bobotInUnit: against > 0 ? (overall / against) * 100 : 0,
           share: shareOf(n),
         };
       });
+
+  const units: WeightsUnit[] = anchors.map((anchor) => {
+    const members = nodes.filter((n) => cardOf(n) === anchor.id);
+
+    // The unit's own figure EXCLUDES any unit nested inside it. SPK-007 sits at
+    // 1.4.4 inside SPK-004's 1.4 and is still its own contract; counting it in
+    // both is how a project total reaches 114%.
+    const leafTotal = members
+      .filter((n) => n.isLeaf)
+      .reduce((s, n) => s + (result.bobotOf.get(n.id) ?? 0), 0);
 
     return {
       id: anchor.id,
@@ -173,11 +214,18 @@ export function buildWeightsScreen(
       bobotOverall: leafTotal,
       pricedRows: members.filter((n) => (n.price ?? 0) > 0).length,
       totalRows: members.length,
-      rows,
+      rows: toRows(members, depthOf(anchor) + 1, leafTotal),
     };
   });
 
-  return { summary, units, hasUnits };
+  // Everything no card holds. On a flat plan this is the whole project, and it
+  // is the only place a price can be typed; on Gundih it is empty.
+  const loose = nodes.filter((n) => !anchorIds.has(n.id) && cardOf(n) === null);
+  const looseTotal = loose
+    .filter((n) => n.isLeaf)
+    .reduce((s, n) => s + (result.bobotOf.get(n.id) ?? 0), 0);
+
+  return { summary, units, looseRows: toRows(loose, 0, looseTotal), hasUnits, nodes };
 }
 
 export function loadWeightsScreen(projectId: string): WeightsScreen | null {
