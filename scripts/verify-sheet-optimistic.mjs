@@ -255,13 +255,67 @@ await selectLeafNamed('New task');
 await measure('Outdent', () => clickButton('Outdent'));
 
 // ---- Delete --------------------------------------------------------------
-// Its own three leaves, by name. A row WITH children opens the confirm panel
-// instead of deleting, which is correct behaviour and a different measurement.
+// Its own three leaves, by name.
 for (let k = 0; k < 3; k += 1) {
   const s = await snapshot();
   await selectLeafNamed('New task');
   const d = await measure(`Delete ${k + 1}`, () => clickButton('Delete'));
   if (d.after.count !== s.count - 1) failures.push(`Delete: ${s.count} -> ${d.after.count}`);
+}
+
+// ---- Delete a row WITH CHILDREN -------------------------------------------
+// THE CASE THE FIRST PASS SKIPPED, and the one the user was actually pressing.
+// A leaf goes on the press; a row with children opens a confirm panel first,
+// and that panel is `RowMenu`, which had its own non-optimistic path. So every
+// row worth deleting — a branch — still waited out the whole round trip with
+// its subtree on screen under "Deleting…". Build a branch, then delete it.
+// Build one out of this script's own rows: add a row, then add a row inside it,
+// and the first becomes a branch. No renaming needed — it is the "New task"
+// that has a collapse chevron.
+await selectRow(1);
+await clickButton('Add row');
+await page.waitForFunction((sel) => !document.querySelector(`${sel} .animate-pulse`), { timeout: 25_000 }, ROW);
+await selectLeafNamed('New task');
+await clickButton('Add inside');
+await page.waitForFunction((sel) => !document.querySelector(`${sel} .animate-pulse`), { timeout: 25_000 }, ROW);
+
+const gotBranch = await page.evaluate((sel) => {
+  const row = [...document.querySelectorAll(sel)].find(
+    (r) =>
+      r.innerText.includes('New task') &&
+      r.querySelector('button[aria-label^="Collapse"], button[aria-label^="Expand"]')
+  );
+  if (!row) return false;
+  row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  return true;
+}, ROW);
+
+if (!gotBranch) failures.push('Could not build a row with children to delete');
+else {
+  const s = await snapshot();
+  const d = await measure('Delete branch', async () => {
+    await clickButton('Delete');
+    // The confirm panel is the whole point of this case: a leaf never sees it.
+    await page.waitForFunction(() => document.body.innerText.includes('rows under it'), {
+      timeout: 10_000,
+    });
+    await page.evaluate(() => {
+      // The panel's own Delete, which is the last one on the page.
+      const b = [...document.querySelectorAll('button')]
+        .filter((x) => x.textContent.trim() === 'Delete')
+        .at(-1);
+      if (!b) throw new Error('No Delete in the confirm panel');
+      // Restart the stopwatch here: opening the panel was the previous press.
+      if (window.__m) {
+        window.__m.t0 = performance.now();
+        window.__m.seen = null;
+      }
+      b.click();
+    });
+  });
+  if (d.after.count !== s.count - 2) {
+    failures.push(`Delete branch: ${s.count} -> ${d.after.count}, expected the parent and its child`);
+  }
 }
 
 const end = await snapshot();

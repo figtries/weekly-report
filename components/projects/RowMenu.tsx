@@ -14,6 +14,15 @@ import {
 } from 'lucide-react';
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
+import {
+  predictAdd,
+  predictDelete,
+  predictFlags,
+  predictIndent,
+  predictMove,
+  predictOutdent,
+  tmpRowId,
+} from '@/lib/sheet-predict';
 import MoneyInput from '@/components/ui/MoneyInput';
 import {
   addRowAction,
@@ -59,6 +68,8 @@ export default function RowMenu({
   onChanged,
   onDeleted,
   onUndoable,
+  onPredict,
+  onFailed,
 }: {
   row: SheetRow;
   projectId: string;
@@ -82,6 +93,26 @@ export default function RowMenu({
    * rebuilt to remove.
    */
   onUndoable?: (run: () => Promise<Res>) => void;
+  /**
+   * Draw this change now, before the server has heard of it.
+   *
+   * The panel does not hold the rows — the sheet does — so it hands up a
+   * function to run against them. Without this every action in here waited out
+   * the full round trip, which on the deployment is a ~2 MB snapshot upload:
+   * the confirm panel for a row with children sat under "Deleting…" for a
+   * second and a half with the whole subtree still on screen, and the toolbar's
+   * own Delete routes INTO that panel for exactly the rows worth deleting.
+   */
+  onPredict?: (fn: (rows: SheetRow[]) => SheetRow[]) => void;
+  /**
+   * The server refused a change this panel had already drawn.
+   *
+   * It cannot report that itself — it closed the moment it guessed — so the
+   * sheet owns both halves of putting it right: the message, and going back for
+   * the rows as they really are. An empty message means the row was simply gone
+   * and there is nothing to accuse anybody of.
+   */
+  onFailed?: (message: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -89,11 +120,30 @@ export default function RowMenu({
   const [unitValue, setUnitValue] = useState('');
   const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>(initialMode);
 
-  const run = (fn: () => Promise<Res>, keepOpen = false, onOk?: (res: Res) => void) => {
+  const run = (
+    fn: () => Promise<Res>,
+    keepOpen = false,
+    onOk?: (res: Res) => void,
+    /** What the sheet should show at once — see `onPredict`. */
+    guess?: (rows: SheetRow[]) => SheetRow[]
+  ) => {
     setError(null);
+    // A guess moves the sheet NOW, which means this panel has already said
+    // everything it has to say and should get out of the way rather than sit
+    // over the change under a spinner. It also means the panel will not be
+    // mounted to show an error if the server refuses, so the sheet takes the
+    // message as well as the rows — see `onFailed`.
+    const guessed = Boolean(guess && onPredict);
+    if (guess && onPredict) onPredict(guess);
+    if (guessed) onClose();
+
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) {
+        if (guessed) {
+          onFailed?.(res.gone ? '' : (res.error ?? 'Something went wrong'));
+          return;
+        }
         // A row the server says is gone leaves nothing to do here and nothing
         // worth reading: the sheet behind this panel is what is out of date.
         if (res.gone) {
@@ -110,16 +160,25 @@ export default function RowMenu({
       // where it was. Field edits stay open: people fill start, finish and
       // price one after another, and a panel that shuts each time is a panel
       // they have to reopen three times.
-      if (!keepOpen) onClose();
+      if (!keepOpen && !guessed) onClose();
     });
   };
 
   /** Run it, and hand the sheet the move that puts things back. */
-  const undoable = (fn: () => Promise<Res>, inverse: (res: Res) => (() => Promise<Res>) | null) =>
-    run(fn, false, (res) => {
-      const back = inverse(res);
-      if (back) onUndoable?.(back);
-    });
+  const undoable = (
+    fn: () => Promise<Res>,
+    inverse: (res: Res) => (() => Promise<Res>) | null,
+    guess?: (rows: SheetRow[]) => SheetRow[]
+  ) =>
+    run(
+      fn,
+      false,
+      (res) => {
+        const back = inverse(res);
+        if (back) onUndoable?.(back);
+      },
+      guess
+    );
 
   return (
     <div
@@ -189,7 +248,8 @@ export default function RowMenu({
               onClick={() =>
                 undoable(
                   () => addRowAction(projectId, { afterNodeId: row.id }),
-                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
+                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null),
+                  (rs) => predictAdd(rs, row.id, false, tmpRowId())
                 )
               }
               disabled={pending}
@@ -201,7 +261,8 @@ export default function RowMenu({
               onClick={() =>
                 undoable(
                   () => addRowAction(projectId, { afterNodeId: row.id, asChild: true }),
-                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
+                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null),
+                  (rs) => predictAdd(rs, row.id, true, tmpRowId())
                 )
               }
               disabled={pending}
@@ -213,7 +274,11 @@ export default function RowMenu({
 
             <Item
               icon={<ChevronsRight className="size-4" />}
-              onClick={() => undoable(() => indentRowAction(row.id), () => () => outdentRowAction(row.id))}
+              onClick={() => undoable(
+                  () => indentRowAction(row.id),
+                  () => () => outdentRowAction(row.id),
+                  (rs) => predictIndent(rs, row.id)
+                )}
               disabled={pending}
               hint="Tab"
             >
@@ -221,7 +286,11 @@ export default function RowMenu({
             </Item>
             <Item
               icon={<ChevronsLeft className="size-4" />}
-              onClick={() => undoable(() => outdentRowAction(row.id), () => () => indentRowAction(row.id))}
+              onClick={() => undoable(
+                  () => outdentRowAction(row.id),
+                  () => () => indentRowAction(row.id),
+                  (rs) => predictOutdent(rs, row.id)
+                )}
               disabled={pending}
               hint="Shift+Tab"
             >
@@ -230,7 +299,11 @@ export default function RowMenu({
             <Item
               icon={<MoveUp className="size-4" />}
               onClick={() =>
-                undoable(() => moveRowAction(row.id, 'up'), () => () => moveRowAction(row.id, 'down'))
+                undoable(
+                  () => moveRowAction(row.id, 'up'),
+                  () => () => moveRowAction(row.id, 'down'),
+                  (rs) => predictMove(rs, row.id, 'up')
+                )
               }
               disabled={pending}
             >
@@ -239,7 +312,11 @@ export default function RowMenu({
             <Item
               icon={<MoveDown className="size-4" />}
               onClick={() =>
-                undoable(() => moveRowAction(row.id, 'down'), () => () => moveRowAction(row.id, 'up'))
+                undoable(
+                  () => moveRowAction(row.id, 'down'),
+                  () => () => moveRowAction(row.id, 'up'),
+                  (rs) => predictMove(rs, row.id, 'down')
+                )
               }
               disabled={pending}
             >
@@ -251,7 +328,11 @@ export default function RowMenu({
             {!row.isSummary && (
               <Item
                 icon={<Diamond className={`size-4 ${row.isMilestone ? 'fill-foreground' : ''}`} />}
-                onClick={() => run(() => setMilestoneAction(row.id, !row.isMilestone))}
+                onClick={() =>
+                  run(() => setMilestoneAction(row.id, !row.isMilestone), false, undefined, (rs) =>
+                    predictFlags(rs, row.id, { isMilestone: !row.isMilestone })
+                  )
+                }
                 disabled={pending}
               >
                 {row.isMilestone ? 'Not a milestone' : 'Make it a milestone'}
@@ -266,7 +347,9 @@ export default function RowMenu({
                 icon={<Tag className="size-4" />}
                 onClick={() =>
                   row.isReportingUnit
-                    ? run(() => setReportingUnitAction(row.id, false))
+                    ? run(() => setReportingUnitAction(row.id, false), false, undefined, (rs) =>
+                        predictFlags(rs, row.id, { isReportingUnit: false, unitLabel: null })
+                      )
                     : setMode('unit')
                 }
                 disabled={pending}
@@ -285,8 +368,11 @@ export default function RowMenu({
               onClick={() =>
                 row.childCount > 0
                   ? setMode('delete')
-                  : run(() => deleteRowAction(row.id), false, (res) =>
-                      onDeleted?.(res.undoId, row.name)
+                  : run(
+                      () => deleteRowAction(row.id),
+                      false,
+                      (res) => onDeleted?.(res.undoId, row.name),
+                      (rs) => predictDelete(rs, row.id)
                     )
               }
               disabled={pending}
@@ -371,8 +457,11 @@ export default function RowMenu({
                 type="button"
                 disabled={pending}
                 onClick={() =>
-                  run(() => deleteRowAction(row.id), false, (res) =>
-                    onDeleted?.(res.undoId, row.name)
+                  run(
+                    () => deleteRowAction(row.id),
+                    false,
+                    (res) => onDeleted?.(res.undoId, row.name),
+                    (rs) => predictDelete(rs, row.id)
                   )
                 }
                 className="h-11 flex-1 rounded-lg bg-destructive text-sm font-medium text-white disabled:opacity-50"
