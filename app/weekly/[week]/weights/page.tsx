@@ -58,7 +58,7 @@ async function WeightsPageBody() {
 
         <Reveal delay={MOTION.stagger}>
           {screen ? (
-            <WeightsWorkbench screen={screen} />
+            <WeightsWorkbench screen={screen} projectId={open!.id} />
           ) : (
             <p className="text-sm text-muted-foreground">Open a project first.</p>
           )}

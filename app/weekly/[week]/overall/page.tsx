@@ -11,6 +11,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MOTION, TYPE } from '@/lib/design';
 import { cn } from '@/lib/utils';
 import LegacyGate from '@/components/projects/LegacyGate';
+import SetupGuideCard from '@/components/weekly/SetupGuideCard';
+import { getOpenProject } from '@/lib/legacy-bridge';
+import { loadWeightsScreen } from '@/lib/weights-screen';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -50,6 +53,50 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
   // than in the client so the queue is part of the prerendered page — the first
   // thing on screen should be the work, not a spinner deciding what the work is.
   const worklist = buildWorklist({ roots, schedule: db.schedule, week, changeLog: db.changeLog });
+
+  // The one thing still missing, if anything is. One card, in dependency
+  // order, and it collapses to nothing once the project is set up: a banner
+  // that is always there is furniture, and furniture is what people learn to
+  // stop seeing.
+  //
+  // "Not weighted from prices" needs BOTH conditions. `basis !== 'boq'` alone
+  // would show the card forever on a project whose prices genuinely never
+  // cover the whole plan, and a card that cannot be dismissed is worse than no
+  // card. `wouldChange > 0` is what lets it finish.
+  const open = await getOpenProject();
+  const wscreen = open && !open.legacyJsonId ? loadWeightsScreen(open.id) : null;
+  const estimated = wscreen
+    ? [...wscreen.units.flatMap((u) => u.rows), ...wscreen.looseRows].filter(
+        (r) => r.isLeaf && r.estimated
+      ).length
+    : 0;
+  const money = wscreen?.summary;
+
+  const guide =
+    !money || !open
+      ? null
+      : money.leaves === 0
+        ? {
+            title: 'Lay out the work first',
+            body: 'This project has no activities yet, so there is nothing to weigh or report on.',
+            cta: 'Open the planner',
+            href: `/projects/${open.id}`,
+          }
+        : money.basis !== 'boq' && money.wouldChange > 0
+          ? {
+              title: `${money.leaves} activities are not weighted from prices yet`,
+              body: 'Every activity counts the same until prices say otherwise, so the report cannot tell big work from small.',
+              cta: 'Set prices',
+              href: `/weekly/${week}/weights`,
+            }
+          : estimated > 0
+            ? {
+                title: `${estimated} activities are still measured by a typed percent`,
+                body: 'Say how each one is counted and the weekly figure comes from evidence instead of a guess.',
+                cta: 'Set how they are counted',
+                href: `/weekly/${week}/weights`,
+              }
+            : null;
 
   // Four figures on one calm ground, not four tinted cards — the backgrounds
   // stay white; only the numerals carry colour.
@@ -97,7 +144,13 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
         </span>
       </PageHeader>
 
-      <Reveal delay={MOTION.stagger}>
+      {guide && (
+        <Reveal delay={MOTION.stagger}>
+          <SetupGuideCard {...guide} />
+        </Reveal>
+      )}
+
+      <Reveal delay={MOTION.stagger * (guide ? 2 : 1)}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {stats.map((s) => (
             <Card key={s.label} size="sm" className="h-full gap-2">
@@ -121,7 +174,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
       {/* The stored evidence behind each leaf — quantities counted and
           milestones ticked. The workbench needs it because entry now happens on
           the item itself rather than on a separate Field Input screen. */}
-      <Reveal delay={MOTION.stagger * 2}>
+      <Reveal delay={MOTION.stagger * (guide ? 3 : 2)}>
         <DataOverallWorkbench
           roots={roots}
           week={week}

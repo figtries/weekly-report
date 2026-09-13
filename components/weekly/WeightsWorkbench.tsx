@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 // Loaded on demand: nobody opens this on the way past, and the field crew's
 // connection is what the initial bundle is measured against.
 const MeasurePanel = dynamic(() => import('./MeasurePanel'), { ssr: false });
+const DeriveWeightsDialog = dynamic(() => import('./DeriveWeightsDialog'), { ssr: false });
 
 /**
  * Where a project says what its work is worth.
@@ -47,13 +48,20 @@ const MeasurePanel = dynamic(() => import('./MeasurePanel'), { ssr: false });
  * commit that way, and a timer is a write that can still be in flight when the
  * person navigates away.
  */
-export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) {
+export default function WeightsWorkbench({
+  screen,
+  projectId,
+}: {
+  screen: WeightsScreen;
+  projectId: string;
+}) {
   const [openUnit, setOpenUnit] = useState<string | null>(null);
   /** Prices typed since the page loaded, raw digit strings, keyed by row id. */
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<string | null>(null);
   /** The row whose measurement panel is open. ONE panel, pointed at a row. */
   const [measuring, setMeasuring] = useState<WeightsRow | null>(null);
+  const [deriving, setDeriving] = useState(false);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -140,6 +148,7 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
         gap={gap}
         priced={pricedCount}
         total={leafCount}
+        onLock={() => setDeriving(true)}
       />
 
       {unit ? (
@@ -197,6 +206,17 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
         </>
       )}
 
+      {deriving && (
+        <DeriveWeightsDialog
+          projectId={projectId}
+          onClose={() => setDeriving(false)}
+          onApplied={() => {
+            setDeriving(false);
+            router.refresh();
+          }}
+        />
+      )}
+
       {measuring && (
         <MeasurePanel
           row={measuring}
@@ -233,18 +253,21 @@ function PricingHero({
   gap,
   priced,
   total,
+  onLock,
 }: {
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
   gap: number;
   priced: number;
   total: number;
+  onLock: () => void;
 }) {
   const { summary } = screen;
   const signed = summary.contractValue > 0;
   const allocated = Math.max(0, summary.contractValue - gap);
   const pct = signed ? Math.min(100, (allocated / summary.contractValue) * 100) : 0;
   const done = gap <= 0.5 && signed;
+  const locked = summary.basis === 'boq';
 
   return (
     <Card className="gap-3 bg-gradient-to-br from-chart-1/8 to-transparent ring-chart-1/20">
@@ -281,23 +304,49 @@ function PricingHero({
               />
             </div>
 
-            <p className="text-sm text-muted-foreground">
-              {done ? (
-                <span className="font-medium text-ok">
-                  Every activity has a price. These weights come from the money.
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="text-sm text-muted-foreground">
+                {done ? (
+                  <span className="font-medium text-ok">
+                    Every activity has a price. These weights come from the money.
+                  </span>
+                ) : (
+                  <>
+                    <strong className="tabular-nums text-foreground">
+                      {formatMoney(allocated, summary.currency)}
+                    </strong>{' '}
+                    priced,{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {formatMoney(gap, summary.currency)}
+                    </strong>{' '}
+                    still open · {priced} of {total} activities
+                  </>
+                )}
+              </p>
+
+              {/* The LOCK, and it belongs here rather than in the planner's
+                  money strip, which is where it was stranded when the price
+                  column left the planner on 12 Sep. Recalculating needs no
+                  button: `syncDerivedWeights` already keeps an unlocked
+                  project's weights in step with its prices on every edit. What
+                  needs one is DECLARING them authoritative, after which the
+                  prices stop pushing them around — and on Gundih that is the
+                  difference between 81 correct weights and 81 wrong ones. */}
+              {locked ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+                  Value based, locked
                 </span>
               ) : (
-                <>
-                  <strong className="tabular-nums text-foreground">
-                    {formatMoney(allocated, summary.currency)}
-                  </strong>{' '}
-                  priced, <strong className="tabular-nums text-foreground">
-                    {formatMoney(gap, summary.currency)}
-                  </strong>{' '}
-                  still open · {priced} of {total} activities
-                </>
+                <m.button
+                  {...pressMotion}
+                  onClick={onLock}
+                  className="inline-flex min-h-11 items-center rounded-lg bg-background px-4 text-sm font-medium ring-1 ring-foreground/12 transition-colors duration-300 ease-ios hover:bg-accent"
+                >
+                  Lock these weights
+                </m.button>
               )}
-            </p>
+            </div>
           </>
         )}
       </CardContent>
