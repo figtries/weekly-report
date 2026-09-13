@@ -97,6 +97,15 @@
         "set NEXT_DIST_DIR=.next-verifydb&& set REPORT_DB_PATH=data/verify.db&& npx next dev -p 3221"
       ],
       "port": 3221
+    },
+    {
+      "name": "prod-verify-db",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set REPORT_DB_PATH=data/verify.db&& npx next start -p 3212"
+      ],
+      "port": 3212
     }
   ]
 }
