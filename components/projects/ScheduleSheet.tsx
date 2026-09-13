@@ -646,6 +646,42 @@ export default function ScheduleSheet({
     recomputeRange();
   }, [recomputeRange, visible.length, pane]);
 
+  /**
+   * Bring a row that was just made onto the screen.
+   *
+   * With no row selected, Add row puts the new one at the END of the plan. On
+   * the nine-row project that is still in front of you; on Gundih's 285 it is
+   * twelve thousand pixels below the fold, and it is not even MOUNTED — only
+   * the window is — so the button reads as dead no matter how fast the server
+   * answers. Drawing the row instantly fixed nothing for that case, which is
+   * why this is here and not a separate nicety.
+   *
+   * Positioned a third down rather than flush against an edge: a row pinned to
+   * the top or bottom of a scroller reads as "the list jumped", not "here is
+   * the row you asked for". Smooth only when the trip is short — this list is
+   * windowed, and a smooth ride across two hundred rows is two hundred rows of
+   * blank strip while the range chases it.
+   */
+  const revealRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = revealRef.current;
+    if (!id) return;
+    // One attempt, cleared either way: a row a live search excludes is not one
+    // to go hunting for on some later render.
+    revealRef.current = null;
+    const i = visible.findIndex((r) => r.id === id);
+    if (i < 0) return;
+    // Whichever pane is on screen — below 768px they take turns and the hidden
+    // one measures zero, the same rule `recomputeRange` follows.
+    const el = leftRef.current?.clientHeight ? leftRef.current : rightRef.current;
+    if (!el) return;
+    const top = i * ROW_H;
+    if (top >= el.scrollTop && top + ROW_H <= el.scrollTop + el.clientHeight) return;
+    const target = Math.max(0, top - el.clientHeight / 3);
+    const far = Math.abs(target - el.scrollTop) > el.clientHeight * 2;
+    el.scrollTo({ top: target, behavior: far ? 'auto' : 'smooth' });
+  }, [visible]);
+
   const windowed = useMemo(
     () => visible.slice(range.start, Math.min(range.end, visible.length)),
     [visible, range]
@@ -857,6 +893,16 @@ export default function ScheduleSheet({
     (anchorId: string | null, asChild = false) => {
       tmpSeq += 1;
       const tmpId = `${TMP}${tmpSeq}`;
+      revealRef.current = tmpId;
+      // A row put INSIDE a folded branch is a row nobody can see, and the fold
+      // was closed before it existed — it is not a preference about this row.
+      if (asChild && anchorId)
+        setCollapsed((c) => {
+          if (!c.has(anchorId)) return c;
+          const next = new Set(c);
+          next.delete(anchorId);
+          return next;
+        });
       structure(
         addRowAction(projectId, { afterNodeId: anchorId, asChild }),
         (rs) => predictAdd(rs, anchorId, asChild, tmpId),

@@ -327,6 +327,94 @@ if (went) {
   console.log('     (only one project — the project-swap check was skipped)');
 }
 
+// ---- A row added below the fold -------------------------------------------
+// The case optimism alone does not reach. With nothing selected, Add row puts
+// the new row at the END of the plan; on a long one that is thousands of pixels
+// down and OUTSIDE the mounted window, so instant drawing still shows nothing.
+// Checked on the longest project in the workspace, from the top of it.
+await page.goto(`${base}/projects`, { waitUntil: 'networkidle0', timeout: 60_000 });
+await page.waitForFunction(
+  () => [...document.querySelectorAll('a')].some((a) => /^\/projects\/./.test(a.getAttribute('href') ?? '')),
+  { timeout: 30_000 }
+);
+const longest = await page.evaluate(() => {
+  let best = null;
+  let most = -1;
+  for (const a of document.querySelectorAll('a')) {
+    const href = a.getAttribute('href') ?? '';
+    if (!/^\/projects\/./.test(href)) continue;
+    // The whole card, not a guessed ancestor: the row count sits several
+    // levels away from the title link.
+    const card = a.closest('div.group') ?? a.parentElement?.parentElement;
+    const n = Number((card?.innerText.match(/(\d[\d,.]*)\s+rows/) ?? [])[1]?.replace(/[,.]/g, '') ?? 0);
+    if (n > most) {
+      most = n;
+      best = href;
+    }
+  }
+  return { href: best, rows: most };
+});
+if (!longest.href) throw new Error('No project links on /projects');
+await page.goto(`${base}${longest.href}`, { waitUntil: 'networkidle0', timeout: 90_000 });
+await page.waitForSelector(ROW, { timeout: 60_000 });
+await new Promise((r) => setTimeout(r, 2500));
+console.log(`\n${longest.href} — ${longest.rows} rows, scrolled to the top, nothing selected`);
+
+await page.evaluate((sel) => {
+  const pane = document.querySelector(sel)?.closest('[class*="overflow-auto"]');
+  if (pane) pane.scrollTop = 0;
+}, ROW);
+await new Promise((r) => setTimeout(r, 400));
+// The SCROLLER's height, not the mounted row count: this list is windowed, so
+// the number of rows in the DOM stays about forty however long the plan is.
+// One more row is exactly one ROW_H of scrollable height.
+const paneHeight = () =>
+  page.evaluate(
+    (sel) => document.querySelector(sel)?.closest('[class*="overflow-auto"]')?.scrollHeight ?? 0,
+    ROW
+  );
+const beforeAdd = await paneHeight();
+await clickButton('Add row');
+
+let landed = null;
+for (let t = 0; t < 300; t += 1) {
+  landed = await page.evaluate((sel) => {
+    const row = [...document.querySelectorAll(sel)].find((r) => r.querySelector('.animate-pulse'));
+    if (!row) return null;
+    const pane = row.closest('[class*="overflow-auto"]');
+    const a = row.getBoundingClientRect();
+    const b = pane.getBoundingClientRect();
+    return { inView: a.top >= b.top - 1 && a.bottom <= b.bottom + 1, top: Math.round(a.top - b.top) };
+  }, ROW);
+  if (landed?.inView) break;
+  await new Promise((r) => setTimeout(r, 20));
+}
+if (!landed) failures.push('Below the fold: the new row never mounted at all');
+else if (!landed.inView) failures.push(`Below the fold: the new row mounted but sits ${landed.top}px outside the pane`);
+else console.log(`OK   reveal       new row mounted and ${landed.top}px into the pane`);
+
+await page.waitForFunction((sel) => !document.querySelector(`${sel} .animate-pulse`), { timeout: 25_000 }, ROW);
+await page.screenshot({ path: 'scratch/sheet-reveal.png' });
+const afterAdd = await paneHeight();
+if (afterAdd <= beforeAdd) {
+  failures.push(`Below the fold: the plan did not grow (${beforeAdd}px -> ${afterAdd}px)`);
+}
+// Put the long plan back the way it was found. Scroll to the end first: with
+// the reveal broken the new row is never mounted, and the cleanup would throw
+// a selector error on top of the real failure instead of leaving it readable.
+await page.evaluate((sel) => {
+  const pane = document.querySelector(sel)?.closest('[class*="overflow-auto"]');
+  if (pane) pane.scrollTop = pane.scrollHeight;
+}, ROW);
+await new Promise((r) => setTimeout(r, 600));
+try {
+  await selectLeafNamed('New task');
+  await clickButton('Delete');
+  await new Promise((r) => setTimeout(r, 2500));
+} catch (e) {
+  console.log(`     (could not clean up the added row: ${e.message})`);
+}
+
 await browser.close();
 
 const realErrors = consoleErrors.filter((e) => !/favicon|Download the React DevTools/i.test(e));
