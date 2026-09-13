@@ -85,7 +85,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
        cutting the header down to its dates bought back most of that height, and
        a summary you have to scroll DOWN to stops being a summary. */}
     <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
-      <PageHeader section="Weekly Progress" title="Update progress" className="mb-0 animate-enter">
+      <PageHeader section="Data Overall" title="Update progress" className="mb-0 animate-enter">
         {/* The dates and nothing else. The sentence that used to follow them
             explained how the screen works, which is a thing you read once and
             then scroll past every week — while the dates are what someone

@@ -37,7 +37,7 @@ export default async function NoLegacyData({ what }: { what: string }) {
       icon={FolderKanban}
       title={open ? `“${open.name}” has no ${what} yet` : `No ${what} yet`}
       body={`Weekly progress, the schedule and the document register all work for this project — ${what} are the part that does not have a home here yet, and they are being rebuilt. Its weekly report is filled in and issued as normal in the meantime.`}
-      primary={open ? { href: '/weekly', label: 'Go to Weekly Progress' } : undefined}
+      primary={open ? { href: '/weekly', label: 'Go to Data Overall' } : undefined}
       secondary={{ href: '/projects', label: 'Open another project' }}
     />
   );

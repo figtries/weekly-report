@@ -41,8 +41,8 @@ interface Destination {
   match: (pathname: string) => boolean;
 }
 
-const WEEKLY_PROGRESS = ['overall', 'control'];
-const WEEKLY_REPORT = ['summary', 'detail', 'scurve', 'documentation', 'print'];
+const DATA_OVERALL = ['overall', 'control'];
+const WEEKLY_PROGRESS = ['summary', 'detail', 'scurve', 'documentation', 'print'];
 
 const DESTINATIONS: Destination[] = [
   {
@@ -52,10 +52,10 @@ const DESTINATIONS: Destination[] = [
     match: (p) => p === '/',
   },
   {
-    label: 'Weekly Progress',
+    label: 'Data Overall',
     icon: Activity,
     href: (w) => `/weekly/${w}/overall`,
-    match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
+    match: (p) => DATA_OVERALL.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
   {
     label: 'Daily',
@@ -64,13 +64,13 @@ const DESTINATIONS: Destination[] = [
     match: (p) => p.startsWith('/daily'),
   },
   {
-    label: 'Reports',
+    label: 'Weekly Progress',
     icon: FileText,
     href: (w) => `/weekly/${w}/summary`,
     // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
-    // named `summary` and `detail` too, so a bare endsWith lit Reports as well
+    // named `summary` and `detail` too, so a bare endsWith lit this entry as well
     // on every /dokumen page — two destinations highlighted at once.
-    match: (p) => WEEKLY_REPORT.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
+    match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
   {
     label: 'Document Control',

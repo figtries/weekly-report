@@ -5,10 +5,10 @@ import { connection } from 'next/server';
 import { getLatestWeek, getOpenDb } from '@/lib/data';
 
 /**
- * Weekly Progress opens on the open project's latest week — not db.json's.
+ * Data Overall opens on the open project's latest week, not db.json's.
  *
  * This used to read `getDb()`, which holds exactly one project, so opening any
- * other project and tapping Weekly Progress landed on ITS week number: a
+ * other project and tapping Data Overall landed on ITS week number: a
  * two-week project sent to week 36, where its own week picker cannot follow.
  *
  * The redirect has to happen behind `<Suspense>` because the open project is a

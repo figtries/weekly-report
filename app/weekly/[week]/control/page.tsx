@@ -62,7 +62,7 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
     <RouteTransition id="weekly-control">
       <div className="space-y-4 px-3 py-4 sm:p-6 lg:p-8 print:hidden">
         <PageHeader
-          section="Weekly Progress"
+          section="Data Overall"
           title="Check the figures"
           className="mb-0 animate-enter"
         >

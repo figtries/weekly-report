@@ -7,9 +7,9 @@ import type { ReactNode } from 'react';
  * Every page used to hand-roll its own `<header>` with its own margins and its
  * own heading size, which is why no two of them started at the same height.
  *
- * `section` is the group the page belongs to — "Weekly Progress" above Fill in,
- * Check and the four report sheets — so that screens sharing a sidebar entry
- * say so on the page as well as in the nav.
+ * `section` is the group the page belongs to — "Data Overall" above Fill in and
+ * Check, "Weekly Progress" above the four report sheets — so that screens
+ * sharing a sidebar entry say so on the page as well as in the nav.
  *
  * IT CARRIES NO ANIMATION OF ITS OWN, deliberately. Every page here rises as a
  * single `animate-fade-in-up` block, and that is the whole entrance: header,

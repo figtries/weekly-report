@@ -88,7 +88,7 @@ export default async function WeeklyWeekLayout({
     // carries its own boundary inside the scroller below.
     <RouteTransition id="weekly">
     <div className="section-shell flex h-full flex-col print:block print:h-auto">
-      {/* Covers Weekly Progress AND Reports — both live under this layout, so
+      {/* Covers Data Overall AND Weekly Progress — both live under this layout, so
           one gate serves five screens. The v1 pages read db.json while projects
           are chosen in SQLite; when the open project has no data here, this
           week picker and these step counts would be another project's.
