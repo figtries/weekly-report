@@ -170,7 +170,18 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
         {/* Always the sheet, even with nothing in it. An empty project used to
             get a separate panel here, which meant the one screen where you
             build a plan was missing on exactly the project that had none. */}
+        {/* Keyed by project, to say out loud what the sheet now depends on: it
+            takes `rows` as a SEED and owns them from mount onwards, because a
+            page payload cannot be told apart from an older one on arrival (see
+            ScheduleSheet). A component that never re-reads this prop has to be
+            a new component when the id changes.
+
+            Next remounts across `/projects/a` → `/projects/b` on its own today
+            — checked, and `scripts/verify-sheet-optimistic.mjs` passes its swap
+            case without this line. The key is here so that the sheet's rule
+            does not quietly rest on that. */}
         <ScheduleSheet
+          key={id}
           rows={sheet.rows}
           spanStart={sheet.spanStart}
           spanFinish={sheet.spanFinish}

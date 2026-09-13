@@ -13,7 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import type { SheetRow } from '@/lib/sheet';
+import type { Sheet, SheetRow } from '@/lib/sheet';
 import MoneyInput from '@/components/ui/MoneyInput';
 import {
   addRowAction,
@@ -25,7 +25,15 @@ import {
 } from '@/lib/sheet-structure';
 
 /** Anything a server action can answer with, as far as this panel cares. */
-type Res = { ok: boolean; error?: string; gone?: true; newId?: string; undoId?: string };
+type Res = {
+  ok: boolean;
+  error?: string;
+  gone?: true;
+  newId?: string;
+  undoId?: string;
+  /** The rows as they now stand, straight from the write — see StructureResult. */
+  sheet?: Sheet;
+};
 import {
   setMilestoneAction,
   updateRowDatesAction,
@@ -57,7 +65,13 @@ export default function RowMenu({
   /** 'delete' when the sheet opened this panel to ask about a row with children. */
   initialMode?: 'menu' | 'delete';
   onClose: () => void;
-  onChanged: () => void;
+  /**
+   * Something changed. The SHEET comes with it when the action carried one,
+   * so the panel hands back rows the caller would otherwise go and ask for in
+   * a second round trip; absent when there is nothing to hand over, such as a
+   * row the server says is already gone.
+   */
+  onChanged: (sheet?: Sheet) => void;
   /** The delete that just happened, and the handle that can take it back. */
   onDeleted?: (undoId: string | undefined, name: string) => void;
   /**
@@ -91,7 +105,7 @@ export default function RowMenu({
         return;
       }
       onOk?.(res);
-      onChanged();
+      onChanged(res.sheet);
       // Structural actions close, because the row they acted on may not be
       // where it was. Field edits stay open: people fill start, finish and
       // price one after another, and a panel that shuts each time is a panel

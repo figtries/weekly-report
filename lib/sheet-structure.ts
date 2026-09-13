@@ -4,8 +4,16 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { beforeWrite, db, flushDbSnapshot, refreshDbSnapshot, schema, sqlite } from './sqlite';
-import { getActiveBaselineId } from './sheet';
+import {
+  beforeWrite,
+  db,
+  ensureFreshDb,
+  flushDbSnapshot,
+  refreshDbSnapshot,
+  schema,
+  sqlite,
+} from './sqlite';
+import { getActiveBaselineId, getSheet, type Sheet } from './sheet';
 import { syncDerivedWeights } from './weights-auto';
 
 /**
@@ -35,9 +43,36 @@ import { syncDerivedWeights } from './weights-auto';
  * as broken.
  */
 
+/**
+ * **The answer carries the sheet.** The client used to take `{ ok: true }` and
+ * then ask for the whole page again with `router.refresh()` — a second round
+ * trip of 0.21–0.80 s (measured against the deployment, 13 Sep 2026) for rows
+ * this function already had in hand. `getSheet` is a synchronous SQLite read of
+ * about a millisecond, so putting it in the reply that is already being awaited
+ * costs nothing and removes the trip entirely.
+ *
+ * It is also what makes an optimistic sheet honest: the browser may show its
+ * guess of where the row lands, but the outline codes it cannot know come back
+ * on this field a moment later, from the same renumber that wrote them.
+ */
 export type StructureResult =
-  | { ok: true; newId?: string; undoId?: string }
+  | { ok: true; newId?: string; undoId?: string; sheet?: Sheet }
   | { ok: false; error: string; gone?: true };
+
+/**
+ * The plan as it stands, asked for directly.
+ *
+ * The sheet used to recover from a failed edit with `router.refresh()` and take
+ * its rows from whatever page payload arrived next. Under 400ms of emulated
+ * latency that put a deleted row back on screen eleven seconds later: a GET
+ * issued before the delete, answered after it, and indistinguishable on arrival
+ * from the one that was actually wanted. A reply you asked for and can hold in
+ * your hand cannot be confused with an older one.
+ */
+export async function readSheetAction(projectId: string): Promise<Sheet> {
+  await ensureFreshDb();
+  return getSheet(projectId);
+}
 
 /**
  * Not "Row not found".
@@ -195,10 +230,21 @@ async function projectOf(nodeId: string): Promise<string> {
  * second time then reported the truth, which is how this surfaced: "Row not
  * found" against a row still on screen (11 Sep 2026). Awaiting costs nothing
  * where no blob store is attached, since `flushDbSnapshot` returns at once.
+ *
+ * **The rows are read BEFORE that push, and returned.** The client no longer
+ * calls `router.refresh()` for them at all — it takes them from here, on the
+ * reply it was already waiting for. So the reason above still stands and has
+ * one fewer way to bite: the refresh that does follow is for the page's own
+ * header and weight strip, and nothing it answers with is read as rows.
+ * Reading the sheet first also means it is assembled from the transaction that
+ * just committed, with the upload the only thing left between here and the
+ * answer.
  */
-async function settle(): Promise<void> {
+async function settle(projectId: string): Promise<Sheet> {
+  const sheet = getSheet(projectId);
   revalidatePath('/projects', 'layout');
   await flushDbSnapshot();
+  return sheet;
 }
 
 function touchProject(projectId: string, tx: Writer = db) {
@@ -305,8 +351,7 @@ export async function addRowAction(
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true, newId: id };
+    return { ok: true, newId: id, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -402,8 +447,7 @@ export async function deleteRowAction(nodeId: string): Promise<StructureResult> 
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true, undoId };
+    return { ok: true, undoId, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -458,8 +502,7 @@ export async function undoDeleteRowAction(undoId: string): Promise<StructureResu
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true };
+    return { ok: true, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -485,8 +528,7 @@ export async function indentRowAction(nodeId: string): Promise<StructureResult> 
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true };
+    return { ok: true, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -517,8 +559,7 @@ export async function outdentRowAction(nodeId: string): Promise<StructureResult>
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true };
+    return { ok: true, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -545,8 +586,7 @@ export async function moveRowAction(nodeId: string, dir: 'up' | 'down'): Promise
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
-    await settle();
-    return { ok: true };
+    return { ok: true, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -584,8 +624,7 @@ export async function setReportingUnitAction(
       .where(eq(schema.wbsNodes.id, nodeId))
       .run();
     touchProject(projectId);
-    await settle();
-    return { ok: true };
+    return { ok: true, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
   }

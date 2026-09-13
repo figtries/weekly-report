@@ -70,3 +70,9 @@ next-env.d.ts
 /data/seed.db-shm
 /data/seed.db-wal
 /.next-verifydb/
+
+# Screenshots and throwaway output from the verify scripts.
+/scratch/
+/data/verify.db
+/data/verify.db-shm
+/data/verify.db-wal

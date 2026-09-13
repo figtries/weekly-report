@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 
-import type { SheetRow } from '@/lib/sheet';
+import type { Sheet, SheetRow } from '@/lib/sheet';
 import {
   updateRowDatesAction,
   updateRowTargetAction,
@@ -22,6 +22,7 @@ import {
   addRowAction,
   deleteRowAction,
   indentRowAction,
+  readSheetAction,
   outdentRowAction,
   undoDeleteRowAction,
 } from '@/lib/sheet-structure';
@@ -193,7 +194,139 @@ function lateBy(target: string | null, finish: string | null): number | null {
 type Field = 'name' | 'duration' | 'start' | 'finish' | 'target' | 'price';
 
 /** Anything a server action can answer with, as far as the undo stack cares. */
-type ActionResult = { ok: boolean; error?: string; gone?: true; newId?: string; undoId?: string };
+type ActionResult = {
+  ok: boolean;
+  error?: string;
+  gone?: true;
+  newId?: string;
+  undoId?: string;
+  /** The authoritative rows, from the same transaction — see StructureResult. */
+  sheet?: Sheet;
+};
+
+/**
+ * A row this browser has drawn but the server has not confirmed.
+ *
+ * Structural edits used to show NOTHING until both a server action and a
+ * `router.refresh()` had come back — 1.5 to 3 seconds on the deployment, of
+ * which the bulk is one ~2 MB snapshot upload that is awaited on purpose. The
+ * work was never the problem; the silence was. Editing a cell has always gone
+ * through the same wait and has always felt fine, because `patch()` moves the
+ * screen first.
+ *
+ * So the sheet now guesses, and it guesses only what it can actually know: that
+ * a row exists here, that this row is one level deeper, that this row is gone.
+ * The outline codes are NOT guessed — reproducing `renumber()` in the browser
+ * is exactly the trap the old comment warned about — so a pending row wears no
+ * code and the rows below it keep theirs until the answer lands. A moment of a
+ * stale code costs nothing; a wrong one that then corrects itself is what makes
+ * a sheet untrustworthy.
+ */
+const TMP = 'tmp-';
+const isPending = (id: string) => id.startsWith(TMP);
+let tmpSeq = 0;
+
+/** Everything under `rows[i]`, by depth — the subtree travels with its row. */
+function subtreeEnd(rows: SheetRow[], i: number): number {
+  const depth = rows[i].depth;
+  let end = i + 1;
+  while (end < rows.length && rows[end].depth > depth) end += 1;
+  return end;
+}
+
+/**
+ * A placeholder row, born where the server is about to put the real one.
+ *
+ * Dates are left null on purpose. The server's rule is "the day after the row
+ * above finishes", which this could copy — but a bar that draws in one place
+ * and then moves is worse than a bar that arrives a beat late, and the row is
+ * on screen either way.
+ */
+function blankRow(id: string, depth: number, parentId: string | null): SheetRow {
+  return {
+    id,
+    parentId,
+    code: '',
+    wbsCode: '',
+    name: 'New task',
+    depth,
+    isLeaf: true,
+    isMilestone: false,
+    isReportingUnit: false,
+    unitLabel: null,
+    price: null,
+    bobot: null,
+    startDate: null,
+    finishDate: null,
+    targetDate: null,
+    daysLate: null,
+    durationDays: null,
+    childCount: 0,
+    isSummary: false,
+    colorGroup: -1,
+    groupLabel: null,
+    unitId: null,
+    unitName: null,
+    totalFloat: null,
+    isCritical: false,
+  };
+}
+
+/** Add: after the anchor's whole subtree, or as its first child. */
+function predictAdd(rows: SheetRow[], anchorId: string | null, asChild: boolean, tmpId: string): SheetRow[] {
+  const i = anchorId ? rows.findIndex((r) => r.id === anchorId) : -1;
+  if (i < 0) return [...rows, blankRow(tmpId, 0, null)];
+  const a = rows[i];
+  const at = asChild ? i + 1 : subtreeEnd(rows, i);
+  const row = blankRow(tmpId, a.depth + (asChild ? 1 : 0), asChild ? a.id : a.parentId);
+  const next = [...rows.slice(0, at), row, ...rows.slice(at)];
+  if (asChild) next[i] = { ...a, isLeaf: false, childCount: a.childCount + 1 };
+  return next;
+}
+
+/** Indent: the row and everything under it drop a level, under the sibling above. */
+function predictIndent(rows: SheetRow[], id: string): SheetRow[] {
+  const i = rows.findIndex((r) => r.id === id);
+  if (i <= 0) return rows;
+  const me = rows[i];
+  let p = i - 1;
+  while (p >= 0 && rows[p].depth > me.depth) p -= 1;
+  if (p < 0 || rows[p].depth !== me.depth) return rows;
+  const end = subtreeEnd(rows, i);
+  const next = rows.map((r, k) => (k >= i && k < end ? { ...r, depth: r.depth + 1 } : r));
+  next[i] = { ...next[i], parentId: rows[p].id };
+  next[p] = { ...rows[p], isLeaf: false, childCount: rows[p].childCount + 1 };
+  return next;
+}
+
+/** Outdent: the row and its subtree come up a level, landing past the old parent's. */
+function predictOutdent(rows: SheetRow[], id: string): SheetRow[] {
+  const i = rows.findIndex((r) => r.id === id);
+  if (i < 0 || rows[i].depth === 0) return rows;
+  const me = rows[i];
+  const parentAt = rows.findIndex((r) => r.id === me.parentId);
+  if (parentAt < 0) return rows;
+  const end = subtreeEnd(rows, i);
+  const moving = rows.slice(i, end).map((r) => ({ ...r, depth: r.depth - 1 }));
+  moving[0] = { ...moving[0], parentId: rows[parentAt].parentId };
+  const rest = [...rows.slice(0, i), ...rows.slice(end)];
+  const landing = subtreeEnd(rest, rest.findIndex((r) => r.id === me.parentId));
+  return [...rest.slice(0, landing), ...moving, ...rest.slice(landing)];
+}
+
+/** Delete: the row and its subtree go, and the parent loses a child. */
+function predictDelete(rows: SheetRow[], id: string): SheetRow[] {
+  const i = rows.findIndex((r) => r.id === id);
+  if (i < 0) return rows;
+  const end = subtreeEnd(rows, i);
+  const parentId = rows[i].parentId;
+  const next = [...rows.slice(0, i), ...rows.slice(end)];
+  return next.map((r) =>
+    r.id === parentId
+      ? { ...r, childCount: Math.max(0, r.childCount - 1), isLeaf: r.childCount <= 1 }
+      : r
+  );
+}
 
 /**
  * One step back.
@@ -210,7 +343,20 @@ type ActionResult = { ok: boolean; error?: string; gone?: true; newId?: string; 
  */
 type Edit =
   | { kind: 'field'; rowId: string; field: Field; before: string }
-  | { kind: 'structure'; run: () => Promise<ActionResult> };
+  | {
+      kind: 'structure';
+      run: () => Promise<ActionResult>;
+      /**
+       * How the step back looks before the server confirms it. Carried on the
+       * stack rather than worked out at undo time, because by then all that is
+       * left is an opaque thunk — and a Ctrl+Z that freezes for a second and a
+       * half is the same complaint as a button that does.
+       *
+       * Absent on putting a deleted subtree back: those rows are not held here,
+       * so there is nothing honest to draw until the server sends them.
+       */
+      predict?: (rows: SheetRow[]) => SheetRow[];
+    };
 
 export default function ScheduleSheet({
   rows: initialRows,
@@ -286,8 +432,90 @@ export default function ScheduleSheet({
   const rightRef = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(0);
   const [, startTransition] = useTransition();
+  /** The Gantt's own span, which a row added past the end has to be able to widen. */
+  const [span, setSpan] = useState({ start: spanStart, finish: spanFinish });
 
-  useEffect(() => setRows(initialRows), [initialRows]);
+  /**
+   * THE PAGE NO LONGER DELIVERS ROWS. This component owns them from mount on.
+   *
+   * `initialRows` seeds the state and is never adopted again, and that is the
+   * whole defence. Rows used to arrive on whatever `router.refresh()` payload
+   * came back next, which is fine until two are in flight: measured on 13 Sep
+   * 2026 under 400ms of emulated latency, a GET issued before a delete was
+   * answered eleven seconds after it and put the deleted row back on screen
+   * (`scripts/verify-sheet-optimistic.mjs` caught it as `rows 22 -> 23`).
+   * Guarding it with flags only narrowed the window — an arriving payload
+   * carries nothing that says which request it answers.
+   *
+   * So every row that reaches this sheet now comes from a reply it asked for
+   * and is holding: a structural action's own `sheet`, or `readSheetAction`
+   * when something went wrong. `refreshQuiet` still re-renders the page, for
+   * the row count in the header, the weight strip and the bar-style rules,
+   * which are the page's and not this component's — and it can no longer race
+   * anything, because nothing it returns is read here.
+   */
+  const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyRows = useCallback((next: SheetRow[], sheet?: Sheet) => {
+    setRows(next);
+    if (sheet) setSpan({ start: sheet.spanStart, finish: sheet.spanFinish });
+  }, []);
+
+  /**
+   * Once, after the editing stops. A plan is typed one row after another, and
+   * a page render per keystroke is five overlapping server renders for a strip
+   * of numbers nobody is looking at yet.
+   */
+  const refreshQuiet = useCallback(() => {
+    if (quietTimer.current) clearTimeout(quietTimer.current);
+    quietTimer.current = setTimeout(() => {
+      quietTimer.current = null;
+      router.refresh();
+    }, 700);
+  }, [router]);
+  useEffect(
+    () => () => {
+      if (quietTimer.current) clearTimeout(quietTimer.current);
+    },
+    []
+  );
+
+  /**
+   * Go and get the plan as it stands.
+   *
+   * For the writers that live outside this component — paste, the row menu, a
+   * date shift — and for putting the sheet right after an edit the server
+   * refused. Both used to be `router.refresh()`.
+   */
+  const syncRows = useCallback(() => {
+    startTransition(async () => {
+      try {
+        const fresh = await readSheetAction(projectId);
+        applyRows(fresh.rows, fresh);
+      } catch {
+        /* nothing to put right if the read itself cannot be made */
+      }
+    });
+    refreshQuiet();
+  }, [projectId, applyRows, refreshQuiet]);
+
+  /**
+   * A writer that already has the rows hands them over; one that does not sends
+   * this to go and get them. The row menu's own actions return a sheet for the
+   * same reason the toolbar's do, so going back for it would be a round trip
+   * spent on something already in the room.
+   */
+  const applySheet = useCallback(
+    (sheet?: Sheet) => {
+      if (!sheet) {
+        syncRows();
+        return;
+      }
+      applyRows(sheet.rows, sheet);
+      refreshQuiet();
+    },
+    [applyRows, refreshQuiet, syncRows]
+  );
 
   useEffect(() => {
     try {
@@ -300,8 +528,8 @@ export default function ScheduleSheet({
 
   // A row may legitimately sit outside the contract window; the timeline widens
   // rather than clipping it, because that is exactly the row worth seeing.
-  const ganttStart = projectStart ?? spanStart;
-  const ganttFinish = projectFinish ?? spanFinish;
+  const ganttStart = projectStart ?? span.start;
+  const ganttFinish = projectFinish ?? span.finish;
 
   /**
    * Search keeps the OUTLINE, not just the hits.
@@ -548,31 +776,47 @@ export default function ScheduleSheet({
   );
 
   /**
-   * Structural edits are NOT optimistic and NOT on the undo stack. Adding a row
-   * renumbers the whole outline and can reshape every row below it; guessing
-   * that locally means reimplementing the server's tree walk in the browser and
-   * hoping the two agree. One refresh is always right.
+   * A structural edit: shown at once, settled when the server answers.
+   *
+   * This used to wait for BOTH a server action and a `router.refresh()` before
+   * anything moved, and the comment here argued that one refresh is always
+   * right. It is — it was the second trip that was wrong. The action returns
+   * the authoritative sheet now (see `StructureResult`), so the rows arrive on
+   * the reply this was already awaiting, and `predict` fills the seconds before
+   * it with the part the browser genuinely knows.
+   *
+   * A failure does not restore a snapshot. Another edit may have landed in the
+   * meantime, and a saved copy of "before" would then take that one back out
+   * too — so the recovery is the same as it always was, one refresh, which is
+   * also what a `gone` row needs.
+   *
+   * Still NOT on the undo stack by itself; `structureUndoable` does that.
    */
   const structure = useCallback(
-    (p: Promise<ActionResult>, onOk?: (res: ActionResult) => void) => {
+    (
+      p: Promise<ActionResult>,
+      predict?: (rows: SheetRow[]) => SheetRow[],
+      onOk?: (res: ActionResult) => void
+    ) => {
       setError(null);
+      if (predict) applyRows(predict(rowsRef.current));
       startTransition(async () => {
         const res = await p;
         if (!res.ok) {
           // A row the server says is gone is not something to put in front of
           // anybody: this sheet is simply behind. Go and get the current rows.
-          if (res.gone) {
-            router.refresh();
-            return;
-          }
-          setError(res.error ?? 'Something went wrong');
+          syncRows();
+          if (!res.gone) setError(res.error ?? 'Something went wrong');
           return;
         }
+        if (res.sheet) applyRows(res.sheet.rows, res.sheet);
         onOk?.(res);
-        router.refresh();
+        // The rows are already right; this is for the row count in the header
+        // and the weight strip, which are the page's and not this component's.
+        refreshQuiet();
       });
     },
-    [router]
+    [applyRows, syncRows, refreshQuiet]
   );
 
   /**
@@ -584,14 +828,54 @@ export default function ScheduleSheet({
   const structureUndoable = useCallback(
     (
       p: Promise<ActionResult>,
-      inverse: (res: ActionResult) => (() => Promise<ActionResult>) | null
+      inverse: (res: ActionResult) => (() => Promise<ActionResult>) | null,
+      predict?: (rows: SheetRow[]) => SheetRow[],
+      undoPredict?: (rows: SheetRow[]) => SheetRow[]
     ) => {
-      structure(p, (res) => {
+      structure(p, predict, (res) => {
         const back = inverse(res);
-        if (back) setUndoStack((s) => [...s.slice(-49), { kind: 'structure', run: back }]);
+        if (back)
+          setUndoStack((s) => [
+            ...s.slice(-49),
+            { kind: 'structure', run: back, predict: undoPredict },
+          ]);
       });
     },
     [structure]
+  );
+
+  /**
+   * Add a row, and put it on screen before the network has heard of it.
+   *
+   * The temporary id is the whole bookkeeping: `isPending` reads it, and the
+   * authoritative sheet clears the flag simply by not containing it. If the
+   * placeholder happened to be selected when the answer lands, the selection
+   * follows the real row — a toolbar whose subject quietly became null is the
+   * same silence this change exists to remove.
+   */
+  const addRow = useCallback(
+    (anchorId: string | null, asChild = false) => {
+      tmpSeq += 1;
+      const tmpId = `${TMP}${tmpSeq}`;
+      structure(
+        addRowAction(projectId, { afterNodeId: anchorId, asChild }),
+        (rs) => predictAdd(rs, anchorId, asChild, tmpId),
+        (res) => {
+          const created = res.newId;
+          if (!created) return;
+          setSelectedId((cur) => (cur === tmpId ? created : cur));
+          setUndoStack((s) => [
+            ...s.slice(-49),
+            {
+              kind: 'structure',
+              run: () => deleteRowAction(created),
+              predict: (rs) => predictDelete(rs, created),
+            },
+          ]);
+        }
+      );
+    },
+    [structure, projectId]
   );
 
   /** Ctrl+Z and the Undo bar are two doors onto the same step back. */
@@ -626,11 +910,15 @@ export default function ScheduleSheet({
         setMenuRow(row);
         return;
       }
-      structure(deleteRowAction(row.id), (res) => {
-        if (!res.undoId) return;
-        setUndoDelete({ id: res.undoId, name: row.name });
-        rememberUndo(res.undoId);
-      });
+      structure(
+        deleteRowAction(row.id),
+        (rs) => predictDelete(rs, row.id),
+        (res) => {
+          if (!res.undoId) return;
+          setUndoDelete({ id: res.undoId, name: row.name });
+          rememberUndo(res.undoId);
+        }
+      );
     },
     [structure, rememberUndo]
   );
@@ -670,15 +958,15 @@ export default function ScheduleSheet({
         setMenuRow(row);
       },
       indent: (id, shift) =>
-        structureUndoable(shift ? outdentRowAction(id) : indentRowAction(id), () =>
-          shift ? () => indentRowAction(id) : () => outdentRowAction(id)
+        structureUndoable(
+          shift ? outdentRowAction(id) : indentRowAction(id),
+          () => (shift ? () => indentRowAction(id) : () => outdentRowAction(id)),
+          (rs) => (shift ? predictOutdent(rs, id) : predictIndent(rs, id)),
+          (rs) => (shift ? predictIndent(rs, id) : predictOutdent(rs, id))
         ),
-      enter: (id) =>
-        structureUndoable(addRowAction(projectId, { afterNodeId: id }), ({ newId }) =>
-          newId ? () => deleteRowAction(newId) : null
-        ),
+      enter: (id) => addRow(id),
     }),
-    [commit, structure, structureUndoable, projectId]
+    [commit, structureUndoable, addRow]
   );
 
   const rowsRef = useRef(rows);
@@ -701,7 +989,7 @@ export default function ScheduleSheet({
     if (!last) return;
     setUndoStack((stack) => stack.slice(0, -1));
     if (last.kind === 'structure') {
-      structure(last.run());
+      structure(last.run(), last.predict);
       return;
     }
     const row = rowsRef.current.find((r) => r.id === last.rowId);
@@ -745,22 +1033,22 @@ export default function ScheduleSheet({
       // inside a cell already did this; a selected row had nothing.
       if (e.key === 'Enter') {
         e.preventDefault();
-        structureUndoable(addRowAction(projectId, { afterNodeId: selectedId }), ({ newId }) =>
-          newId ? () => deleteRowAction(newId) : null
-        );
+        addRow(selectedId);
       }
       if (e.key === 'Tab') {
         e.preventDefault();
         const shift = e.shiftKey;
         structureUndoable(
           shift ? outdentRowAction(selectedId) : indentRowAction(selectedId),
-          () => (shift ? () => indentRowAction(selectedId) : () => outdentRowAction(selectedId))
+          () => (shift ? () => indentRowAction(selectedId) : () => outdentRowAction(selectedId)),
+          (rs) => (shift ? predictOutdent(rs, selectedId) : predictIndent(rs, selectedId)),
+          (rs) => (shift ? predictIndent(rs, selectedId) : predictOutdent(rs, selectedId))
         );
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, selectedId, visible, structureUndoable, projectId]);
+  }, [undo, selectedId, visible, structureUndoable, addRow]);
 
   const syncing = useRef(false);
   const mirror = (from: 'l' | 'r') => () => {
@@ -838,25 +1126,25 @@ export default function ScheduleSheet({
         selected={selected}
         canUndo={undoStack.length > 0}
         onUndo={undo}
-        onAdd={() =>
-          structureUndoable(addRowAction(projectId, { afterNodeId: anchor }), ({ newId }) =>
-            newId ? () => deleteRowAction(newId) : null
-          )
-        }
-        onAddChild={() =>
-          selectedId &&
-          structureUndoable(
-            addRowAction(projectId, { afterNodeId: selectedId, asChild: true }),
-            ({ newId }) => (newId ? () => deleteRowAction(newId) : null)
-          )
-        }
+        onAdd={() => addRow(anchor)}
+        onAddChild={() => selectedId && addRow(selectedId, true)}
         onIndent={() =>
           selectedId &&
-          structureUndoable(indentRowAction(selectedId), () => () => outdentRowAction(selectedId))
+          structureUndoable(
+            indentRowAction(selectedId),
+            () => () => outdentRowAction(selectedId),
+            (rs) => predictIndent(rs, selectedId),
+            (rs) => predictOutdent(rs, selectedId)
+          )
         }
         onOutdent={() =>
           selectedId &&
-          structureUndoable(outdentRowAction(selectedId), () => () => indentRowAction(selectedId))
+          structureUndoable(
+            outdentRowAction(selectedId),
+            () => () => indentRowAction(selectedId),
+            (rs) => predictOutdent(rs, selectedId),
+            (rs) => predictIndent(rs, selectedId)
+          )
         }
         onDelete={() => selected && removeRow(selected)}
         allCollapsed={collapsed.size > 0}
@@ -875,7 +1163,7 @@ export default function ScheduleSheet({
             projectId={projectId}
             afterNodeId={selectedId}
             afterLabel={selected?.name ?? null}
-            onDone={() => router.refresh()}
+            onDone={syncRows}
             trigger={(open) => (
               <m.button
                 type="button"
@@ -953,7 +1241,7 @@ export default function ScheduleSheet({
           weeks={weeks}
           onApplied={() => {
             setShift(null);
-            router.refresh();
+            syncRows();
           }}
           onDismiss={() => setShift(null)}
         />
@@ -1040,7 +1328,7 @@ export default function ScheduleSheet({
                     projectId={projectId}
                     afterNodeId={null}
                     afterLabel={null}
-                    onDone={() => router.refresh()}
+                    onDone={syncRows}
                     trigger={(open) => (
                       <m.button
                         type="button"
@@ -1056,7 +1344,7 @@ export default function ScheduleSheet({
                   <m.button
                     type="button"
                     {...pressMotion}
-                    onClick={() => structure(addRowAction(projectId, {}))}
+                    onClick={() => addRow(null)}
                     className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-4 text-sm font-medium"
                   >
                     <Plus className="size-4" />
@@ -1084,6 +1372,7 @@ export default function ScheduleSheet({
                 collapsed={collapsed.has(r.id)}
                 editing={editing?.rowId === r.id ? editing.field : null}
                 paint={paintOf(r)}
+                pending={isPending(r.id)}
                 on={rowHandlers}
               />
             ))}
@@ -1159,7 +1448,7 @@ export default function ScheduleSheet({
             setMenuRow(null);
             setMenuMode('menu');
           }}
-          onChanged={() => router.refresh()}
+          onChanged={applySheet}
           onDeleted={(undoId, name) => {
             if (!undoId) return;
             setUndoDelete({ id: undoId, name });
@@ -1194,7 +1483,7 @@ export default function ScheduleSheet({
           .map((r) => ({ id: r.id, name: r.unitLabel || r.name }))}
         open={stylesOpen}
         onClose={() => setStylesOpen(false)}
-        onChanged={() => router.refresh()}
+        onChanged={applySheet}
       />
     </div>
   );
@@ -1273,6 +1562,7 @@ const Row = memo(function Row({
   editing,
   highlight,
   paint,
+  pending,
   on,
 }: {
   row: SheetRow;
@@ -1283,27 +1573,45 @@ const Row = memo(function Row({
   highlight?: string;
   /** Whatever colour the rule engine gave this row's bar. */
   paint: string;
+  /**
+   * Drawn by this browser, not yet confirmed by the server.
+   *
+   * It fades in, sits at reduced weight, and refuses every edit — its id is a
+   * placeholder, so a rename or an indent sent from it would reach the server
+   * as a row that has never existed. The wait is the same as it always was; the
+   * difference is that it is now spent looking at the row instead of at
+   * nothing.
+   */
+  pending?: boolean;
   on: RowHandlers;
 }) {
   // Bound to THIS row, inside the memo boundary — so they are rebuilt only when
   // this row re-renders, which is the point.
   const onSelect = () => on.select(r.id);
   const onToggle = () => on.toggle(r.id);
-  const onEdit = (f: Field) => on.edit(r.id, f);
+  const onEdit = (f: Field) => !pending && on.edit(r.id, f);
   const onDone = on.done;
   const onCommit = (f: Field, v: string) => on.commit(r, f, v);
-  const onMenu = () => on.menu(r);
-  const onIndent = (shift: boolean) => on.indent(r.id, shift);
-  const onEnter = () => on.enter(r.id);
+  const onMenu = () => !pending && on.menu(r);
+  const onIndent = (shift: boolean) => !pending && on.indent(r.id, shift);
+  const onEnter = () => !pending && on.enter(r.id);
 
   const locked = r.isSummary;
+  /**
+   * An empty cell says "nothing here yet"; a dash says "nothing here". A row
+   * that is still arriving has not answered the question, so it does not put
+   * three em dashes across the schedule columns on its way in.
+   */
+  const blank = pending ? '' : '—';
 
   return (
     <div
       onMouseDown={onSelect}
       className={`group grid items-center gap-x-1.5 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
         selected ? 'bg-muted' : 'hover:bg-muted/50'
-      } ${r.isSummary ? 'font-semibold' : ''}`}
+      } ${r.isSummary ? 'font-semibold' : ''} ${
+        pending ? 'animate-fade-in-up text-muted-foreground' : ''
+      }`}
       style={{ height: ROW_H }}
     >
       <span className="flex items-center gap-1.5 truncate text-[11px] tabular-nums text-muted-foreground">
@@ -1312,9 +1620,15 @@ const Row = memo(function Row({
         <span
           aria-hidden
           className="h-4 w-1 shrink-0 rounded-full"
-          style={{ background: paint }}
+          style={{ background: paint, opacity: pending ? 0.35 : 1 }}
         />
-        <span className="hidden sm:inline">{r.code}</span>
+        {/* No outline code while pending: it is the one thing here the browser
+            genuinely cannot know, and a guessed 1.3 that becomes 1.4 a second
+            later teaches people not to trust the column. A breathing dot says
+            "on its way" without claiming a number. */}
+        <span className="hidden sm:inline">
+          {pending ? <span className="animate-pulse" aria-label="Saving">·</span> : r.code}
+        </span>
       </span>
 
       <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: r.depth * 12 }}>
@@ -1368,14 +1682,14 @@ const Row = memo(function Row({
       <div className="text-right tabular-nums">
         {locked ? (
           <span className="text-muted-foreground">
-            {r.durationDays == null ? '—' : `${r.durationDays} d`}
+            {r.durationDays == null ? blank : `${r.durationDays} d`}
           </span>
         ) : r.isMilestone ? (
-          <span className="text-[11px] text-muted-foreground">—</span>
+          <span className="text-[11px] text-muted-foreground">{blank}</span>
         ) : (
           <EditableCell
             value={r.durationDays == null ? '' : String(r.durationDays)}
-            display={r.durationDays == null ? '—' : `${r.durationDays} d`}
+            display={r.durationDays == null ? blank : `${r.durationDays} d`}
             active={editing === 'duration'}
             onEdit={() => onEdit('duration')}
             onDone={onDone}
@@ -1390,11 +1704,11 @@ const Row = memo(function Row({
           the row panel, where reading it does not cost the name 70px. */}
       <div className="hidden text-right tabular-nums sm:block">
         {locked ? (
-          <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || '—'}</span>
+          <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || blank}</span>
         ) : (
           <EditableCell
             value={r.startDate ?? ''}
-            display={fmtDate(r.startDate) || '—'}
+            display={fmtDate(r.startDate) || blank}
             active={editing === 'start'}
             onEdit={() => onEdit('start')}
             onDone={onDone}
@@ -1407,11 +1721,11 @@ const Row = memo(function Row({
 
       <div className="text-right tabular-nums">
         {locked ? (
-          <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || '—'}</span>
+          <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || blank}</span>
         ) : (
           <EditableCell
             value={r.finishDate ?? ''}
-            display={fmtDate(r.finishDate) || '—'}
+            display={fmtDate(r.finishDate) || blank}
             active={editing === 'finish'}
             onEdit={() => onEdit('finish')}
             onDone={onDone}
