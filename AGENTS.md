@@ -230,6 +230,35 @@ was the wrong test: on Gundih at 390px the name column went from 170px to
 identify a row by is not. Re-measure the name column, not just the overflow,
 before adding anything to that grid.
 
+**Data Overall is ONE MAP, and it is not a table.** Two earlier cuts were built
+outward from the workbook — its columns, its blocks, its formulas — and both
+were rejected the same day for reading as a spreadsheet with the gridlines taken
+out. The figures were never wrong; the shape was. What shipped on 13 Sep 2026 is
+`components/weekly/OverallMap.tsx` over `lib/overall-map.ts`: contract → group →
+activity, opened where you stand, NO COLUMN HEADERS ANYWHERE, and three things
+per row — name, one bar, one number. Everything else about a row is one press
+away in `ActivityPanel`, which is also where Activities went: **price, method
+and schedule stopped being a screen**, because three screens meant remembering
+which one held which field. `/weekly/[week]/weights` survives as the BULK tool
+(two hundred prices in one sitting is not a per-row job) reached from the setup
+card and a quiet link under the map — do not put it back beside the stepper.
+The weekly queue survives too, as a LENS over the map rather than a list of its
+own: `lib/worklist.ts` still decides what is due.
+
+Four things there are correctness, not taste. `buildOverallMap` COMPUTES
+NOTHING — percentages come from `lib/rollup.ts`, due/filled from
+`lib/worklist.ts`, method from `lib/progress.ts`; a screen with its own opinion
+is how a report ends up disagreeing with the site. A SINGLE ROOT IS UNWRAPPED,
+because Gundih's WBS has one top row and the map's first screen was otherwise
+one line reading "176 activities". `withOptimistic` carries a saved leaf up its
+ancestors by WEIGHT using the rollup's own formula — it is display only, lasts
+until the refresh lands, and is the reason a contract bar visibly grows when you
+fill something in, which is the only part of this screen that makes filling in
+nine items feel like progress rather than a chore. And the panel's draft is
+RE-SEEDED when the row's method changes: switching to quantity makes the server
+seed a quantity from the old percent, and a draft still holding `qtyDone: 0`
+would have made Save write a zero over it.
+
 **Adding a weekly tab means setting `printable`.** `TABS` in
 `components/weekly/WeekTabs.tsx` carries an explicit flag that must match the
 `ReportKey` union in `app/print/weekly/[week]/page.tsx`. It used to be inferred

@@ -1,6 +1,6 @@
 'use client';
 
-import { PressLink, pressMotion } from '@/components/motion/Press';
+import { pressMotion } from '@/components/motion/Press';
 
 import { m } from 'framer-motion';
 
@@ -11,8 +11,6 @@ import SavePdfButton from '@/components/print/SavePdfButton';
 import SectionTabs from '@/components/layout/SectionTabs';
 import WeekSteps, { type WeekStep } from './WeekSteps';
 import WeekSelect from './WeekSelect';
-import { Scale } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 /**
  * The weekly pages, split the way people use them.
@@ -185,30 +183,15 @@ export default function WeekTabs({
             group is justify-end, so the print button at the right edge never
             moves. */}
         <div className="col-start-2 row-start-1 flex shrink-0 flex-wrap items-center justify-end gap-2 md:col-start-3">
-          {/* Activities is DELIBERATELY not a step. The stepper is the order a
-              WEEK is worked through, and what an activity is worth and how it
-              is counted belong to the project — put in the stepper it would be
-              dead furniture from week two. Being outside it is what says so.
-
-              Icon only below `sm`, the same way Set-as-Current collapses on the
-              row beside it. */}
-          {!onReport && (
-            <PressLink
-              href={`/weekly/${selectedWeek}/weights`}
-              {...pressMotion}
-              aria-current={activeTab === 'weights' ? 'page' : undefined}
-              className={cn(
-                'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-300 ease-ios',
-                activeTab === 'weights'
-                  ? 'bg-chart-1 text-white'
-                  : 'bg-background ring-1 ring-foreground/12 hover:bg-accent'
-              )}
-              title="What each activity is worth, and how it is counted"
-            >
-              <Scale className="h-4 w-4" />
-              <span>Activities</span>
-            </PressLink>
-          )}
+          {/* ACTIVITIES IS NO LONGER A DESTINATION IN THIS HEADER. What an
+              activity is worth and how it is counted stopped being a screen on
+              13 Sep 2026: both now live in the row's own panel on Fill in, one
+              press from the map, which is what the third design of Data Overall
+              was for — three screens meant remembering which one held which
+              field. The bulk tool survives at `/weekly/[week]/weights` for the
+              afternoon when 200 prices are typed at once, reached from the
+              setup card and from a quiet link under the map. It is not worth a
+              permanent slot beside the stepper. */}
           {!isCurrent && !derivedCurrent && (
             <m.button {...pressMotion}
               onClick={setAsCurrent}

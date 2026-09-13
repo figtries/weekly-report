@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import { getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { weekPeriodShort } from '@/lib/weeks';
 import { buildWorklist } from '@/lib/worklist';
-import DataOverallWorkbench from '@/components/weekly/DataOverallWorkbench';
+import OverallMap from '@/components/weekly/OverallMap';
+import { buildOverallMap, type RowFact } from '@/lib/overall-map';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import PageHeader from '@/components/layout/PageHeader';
 import { Reveal } from '@/components/motion/Reveal';
@@ -45,13 +46,13 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
   const { roots, grandTotal } = result;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);
 
-  // Only surface changes for this week — history strip + panel timeline stay
-  // scoped to what the user is currently editing.
-  const recentChanges = (db.changeLog ?? []).filter((c) => c.week === week);
-
   // What this week actually asks of whoever is filling it in. Built here rather
   // than in the client so the queue is part of the prerendered page — the first
   // thing on screen should be the work, not a spinner deciding what the work is.
+  //
+  // It is no longer a LIST on this screen. The map comes first and this is the
+  // lens over it, which is what the 13 Sep 2026 brief asked for after two cuts
+  // that led with a queue were rejected.
   const worklist = buildWorklist({ roots, schedule: db.schedule, week, changeLog: db.changeLog });
 
   // The one thing still missing, if anything is. One card, in dependency
@@ -71,6 +72,25 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
       ).length
     : 0;
   const money = wscreen?.summary;
+
+  // Price and dates for the panel. They live in SQLite and have no equivalent
+  // on the db.json side, so the imported project simply gets a panel with two
+  // read-only sections rather than a screen that pretends to offer them.
+  const facts: Record<string, RowFact> = {};
+  if (wscreen) {
+    [...wscreen.units.flatMap((u) => u.rows), ...wscreen.looseRows].forEach((r) => {
+      facts[r.id] = { price: r.price, start: r.start, finish: r.finish };
+    });
+  }
+
+  const map = buildOverallMap({
+    roots,
+    snapshots: result.meta.leafData,
+    worklist,
+    schedule: db.schedule,
+    changeLog: db.changeLog,
+    facts,
+  });
 
   const guide =
     !money || !open
@@ -171,16 +191,18 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
         </div>
       </Reveal>
 
-      {/* The stored evidence behind each leaf — quantities counted and
-          milestones ticked. The workbench needs it because entry now happens on
-          the item itself rather than on a separate Field Input screen. */}
+      {/* The project itself. Everything about one activity — its figure, how it
+          is counted, what it is worth, when it runs — is one press away inside
+          it, which is what took Activities off the menu as a screen people had
+          to know about. */}
       <Reveal delay={MOTION.stagger * (guide ? 3 : 2)}>
-        <DataOverallWorkbench
-          roots={roots}
+        <OverallMap
+          map={map}
           week={week}
-          recentChanges={recentChanges}
-          snapshots={result.meta.leafData}
-          worklist={worklist}
+          canPrice={!!open && !open.legacyJsonId}
+          projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
+          checkHref={`/weekly/${week}/control`}
+          weightsHref={open && !open.legacyJsonId ? `/weekly/${week}/weights` : null}
         />
       </Reveal>
     </div>
