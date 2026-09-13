@@ -44,13 +44,15 @@ async function WeightsPageBody() {
   return (
     <RouteTransition id="weekly-weights">
       <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
-        <PageHeader section="Data Overall" title="Prices and weights" className="mb-0 animate-enter">
-          {/* The promise, said once, at the top, in the words that remove the
-              fear. Nobody arrives here with a complete BOQ, and believing you
-              need one is what stops a project getting set up at all. */}
+        <PageHeader section="Data Overall" title="Activities" className="mb-0 animate-enter">
+          {/* Both promises, said once, at the top, in the words that remove the
+              two fears. Nobody arrives with a complete BOQ, and believing you
+              need one is what stops a project getting set up at all. And nobody
+              on a site can answer "what percent is this now" — the workbook
+              this replaces asked them 176 times a week and got guesses. */}
           <span className="font-semibold text-foreground">
-            Type only the prices you have. Everything else takes an even share, and the total
-            always closes at 100%.
+            Set each activity up once. Type only the prices you have, and say how the work will
+            be counted. Then every week you count instead of estimating.
           </span>
         </PageHeader>
 

@@ -1,5 +1,7 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
@@ -12,6 +14,10 @@ import { formatMoney } from '@/lib/currency';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+// Loaded on demand: nobody opens this on the way past, and the field crew's
+// connection is what the initial bundle is measured against.
+const MeasurePanel = dynamic(() => import('./MeasurePanel'), { ssr: false });
 
 /**
  * Where a project says what its work is worth.
@@ -46,7 +52,10 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
   /** Prices typed since the page loaded, raw digit strings, keyed by row id. */
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<string | null>(null);
+  /** The row whose measurement panel is open. ONE panel, pointed at a row. */
+  const [measuring, setMeasuring] = useState<WeightsRow | null>(null);
   const [, startTransition] = useTransition();
+  const router = useRouter();
 
   const signed = screen.summary.contractValue > 0 ? screen.summary.contractValue : undefined;
 
@@ -142,6 +151,7 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
           typed={typed}
           setTyped={setTyped}
           onCommit={commitPrice}
+          onMeasure={setMeasuring}
           onBack={() => setOpenUnit(null)}
         />
       ) : (
@@ -173,6 +183,7 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
               typed={typed}
               setTyped={setTyped}
               onCommit={commitPrice}
+              onMeasure={setMeasuring}
               showBoth={false}
               scopeLabel="project"
             />
@@ -184,6 +195,20 @@ export default function WeightsWorkbench({ screen }: { screen: WeightsScreen }) 
             </p>
           )}
         </>
+      )}
+
+      {measuring && (
+        <MeasurePanel
+          row={measuring}
+          onClose={() => setMeasuring(null)}
+          onSaved={() => {
+            setMeasuring(null);
+            // The server owns the method, the quantity and the step list, so
+            // the page is re-read rather than patched here. Nothing typed is
+            // lost: prices commit on blur and are already saved.
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );
@@ -321,6 +346,7 @@ function UnitRows({
   typed,
   setTyped,
   onCommit,
+  onMeasure,
   onBack,
 }: {
   unit: WeightsUnit;
@@ -330,6 +356,7 @@ function UnitRows({
   typed: Record<string, string>;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
+  onMeasure: (row: WeightsRow) => void;
   onBack: () => void;
 }) {
   return (
@@ -354,6 +381,7 @@ function UnitRows({
         typed={typed}
         setTyped={setTyped}
         onCommit={onCommit}
+        onMeasure={onMeasure}
         showBoth
         scopeLabel={unit.code || 'this unit'}
       />
@@ -380,6 +408,7 @@ function RowList({
   typed,
   setTyped,
   onCommit,
+  onMeasure,
   showBoth,
   scopeLabel,
 }: {
@@ -390,6 +419,7 @@ function RowList({
   typed: Record<string, string>;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
+  onMeasure: (row: WeightsRow) => void;
   /** Whether the scope figure and the project figure are different questions. */
   showBoth: boolean;
   scopeLabel: string;
@@ -459,10 +489,27 @@ function RowList({
                 <p className="line-clamp-2 text-sm font-medium">
                   {row.code} {row.name}
                 </p>
-                {!row.isLeaf && (
+                {!row.isLeaf ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Branch. Its figure is the rows beneath it.
                   </p>
+                ) : (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {/* The schedule, read only. It sits here because in the
+                        workbook this replaces Duration / Start / Finish are the
+                        columns immediately beside Price, and the weekly plan is
+                        derived from them. Without it the screen looks like it
+                        only does money. */}
+                    {row.start && row.finish ? (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {fmtDay(row.start)} to {fmtDay(row.finish)}
+                        {row.durationDays ? ` · ${row.durationDays}d` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Not scheduled yet</span>
+                    )}
+                    <MeasureChip row={row} onOpen={() => onMeasure(row)} />
+                  </div>
                 )}
               </div>
 
@@ -524,6 +571,56 @@ function RowList({
       </div>
     </>
   );
+}
+
+/**
+ * How this row will be measured, as a control rather than as a caption.
+ *
+ * It is a BUTTON on every row, including the rows that are fine, because the
+ * thing being said is a decision someone can change and quiet text saying
+ * "percent" would read as a label rather than as an offer. The estimated state
+ * is the one that has to carry weight: 233 of this database's 236 leaves sit on
+ * a typed percent, which is the workbook's own failure reproduced, so it is
+ * drawn as something unfinished rather than as a neutral default.
+ */
+function MeasureChip({ row, onOpen }: { row: WeightsRow; onOpen: () => void }) {
+  // Phrased as what the person DOES every week, not as the name of a setting.
+  // "Quantity" is a category; "450 m to count" is an instruction, and it also
+  // shows the total back so a wrong one is caught here rather than in month
+  // three when the percentage stops making sense.
+  const label =
+    row.method === 'qty'
+      ? `${row.qtyTotal ?? '?'} ${row.qtyUnit ?? 'units'} to count`
+      : row.method === 'milestone'
+        ? `${row.steps} steps to tick`
+        : row.method === 'linked'
+          ? 'From the document register'
+          : 'Percent, typed';
+
+  return (
+    <m.button
+      {...pressMotion}
+      onClick={onOpen}
+      className={cn(
+        'inline-flex min-h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium ring-1 transition-colors duration-300 ease-ios',
+        row.estimated
+          ? 'bg-warn-soft text-warn ring-warn/30 hover:bg-warn/15'
+          : 'bg-ok-soft text-ok ring-ok/25 hover:bg-ok/15'
+      )}
+      title="Choose how this activity is measured"
+    >
+      {row.estimated && <span aria-hidden>!</span>}
+      {label}
+    </m.button>
+  );
+}
+
+/** `2026-03-14` as `14 Mar`. en-GB, like every other date in the app. */
+function fmtDay(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 /** A branch's live figure: its own leaves in this list, added up. */

@@ -242,6 +242,62 @@ pekerjaanku sudah 60% tapi proyeknya cuma naik 2%?"*
 Bentuknya: sheet/panel yang sudah dipakai workbench untuk panel baris, bukan
 tooltip. Sekali tap, bisa ditutup, terbaca di 390px.
 
+## Amandemen, 13 Sep sore: Data Overall bukan layar harga
+
+Setelah layar Weights berdiri dan dilihat, pemiliknya menolaknya — *"orang pasti
+bingung pakainya; yang susah itu kan BIKIN data overall"* — dan menunjuk ke
+workbook W31 Gundih yang asli. Membacanya mengubah keputusan 4 dan seluruh
+bagian 2 di atas. Tiga temuan, semuanya dari berkasnya sendiri:
+
+**Modelnya sudah cocok, jadi rumusnya memang bukan masalahnya.** Kolom di
+`Data Overall`: `WF Overall = F13/F293` (harga baris ÷ total harga) dan
+`WF per SPK = E13/$E$11` (bobot baris ÷ bobot SPK-nya), cabang pakai
+`SUBTOTAL(9,…)`. Itu persis `bobotOverall` dan `bobotInUnit`.
+
+**Tapi layarnya cuma memperlihatkan separuh sheet-nya.** Di Excel, Duration /
+Start / Finish duduk TEPAT di sebelah Price, karena dari tanggal itulah blok
+PLAN mingguan lahir: `DATA PLAN = M13*$E13`, yaitu persen rencana × bobot. Layar
+Weights tidak menampilkan tanggal sama sekali, jadi ia terbaca seperti
+mengerjakan sepertiga pekerjaan — padahal aplikasi ini sudah menurunkan harga →
+bobot DAN tanggal → kurva. Yang hilang bukan mesinnya; orang tidak pernah
+melihat bahwa mesinnya sudah jalan.
+
+**Dan yang benar-benar bikin bingung tiap minggu adalah persennya.** Blok
+`ACTUAL` di workbook itu 176 baris × 60 minggu berisi angka yang diketik tangan
+dan diseed dari `PLAN` — jadi orang menaksir, bukan mengukur. Aplikasi ini punya
+obatnya sejak awal (`qty` dan `milestone` di `lib/progress.ts`, ditulis lewat
+`applyFieldProgress` sehingga bukti yang memutuskan persentase) dan **tidak ada
+satu baris pun yang memakainya: 233 dari 236 leaf berstatus `lumpsum`**, tiga
+sisanya `linked`. Tidak pernah ada tempat untuk menyetelnya.
+
+Maka:
+
+9. **Data Overall adalah tempat menyiapkan tiap pekerjaan SEKALI**, bukan layar
+   harga. Satu baris memperlihatkan rantai penuhnya — harga → bobot · tanggal →
+   target minggu ini · cara ukur → bagaimana aktual diisi nanti — dan hanya DUA
+   yang bisa diketik: harga, dan cara mengukurnya. Sisanya diturunkan, dan
+   layarnya menyebutkan mana yang dikerjakan aplikasi. Orang yang datang dari
+   Excel mengira harus mengisi lima kolom; layar ini memberi tahu bahwa dia
+   mengisi dua.
+
+10. **Tiga cara ukur ditawarkan, bukan empat.** Kuantitas ("3 dari 8 unit"),
+    tahapan ("Material · Fabrikasi · Terpasang · Tested"), dan persen langsung —
+    yang tetap boleh, tapi **ditandai sebagai taksiran, bukan sebagai ukuran**.
+    `linked` (leaf engineering membaca register dokumen) tidak ditawarkan di
+    pemilih: tiga baris yang sudah memakainya tetap jalan dan tidak diganggu,
+    tapi menawarkannya sebagai pilihan bebas mengundang orang menautkan baris
+    yang tidak punya dokumen.
+
+11. **Pemilih cara ukur adalah SATU panel bersama**, dibuka oleh chip di baris
+    dan dikemudikan id baris aktif — bukan satu panel per baris. Daftar ini bisa
+    285 baris; aturan repo ini soal Radix adalah per layar, tidak per baris.
+
+Tidak ada action tulis baru untuk ini juga: `setProgressMethodAction(leafId,
+method, { vol, satuan, milestones })` sudah ada, sudah bercabang ke
+`setProgressMethodSqlite`, sudah menolak `vol: 1, satuan: 'Ls'` lewat
+`hasRealQuantity()`, dan sudah membawa progress MELINTASI perubahan metode
+alih-alih menghitung ulang menembusnya.
+
 ## Batas yang harus disebut, bukan disembunyikan
 
 **Gundih tidak kebagian tab Weights.** Dia proyek `legacyJsonId` yang membaca

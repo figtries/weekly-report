@@ -29,7 +29,9 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
+import type { ProgressMethod } from './schema';
 import { deriveWeights, summariseWeights, type WeightNode, type WeightSummary } from './weights';
+import { getActiveBaselineId } from './sheet';
 import { loadWeightNodes } from './weights-read';
 
 /** Where a row's weight came from. Drives the label, so it must not overstate. */
@@ -54,6 +56,33 @@ export interface WeightsRow {
   /** Percent within this row's own reporting unit. */
   bobotInUnit: number;
   share: WeightShare;
+
+  /**
+   * The schedule, read only, shown because the Excel sheet this replaces keeps
+   * Duration / Start / Finish in the columns right beside Price — and for a
+   * reason. Price decides how much a row COUNTS; the dates decide WHEN, and the
+   * weekly plan curve is `DATA PLAN = plan% × WF`. A screen that shows the
+   * price half alone looks like it is doing a third of the job, which is
+   * exactly how the first cut of this screen read.
+   */
+  start: string | null;
+  finish: string | null;
+  durationDays: number | null;
+
+  /** How this row's percentage gets decided every week. */
+  method: ProgressMethod;
+  /** For `qty`: the total to count against, and what it is counted in. */
+  qtyTotal: number | null;
+  qtyUnit: string | null;
+  /** For `milestone`: how many steps it has. */
+  steps: number;
+  /**
+   * True where the percentage is TYPED rather than measured. Not a warning for
+   * its own sake: the workbook this replaces has 176 rows of hand-typed
+   * cumulative percent seeded from the plan, and reproducing that quietly is
+   * the one failure this screen exists to prevent.
+   */
+  estimated: boolean;
 }
 
 export interface WeightsUnit {
@@ -107,9 +136,29 @@ export interface WeightsScreen {
   hasUnits: boolean;
 }
 
+/**
+ * Everything about a row that is NOT money.
+ *
+ * Kept as a lookup passed in rather than read inside, so `buildWeightsScreen`
+ * stays pure over plain rows and `scripts/verify-weights-screen.ts` can drive
+ * it without a database. An absent entry is a row with no schedule and no
+ * method set, which is what a freshly pasted plan looks like.
+ */
+export interface RowFacts {
+  code: string;
+  name: string;
+  start?: string | null;
+  finish?: string | null;
+  durationDays?: number | null;
+  method?: ProgressMethod | null;
+  qtyTotal?: number | null;
+  qtyUnit?: string | null;
+  steps?: number;
+}
+
 export function buildWeightsScreen(
   nodes: WeightNode[],
-  meta: Map<string, { code: string; name: string }>,
+  meta: Map<string, RowFacts>,
   currency: string,
   signedValue: number | null
 ): WeightsScreen {
@@ -182,10 +231,13 @@ export function buildWeightsScreen(
       .sort((a, b) => a.order - b.order)
       .map((n) => {
         const overall = n.isLeaf ? (result.bobotOf.get(n.id) ?? 0) : (subtree.get(n.id) ?? 0);
+        const f = meta.get(n.id);
+        // `methodOf`'s rule, not a second one: an unset method IS lumpsum.
+        const method: ProgressMethod = f?.method ?? 'lumpsum';
         return {
           id: n.id,
-          code: meta.get(n.id)?.code ?? '',
-          name: meta.get(n.id)?.name ?? '',
+          code: f?.code ?? '',
+          name: f?.name ?? '',
           depth: Math.max(0, depthOf(n) - baseDepth),
           isLeaf: n.isLeaf,
           price: n.price,
@@ -193,6 +245,16 @@ export function buildWeightsScreen(
           // Guarded: a card whose leaves all weigh zero must show 0, not NaN.
           bobotInUnit: against > 0 ? (overall / against) * 100 : 0,
           share: shareOf(n),
+          start: f?.start ?? null,
+          finish: f?.finish ?? null,
+          durationDays: f?.durationDays ?? null,
+          method,
+          qtyTotal: f?.qtyTotal ?? null,
+          qtyUnit: f?.qtyUnit ?? null,
+          steps: f?.steps ?? 0,
+          // Only a LEAF can be estimated: a branch has no percentage of its
+          // own, its figure is its children added up.
+          estimated: n.isLeaf && method === 'lumpsum',
         };
       });
 
@@ -237,17 +299,58 @@ export function loadWeightsScreen(projectId: string): WeightsScreen | null {
   if (!project) return null;
 
   const nodes = loadWeightNodes(projectId);
-  const meta = new Map(
-    db
-      .select({
-        id: schema.wbsNodes.id,
-        code: schema.wbsNodes.wbsCode,
-        name: schema.wbsNodes.deskripsi,
-      })
-      .from(schema.wbsNodes)
-      .where(eq(schema.wbsNodes.projectId, projectId))
-      .all()
-      .map((r) => [r.id, { code: r.code, name: r.name }] as const)
+
+  const rows = db
+    .select({
+      id: schema.wbsNodes.id,
+      code: schema.wbsNodes.wbsCode,
+      name: schema.wbsNodes.deskripsi,
+      method: schema.wbsNodes.progressMethod,
+      qtyTotal: schema.wbsNodes.vol,
+      qtyUnit: schema.wbsNodes.satuan,
+    })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.projectId, projectId))
+    .all();
+
+  // The dates come from the ACTIVE baseline, the same one the planner and the
+  // plan curve read. A project with no baseline yet simply has no dates to
+  // show, which is a true thing to say about it.
+  const baselineId = getActiveBaselineId(projectId);
+  const sched = new Map(
+    (baselineId
+      ? db
+          .select()
+          .from(schema.nodeSchedules)
+          .where(eq(schema.nodeSchedules.baselineId, baselineId))
+          .all()
+      : []
+    ).map((s) => [s.nodeId, s] as const)
+  );
+
+  const stepCount = new Map<string, number>();
+  for (const m of db.select({ nodeId: schema.milestones.nodeId }).from(schema.milestones).all()) {
+    stepCount.set(m.nodeId, (stepCount.get(m.nodeId) ?? 0) + 1);
+  }
+
+  const meta = new Map<string, RowFacts>(
+    rows.map((r) => {
+      const s = sched.get(r.id);
+      return [
+        r.id,
+        {
+          code: r.code,
+          name: r.name,
+          start: s?.startDate ?? null,
+          finish: s?.finishDate ?? null,
+          durationDays: s?.durationDays ?? null,
+          method: r.method,
+          qtyTotal: r.qtyTotal,
+          qtyUnit: r.qtyUnit,
+          steps: stepCount.get(r.id) ?? 0,
+        },
+      ] as const;
+    })
   );
 
   return buildWeightsScreen(nodes, meta, project.currency, project.contractValue);

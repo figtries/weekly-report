@@ -44,7 +44,7 @@ const GROUPS = {
     // order a WEEK is worked through, and prices belong to the project. Being
     // listed here is what makes the tab detect as active and get prefetched;
     // its visible entry is the pill in the action group.
-    { key: 'weights', label: 'Prices and weights', short: 'Weights', printable: false },
+    { key: 'weights', label: 'Activities', short: 'Activities', printable: false },
   ],
   laporan: [
     { key: 'summary', label: 'Overall Summary', short: 'Summary', printable: true },
