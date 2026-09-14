@@ -22,6 +22,11 @@ import type { ChangeLogEntry, ScheduleItem } from './types';
  * the whole WBS every Friday. Scheduled-only averages 8.8 items a week across
  * the project and never exceeds 25.
  *
+ * Scheduled-this-week is the rule for what to ASK; it is not the rule for what
+ * is outstanding. A leaf that reached 100% early is scheduled for weeks it has
+ * nothing left to report on, so it arrives already answered (`complete`) rather
+ * than as work — see the field.
+ *
  * The items it leaves out are not dropped — `stuck` collects everything whose
  * scheduled finish has passed while it is still short of 100% (44 of them at
  * W43). That is not a Friday to-do list, it is a project problem, so it
@@ -41,6 +46,16 @@ export interface WorklistEntry {
   behindPct: number;
   /** Someone recorded something against this leaf during this week. */
   touched: boolean;
+  /**
+   * Already at 100%, with its scheduled finish still ahead of it.
+   *
+   * It counts as dealt with WITHOUT anyone touching it again: there is nothing
+   * left to record, and an item that finished early would otherwise be handed
+   * back every week until its span ran out — blocking the week each time over
+   * work that is done. `touched` stays honest so the two reasons can be told
+   * apart.
+   */
+  complete: boolean;
 }
 
 /** A leaf whose scheduled finish has passed while it is still short of 100%. */
@@ -69,6 +84,17 @@ export interface Worklist {
 /** Zero-weight leaves are milestone rows, not work — every weekly UI hides them. */
 function isMilestoneRow(n: RollupNode): boolean {
   return n.children.length === 0 && n.bobot === 0;
+}
+
+/**
+ * Finished, to the two decimals every screen and every sheet prints.
+ *
+ * A quantity-driven leaf lands on 99.999999999 rather than 100 often enough
+ * that `>= 100` would keep asking for an item the whole app already shows as
+ * 100.00%.
+ */
+function isComplete(pct: number): boolean {
+  return pct >= 99.995;
 }
 
 /** The percent the plan expects this leaf to have reached by now. */
@@ -123,12 +149,13 @@ export function buildWorklist({
         spanWeeks: s.finishWeek - s.startWeek + 1,
         behindPct: planPctOf(node) - pct,
         touched: touchedIds.has(node.id),
+        complete: isComplete(pct),
       };
-      (entry.touched ? done : due).push(entry);
+      (entry.touched || entry.complete ? done : due).push(entry);
       return;
     }
 
-    if (s.finishWeek < week && pct < 100) {
+    if (s.finishWeek < week && !isComplete(pct)) {
       stuck.push({ node, finishWeek: s.finishWeek, weeksLate: week - s.finishWeek, pct });
     }
   };

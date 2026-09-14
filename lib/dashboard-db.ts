@@ -37,6 +37,7 @@ import { getActiveBaselineId } from './sheet';
 import { db as sqlite, schema } from './sqlite';
 import { parseSignature } from './signature';
 import type {
+  ChangeLogEntry,
   Database,
   ProgressMethod,
   ProjectInfo,
@@ -183,6 +184,35 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     m.set(row.nodeId, [...(m.get(row.nodeId) ?? []), row.milestoneId]);
   }
 
+  // THE RECORD THAT SOMEBODY ANSWERED. `buildWorklist` decides an item was
+  // dealt with from the change log, and this adapter used to hand over none at
+  // all — so on a SQLite project every leaf the schedule touched stayed
+  // "due and unanswered" forever, `done` was permanently empty, and the Check
+  // page's blocking finding could not be cleared by any button in the app.
+  // Pressing "no progress" wrote its row and changed nothing on screen
+  // (14 Sep 2026, week 37 of the Samberah project: an item at 100% still held
+  // the week back).
+  //
+  // A `leaf_progress` row IS that record: `writeSnapshot` is the only thing
+  // that creates one, both the Fill in screen and "no progress" go through it,
+  // and it is keyed per week. So the log is read back off the rows already
+  // loaded above rather than from a table of its own. It carries no before/
+  // after — SQLite keeps the standing figure, not the edit — and nothing reads
+  // one: `field` exists for db.json's own dedupe, and `at` for "last touched".
+  const weekNoById = new Map(weekRows.map((w) => [w.id, w.weekNo]));
+  const changeLog: ChangeLogEntry[] = progress.map((row) => {
+    const pct = row.cumProgressPct ?? 0;
+    return {
+      id: row.id,
+      leafId: row.nodeId,
+      week: weekNoById.get(row.weekId) ?? 0,
+      field: 'cumProgressPct',
+      oldValue: pct,
+      newValue: pct,
+      at: row.recordedAt ?? '',
+    };
+  });
+
   // The last week anybody recorded anything. The S-curve draws its actual line
   // up to here and stops — a flat line running to week 60 would claim the
   // project stalled, when in truth nobody has filed those weeks yet.
@@ -301,6 +331,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
       scurveActual: [],
       daily: [],
       schedule,
+      changeLog,
     },
     weeks: weekRows.map((w) => w.weekNo),
     currentWeek,

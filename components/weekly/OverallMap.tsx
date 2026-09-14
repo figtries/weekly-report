@@ -418,14 +418,23 @@ const Row = memo(function Row({
                 node.filledCount ? 'bg-ok-soft text-ok' : 'bg-chart-1/10 text-chart-1'
               )}
             >
-              {node.filledCount ? 'Filled in' : 'Due this week'}
+              {node.completeCount
+                ? 'Complete'
+                : node.filledCount
+                  ? 'Filled in'
+                  : 'Due this week'}
             </span>
           )}
           {isBranch && (
             <span className="tabular-nums">
               {node.leafCount} {node.leafCount === 1 ? 'activity' : 'activities'} · weight{' '}
               <span className="font-semibold text-foreground/70">{fmt2(node.weight)}%</span>
-              {node.dueCount > 0 && ` · ${node.dueCount} due`}
+              {/* What is still OUTSTANDING, not what was scheduled. A branch
+                  reading "1 due" over a row whose own chip says Complete is one
+                  card making two statements, and the person checking the week
+                  has to open it to find out which is true. */}
+              {node.dueCount - node.filledCount > 0 &&
+                ` · ${node.dueCount - node.filledCount} due`}
             </span>
           )}
           {node.kind === 'leaf' && (

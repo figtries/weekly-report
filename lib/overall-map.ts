@@ -19,7 +19,8 @@ import { methodOf, totalQty } from './progress';
  * elsewhere and is carried through unchanged:
  *
  *   percentages      lib/rollup.ts     (`curProgressPct`, `targetWF`, `bobot`)
- *   due / filled in  lib/worklist.ts   (scheduled this week, touched this week)
+ *   due / filled in  lib/worklist.ts   (scheduled this week; touched this week
+ *                                      or already finished)
  *   how it is measured lib/progress.ts (`methodOf`, `totalQty`)
  *
  * Re-deriving any of them here would give the screen its own opinion, and a
@@ -70,6 +71,14 @@ export interface MapNode {
   dueCount: number;
   /** Of those, the ones already dealt with. */
   filledCount: number;
+  /**
+   * Of THOSE, the ones dealt with by already being finished.
+   *
+   * A leaf that reached 100% before its scheduled finish is no longer work,
+   * but nobody filled it in this week either, and a chip saying they did is a
+   * lie the person checking the week would have to go and disprove.
+   */
+  completeCount: number;
   children: MapNode[];
 
   /* leaf only ------------------------------------------------------------- */
@@ -167,6 +176,9 @@ export function buildOverallMap({
     ...worklist.done.map((e) => e.node.id),
   ]);
   const filledIds = new Set<string>(worklist.done.map((e) => e.node.id));
+  const completeIds = new Set<string>(
+    worklist.done.filter((e) => e.complete && !e.touched).map((e) => e.node.id)
+  );
 
   const schedById = new Map<string, ScheduleItem>();
   (schedule ?? []).forEach((s) => schedById.set(s.leafId, s));
@@ -201,6 +213,11 @@ export function buildOverallMap({
       leafCount: isLeaf ? 1 : kids.reduce((s, k) => s + k.leafCount, 0),
       dueCount: isLeaf ? (dueIds.has(node.id) ? 1 : 0) : kids.reduce((s, k) => s + k.dueCount, 0),
       filledCount: isLeaf ? (filledIds.has(node.id) ? 1 : 0) : kids.reduce((s, k) => s + k.filledCount, 0),
+      completeCount: isLeaf
+        ? completeIds.has(node.id)
+          ? 1
+          : 0
+        : kids.reduce((s, k) => s + k.completeCount, 0),
       children: kids,
     };
 
