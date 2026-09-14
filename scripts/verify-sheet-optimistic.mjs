@@ -137,7 +137,11 @@ const selectLeafNamed = (name) =>
     (sel, wanted) => {
       const rows = [...document.querySelectorAll(sel)].filter(
         (r) =>
-          r.innerText.includes(wanted) &&
+          // The name of a row that was JUST added lives in an open `<input>`,
+          // not in the row's text: the sheet selects the new row and opens its
+          // name for typing. `innerText` alone stopped finding it.
+          (r.innerText.includes(wanted) ||
+            [...r.querySelectorAll('input')].some((i) => i.value.includes(wanted))) &&
           !r.querySelector('button[aria-label^="Collapse"], button[aria-label^="Expand"]')
       );
       const row = rows.at(-1);

@@ -338,8 +338,77 @@ export default function ScheduleSheet({
    */
   const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * A row this browser drew, and the row the server made of it.
+   *
+   * Everything in the optimistic path hangs off these two maps.
+   *
+   * `tmpReal` is what lets a SECOND change reach the database at all. The id on
+   * screen while a row is arriving is a placeholder, and sending a placeholder
+   * is refused with "That row is no longer in the plan" — which `structure`
+   * swallows on purpose, because it normally means this sheet is behind. So a
+   * second Add row pressed before the first had answered, an Enter typed at the
+   * end of a name, a Tab, a Delete: each one was sent against `tmp-4`, refused,
+   * and silently rolled back. The row appeared and then vanished, with nothing
+   * on screen to say why. That is the bug.
+   *
+   * `realTmp` is the other direction and is used for ONE thing: the React key.
+   * A row keeps the key it was born with when the placeholder becomes real
+   * underneath it, so the name input you are typing into is not unmounted and
+   * remounted mid-word — it keeps its draft, its focus and its cursor.
+   */
+  const tmpReal = useRef(new Map<string, string>());
+  const realTmp = useRef(new Map<string, string>());
+  /** The id the SERVER knows, if it knows one yet. Call it at send time, never earlier. */
+  const resolveId = useCallback((id: string) => tmpReal.current.get(id) ?? id, []);
+  /** The id this BROWSER first drew — stable across the swap, so React keeps the element. */
+  const keyOf = useCallback((id: string) => realTmp.current.get(id) ?? id, []);
+
+  /**
+   * Structural writes go one at a time.
+   *
+   * Two in flight at once broke twice over. A second op could only name the
+   * first one's placeholder, which is the GONE above; and two replies each
+   * carrying a whole sheet can land in either order, which puts the older plan
+   * back on screen. Queued, every op resolves its ids at SEND time — by then
+   * every earlier placeholder has a real id — and the last reply is the last
+   * word. The wait is not felt: the guess is already drawn.
+   */
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const queued = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
+    const p = chain.current.then(fn, fn);
+    chain.current = p.then(
+      () => undefined,
+      () => undefined
+    );
+    return p;
+  }, []);
+
+  /**
+   * What this browser is showing that the server has not confirmed yet.
+   *
+   * An action's reply carries the WHOLE sheet, so applying it wiped every other
+   * guess still in flight: press Add row twice quickly and the first answer
+   * took the second row off the screen — the same disappearance, from the other
+   * end. Each pending change leaves its guess here and takes it back when its
+   * own answer lands, and whatever is left is replayed on top of every sheet
+   * that arrives.
+   */
+  const overlays = useRef<{ id: number; apply: (rows: SheetRow[]) => SheetRow[] }[]>([]);
+  const overlaySeq = useRef(0);
+  /** Draw a guess now, and hand back the way to drop it. */
+  const overlay = useCallback((apply: (rows: SheetRow[]) => SheetRow[]) => {
+    overlaySeq.current += 1;
+    const o = { id: overlaySeq.current, apply };
+    overlays.current = [...overlays.current, o];
+    setRows((rs) => apply(rs));
+    return () => {
+      overlays.current = overlays.current.filter((x) => x.id !== o.id);
+    };
+  }, []);
+
   const applyRows = useCallback((next: SheetRow[], sheet?: Sheet) => {
-    setRows(next);
+    setRows(overlays.current.reduce((rs, o) => o.apply(rs), next));
     if (sheet) setSpan({ start: sheet.spanStart, finish: sheet.spanFinish });
   }, []);
 
@@ -638,31 +707,63 @@ export default function ScheduleSheet({
         // to work out "late by" here — the same subtraction the server does on
         // the next read.
         if (field === 'target') {
-          patch(row.id, { targetDate: raw || null, daysLate: lateBy(raw || null, row.finishDate) });
-          const res = await updateRowTargetAction(row.id, raw);
+          const next = { targetDate: raw || null, daysLate: lateBy(raw || null, row.finishDate) };
+          const drop = overlay((rs) =>
+            rs.map((r) => (r.id === resolveId(row.id) ? { ...r, ...next } : r))
+          );
+          // `.catch` and not a bare await: a throw would skip `drop()` and pin
+          // the guess to the screen for good.
+          const res = await queued(() => updateRowTargetAction(resolveId(row.id), raw)).catch(
+            () => ({ ok: false as const, error: 'Something went wrong' })
+          );
+          drop();
           if (!res.ok) {
             setError(res.error);
-            patch(row.id, { targetDate: before || null, daysLate: lateBy(before || null, row.finishDate) });
+            patch(resolveId(row.id), {
+              targetDate: before || null,
+              daysLate: lateBy(before || null, row.finishDate),
+            });
             return;
           }
+          patch(resolveId(row.id), next);
         } else if (field === 'name' || field === 'price') {
-          patch(row.id, field === 'name' ? { name: raw } : { price: raw === '' ? null : Number(raw) });
-          const res = await updateRowTextAction(row.id, field, raw);
+          /**
+           * The typed value is held as an OVERLAY, not written straight into
+           * the rows.
+           *
+           * A name typed into a row that is still on its way would otherwise be
+           * painted over by that row's own answer — the server still calls it
+           * "New task" until the rename lands — and the word you had just
+           * finished typing would vanish under your hands for a second. The
+           * overlay survives every sheet that arrives until the server holds
+           * the value, and `resolveId` is what sends the rename to the row the
+           * database actually made.
+           */
+          const next =
+            field === 'name' ? { name: raw } : { price: raw === '' ? null : Number(raw) };
+          const drop = overlay((rs) =>
+            rs.map((r) => (r.id === resolveId(row.id) ? { ...r, ...next } : r))
+          );
+          const res = await queued(() =>
+            updateRowTextAction(resolveId(row.id), field, raw)
+          ).catch(() => ({ ok: false as const, error: 'Something went wrong' }));
+          drop();
           if (!res.ok) {
             setError(res.error);
             patch(
-              row.id,
+              resolveId(row.id),
               field === 'name' ? { name: before } : { price: before === '' ? null : Number(before) }
             );
             return;
           }
+          patch(resolveId(row.id), next);
         } else {
-          const res = await updateRowDatesAction(row.id, field, raw);
+          const res = await queued(() => updateRowDatesAction(resolveId(row.id), field, raw));
           if (!res.ok) {
             setError(res.error);
             return;
           }
-          patch(row.id, {
+          patch(resolveId(row.id), {
             startDate: res.startDate,
             finishDate: res.finishDate,
             durationDays: res.durationDays,
@@ -687,10 +788,13 @@ export default function ScheduleSheet({
           }
         }
         if (recordUndo)
-          setUndoStack((s) => [...s.slice(-49), { kind: 'field', rowId: row.id, field, before }]);
+          setUndoStack((s) => [
+            ...s.slice(-49),
+            { kind: 'field', rowId: resolveId(row.id), field, before },
+          ]);
       });
     },
-    [patch, chainNodes, chainLinks, nameById]
+    [patch, chainNodes, chainLinks, nameById, overlay, queued, resolveId]
   );
 
   /**
@@ -709,17 +813,45 @@ export default function ScheduleSheet({
    * also what a `gone` row needs.
    *
    * Still NOT on the undo stack by itself; `structureUndoable` does that.
+   *
+   * **The action is handed over as a THUNK, not as a promise already running.**
+   * That is what lets it be queued, and being queued is what lets it name rows
+   * by the id the server gave them: `resolveId` is read when the thunk is
+   * finally called, after every change in front of it has answered.
    */
   const structure = useCallback(
     (
-      p: Promise<ActionResult>,
+      run: () => Promise<ActionResult>,
       predict?: (rows: SheetRow[]) => SheetRow[],
       onOk?: (res: ActionResult) => void
     ) => {
       setError(null);
-      if (predict) applyRows(predict(rowsRef.current));
+      // The guess goes up now and stays up — through other people's replies —
+      // until this change's own answer makes it unnecessary.
+      const drop = predict ? overlay(predict) : null;
       startTransition(async () => {
-        const res = await p;
+        /**
+         * `onOk` runs INSIDE the queued call, not after it.
+         *
+         * It is where a placeholder learns the id the database gave it, and
+         * the next change in the queue reads that id the moment the queue
+         * advances. Done outside, the two are one microtask apart in the wrong
+         * order — measured 14 Sep 2026: four presses of Add row, one row kept.
+         * The first add answered, the second was released and sent `tmp-1` as
+         * its anchor anyway, and the server refused it as a row that is no
+         * longer in the plan. Whatever must be true before the next change is
+         * sent belongs in here.
+         */
+        const res = await queued(async () => {
+          const r = await run().catch(
+            (): ActionResult => ({ ok: false, error: 'Something went wrong' })
+          );
+          // Before the sheet arrives, or the guess would be replayed on top of
+          // rows that already contain it — the same row twice.
+          drop?.();
+          if (r.ok) onOk?.(r);
+          return r;
+        });
         if (!res.ok) {
           // A row the server says is gone is not something to put in front of
           // anybody: this sheet is simply behind. Go and get the current rows.
@@ -728,13 +860,12 @@ export default function ScheduleSheet({
           return;
         }
         if (res.sheet) applyRows(res.sheet.rows, res.sheet);
-        onOk?.(res);
         // The rows are already right; this is for the row count in the header
         // and the weight strip, which are the page's and not this component's.
         refreshQuiet();
       });
     },
-    [applyRows, syncRows, refreshQuiet]
+    [applyRows, syncRows, refreshQuiet, overlay, queued]
   );
 
   /**
@@ -745,12 +876,12 @@ export default function ScheduleSheet({
    */
   const structureUndoable = useCallback(
     (
-      p: Promise<ActionResult>,
+      run: () => Promise<ActionResult>,
       inverse: (res: ActionResult) => (() => Promise<ActionResult>) | null,
       predict?: (rows: SheetRow[]) => SheetRow[],
       undoPredict?: (rows: SheetRow[]) => SheetRow[]
     ) => {
-      structure(p, predict, (res) => {
+      structure(run, predict, (res) => {
         const back = inverse(res);
         if (back)
           setUndoStack((s) => [
@@ -766,10 +897,17 @@ export default function ScheduleSheet({
    * Add a row, and put it on screen before the network has heard of it.
    *
    * The temporary id is the whole bookkeeping: `isPending` reads it, and the
-   * authoritative sheet clears the flag simply by not containing it. If the
-   * placeholder happened to be selected when the answer lands, the selection
-   * follows the real row — a toolbar whose subject quietly became null is the
-   * same silence this change exists to remove.
+   * authoritative sheet clears the flag simply by not containing it. When the
+   * answer lands, the selection AND the open editor follow the placeholder to
+   * the real row — a toolbar whose subject quietly became null, or a cell that
+   * closes itself mid-word, are the same silence this change exists to remove.
+   *
+   * **The new row is selected and its name is opened at once.** A row that
+   * appears somewhere below with nothing focused is a row you then have to go
+   * and find and click twice, which is what made adding several in a row feel
+   * like fighting the sheet. Now Add row — or Enter at the end of a name — puts
+   * the caret in the next line's name, the way an outliner does, and the next
+   * Enter carries on from there.
    */
   const addRow = useCallback(
     (anchorId: string | null, asChild = false) => {
@@ -784,13 +922,26 @@ export default function ScheduleSheet({
           next.delete(anchorId);
           return next;
         });
+      setSelectedId(tmpId);
+      setEditing({ rowId: tmpId, field: 'name' });
       structure(
-        addRowAction(projectId, { afterNodeId: anchorId, asChild }),
-        (rs) => predictAdd(rs, anchorId, asChild, tmpId),
+        // Resolved INSIDE the thunk: by the time the queue reaches this, a row
+        // added a moment ago has a real id, and the anchor is that id and not
+        // the `tmp-` the browser is still drawing.
+        () =>
+          addRowAction(projectId, {
+            afterNodeId: anchorId ? resolveId(anchorId) : null,
+            asChild,
+          }),
+        (rs) => predictAdd(rs, anchorId ? resolveId(anchorId) : null, asChild, tmpId),
         (res) => {
           const created = res.newId;
           if (!created) return;
+          tmpReal.current.set(tmpId, created);
+          realTmp.current.set(created, tmpId);
+          revealRef.current = created;
           setSelectedId((cur) => (cur === tmpId ? created : cur));
+          setEditing((cur) => (cur?.rowId === tmpId ? { rowId: created, field: cur.field } : cur));
           setUndoStack((s) => [
             ...s.slice(-49),
             {
@@ -802,7 +953,7 @@ export default function ScheduleSheet({
         }
       );
     },
-    [structure, projectId]
+    [structure, projectId, resolveId]
   );
 
   /** Ctrl+Z and the toolbar's Undo are two doors onto the same step back. */
@@ -835,14 +986,14 @@ export default function ScheduleSheet({
         return;
       }
       structure(
-        deleteRowAction(row.id),
-        (rs) => predictDelete(rs, row.id),
+        () => deleteRowAction(resolveId(row.id)),
+        (rs) => predictDelete(rs, resolveId(row.id)),
         (res) => {
           if (res.undoId) rememberUndo(res.undoId);
         }
       );
     },
-    [structure, rememberUndo]
+    [structure, rememberUndo, resolveId]
   );
 
   /**
@@ -881,14 +1032,17 @@ export default function ScheduleSheet({
       },
       indent: (id, shift) =>
         structureUndoable(
-          shift ? outdentRowAction(id) : indentRowAction(id),
-          () => (shift ? () => indentRowAction(id) : () => outdentRowAction(id)),
-          (rs) => (shift ? predictOutdent(rs, id) : predictIndent(rs, id)),
-          (rs) => (shift ? predictIndent(rs, id) : predictOutdent(rs, id))
+          () => (shift ? outdentRowAction(resolveId(id)) : indentRowAction(resolveId(id))),
+          () =>
+            shift
+              ? () => indentRowAction(resolveId(id))
+              : () => outdentRowAction(resolveId(id)),
+          (rs) => (shift ? predictOutdent(rs, resolveId(id)) : predictIndent(rs, resolveId(id))),
+          (rs) => (shift ? predictIndent(rs, resolveId(id)) : predictOutdent(rs, resolveId(id)))
         ),
       enter: (id) => addRow(id),
     }),
-    [commit, structureUndoable, addRow]
+    [commit, structureUndoable, addRow, resolveId]
   );
 
   const rowsRef = useRef(rows);
@@ -911,7 +1065,7 @@ export default function ScheduleSheet({
     if (!last) return;
     setUndoStack((stack) => stack.slice(0, -1));
     if (last.kind === 'structure') {
-      structure(last.run(), last.predict);
+      structure(last.run, last.predict);
       return;
     }
     const row = rowsRef.current.find((r) => r.id === last.rowId);
@@ -960,17 +1114,19 @@ export default function ScheduleSheet({
       if (e.key === 'Tab') {
         e.preventDefault();
         const shift = e.shiftKey;
+        const id = selectedId;
         structureUndoable(
-          shift ? outdentRowAction(selectedId) : indentRowAction(selectedId),
-          () => (shift ? () => indentRowAction(selectedId) : () => outdentRowAction(selectedId)),
-          (rs) => (shift ? predictOutdent(rs, selectedId) : predictIndent(rs, selectedId)),
-          (rs) => (shift ? predictIndent(rs, selectedId) : predictOutdent(rs, selectedId))
+          () => (shift ? outdentRowAction(resolveId(id)) : indentRowAction(resolveId(id))),
+          () =>
+            shift ? () => indentRowAction(resolveId(id)) : () => outdentRowAction(resolveId(id)),
+          (rs) => (shift ? predictOutdent(rs, resolveId(id)) : predictIndent(rs, resolveId(id))),
+          (rs) => (shift ? predictIndent(rs, resolveId(id)) : predictOutdent(rs, resolveId(id)))
         );
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, selectedId, visible, structureUndoable, addRow]);
+  }, [undo, selectedId, visible, structureUndoable, addRow, resolveId]);
 
   const syncing = useRef(false);
   const mirror = (from: 'l' | 'r') => () => {
@@ -1040,6 +1196,7 @@ export default function ScheduleSheet({
   };
 
   const anchor = selectedId ?? rows.at(-1)?.id ?? null;
+  const pasteAnchor = selectedId && !isPending(selectedId) ? selectedId : null;
 
   return (
     // NO `.animate-enter` HERE, and that is deliberate rather than an omission.
@@ -1066,19 +1223,19 @@ export default function ScheduleSheet({
         onIndent={() =>
           selectedId &&
           structureUndoable(
-            indentRowAction(selectedId),
-            () => () => outdentRowAction(selectedId),
-            (rs) => predictIndent(rs, selectedId),
-            (rs) => predictOutdent(rs, selectedId)
+            () => indentRowAction(resolveId(selectedId)),
+            () => () => outdentRowAction(resolveId(selectedId)),
+            (rs) => predictIndent(rs, resolveId(selectedId)),
+            (rs) => predictOutdent(rs, resolveId(selectedId))
           )
         }
         onOutdent={() =>
           selectedId &&
           structureUndoable(
-            outdentRowAction(selectedId),
-            () => () => indentRowAction(selectedId),
-            (rs) => predictOutdent(rs, selectedId),
-            (rs) => predictIndent(rs, selectedId)
+            () => outdentRowAction(resolveId(selectedId)),
+            () => () => indentRowAction(resolveId(selectedId)),
+            (rs) => predictOutdent(rs, resolveId(selectedId)),
+            (rs) => predictIndent(rs, resolveId(selectedId))
           )
         }
         onDelete={() => selected && removeRow(selected)}
@@ -1096,8 +1253,11 @@ export default function ScheduleSheet({
         slot={
           <PasteRows
             projectId={projectId}
-            afterNodeId={selectedId}
-            afterLabel={selected?.name ?? null}
+            // A row the server has not confirmed cannot anchor a paste, and
+            // this dialog has no queue to wait in — so it pastes at the end
+            // rather than being refused.
+            afterNodeId={pasteAnchor}
+            afterLabel={pasteAnchor ? (selected?.name ?? null) : null}
             onDone={syncRows}
             trigger={(open) => (
               <m.button
@@ -1300,7 +1460,13 @@ export default function ScheduleSheet({
                 undoes it silently. */}
             {windowed.map((r) => (
               <Row
-                key={r.id}
+                // The id this browser FIRST drew, which for a new row is its
+                // `tmp-`. Keying on `r.id` meant the element was thrown away and
+                // rebuilt the moment the server answered — in the middle of
+                // typing the name, which is the one moment it happens. The cell
+                // is a native input holding its own draft, so the word went with
+                // it. See `realTmp`.
+                key={keyOf(r.id)}
                 highlight={term}
                 row={r}
                 selected={r.id === selectedId}
@@ -1392,7 +1558,10 @@ export default function ScheduleSheet({
           }
           onPredict={(fn) => {
             setError(null);
-            applyRows(fn(rowsRef.current));
+            // Straight onto the rows, NOT through `applyRows`: that one replays
+            // the overlays, and this guess is already sitting in what it would
+            // replay them over.
+            setRows((rs) => fn(rs));
           }}
           onFailed={(message) => {
             if (message) setError(message);
@@ -1457,11 +1626,14 @@ const Row = memo(function Row({
   /**
    * Drawn by this browser, not yet confirmed by the server.
    *
-   * It fades in, sits at reduced weight, and refuses every edit — its id is a
-   * placeholder, so a rename or an indent sent from it would reach the server
-   * as a row that has never existed. The wait is the same as it always was; the
-   * difference is that it is now spent looking at the row instead of at
-   * nothing.
+   * It fades in and sits at reduced weight while it arrives. It used to refuse
+   * every edit as well, because its id is a placeholder and a rename sent from
+   * it would name a row that has never existed — but that made the new row
+   * inert for the whole round trip, so the first click on the name you had just
+   * asked for did nothing at all. The sheet queues those edits now and sends
+   * them against the real id (see `resolveId`), so the row can be typed into
+   * from the instant it appears. The row menu is the one thing still held back:
+   * it calls the server itself, with the id it was handed.
    */
   pending?: boolean;
   on: RowHandlers;
@@ -1470,12 +1642,12 @@ const Row = memo(function Row({
   // this row re-renders, which is the point.
   const onSelect = () => on.select(r.id);
   const onToggle = () => on.toggle(r.id);
-  const onEdit = (f: Field) => !pending && on.edit(r.id, f);
+  const onEdit = (f: Field) => on.edit(r.id, f);
   const onDone = on.done;
   const onCommit = (f: Field, v: string) => on.commit(r, f, v);
   const onMenu = () => !pending && on.menu(r);
-  const onIndent = (shift: boolean) => !pending && on.indent(r.id, shift);
-  const onEnter = () => !pending && on.enter(r.id);
+  const onIndent = (shift: boolean) => on.indent(r.id, shift);
+  const onEnter = () => on.enter(r.id);
 
   const locked = r.isSummary;
   /**
@@ -1707,6 +1879,14 @@ function EditableCell({
       type={type}
       inputMode={inputMode}
       value={shown}
+      // Entering a cell selects what is in it, the way a spreadsheet does. A
+      // new row opens on the words "New task" with the caret parked after them,
+      // and the first thing typed used to come out "New taskPiling" — the fix
+      // for that is the same convention that makes retyping any cell one action
+      // instead of three. Escape still puts the old value back untouched.
+      onFocus={(e) => {
+        if (type === 'text') e.currentTarget.select();
+      }}
       onChange={(e) => setDraft(group ? stripAmount(e.target.value) : e.target.value)}
       onBlur={() => {
         send(draft);
