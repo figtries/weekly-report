@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -27,6 +28,7 @@ import {
   predictAdd,
   predictDelete,
   predictIndent,
+  predictMoveTo,
   predictOutdent,
   tmpRowId,
 } from '@/lib/sheet-predict';
@@ -39,6 +41,7 @@ import {
   addRowAction,
   deleteRowAction,
   indentRowAction,
+  moveRowToAction,
   readSheetAction,
   outdentRowAction,
   undoDeleteRowAction,
@@ -858,7 +861,22 @@ export default function ScheduleSheet({
           // Before the sheet arrives, or the guess would be replayed on top of
           // rows that already contain it — the same row twice.
           drop?.();
-          if (r.ok) onOk?.(r);
+          if (r.ok) {
+            /**
+             * `onOk` and the rows land in the SAME TICK, and that is not tidiness.
+             *
+             * `onOk` re-points the selection and the open editor from the
+             * placeholder to the real id; `applyRows` swaps the rows to match.
+             * Split across two ticks, React commits a render in between where
+             * the editor names a row the sheet does not have yet — the cell goes
+             * inactive for one frame, `EditableCell` reseeds its draft from the
+             * value, and the half-typed name is gone. Measured 14 Sep 2026:
+             * typing "Charlie" into a new row saved "New taskie", the tail of
+             * the word landing after the reset.
+             */
+            onOk?.(r);
+            if (r.sheet) applyRows(r.sheet.rows, r.sheet);
+          }
           return r;
         });
         if (!res.ok) {
@@ -868,7 +886,6 @@ export default function ScheduleSheet({
           if (!res.gone) setError(res.error ?? 'Something went wrong');
           return;
         }
-        if (res.sheet) applyRows(res.sheet.rows, res.sheet);
         // The rows are already right; this is for the row count in the header
         // and the weight strip, which are the page's and not this component's.
         refreshQuiet();
@@ -1012,6 +1029,240 @@ export default function ScheduleSheet({
   );
 
   /**
+   * Drag a row to where it belongs.
+   *
+   * Asked for on 14 Sep 2026, and the reason is worth keeping: Add inside had
+   * put a new line at 3.1 when 3.3 was wanted, and putting it right meant
+   * finding Move down in a menu and pressing it twice. Even with the ordering
+   * fixed, a plan is shaped by moving things, and every other way of saying
+   * "this line goes there" is two decisions — a level and a position — taken
+   * one at a time through different controls.
+   *
+   * **MOUSE AND PEN ONLY.** A touch drag has to win the same gesture the list
+   * uses to scroll, and the honest way to do that is a long press that locks
+   * scrolling, which is a different job on iOS Safari than anywhere else. The
+   * row menu's Move up / Move down is the phone's answer and stays.
+   *
+   * Three things make it aimable. The drop line is drawn AT THE DEPTH the row
+   * will land at, so the one genuinely ambiguous drop — the gap under the last
+   * line of a package — shows which side of the fence it is on before the
+   * button comes up. The gap is computed from the pointer against `ROW_H` and
+   * the scroller, never from whatever element happens to be under the cursor,
+   * so it works the same over the mounted window and the two spacers that stand
+   * in for the rest. And a drop under an OPEN branch means "first thing inside
+   * it", which is the only way to aim at a package with nothing in it yet.
+   */
+  const [drag, setDrag] = useState<{ id: string; gap: number; depth: number } | null>(null);
+  const pressRef = useRef<{
+    id: string;
+    x: number;
+    y: number;
+    depth: number;
+    started: boolean;
+  } | null>(null);
+  const dropRef = useRef<{ parentId: string | null; afterId: string | null } | null>(null);
+  const swallowClick = useRef(false);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
+  /**
+   * Where a drop puts the row: under whom, behind whom, how deep.
+   *
+   * The gap alone cannot say. Under the last line of a package, "after that
+   * line" and "after the package" are the same place on screen and different
+   * plans, which is why every outliner reads the HORIZONTAL position too:
+   * `want` is a level, taken from how far left or right the pointer has
+   * travelled in twelve-pixel steps, and it is clamped to the levels this gap
+   * can actually offer — no deeper than a child of the row above, no shallower
+   * than the row below, which would otherwise be re-parented behind your back.
+   * Dragging left at the end of a package is how a row leaves it.
+   */
+  const dropAt = useCallback((gap: number, want: number, draggedId: string) => {
+    const list = visibleRef.current;
+    const above = gap > 0 ? list[gap - 1] : null;
+    const below = list[gap] ?? null;
+    if (!above) return { parentId: null, afterId: null, depth: 0 };
+
+    const byId = new Map(list.map((r) => [r.id, r]));
+    // A row can always become the first line inside the one above it, branch or
+    // leaf — that is also the only way to aim at a package with nothing in it
+    // yet. Below is the floor: landing shallower than the next row would take
+    // that row's parent away from it.
+    const max = above.depth + 1;
+    const min = below ? below.depth : 0;
+    const depth = Math.max(min, Math.min(max, want));
+
+    let parentId: string | null;
+    let afterId: string | null;
+    if (depth === above.depth + 1) {
+      parentId = above.id;
+      afterId = null;
+    } else {
+      // Climb out of `above` until the level matches, and land behind whatever
+      // we climbed out of.
+      let a: SheetRow | null = above;
+      while (a && a.depth > depth) a = a.parentId ? (byId.get(a.parentId) ?? null) : null;
+      if (!a) return null;
+      parentId = a.parentId;
+      afterId = a.id;
+    }
+
+    // Behind itself is not a move, and inside itself is not a tree.
+    if (afterId === draggedId) return null;
+    for (let c = parentId, hops = 0; c && hops < 256; hops += 1) {
+      if (c === draggedId) return null;
+      c = byId.get(c)?.parentId ?? null;
+    }
+    return { parentId, afterId, depth };
+  }, []);
+
+  const moveTo = useCallback(
+    (id: string, parentId: string | null, afterId: string | null) => {
+      const rs = rowsRef.current;
+      const i = rs.findIndex((r) => r.id === id);
+      if (i < 0) return;
+      const backParent = rs[i].parentId;
+      // The sibling it used to sit behind, so Undo puts it back IN LINE and not
+      // merely back under the same parent.
+      let backAfter: string | null = null;
+      for (let k = i - 1; k >= 0; k -= 1) {
+        if (rs[k].depth < rs[i].depth) break;
+        if (rs[k].parentId === backParent) {
+          backAfter = rs[k].id;
+          break;
+        }
+      }
+      // A row dropped INSIDE a folded package is a row nobody can see, and the
+      // fold was closed before it went in there — the same reasoning as
+      // `addRow`, and the same two lines.
+      if (parentId)
+        setCollapsed((c) => {
+          if (!c.has(parentId)) return c;
+          const next = new Set(c);
+          next.delete(parentId);
+          return next;
+        });
+      const real = (x: string | null) => (x ? resolveId(x) : null);
+      structureUndoable(
+        () => moveRowToAction(resolveId(id), real(parentId), real(afterId)),
+        () => () => moveRowToAction(resolveId(id), real(backParent), real(backAfter)),
+        (rows) => predictMoveTo(rows, resolveId(id), real(parentId), real(afterId)),
+        (rows) => predictMoveTo(rows, resolveId(id), real(backParent), real(backAfter))
+      );
+    },
+    [structureUndoable, resolveId]
+  );
+  const moveToRef = useRef(moveTo);
+  moveToRef.current = moveTo;
+
+  /**
+   * The whole gesture on two window listeners, bound once.
+   *
+   * Per-row handlers would have to be rebuilt every time the drop line moved,
+   * which is the one thing `rowHandlers` exists to prevent.
+   */
+  const autoScroll = useRef(0);
+  useEffect(() => {
+    const gapFrom = (clientY: number) => {
+      const el = leftRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      const y = clientY - rect.top + el.scrollTop - HEAD_H;
+      return Math.max(0, Math.min(visibleRef.current.length, Math.round(y / ROW_H)));
+    };
+
+    const edge = (clientY: number) => {
+      const el = leftRef.current;
+      if (!el) return 0;
+      const r = el.getBoundingClientRect();
+      if (clientY < r.top + HEAD_H + 44) return -1;
+      if (clientY > r.bottom - 44) return 1;
+      return 0;
+    };
+    const tick = () => {
+      const el = leftRef.current;
+      if (!autoScroll.current || !el) return;
+      el.scrollTop += autoScroll.current * 14;
+      requestAnimationFrame(tick);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const p = pressRef.current;
+      if (!p) return;
+      if (!p.started) {
+        if (Math.abs(e.clientY - p.y) < 6 && Math.abs(e.clientX - p.x) < 6) return;
+        p.started = true;
+        document.body.style.cursor = 'grabbing';
+      }
+      // A drag is not a text selection, whatever the browser thinks.
+      e.preventDefault();
+      const gap = gapFrom(e.clientY);
+      if (gap == null) return;
+      // Twelve pixels is one level, the same step the rows are indented by.
+      const want = p.depth + Math.round((e.clientX - p.x) / 12);
+      const t = dropAt(gap, want, p.id);
+      dropRef.current = t ? { parentId: t.parentId, afterId: t.afterId } : null;
+      setDrag({ id: p.id, gap: t ? gap : -1, depth: t?.depth ?? 0 });
+      const dir = edge(e.clientY);
+      if (dir !== autoScroll.current) {
+        autoScroll.current = dir;
+        if (dir) requestAnimationFrame(tick);
+      }
+    };
+
+    const stop = () => {
+      const p = pressRef.current;
+      pressRef.current = null;
+      autoScroll.current = 0;
+      document.body.style.cursor = '';
+      setDrag(null);
+      return p;
+    };
+
+    const onUp = () => {
+      const p = pressRef.current;
+      const target = dropRef.current;
+      dropRef.current = null;
+      stop();
+      if (!p?.started) return;
+      // The press that ended a drag is not a click on the cell it ended over.
+      swallowClick.current = true;
+      if (target) moveToRef.current(p.id, target.parentId, target.afterId);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && pressRef.current) {
+        dropRef.current = null;
+        stop();
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('keydown', onKey);
+      document.body.style.cursor = '';
+    };
+  }, [dropAt]);
+
+  /** The row being carried, and everything travelling with it. */
+  const dragIds = useMemo(() => {
+    if (!drag) return null;
+    const i = visible.findIndex((r) => r.id === drag.id);
+    if (i < 0) return null;
+    const ids = new Set([visible[i].id]);
+    for (let k = i + 1; k < visible.length && visible[k].depth > visible[i].depth; k += 1) {
+      ids.add(visible[k].id);
+    }
+    return ids;
+  }, [drag, visible]);
+
+  /**
    * ONE handler object for every row, and it never changes identity.
    *
    * `Row` is memoised, and a memoised component given a freshly built arrow
@@ -1055,9 +1306,28 @@ export default function ScheduleSheet({
           (rs) => (shift ? predictOutdent(rs, resolveId(id)) : predictIndent(rs, resolveId(id))),
           (rs) => (shift ? predictIndent(rs, resolveId(id)) : predictOutdent(rs, resolveId(id)))
         ),
+      press: (row, e) => {
+        swallowClick.current = false;
+        // Mouse and pen only; a touch owns the scroller. Left button only, and
+        // never from inside an open cell, where a drag means selecting text.
+        if (e.pointerType === 'touch' || e.button !== 0) return;
+        if ((e.target as HTMLElement).closest('input')) return;
+        // A filtered list has gaps that mean nothing: the row above a gap is
+        // not the row a drop would land behind.
+        if (queryRef.current.trim().length >= 2) return;
+        pressRef.current = {
+          id: row.id,
+          x: e.clientX,
+          y: e.clientY,
+          depth: row.depth,
+          started: false,
+        };
+      },
     }),
     [commit, structureUndoable, resolveId]
   );
+  const queryRef = useRef(query);
+  queryRef.current = query;
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -1357,7 +1627,19 @@ export default function ScheduleSheet({
         />
       )}
 
-      <div ref={shellRef} className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">
+      <div
+        ref={shellRef}
+        // The press that ended a drag is not a click on whatever cell it ended
+        // over: without this, dropping a row onto a name opened that name for
+        // editing, which is the sort of thing that teaches people not to drag.
+        onClickCapture={(e) => {
+          if (!swallowClick.current) return;
+          swallowClick.current = false;
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden"
+      >
         <div
           ref={leftRef}
           onScroll={mirror('l')}
@@ -1371,7 +1653,29 @@ export default function ScheduleSheet({
               grid needs and it compresses its last column instead of scrolling,
               with no scrollbar in sight to say so. The 19rem mobile floor is
               unchanged, because the mobile grid is. */}
-          <div className="min-w-[19rem] sm:min-w-[30.625rem]">
+          <div className={`relative min-w-[19rem] sm:min-w-[30.625rem] ${drag ? 'select-none' : ''}`}>
+            {/* WHERE IT WILL LAND, drawn at the depth it will land at.
+                The one drop a list like this cannot express by position alone
+                is the gap under the last line of a package — inside it, or
+                after it? The line's own indent answers that before the button
+                comes up, which is what makes the drag aimable instead of
+                hopeful. It hides itself over a drop that is not allowed (into
+                its own subtree), so nothing has to be explained afterwards. */}
+            {drag && drag.gap >= 0 && (
+              /* Laid out on the ROW'S OWN GRID, so the line starts exactly where
+                 a name starts and one level of indent looks like one level of
+                 indent — at both breakpoints, without measuring anything. */
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-x-0 z-30 grid items-center gap-x-1.5 px-3 ${GRID_SM} ${GRID_LG}`}
+                style={{ top: HEAD_H + drag.gap * ROW_H - 1 }}
+              >
+                <div
+                  className="col-[2/-1] h-0.5 rounded-full bg-foreground"
+                  style={{ marginLeft: drag.depth * 12 }}
+                />
+              </div>
+            )}
             <div
               className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
@@ -1489,6 +1793,7 @@ export default function ScheduleSheet({
                 editing={editing?.rowId === r.id ? editing.field : null}
                 paint={paintOf(r)}
                 pending={isPending(r.id)}
+                dragging={dragIds?.has(r.id) ?? false}
                 on={rowHandlers}
               />
             ))}
@@ -1617,6 +1922,8 @@ type RowHandlers = {
   commit: (row: SheetRow, field: Field, value: string) => void;
   menu: (row: SheetRow) => void;
   indent: (id: string, shift: boolean) => void;
+  /** A press that MIGHT become a drag — see the drag block in the sheet. */
+  press: (row: SheetRow, e: ReactPointerEvent) => void;
 };
 
 const Row = memo(function Row({
@@ -1627,6 +1934,7 @@ const Row = memo(function Row({
   highlight,
   paint,
   pending,
+  dragging,
   on,
 }: {
   row: SheetRow;
@@ -1650,6 +1958,8 @@ const Row = memo(function Row({
    * it calls the server itself, with the id it was handed.
    */
   pending?: boolean;
+  /** Being carried by a drag, or travelling with the row that is. */
+  dragging?: boolean;
   on: RowHandlers;
 }) {
   // Bound to THIS row, inside the memo boundary — so they are rebuilt only when
@@ -1683,11 +1993,12 @@ const Row = memo(function Row({
   return (
     <div
       onMouseDown={onSelect}
+      onPointerDown={(e) => on.press(r, e)}
       className={`group grid items-center gap-x-1.5 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
         selected ? 'bg-muted' : 'hover:bg-muted/50'
       } ${r.isSummary ? 'font-semibold' : ''} ${
         pending ? 'animate-fade-in-up text-muted-foreground' : ''
-      }`}
+      } ${dragging ? 'opacity-40' : ''}`}
       style={{ height: ROW_H }}
     >
       <span className="flex items-center gap-1.5 truncate text-[11px] tabular-nums text-muted-foreground">
@@ -1882,7 +2193,25 @@ function EditableCell({
   group?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value, active]);
+  /**
+   * The draft follows the value ONLY WHILE THE CELL IS CLOSED.
+   *
+   * It used to follow it always (`[value, active]`), which reads as harmless
+   * and is not: an effect re-runs whenever React decides to, and every run of
+   * it overwrote whatever was being typed at that instant. Caught on 14 Sep
+   * 2026 by a test that typed "Bravo" into a brand-new row and read back
+   * "New taskavo" — the answer to the row's own Add landed mid-word, the effect
+   * ran again, the draft went back to "New task" with the caret at its end, and
+   * the rest of the word was typed onto that.
+   *
+   * Seeding on open is not needed and never was: a closed cell has already been
+   * kept equal to the value by this same effect, so the draft is right the
+   * moment it opens. What it buys is that nothing outside this input can touch
+   * the text while the caret is in it.
+   */
+  useEffect(() => {
+    if (!active) setDraft(value);
+  }, [value, active]);
 
   if (!active) {
     return (

@@ -172,6 +172,56 @@ export function predictMove(rows: SheetRow[], id: string, dir: 'up' | 'down'): S
 }
 
 /**
+ * Dropped somewhere else entirely: a new parent, a new place in line.
+ *
+ * The one guess in this file that changes BOTH depth and position, which is
+ * exactly what makes it worth guessing — a drag that waits for the server before
+ * the row moves is a drag you cannot aim. The subtree travels with the row and
+ * keeps its shape, every level shifting by the same amount. Codes are left
+ * alone, like everywhere else here; `renumber` owns them.
+ */
+export function predictMoveTo(
+  rows: SheetRow[],
+  id: string,
+  parentId: string | null,
+  afterId: string | null
+): SheetRow[] {
+  const i = rows.findIndex((r) => r.id === id);
+  if (i < 0) return rows;
+  const end = subtreeEnd(rows, i);
+  const oldParentId = rows[i].parentId;
+  const depth = parentId === null ? 0 : (rows.find((r) => r.id === parentId)?.depth ?? -1) + 1;
+  const delta = depth - rows[i].depth;
+  const block = rows.slice(i, end).map((r) => ({ ...r, depth: r.depth + delta }));
+  block[0] = { ...block[0], parentId };
+
+  const rest = [...rows.slice(0, i), ...rows.slice(end)];
+  let at: number;
+  if (afterId) {
+    const a = rest.findIndex((r) => r.id === afterId);
+    at = a < 0 ? rest.length : subtreeEnd(rest, a);
+  } else if (parentId) {
+    const p = rest.findIndex((r) => r.id === parentId);
+    at = p < 0 ? rest.length : p + 1;
+  } else {
+    at = 0;
+  }
+
+  const next = [...rest.slice(0, at), ...block, ...rest.slice(at)];
+  // The row it left and the row it joined both change shape.
+  return next.map((r) => {
+    if (r.id === oldParentId && r.id !== parentId) {
+      const childCount = Math.max(0, r.childCount - 1);
+      return { ...r, childCount, isLeaf: childCount === 0, isSummary: childCount > 0 };
+    }
+    if (r.id === parentId && r.id !== oldParentId) {
+      return { ...r, childCount: r.childCount + 1, isLeaf: false, isSummary: true };
+    }
+    return r;
+  });
+}
+
+/**
  * A flag flipped on one row, and nothing else claimed.
  *
  * Marking a reporting unit really does repaint a whole subtree — `colorGroup`,

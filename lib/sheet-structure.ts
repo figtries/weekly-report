@@ -283,8 +283,24 @@ function defaultStart(
 
   let start: string | null = null;
   if (baselineId && afterNodeId) {
-    const anchor = rowSpan(afterNodeId, baselineId);
-    if (anchor) start = asChild ? anchor.start : addDays(anchor.finish, 1);
+    if (asChild) {
+      // Last in, so it follows whatever is already inside — and when nothing is,
+      // it starts when the package does.
+      const kids = db
+        .select({ id: schema.wbsNodes.id })
+        .from(schema.wbsNodes)
+        .where(eq(schema.wbsNodes.parentId, afterNodeId))
+        .all();
+      let last: string | null = null;
+      for (const k of kids) {
+        const s = rowSpan(k.id, baselineId);
+        if (s && (!last || s.finish > last)) last = s.finish;
+      }
+      start = last ? addDays(last, 1) : (rowSpan(afterNodeId, baselineId)?.start ?? null);
+    } else {
+      const anchor = rowSpan(afterNodeId, baselineId);
+      if (anchor) start = addDays(anchor.finish, 1);
+    }
   }
   start ??= project?.startDate ?? new Date().toISOString().slice(0, 10);
 
@@ -314,7 +330,25 @@ export async function addRowAction(
       parentId = opts.asChild ? a.id : a.parentId;
       // Sits immediately after the anchor; renumber turns this into a clean
       // depth-first sequence a moment later.
-      order = a.order + (opts.asChild ? 1 : 1);
+      order = a.order + 1;
+      if (opts.asChild) {
+        /**
+         * INSIDE means at the END of what is already inside.
+         *
+         * `a.order + 1` is the position of the anchor's FIRST child, so a row
+         * added inside Procurement came out as 3.1 and pushed the three lines
+         * already there down — which is not what "add inside" means to anybody
+         * filling in a package one line at a time (14 Sep 2026). Half a step
+         * past the last child puts it last; renumber flattens the fraction, and
+         * a fraction is also why no rows have to be pushed along to make room.
+         */
+        const kids = db
+          .select({ order: schema.wbsNodes.order })
+          .from(schema.wbsNodes)
+          .where(eq(schema.wbsNodes.parentId, a.id))
+          .all();
+        if (kids.length) order = Math.max(...kids.map((k) => k.order)) + 0.5;
+      }
     } else {
       const last = db
         .select({ order: schema.wbsNodes.order })
@@ -576,6 +610,71 @@ export async function outdentRowAction(nodeId: string): Promise<StructureResult>
       sqlite
         .prepare('update wbs_nodes set sort_order = ? where id = ?')
         .run(parent.order + 0.5, nodeId);
+      renumber(projectId, tx);
+      touchProject(projectId, tx);
+    });
+    return { ok: true, sheet: await settle(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Put a row exactly where it was dropped — a new parent, a new place in line.
+ *
+ * The sheet's other moves each answer half of this: Move up / Move down walk a
+ * row among the siblings it already has, Indent and Outdent change its level
+ * without changing its neighbours. Dragging asks both at once, and asking twice
+ * is how "add inside put it at 3.1 instead of 3.3" turns into four keystrokes
+ * and a guess (14 Sep 2026).
+ *
+ * `afterNodeId` is the sibling it lands BEHIND, or null for first in line.
+ * Everything is expressed as a half-step in `sort_order`, because `renumber`
+ * rebuilds the whole depth-first sequence from the tree a line later and a
+ * fraction only has to say which side of a neighbour the row is on — which is
+ * also why no other row has to be pushed along to make room. The subtree comes
+ * with it for free: its rows keep pointing at their parent, and renumber walks
+ * them wherever it now sits.
+ */
+export async function moveRowToAction(
+  nodeId: string,
+  parentId: string | null,
+  afterNodeId: string | null
+): Promise<StructureResult> {
+  await beforeWrite();
+  try {
+    const projectId = await projectOf(nodeId);
+    const nodes = loadTree(projectId);
+    const me = nodes.find((n) => n.id === nodeId);
+    if (!me) throw new Error(GONE);
+
+    // A row cannot be moved inside itself: the tree would be cut loose from the
+    // root and every walk over it would run forever.
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    for (let cursor = parentId, hops = 0; cursor && hops < 256; hops += 1) {
+      if (cursor === nodeId) throw new Error('A row cannot be moved inside itself');
+      cursor = byId.get(cursor)?.parentId ?? null;
+    }
+    if (parentId && !byId.has(parentId)) throw new Error(GONE);
+    if (afterNodeId && !byId.has(afterNodeId)) throw new Error(GONE);
+
+    let order: number;
+    if (afterNodeId) {
+      order = (byId.get(afterNodeId)?.order ?? me.order) + 0.5;
+    } else {
+      // First in line: ahead of whatever is there now, and inside the parent.
+      const kids = nodes.filter((n) => (n.parentId ?? null) === parentId && n.id !== nodeId);
+      const firstOrder = kids.length ? Math.min(...kids.map((k) => k.order)) : null;
+      const parentOrder = parentId ? (byId.get(parentId)?.order ?? -1) : -1;
+      order = firstOrder !== null ? firstOrder - 0.5 : parentOrder + 0.5;
+    }
+
+    db.transaction((tx) => {
+      tx.update(schema.wbsNodes)
+        .set({ parentId: parentId ?? null })
+        .where(eq(schema.wbsNodes.id, nodeId))
+        .run();
+      sqlite.prepare('update wbs_nodes set sort_order = ? where id = ?').run(order, nodeId);
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
