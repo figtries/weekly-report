@@ -13,7 +13,7 @@ import {
   schema,
   sqlite,
 } from './sqlite';
-import { getActiveBaselineId, getSheet, type Sheet } from './sheet';
+import { boxAt, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
 import { syncDerivedWeights } from './weights-auto';
 
 /**
@@ -254,28 +254,48 @@ function touchProject(projectId: string, tx: Writer = db) {
     .run();
 }
 
-/** The day after the row above finishes, else the project's start, else today. */
-function defaultStart(projectId: string, afterNodeId: string | null): string {
+/**
+ * When a new row starts.
+ *
+ * A SIBLING starts the day after the row above it finishes. A row added INSIDE
+ * another starts when that row starts — it used to take the day after its
+ * PARENT finished, which put "PO Solar" in March 2027 the moment it was added
+ * inside a Procurement package running to 28 Mar 27, and then dragged the whole
+ * package there with it (14 Sep 2026).
+ *
+ * And whatever comes out of that is clamped into the box the row is being born
+ * in, so nothing is ever created already breaking the rule that
+ * `updateRowDatesAction` enforces on every edit. Clamping is right HERE and
+ * wrong there: this is a date nobody typed.
+ */
+function defaultStart(
+  projectId: string,
+  afterNodeId: string | null,
+  asChild: boolean,
+  parentId: string | null
+): string {
   const baselineId = getActiveBaselineId(projectId);
-  if (baselineId && afterNodeId) {
-    const prev = db
-      .select({ finishDate: schema.nodeSchedules.finishDate })
-      .from(schema.nodeSchedules)
-      .where(
-        and(
-          eq(schema.nodeSchedules.baselineId, baselineId),
-          eq(schema.nodeSchedules.nodeId, afterNodeId)
-        )
-      )
-      .all()[0];
-    if (prev?.finishDate) return addDays(prev.finishDate, 1);
-  }
-  const p = db
+  const project = db
     .select({ startDate: schema.projects.startDate })
     .from(schema.projects)
     .where(eq(schema.projects.id, projectId))
     .all()[0];
-  return p?.startDate ?? new Date().toISOString().slice(0, 10);
+
+  let start: string | null = null;
+  if (baselineId && afterNodeId) {
+    const anchor = rowSpan(afterNodeId, baselineId);
+    if (anchor) start = asChild ? anchor.start : addDays(anchor.finish, 1);
+  }
+  start ??= project?.startDate ?? new Date().toISOString().slice(0, 10);
+
+  if (baselineId && parentId) {
+    const box = boxAt(parentId, baselineId);
+    if (box) {
+      if (start < box.start) start = box.start;
+      if (start > box.finish) start = box.finish;
+    }
+  }
+  return start;
 }
 
 export async function addRowAction(
@@ -307,7 +327,7 @@ export async function addRowAction(
     }
 
     const id = `n${Date.now().toString(36)}${randomUUID().slice(0, 6)}`;
-    const start = defaultStart(projectId, after);
+    const start = defaultStart(projectId, after, !!opts.asChild, parentId);
     const baselineId = getActiveBaselineId(projectId);
 
     db.transaction((tx) => {

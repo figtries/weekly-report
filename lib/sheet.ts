@@ -8,12 +8,19 @@
  * Three rules are enforced here rather than in the UI, because they are about
  * truth rather than presentation.
  *
- * **A summary row's dates are COMPUTED from its children, never read from
- * storage.** MS Project lets you type a duration onto a summary; it silently
- * stops rolling up, and from then on the schedule lies. Gundih's database does
- * hold rows in `node_schedules` for all 67 of its branches, and they are simply
- * ignored — a parent spans its children by definition, so there is nothing for
- * a stored value to be right about.
+ * **A summary row's dates are its OWN when it has them, and its children's
+ * otherwise.** This was the reverse until 14 Sep 2026 — MS Project's rule, a
+ * parent spans its children by definition — and it threw away the one date
+ * people actually have. Procurement ran 29 Dec 25 to 28 Mar 27 as a typed row;
+ * adding one line inside it moved it to a single day in March, because that is
+ * where the first child happened to land, and locked every date cell on the
+ * way past. The envelope is the input on this kind of plan: a package is
+ * awarded with its dates, and the work inside it is planned to fit. So a branch
+ * keeps what it was given, `updateRowDatesAction` refuses any row that would
+ * sit outside its box, and the rollup stays for branches that have no dates of
+ * their own — an indented row, or any project whose branches were never given
+ * any. Gundih is untouched by the change: all 67 of its branches carry stored
+ * dates and every one of them already equals the rollup exactly.
  *
  * **The outline code is generated from position.** `1`, `1.1`, `1.1.1` fall out
  * of depth and sibling order, so inserting a row renumbers everything below it
@@ -126,6 +133,85 @@ export function getActiveBaselineId(projectId: string): string | null {
   return rows.find((b) => b.kind === 'active')?.id ?? rows[0]?.id ?? null;
 }
 
+/** The dates stored against a row itself, both of them or nothing. */
+function ownDates(nodeId: string, baselineId: string): { start: string; finish: string } | null {
+  const s = db
+    .select({ start: schema.nodeSchedules.startDate, finish: schema.nodeSchedules.finishDate })
+    .from(schema.nodeSchedules)
+    .where(
+      and(eq(schema.nodeSchedules.baselineId, baselineId), eq(schema.nodeSchedules.nodeId, nodeId))
+    )
+    .all()[0];
+  return s?.start && s?.finish ? { start: s.start, finish: s.finish } : null;
+}
+
+/**
+ * The dates a row SHOWS — the same answer `getSheet` renders, for one row.
+ *
+ * Its own box widened to cover whatever is underneath it, which for a leaf is
+ * simply its own dates and for a branch with none is its children's span. The
+ * writers ask this rather than reading `node_schedules` directly, so that "does
+ * this fit inside its parent" is decided against what is on the screen and not
+ * against a value the screen never shows. The FENCE is a different question and
+ * a stricter one — see `boxAt`.
+ */
+export function rowSpan(nodeId: string, baselineId: string): { start: string; finish: string } | null {
+  const own = ownDates(nodeId, baselineId);
+  let start: string | null = own?.start ?? null;
+  let finish: string | null = own?.finish ?? null;
+  const kids = db
+    .select({ id: schema.wbsNodes.id })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.parentId, nodeId))
+    .all();
+  for (const k of kids) {
+    const s = rowSpan(k.id, baselineId);
+    if (!s) continue;
+    if (!start || s.start < start) start = s.start;
+    if (!finish || s.finish > finish) finish = s.finish;
+  }
+  return start && finish ? { start, finish } : null;
+}
+
+/**
+ * The nearest row above this one that fences it in.
+ *
+ * Not simply the parent: a branch that was never given dates of its own has
+ * nothing to fence anything with, and the promise that matters is the one
+ * further up that somebody actually typed. Returns the row's name too, because
+ * a refusal that cannot say WHICH row it is protecting is a refusal nobody can
+ * act on.
+ */
+export type Box = { id: string; name: string; start: string; finish: string };
+
+function nodeHead(id: string) {
+  return db
+    .select({ parentId: schema.wbsNodes.parentId, name: schema.wbsNodes.deskripsi })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.id, id))
+    .all()[0];
+}
+
+/** The fence this row sits in, itself included if it draws one. */
+export function boxAt(nodeId: string, baselineId: string): Box | null {
+  let cursor: string | null = nodeId;
+  // Depth is small, but a cycle in the tree would hang the request rather than
+  // fail it, and this runs inside a write.
+  for (let hops = 0; cursor && hops < 64; hops += 1) {
+    const own = ownDates(cursor, baselineId);
+    const n = nodeHead(cursor);
+    if (own && n) return { id: cursor, name: n.name, ...own };
+    cursor = n?.parentId ?? null;
+  }
+  return null;
+}
+
+/** The same fence, for a row that is not allowed to be its own. */
+export function boxAbove(nodeId: string, baselineId: string): Box | null {
+  const parentId = nodeHead(nodeId)?.parentId ?? null;
+  return parentId ? boxAt(parentId, baselineId) : null;
+}
+
 export function getSheet(projectId: string): Sheet {
   const project = db
     .select({ startDate: schema.projects.startDate, finishDate: schema.projects.finishDate })
@@ -211,7 +297,21 @@ export function getSheet(projectId: string): Sheet {
 
       let own: { start: string | null; finish: string | null };
       if (hasChildren) {
-        own = walk(n.id, depth + 1, code);
+        // The children are walked either way — that is what builds their rows.
+        // What the branch SHOWS is its own box WIDENED to cover them: the box
+        // is the promise, and a bar that does not reach its own children is a
+        // drawing of something that is not happening. Typed dates are fenced
+        // into the box by `updateRowDatesAction`, so the two agree except where
+        // a row was indented in from outside — and there the picture tells the
+        // truth while the promise stays what it was.
+        const rolled = walk(n.id, depth + 1, code);
+        const s = schedByNode.get(n.id);
+        own = s?.startDate && s?.finishDate
+          ? {
+              start: rolled.start && rolled.start < s.startDate ? rolled.start : s.startDate,
+              finish: rolled.finish && rolled.finish > s.finishDate ? rolled.finish : s.finishDate,
+            }
+          : rolled;
       } else {
         const s = schedByNode.get(n.id);
         own = { start: s?.startDate ?? null, finish: s?.finishDate ?? null };

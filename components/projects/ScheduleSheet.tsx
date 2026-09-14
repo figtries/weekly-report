@@ -1,6 +1,15 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
 import {
@@ -1649,7 +1658,17 @@ const Row = memo(function Row({
   const onIndent = (shift: boolean) => on.indent(r.id, shift);
   const onEnter = () => on.enter(r.id);
 
-  const locked = r.isSummary;
+  /**
+   * A SUMMARY ROW'S DATES ARE TYPED, NOT READ-ONLY.
+   *
+   * They were three grey spans until 14 Sep 2026, because a summary's span was
+   * derived from its children and there was nothing for a typed value to mean.
+   * On this kind of plan it means the most: the package is awarded with its
+   * dates and the work inside is planned to fit them, so the row people most
+   * want to type is the one that refused to be typed. `lib/sheet.ts` shows a
+   * branch's own dates when it has them, and `updateRowDatesAction` refuses
+   * anything that would break the fence in either direction.
+   */
   /**
    * An empty cell says "nothing here yet"; a dash says "nothing here". A row
    * that is still arriving has not answered the question, so it does not put
@@ -1733,16 +1752,27 @@ const Row = memo(function Row({
           number: a unit you have to delete before you can type is a unit that
           gets typed over. */}
       <div className="text-right tabular-nums">
-        {locked ? (
-          <span className="text-muted-foreground">
-            {r.durationDays == null ? blank : `${r.durationDays} d`}
-          </span>
-        ) : r.isMilestone ? (
+        {r.isMilestone ? (
           <span className="text-[11px] text-muted-foreground">{blank}</span>
         ) : (
           <EditableCell
             value={r.durationDays == null ? '' : String(r.durationDays)}
-            display={r.durationDays == null ? blank : `${r.durationDays} d`}
+            /* The unit is dropped below 640px, where the column header reads
+               DAYS and says it already. It is not a style choice: the track is
+               44px and `455 d` measures 46, so a nine-month package on a phone
+               read `45…` — a number you cannot trust is worse than a number
+               without its unit. Nothing is taken from the name column, which is
+               the one you identify a row by. */
+            display={
+              r.durationDays == null ? (
+                blank
+              ) : (
+                <>
+                  {r.durationDays}
+                  <span className="hidden sm:inline"> d</span>
+                </>
+              )
+            }
             active={editing === 'duration'}
             onEdit={() => onEdit('duration')}
             onDone={onDone}
@@ -1756,37 +1786,29 @@ const Row = memo(function Row({
       {/* Desktop only, matching its header. On a phone the start date lives in
           the row panel, where reading it does not cost the name 70px. */}
       <div className="hidden text-right tabular-nums sm:block">
-        {locked ? (
-          <span className="text-[11px] text-muted-foreground">{fmtDate(r.startDate) || blank}</span>
-        ) : (
-          <EditableCell
-            value={r.startDate ?? ''}
-            display={fmtDate(r.startDate) || blank}
-            active={editing === 'start'}
-            onEdit={() => onEdit('start')}
-            onDone={onDone}
-            onCommit={(v) => onCommit('start', v)}
-            type="date"
-            className="text-right text-[11px]"
-          />
-        )}
+        <EditableCell
+          value={r.startDate ?? ''}
+          display={fmtDate(r.startDate) || blank}
+          active={editing === 'start'}
+          onEdit={() => onEdit('start')}
+          onDone={onDone}
+          onCommit={(v) => onCommit('start', v)}
+          type="date"
+          className="text-right text-[11px]"
+        />
       </div>
 
       <div className="text-right tabular-nums">
-        {locked ? (
-          <span className="text-[11px] text-muted-foreground">{fmtDate(r.finishDate) || blank}</span>
-        ) : (
-          <EditableCell
-            value={r.finishDate ?? ''}
-            display={fmtDate(r.finishDate) || blank}
-            active={editing === 'finish'}
-            onEdit={() => onEdit('finish')}
-            onDone={onDone}
-            onCommit={(v) => onCommit('finish', v)}
-            type="date"
-            className="text-right text-[11px]"
-          />
-        )}
+        <EditableCell
+          value={r.finishDate ?? ''}
+          display={fmtDate(r.finishDate) || blank}
+          active={editing === 'finish'}
+          onEdit={() => onEdit('finish')}
+          onDone={onDone}
+          onCommit={(v) => onCommit('finish', v)}
+          type="date"
+          className="text-right text-[11px]"
+        />
       </div>
 
       {/* Target, Price and Weight stood here until 12 Sep 2026.
@@ -1836,7 +1858,13 @@ function EditableCell({
   group,
 }: {
   value: string;
-  display?: string;
+  /**
+   * What to show when the cell is not being typed in, if that differs from the
+   * value — `97 d` over `97`. A node rather than a string so a part of it can
+   * be dropped by CSS at a width where it does not fit; the search mark only
+   * runs over a plain string, which is the only kind the name column passes.
+   */
+  display?: ReactNode;
   active: boolean;
   onEdit: () => void;
   onDone: () => void;
@@ -1863,7 +1891,11 @@ function EditableCell({
         onClick={onEdit}
         className={`block w-full truncate rounded px-1 py-[11px] text-left leading-[22px] decoration-dotted underline-offset-4 transition-colors hover:bg-background group-hover:underline ${className}`}
       >
-        <Marked text={display ?? value} term={highlight} />
+        {typeof display === 'string' || display == null ? (
+          <Marked text={display ?? value} term={highlight} />
+        ) : (
+          display
+        )}
       </button>
     );
   }
