@@ -89,9 +89,20 @@ check(
 );
 
 check(
-  'a second dot is a typo, not a separator we missed',
-  stripAmount('5.920.000') === '5.920000',
-  `5.920.000 → ${stripAmount('5.920.000')}`
+  'a dot followed by three digits is a thousands separator, because here it always is',
+  stripAmount('5.920.000') === '5920000' &&
+    stripAmount('28.081') === '28081' &&
+    stripAmount('1403.528') === '1403528',
+  `5.920.000 -> ${stripAmount('5.920.000')} · 28.081 -> ${stripAmount('28.081')} · 1403.528 -> ${stripAmount('1403.528')}`
+);
+
+check(
+  'and a dot followed by anything else is still a decimal point',
+  stripAmount('5920000.006405') === '5920000.006405' &&
+    stripAmount('0.97') === '0.97' &&
+    stripAmount('28.0815') === '28.0815' &&
+    stripAmount('5000.') === '5000.',
+  `Gundih's imported 5920000.006405 and a half-typed 5000. both survive untouched`
 );
 
 /* --- the caret ------------------------------------------------------------- */

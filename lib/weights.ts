@@ -165,7 +165,21 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
         .reduce((s, o) => s + (o.price ?? 0), 0);
       const remainder = Math.max(0, parentValue - takenByPricedSiblings);
       if (node.workstepFactor != null) {
-        value = remainder * node.workstepFactor;
+        // A STATED PERCENT IS A PERCENT OF THE PARENT'S BUDGET, not of what is
+        // left of it. "30% of Engineering" has to mean the same thing whoever
+        // else has been priced, or the box someone typed into changes meaning
+        // behind their back when a sibling gets a price: measured against the
+        // remainder, three rows reading 50 / 30 / 20 stop adding up to their
+        // heading the moment a fourth row is given one.
+        //
+        // NOT A CHANGE OF FIGURES ON GUNDIH, and that is checked rather than
+        // assumed. No factor row there has a genuinely priced sibling: 1.4's
+        // priced child is the nested reporting unit 1.4.4, already excluded
+        // above because it carries its own contract, and 1.4.2.2 and 1.4.3.1
+        // hold a price AND a factor, where the price wins before this branch
+        // is reached. `remainder` equalled `parentValue` everywhere it was
+        // actually used, so both readings give the same number.
+        value = parentValue * node.workstepFactor;
       } else {
         const unpriced = siblings.filter((s) => !((s.price ?? 0) > 0));
         value = unpriced.length ? remainder / unpriced.length : null;
@@ -178,9 +192,22 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
 
   // Roots start from the contract when nothing above them is priced, so a plan
   // with no prices at all still spreads evenly instead of coming back empty.
+  //
+  // A ROOT THAT STATES A PERCENT ALSO STARTS FROM THE CONTRACT, whatever else
+  // is priced, because there is nothing above a root but the project and a
+  // percent has to be a percent OF something. Without this, typing "Engineering
+  // is 21.47%" on a top-level heading did nothing at all as soon as one price
+  // existed anywhere in the plan — the row fell through to the unpriced branch
+  // with no parent value to take a fraction of, and the box read as broken.
+  // Roots with no stated percent are untouched: they still start from null once
+  // prices exist, so their leaves reach the contract's leftover the way they
+  // always have. No project in this database has a root carrying a factor, so
+  // nothing that exists today moves.
   const roots = kids.get(null) ?? [];
   const anyPrice = priced.length > 0;
-  for (const r of roots) walk(r, anyPrice ? null : contract);
+  for (const r of roots) {
+    walk(r, anyPrice ? (r.workstepFactor != null ? contract : null) : contract);
+  }
 
   const leaves = nodes.filter((n) => n.isLeaf);
   let covered = 0;
@@ -412,4 +439,90 @@ export function topLevelPricedTotal(nodes: WeightNode[]): number {
     if (!inside) sum += n.price ?? 0;
   }
   return sum;
+}
+
+/**
+ * What a heading has to give out, and what its rows have already claimed.
+ *
+ * The screen's question, not the derivation's. `deriveWeights` hands every row
+ * a figure whatever the arithmetic looks like, because a report that refuses to
+ * render is worse than one that is wrong by a stated amount. This is how the
+ * screen finds out the arithmetic looked wrong, so it can say so on the card
+ * instead of leaving someone to add six numbers by hand.
+ *
+ * **It computes nothing the derivation does not already know**, and that is
+ * deliberate in the same way `buildOverallMap` computes nothing: a second
+ * opinion about money living in a second file is how a card ends up disagreeing
+ * with the bar underneath it.
+ *
+ * **Over-allocation is REPORTED, never corrected.** Gundih has headings whose
+ * rows state 0.3 + 0.4 + 0.3 and still carry two more rows with nothing on
+ * them, so the heading is handed out at 140%. Scaling the percentages back to
+ * fit would move figures nobody asked to move; zeroing the two empty rows would
+ * drop two real pieces of work to no weight at all, and a leaf with no weight
+ * is invisible to every report. So the number stands and the card says it is
+ * over.
+ */
+export interface Allocation {
+  /** The money this heading has to give out. */
+  budget: number;
+  /** What its rows have claimed: their own prices, and their stated percents. */
+  claimed: number;
+  /** Budget minus claimed. NEGATIVE means the rows claimed more than there is. */
+  left: number;
+  /** Rows that claimed nothing, and will split whatever is left between them. */
+  openChildren: number;
+  /** The stated percents added up, as a fraction. 1 means fully spoken for. */
+  statedFraction: number;
+}
+
+/**
+ * One entry per row that has rows beneath it and a budget to give out.
+ *
+ * A heading no price reaches has no budget to divide and gets no entry: on
+ * screen that is the card whose figure is simply its rows added up, which is a
+ * different sentence from "it is over by 40%".
+ */
+export function allocationOf(nodes: WeightNode[], result: WeightResult): Map<string, Allocation> {
+  const kids = new Map<string, WeightNode[]>();
+  for (const n of nodes) {
+    if (n.parentId == null) continue;
+    kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
+  }
+
+  const priced = nodes.filter((n) => (n.price ?? 0) > 0);
+  const largest = priced.length ? Math.max(...priced.map((n) => n.price ?? 0)) : 0;
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, Allocation>();
+  for (const [parentId, children] of kids) {
+    // A reporting unit's own contract figure first, because that is the number
+    // its SPK was signed for and the derivation only ever sees it as a price.
+    // Then whatever the derivation handed the row from above.
+    const parent = byId.get(parentId);
+    const budget = parent?.unitContractValue ?? result.valueOf.get(parentId);
+    if (budget == null || budget <= 0) continue;
+
+    let claimed = 0;
+    let openChildren = 0;
+    let statedFraction = 0;
+    for (const c of children) {
+      // A nested reporting unit is not spending its parent's money — it
+      // carries its own contract, exactly as the derivation treats it.
+      if (c.isReportingUnit && (c.unitContractValue ?? c.price ?? 0) > 0) continue;
+      if ((c.price ?? 0) > 0) {
+        if (!isTotalRow(c, priced, largest)) claimed += c.price ?? 0;
+        continue;
+      }
+      if (c.workstepFactor != null) {
+        statedFraction += c.workstepFactor;
+        claimed += budget * c.workstepFactor;
+        continue;
+      }
+      openChildren += 1;
+    }
+
+    out.set(parentId, { budget, claimed, left: budget - claimed, openChildren, statedFraction });
+  }
+  return out;
 }

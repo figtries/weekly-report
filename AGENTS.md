@@ -151,6 +151,55 @@ recomputes. Projects without a priced BOQ get `evenWeights()` and must be
 labelled as not value-based — a rough number shown honestly beats a project that
 never gets set up.
 
+**A row is set by its PRICE or by its SHARE, and they are the same fact.** A
+heading has a budget; what people decide about the rows inside it is how much of
+that budget each one takes, and asking for rupiah there makes someone do the
+multiplication by hand and type the answer. So Activities gives every row one
+box with two units: money lands in `price`, a percent lands in
+`workstep_factor` — a column the Gundih importer had been writing since day one
+while no screen could. Weight is still DERIVED from whichever was given; a share
+is an input to `deriveWeights`, never a stored `bobot`.
+
+Three rules there are correctness. **A stated percent is a percent of the
+parent's WHOLE budget**, not of what is left of it after priced siblings — read
+against the remainder, three rows saying 50 / 30 / 20 stop adding up to their
+heading the moment a fourth is priced. (Changing this moved nothing on Gundih,
+and that was checked rather than assumed: no factor row there has a genuinely
+priced sibling, because 1.4's priced child is the nested unit 1.4.4 and 1.4.2.2
+and 1.4.3.1 hold a price AND a factor, where the price wins first.) **The two
+clear each other on write**, in `updateRowTextAction` and in the client's live
+patch, because a price beats a stated percent inside the derivation and a row
+holding both would keep taking its old price while the percent box appeared
+broken. And **over-allocation is REPORTED, never corrected**: `allocationOf` in
+`lib/weights.ts` tells the screen what a heading has left, the card says "over
+by X" and turns, and the figures stand. Gundih has headings handed out at 140%
+(0.3 + 0.4 + 0.3 with two more rows still taking an even share); scaling them
+back would move figures nobody asked to move, and zeroing the empty rows would
+drop real work to no weight at all, which makes it invisible to every report.
+
+**A DOT IN A MONEY BOX IS A THOUSANDS SEPARATOR.** `stripAmount` reads every
+dot as one when every dot in the string is followed by exactly three digits, so
+`28.081` is twenty-eight thousand and `1.403.528` is the contract. This is an
+Indonesian contractor and that is how people here write a number; read as a
+decimal point it is not a rounding difference, it is three orders of magnitude.
+A price typed `28.081` against a US$1,403,528 contract stored 28.081 and printed
+"0.00% of project", so the row looked like it had never been filled in (14 Sep
+2026). Nothing could have caught it on screen either: `formatMoney` is pinned to
+`maximumFractionDigits: 0`, so THIS APP NEVER DISPLAYS A FRACTION OF A UNIT, and
+a box that takes what the rest of the app refuses to show can only lose
+information. The rule is all-or-nothing across the string, which is what leaves
+the importer's own figures alone — `5920000.006405` has six digits after its dot
+and `842723.7244800002` has ten. The percent box is NOT covered and must not be:
+a share is 0 to 100, so a dot there is a real decimal point.
+
+**A card's money is its ROWS added up, never the heading row's own price.** The
+first version printed `unitContractValue ?? price`, so a heading with six fully
+priced rows and no price of its own read "No value yet" beside a figure of
+69.72% — one card making two statements that contradicted each other, reported
+14 Sep 2026. `WeightsUnit.derivedValue` is the figure that was missing, and
+`decidedRows` counts rows set EITHER way, because a count of priced rows reads
+as nothing done on a heading whose rows are all shares.
+
 **The plan curve is generated, never imported.** `generatePlanCurve` turns
 start/finish/pattern into each leaf's weekly `targetWF`, which is exactly the
 shape `LeafSnapshot` already stores — so a schedule revision regenerates the
@@ -240,8 +289,15 @@ per row — name, one bar, one number. Everything else about a row is one press
 away in `ActivityPanel`, which is also where Activities went: **price, method
 and schedule stopped being a screen**, because three screens meant remembering
 which one held which field. `/weekly/[week]/weights` survives as the BULK tool
-(two hundred prices in one sitting is not a per-row job) reached from the setup
-card and a quiet link under the map — do not put it back beside the stepper.
+(two hundred prices in one sitting is not a per-row job), and on 14 Sep 2026 it
+came BACK into the week bar as an unnumbered entry called Activities. The old
+rule here said not to put it beside the stepper, and the half of it that still
+holds is that it is not a STEP: what an activity is worth belongs to the project
+and is as true in week 4 as in week 40, so it carries no numeral and no chevron,
+and `WeekSteps` draws a divider before it. The half that was wrong is that a
+setup card and a quiet link under the map were enough to find it by; they were
+not. It is also the only screen that can show a heading's budget against what
+its rows have claimed, which no per-row panel can.
 The weekly queue survives too, as a LENS over the map rather than a list of its
 own: `lib/worklist.ts` still decides what is due.
 

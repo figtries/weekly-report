@@ -127,11 +127,40 @@ export function groupAmount(raw: string): string {
   return siGroupWhole(whole) + rest;
 }
 
-/** Back to something `Number()` accepts — the separators come straight out. */
+/**
+ * Back to something `Number()` accepts, and the separators come straight out.
+ *
+ * **A DOT FOLLOWED BY EXACTLY THREE DIGITS IS A THOUSANDS SEPARATOR**, provided
+ * every dot in the string looks like that. This is an Indonesian contractor:
+ * 28.081 is twenty-eight thousand and eighty-one, and reading it as twenty-eight
+ * dollars is not a rounding difference, it is three orders of magnitude.
+ *
+ * It cost a real figure on 14 Sep 2026. A price typed as `28.081` was stored as
+ * 28.081, and against a US$1,403,528 contract that row weighed 0.0020% and
+ * printed as "0.00% of project" — a row that read as never filled in. Nothing on
+ * screen could have caught it either, because `formatMoney` is pinned to
+ * `maximumFractionDigits: 0` and this app therefore NEVER DISPLAYS A FRACTION OF
+ * A UNIT anywhere. A box that accepts what the rest of the app refuses to show
+ * is a box that can only lose information.
+ *
+ * The rule is all-or-nothing across the string, and that is what keeps the
+ * importer's own figures intact: Gundih's contract value `5920000.006405` has
+ * six digits after its dot and `842723.7244800002` has ten, so neither matches
+ * and both keep every decimal they arrived with. So does `0.97`, and so does a
+ * half-typed `5000.`.
+ *
+ * It also has to hold WHILE SOMEONE IS TYPING, because `MoneyInput` re-reads the
+ * box on every keystroke. `1.403.528` collapses to `1403` the moment its first
+ * group closes, and the second group is then read against THAT, which is why
+ * the leading run is `\d+` and not the `\d{1,3}` a properly formatted number would
+ * have. Demanding the canonical form would break the very case this was written
+ * for, at the second dot.
+ */
 export function stripAmount(raw: string): string {
   const clean = String(raw ?? '').replace(/[^\d.]/g, '');
-  // Only the first dot is a decimal point; a second one is a typo, not a
-  // separator we failed to strip.
+  if (/^\d+(\.\d{3})+$/.test(clean)) return clean.replace(/\./g, '');
+  // Otherwise only the first dot is a decimal point; a second one is a typo,
+  // not a separator we failed to strip.
   const dot = clean.indexOf('.');
   return dot < 0 ? clean : clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, '');
 }

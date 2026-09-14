@@ -30,7 +30,14 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import type { ProgressMethod } from './schema';
-import { deriveWeights, summariseWeights, type WeightNode, type WeightSummary } from './weights';
+import {
+  allocationOf,
+  deriveWeights,
+  summariseWeights,
+  type Allocation,
+  type WeightNode,
+  type WeightSummary,
+} from './weights';
 import { getActiveBaselineId } from './sheet';
 import { loadWeightNodes } from './weights-read';
 
@@ -51,6 +58,15 @@ export interface WeightsRow {
   depth: number;
   isLeaf: boolean;
   price: number | null;
+  /**
+   * The percent of its parent's budget this row STATES, or null where it
+   * states none. Not the same question as `bobotOverall`: that one is always
+   * answered, because the derivation hands every row a figure. This one is
+   * what somebody typed, and it is null on a row nobody has decided yet.
+   */
+  percentOfParent: number | null;
+  /** What this row is worth once the derivation has run, in project currency. */
+  value: number;
   /** Percent of the whole project. */
   bobotOverall: number;
   /** Percent within this row's own reporting unit. */
@@ -91,8 +107,35 @@ export interface WeightsUnit {
   name: string;
   /** The unit's own contract figure, falling back to its price. */
   unitValue: number | null;
+  /**
+   * What this heading has to give out, and what the rows directly under it
+   * have already claimed. Absent where nothing above the heading says what it
+   * is worth, which is a different sentence from "it is over by 40%" and has
+   * to stay tellable apart on the card.
+   */
+  allocation: Allocation | null;
+  /**
+   * What every row in this card is worth, added up.
+   *
+   * The card used to print `unitContractValue ?? price`, which is the heading
+   * ROW's own money and nothing else. Six rows could carry a full set of
+   * prices under a heading nobody had priced, and the card would say "no value
+   * yet" while the percent beside it read 69.72 — a card disagreeing with its
+   * own number in the same breath. This is the figure that was missing: the
+   * derivation's own money for the rows the card holds.
+   */
+  derivedValue: number;
   bobotOverall: number;
   pricedRows: number;
+  /**
+   * Rows somebody has actually decided: priced, or given a stated share.
+   *
+   * `pricedRows` counts money only, and once a share is a way of setting a row
+   * that count reads as nothing done on a heading whose rows are all set. It is
+   * kept because the hero above still speaks in prices, and the two counts are
+   * different questions.
+   */
+  decidedRows: number;
   totalRows: number;
   rows: WeightsRow[];
 }
@@ -241,6 +284,8 @@ export function buildWeightsScreen(
           depth: Math.max(0, depthOf(n) - baseDepth),
           isLeaf: n.isLeaf,
           price: n.price,
+          percentOfParent: n.workstepFactor != null ? n.workstepFactor * 100 : null,
+          value: result.valueOf.get(n.id) ?? 0,
           bobotOverall: overall,
           // Guarded: a card whose leaves all weigh zero must show 0, not NaN.
           bobotInUnit: against > 0 ? (overall / against) * 100 : 0,
@@ -258,6 +303,8 @@ export function buildWeightsScreen(
         };
       });
 
+  const alloc = allocationOf(nodes, result);
+
   const units: WeightsUnit[] = anchors.map((anchor) => {
     const members = nodes.filter((n) => cardOf(n) === anchor.id);
 
@@ -268,13 +315,23 @@ export function buildWeightsScreen(
       .filter((n) => n.isLeaf)
       .reduce((s, n) => s + (result.bobotOf.get(n.id) ?? 0), 0);
 
+    // What the card's rows are worth, from the derivation rather than from
+    // the heading row's own price. Same subtraction as `leafTotal`: a nested
+    // unit's leaves belong to that unit's card, not to this one.
+    const derivedValue = members
+      .filter((n) => n.isLeaf)
+      .reduce((s, n) => s + (result.valueOf.get(n.id) ?? 0), 0);
+
     return {
       id: anchor.id,
       code: meta.get(anchor.id)?.code ?? '',
       name: meta.get(anchor.id)?.name ?? '',
       unitValue: anchor.unitContractValue ?? anchor.price,
+      allocation: alloc.get(anchor.id) ?? null,
+      derivedValue,
       bobotOverall: leafTotal,
       pricedRows: members.filter((n) => (n.price ?? 0) > 0).length,
+      decidedRows: members.filter((n) => (n.price ?? 0) > 0 || n.workstepFactor != null).length,
       totalRows: members.length,
       rows: toRows(members, depthOf(anchor) + 1, leafTotal),
     };

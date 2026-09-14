@@ -206,5 +206,93 @@ check(
   })()
 );
 
+/**
+ * A heading with a budget, and rows that take shares of it.
+ *
+ * The state the screen was rebuilt for on 14 Sep 2026, and the three things it
+ * has to get right: the card's money must be its ROWS added up rather than the
+ * heading row's own price, a stated percent must be a percent of the heading's
+ * whole budget, and rows claiming more than the heading holds must be REPORTED
+ * rather than quietly scaled to fit.
+ */
+const budgeted: WeightNode[] = [
+  node({ id: 'P', order: 1, price: 800 }),
+  node({ id: 'P1', order: 2, parentId: 'P', isLeaf: true, workstepFactor: 0.25 }),
+  node({ id: 'P2', order: 3, parentId: 'P', isLeaf: true, workstepFactor: 0.25 }),
+  node({ id: 'P3', order: 4, parentId: 'P', isLeaf: true }),
+  // A heading nobody priced, whose rows carry every price between them. This
+  // is the card that used to read 'No value yet' beside a real percentage.
+  node({ id: 'Q', order: 5 }),
+  node({ id: 'Q1', order: 6, parentId: 'Q', isLeaf: true, price: 120 }),
+  node({ id: 'Q2', order: 7, parentId: 'Q', isLeaf: true, price: 80 }),
+];
+const bScreen = buildWeightsScreen(
+  budgeted,
+  new Map(budgeted.map((n) => [n.id, { code: n.id, name: 'Row ' + n.id }])),
+  'IDR',
+  1000
+);
+const card = (id: string) => bScreen.units.find((u) => u.id === id);
+const rowIn = (unit: string, id: string) => card(unit)?.rows.find((r) => r.id === id);
+
+check(
+  'a heading nobody priced is worth what its rows are worth',
+  Math.abs((card('Q')?.derivedValue ?? 0) - 200) < 0.01,
+  'Q = ' + (card('Q')?.derivedValue ?? 0).toFixed(2) + ', while its own price is null'
+);
+
+check(
+  'a stated percent takes that share of the whole budget',
+  Math.abs((rowIn('P', 'P1')?.value ?? 0) - 200) < 0.01,
+  'P1 = 25% of 800 = ' + (rowIn('P', 'P1')?.value ?? 0).toFixed(2)
+);
+
+check(
+  'the screen can say what a heading has left to give out',
+  (() => {
+    const a = card('P')?.allocation;
+    // 800 budget, two rows stating 25% each = 400 claimed, 400 left for P3.
+    return (
+      a != null &&
+      Math.abs(a.budget - 800) < 0.01 &&
+      Math.abs(a.left - 400) < 0.01 &&
+      a.openChildren === 1
+    );
+  })(),
+  'budget ' + card('P')?.allocation?.budget + ' claimed ' + card('P')?.allocation?.claimed
+);
+
+check(
+  'a row states its percent back, and a row that states none says so',
+  rowIn('P', 'P1')?.percentOfParent === 25 && rowIn('P', 'P3')?.percentOfParent === null
+);
+
+/** The same heading, over-subscribed. The figures must stand and the gap show. */
+const over = budgeted.map((n) =>
+  n.id === 'P1' || n.id === 'P2' ? { ...n, workstepFactor: 0.7 } : n
+);
+const oScreen = buildWeightsScreen(
+  over,
+  new Map(over.map((n) => [n.id, { code: n.id, name: 'Row ' + n.id }])),
+  'IDR',
+  1000
+);
+const oAlloc = oScreen.units.find((u) => u.id === 'P')?.allocation;
+
+check(
+  'rows claiming more than their heading holds are reported, not scaled back',
+  (() => {
+    const p1 = oScreen.units.find((u) => u.id === 'P')?.rows.find((r) => r.id === 'P1');
+    // 70% of 800 stands at 560, untouched, and the heading is over by 320.
+    return (
+      oAlloc != null &&
+      Math.abs(oAlloc.left + 320) < 0.01 &&
+      Math.abs((p1?.value ?? 0) - 560) < 0.01 &&
+      Math.abs(oAlloc.statedFraction - 1.4) < 1e-9
+    );
+  })(),
+  'left ' + oAlloc?.left.toFixed(2) + ', rows state ' + ((oAlloc?.statedFraction ?? 0) * 100).toFixed(0) + '%'
+);
+
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

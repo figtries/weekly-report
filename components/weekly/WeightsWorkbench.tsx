@@ -8,7 +8,13 @@ import { m } from 'framer-motion';
 
 import { pressMotion } from '@/components/motion/Press';
 import { updateRowTextAction } from '@/lib/sheet-actions';
-import { deriveWeights, topLevelPricedTotal, type WeightNode } from '@/lib/weights';
+import {
+  allocationOf,
+  deriveWeights,
+  topLevelPricedTotal,
+  type Allocation,
+  type WeightNode,
+} from '@/lib/weights';
 import type { WeightsRow, WeightsScreen, WeightsUnit } from '@/lib/weights-screen';
 import { formatMoney } from '@/lib/currency';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -58,6 +64,15 @@ export default function WeightsWorkbench({
   const [openUnit, setOpenUnit] = useState<string | null>(null);
   /** Prices typed since the page loaded, raw digit strings, keyed by row id. */
   const [typed, setTyped] = useState<Record<string, string>>({});
+  /**
+   * Percents typed since the page loaded, the other half of the same question.
+   *
+   * Kept apart from `typed` rather than in one map with a unit beside it,
+   * because the two clear each other on the server and a single map would make
+   * "this row has no price" and "this row has a price of nothing" the same
+   * state while the save is still in flight.
+   */
+  const [typedPct, setTypedPct] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<string | null>(null);
   /** The row whose measurement panel is open. ONE panel, pointed at a row. */
   const [measuring, setMeasuring] = useState<WeightsRow | null>(null);
@@ -68,18 +83,31 @@ export default function WeightsWorkbench({
   const signed = screen.summary.contractValue > 0 ? screen.summary.contractValue : undefined;
 
   /** The rows as they stand on screen right now, typed prices included. */
-  const patched = useMemo<WeightNode[]>(
-    () =>
-      Object.keys(typed).length === 0
-        ? screen.nodes
-        : screen.nodes.map((n) => {
-            const raw = typed[n.id];
-            if (raw === undefined) return n;
-            const v = raw === '' ? null : Number(raw);
-            return { ...n, price: v != null && Number.isFinite(v) && v > 0 ? v : null };
-          }),
-    [screen.nodes, typed]
-  );
+  const patched = useMemo<WeightNode[]>(() => {
+    if (Object.keys(typed).length === 0 && Object.keys(typedPct).length === 0) return screen.nodes;
+    return screen.nodes.map((n) => {
+      const rawMoney = typed[n.id];
+      const rawPct = typedPct[n.id];
+      if (rawMoney === undefined && rawPct === undefined) return n;
+      const next = { ...n };
+      // THE TWO CLEAR EACH OTHER, here exactly as they do in the action. A
+      // price wins over a stated percent inside `deriveWeights`, so a row left
+      // holding both would take its old price and the percent box would sit
+      // there changing nothing — the box reading as broken when it is the
+      // stale price underneath that is the problem.
+      if (rawMoney !== undefined) {
+        const v = rawMoney === '' ? null : Number(rawMoney);
+        next.price = v != null && Number.isFinite(v) && v > 0 ? v : null;
+        if (next.price != null) next.workstepFactor = null;
+      }
+      if (rawPct !== undefined) {
+        const v = rawPct === '' ? null : Number(rawPct);
+        next.workstepFactor = v != null && Number.isFinite(v) && v > 0 ? v / 100 : null;
+        if (next.workstepFactor != null) next.price = null;
+      }
+      return next;
+    });
+  }, [screen.nodes, typed, typedPct]);
 
   const live = useMemo(() => deriveWeights(patched, signed), [patched, signed]);
 
@@ -119,11 +147,29 @@ export default function WeightsWorkbench({
 
   function commitPrice(rowId: string, raw: string) {
     setFailed(null);
+    setTypedPct((p) => (rowId in p ? omit(p, rowId) : p));
     startTransition(async () => {
       const res = await updateRowTextAction(rowId, 'price', raw);
       if (!res.ok) setFailed(res.error);
     });
   }
+
+  function commitPercent(rowId: string, raw: string) {
+    setFailed(null);
+    setTyped((p) => (rowId in p ? omit(p, rowId) : p));
+    startTransition(async () => {
+      const res = await updateRowTextAction(rowId, 'percent', raw);
+      if (!res.ok) setFailed(res.error);
+    });
+  }
+
+  /**
+   * What every heading has to give out and what its rows have claimed, run
+   * again on the patched rows so a card's "left" figure moves with the box
+   * being typed into. Same function the server called — there is no second
+   * opinion about money anywhere in this screen.
+   */
+  const liveAlloc = useMemo(() => allocationOf(patched, live), [patched, live]);
 
   /** How many activities carry a price now, counting what is only typed. */
   const pricedCount = useMemo(
@@ -156,10 +202,14 @@ export default function WeightsWorkbench({
           unit={unit}
           currency={screen.summary.currency}
           live={live}
+          alloc={liveAlloc.get(unit.id) ?? null}
           unitTotal={unitTotals.get(unit.id) ?? 0}
           typed={typed}
           setTyped={setTyped}
+          typedPct={typedPct}
+          setTypedPct={setTypedPct}
           onCommit={commitPrice}
+          onCommitPercent={commitPercent}
           onMeasure={setMeasuring}
           onBack={() => setOpenUnit(null)}
         />
@@ -178,6 +228,8 @@ export default function WeightsWorkbench({
               unit={u}
               currency={screen.summary.currency}
               bobot={unitTotals.get(u.id) ?? 0}
+              alloc={liveAlloc.get(u.id) ?? null}
+              value={liveValueOf(u, live)}
               onOpen={() => setOpenUnit(u.id)}
             />
           ))}
@@ -189,9 +241,13 @@ export default function WeightsWorkbench({
               rows={screen.looseRows}
               live={live}
               against={looseTotal}
+              currency={screen.summary.currency}
               typed={typed}
               setTyped={setTyped}
+              typedPct={typedPct}
+              setTypedPct={setTypedPct}
               onCommit={commitPrice}
+              onCommitPercent={commitPercent}
               onMeasure={setMeasuring}
               showBoth={false}
               scopeLabel="project"
@@ -354,32 +410,130 @@ function PricingHero({
   );
 }
 
+/** Drop one key without mutating, so a stale entry cannot outlive its save. */
+function omit<T>(map: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...map };
+  delete next[key];
+  return next;
+}
+
+/** What a card's rows are worth RIGHT NOW, typed boxes included. */
+function liveValueOf(unit: WeightsUnit, live: ReturnType<typeof deriveWeights>): number {
+  return unit.rows
+    .filter((r) => r.isLeaf)
+    .reduce((s, r) => s + (live.valueOf.get(r.id) ?? 0), 0);
+}
+
+/**
+ * A heading's budget, and how much of it its rows have spoken for.
+ *
+ * THIS IS THE LINE THAT WAS MISSING. The card used to print the heading ROW's
+ * own price and nothing else, so a heading with six fully priced rows beneath
+ * it and no price of its own said "No value yet" while the figure beside it
+ * read 69.72% — one card, two statements, and they contradicted each other.
+ *
+ * Over-allocation is SAID, never corrected: the number stands and the card
+ * turns. Scaling the rows back to fit would move figures nobody asked to move,
+ * and this app's rule is that a screen reports what the derivation found.
+ */
+function BudgetLine({
+  alloc,
+  value,
+  currency,
+  priced,
+  total,
+  big,
+}: {
+  alloc: Allocation | null;
+  value: number;
+  currency: string;
+  priced: number;
+  total: number;
+  /** The drilled-in header says it louder than the card in a list does. */
+  big?: boolean;
+}) {
+  const over = alloc != null && alloc.left < -0.5;
+  const spare = alloc != null && alloc.left > 0.5;
+
+  const headline = alloc
+    ? `${formatMoney(alloc.budget, currency)} budget`
+    : value > 0
+      ? `${formatMoney(value, currency)} from the rows below`
+      : 'No value yet';
+
+  // Against the BUDGET, not against the biggest sibling: this bar answers "how
+  // much of this heading is spoken for", and 100 is a real edge it can cross.
+  const filled = alloc && alloc.budget > 0 ? (alloc.claimed / alloc.budget) * 100 : 0;
+
+  return (
+    <>
+      <p className={cn('text-muted-foreground', big ? 'text-sm' : 'mt-0.5 text-sm')}>
+        <span className={cn('tabular-nums', alloc && 'font-medium text-foreground')}>{headline}</span>{' '}
+        · {priced} of {total} rows set
+      </p>
+
+      {alloc && (
+        <>
+          <div className={cn('w-full overflow-hidden rounded-full bg-foreground/8', big ? 'mt-2 h-2' : 'mt-1.5 h-1.5')}>
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width] duration-300 ease-ios',
+                over ? 'bg-destructive' : 'bg-chart-1'
+              )}
+              style={{ width: `${Math.min(100, Math.max(0, filled))}%` }}
+            />
+          </div>
+          <p className={cn('mt-1 text-xs tabular-nums', over ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+            {over
+              ? `Over by ${formatMoney(-alloc.left, currency)}`
+              : spare
+                ? `${formatMoney(alloc.left, currency)} left${alloc.openChildren > 0 ? ` for ${alloc.openChildren} ${alloc.openChildren === 1 ? 'row' : 'rows'}` : ' to share out'}`
+                : 'Fully shared out'}
+            {alloc.statedFraction > 0 && ` · rows state ${(alloc.statedFraction * 100).toFixed(0)}%`}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 function UnitCard({
   unit,
   currency,
   bobot,
+  alloc,
+  value,
   onOpen,
 }: {
   unit: WeightsUnit;
   currency: string;
   bobot: number;
+  alloc: Allocation | null;
+  value: number;
   onOpen: () => void;
 }) {
+  const over = alloc != null && alloc.left < -0.5;
   return (
     <m.button
       {...pressMotion}
       onClick={onOpen}
-      className="min-h-11 w-full rounded-lg bg-card p-3 text-left ring-1 ring-foreground/10 transition-colors duration-300 ease-ios hover:bg-accent"
+      className={cn(
+        'min-h-11 w-full rounded-lg bg-card p-3 text-left ring-1 transition-colors duration-300 ease-ios hover:bg-accent',
+        over ? 'ring-destructive/40' : 'ring-foreground/10'
+      )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">
             {unit.code} {unit.name}
           </p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {unit.unitValue != null ? formatMoney(unit.unitValue, currency) : 'No value yet'} ·{' '}
-            {unit.pricedRows} of {unit.totalRows} rows priced
-          </p>
+          <BudgetLine
+            alloc={alloc}
+            value={value}
+            currency={currency}
+            priced={unit.decidedRows}
+            total={unit.totalRows}
+          />
         </div>
         <span className="shrink-0 text-lg font-semibold tabular-nums">{bobot.toFixed(2)}%</span>
       </div>
@@ -391,20 +545,28 @@ function UnitRows({
   unit,
   currency,
   live,
+  alloc,
   unitTotal,
   typed,
   setTyped,
+  typedPct,
+  setTypedPct,
   onCommit,
+  onCommitPercent,
   onMeasure,
   onBack,
 }: {
   unit: WeightsUnit;
   currency: string;
   live: ReturnType<typeof deriveWeights>;
+  alloc: Allocation | null;
   unitTotal: number;
   typed: Record<string, string>;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  typedPct: Record<string, string>;
+  setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
+  onCommitPercent: (rowId: string, raw: string) => void;
   onMeasure: (row: WeightsRow) => void;
   onBack: () => void;
 }) {
@@ -418,26 +580,45 @@ function UnitRows({
         >
           Back to all SPK
         </m.button>
-        <span className="truncate text-sm font-semibold">
+      </div>
+
+      {/* The same three figures the card carried, kept in front of you while
+          you spend them. Walking into a heading and losing the budget you are
+          dividing is how someone ends up typing until the rows look plausible
+          rather than until they add up. */}
+      <div className="rounded-lg bg-card p-3 ring-1 ring-foreground/10">
+        <p className="truncate font-semibold">
           {unit.code} {unit.name}
-        </span>
+        </p>
+        <BudgetLine
+          alloc={alloc}
+          value={liveValueOf(unit, live)}
+          currency={currency}
+          priced={unit.decidedRows}
+          total={unit.totalRows}
+          big
+        />
       </div>
 
       <RowList
         rows={unit.rows}
         live={live}
         against={unitTotal}
+        currency={currency}
         typed={typed}
         setTyped={setTyped}
+        typedPct={typedPct}
+        setTypedPct={setTypedPct}
         onCommit={onCommit}
+        onCommitPercent={onCommitPercent}
         onMeasure={onMeasure}
         showBoth
         scopeLabel={unit.code || 'this unit'}
       />
 
       <p className="px-1 text-xs text-muted-foreground">
-        {formatMoney(unit.unitValue ?? 0, currency)} spread across {unit.totalRows} rows. Type the
-        prices you have; the rest take an even share of what is left.
+        Give a row a share of this heading, or its own price if you have one. Rows you leave alone
+        split whatever is still open between them.
       </p>
     </div>
   );
@@ -454,9 +635,13 @@ function RowList({
   rows,
   live,
   against,
+  currency,
   typed,
   setTyped,
+  typedPct,
+  setTypedPct,
   onCommit,
+  onCommitPercent,
   onMeasure,
   showBoth,
   scopeLabel,
@@ -465,9 +650,13 @@ function RowList({
   live: ReturnType<typeof deriveWeights>;
   /** Denominator for the left figure: this scope's own leaf total. */
   against: number;
+  currency: string;
   typed: Record<string, string>;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  typedPct: Record<string, string>;
+  setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
+  onCommitPercent: (rowId: string, raw: string) => void;
   onMeasure: (row: WeightsRow) => void;
   /** Whether the scope figure and the project figure are different questions. */
   showBoth: boolean;
@@ -491,8 +680,8 @@ function RowList({
           hundred times down the page. */}
       <div className="hidden items-center gap-3 px-3 text-xs font-semibold text-muted-foreground sm:flex">
         <span className="flex-1">Activity</span>
-        <span className="w-36 text-right">Price</span>
-        <span className="w-28 text-right">{showBoth ? `Weight in ${scopeLabel}` : 'Weight'}</span>
+        <span className="w-44 text-right">Share or price</span>
+        <span className="w-28 text-right">{showBoth ? 'Weight here' : 'Weight'}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -500,6 +689,13 @@ function RowList({
           const overall = row.isLeaf ? (live.bobotOf.get(row.id) ?? 0) : subtreeOf(row.id, rows, live);
           const inScope = against > 0 ? (overall / against) * 100 : 0;
           const priced = (typed[row.id] ?? String(row.price ?? '')) !== '';
+          // DECIDED, not priced. A stated share is somebody's decision just as
+          // much as a price is — the comments below draw an undecided row as a
+          // placeholder, and drawing a row set to 30% that way would call the
+          // one deliberate thing on it a guess.
+          const decided =
+            priced ||
+            (typedPct[row.id] ?? (row.percentOfParent != null ? String(row.percentOfParent) : '')) !== '';
           // Scaled against the BIGGEST row here, not against 100. Thirteen rows
           // of 7.69% drawn on a 0-100 scale are thirteen identical slivers, and
           // a bar that cannot tell two rows apart is worse than no bar. Against
@@ -512,7 +708,7 @@ function RowList({
           // on the project's own list it would be the figure above, restated.
           const note = [
             showBoth ? `${overall.toFixed(2)}% of project` : '',
-            row.isLeaf && !priced ? (row.share === 'factor' ? 'set fraction' : 'even share') : '',
+            row.isLeaf && !decided ? (row.share === 'factor' ? 'set fraction' : 'even share') : '',
           ]
             .filter(Boolean)
             .join(' · ');
@@ -530,7 +726,7 @@ function RowList({
                 'rounded-lg bg-card px-3 py-2.5 ring-1 transition-colors duration-300 ease-ios sm:flex sm:items-center sm:gap-3',
                 // A priced row is visibly settled. Reading down the list you can
                 // see how far you got without counting anything.
-                priced ? 'ring-chart-1/35' : 'ring-foreground/10'
+                decided ? 'ring-chart-1/35' : 'ring-foreground/10'
               )}
               style={{ marginLeft: `${Math.min(row.depth, 4) * 12}px` }}
             >
@@ -563,12 +759,14 @@ function RowList({
               </div>
 
               <div className="mt-2 flex items-center gap-3 sm:mt-0 sm:shrink-0">
-                <MoneyInput
-                  defaultValue={row.price != null ? String(row.price) : ''}
-                  placeholder="Add price"
-                  className="min-h-11 flex-1 rounded-lg bg-background px-3 text-right text-sm tabular-nums ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground focus:ring-2 focus:ring-chart-1 focus:outline-none sm:w-40 sm:flex-none"
-                  onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
-                  onCommit={(raw) => onCommit(row.id, raw)}
+                <ValueField
+                  row={row}
+                  currency={currency}
+                  money={live.valueOf.get(row.id) ?? 0}
+                  setTyped={setTyped}
+                  setTypedPct={setTypedPct}
+                  onCommit={onCommit}
+                  onCommitPercent={onCommitPercent}
                 />
 
                 <div className="w-28 shrink-0">
@@ -576,7 +774,7 @@ function RowList({
                     <span
                       className={cn(
                         'text-sm font-semibold tabular-nums',
-                        priced ? 'text-foreground' : 'text-muted-foreground'
+                        decided ? 'text-foreground' : 'text-muted-foreground'
                       )}
                     >
                       {inScope.toFixed(2)}%
@@ -589,7 +787,7 @@ function RowList({
                     <div
                       className={cn(
                         'h-full rounded-full transition-[width] duration-300 ease-ios',
-                        priced ? 'bg-chart-1' : 'text-foreground/30'
+                        decided ? 'bg-chart-1' : 'text-foreground/30'
                       )}
                       style={{
                         width: `${bar}%`,
@@ -598,7 +796,7 @@ function RowList({
                         // that read as "done" or as a stuck progress bar; the
                         // hatch reads as "placeholder", which is what an even
                         // share is. It turns solid the moment a price decides it.
-                        ...(priced
+                        ...(decided
                           ? null
                           : {
                               backgroundImage:
@@ -619,6 +817,126 @@ function RowList({
         })}
       </div>
     </>
+  );
+}
+
+/**
+ * One box, two units, because a share and a price are the same fact.
+ *
+ * The screen used to ask for money and only money, and that is the wrong
+ * question on most of this work: a heading has a budget, and what people
+ * actually decide about the rows inside it is how much of that budget each one
+ * is. Asking for rupiah there makes somebody do the multiplication by hand and
+ * type the answer, which is a worse version of the number they already had.
+ *
+ * Both units land in columns that already exist and that `deriveWeights`
+ * already honours. A price is exact and is the row's own money; a percent is
+ * `workstep_factor`, a stated fraction of the parent's budget, which the
+ * Gundih importer has been writing since day one while no screen could.
+ *
+ * **They clear each other, on purpose.** A price wins over a stated percent
+ * inside the derivation, so a row holding both would keep taking its old price
+ * while the percent box sat there changing nothing — the field reading as
+ * broken when the stale price underneath is the actual problem. Same rule
+ * `applyProgressMethod` follows when a method change wipes the other method's
+ * evidence: a number nobody can explain later is worse than a blank.
+ *
+ * Native `<input>` and `<button>`, no Radix: this list runs to hundreds of
+ * rows and Radix costs are per mounted instance.
+ */
+type ValueMode = 'pct' | 'money';
+
+function ValueField({
+  row,
+  currency,
+  money,
+  setTyped,
+  setTypedPct,
+  onCommit,
+  onCommitPercent,
+}: {
+  row: WeightsRow;
+  currency: string;
+  /** What this row is worth right now, typed boxes included. */
+  money: number;
+  setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onCommit: (rowId: string, raw: string) => void;
+  onCommitPercent: (rowId: string, raw: string) => void;
+}) {
+  // Percent first where nothing has been decided. It is the unit this screen is
+  // for, and the one that stays true when the heading above it is repriced.
+  const [mode, setMode] = useState<ValueMode>(
+    row.percentOfParent != null ? 'pct' : row.price != null ? 'money' : 'pct'
+  );
+
+  const seededPct = row.percentOfParent != null ? String(+row.percentOfParent.toFixed(4)) : '';
+
+  // The symbol comes OUT of the formatter rather than from a second table of
+  // currencies beside it — the same reason `formatMoney` exists at all.
+  const symbol =
+    [...formatMoney(0, currency)]
+      .filter((ch) => !/[0-9]/.test(ch) && ch.trim() !== '' && ch !== '.' && ch !== ',')
+      .join('') || currency;
+
+  return (
+    <div className="mt-2 min-w-0 flex-1 sm:mt-0 sm:w-44 sm:flex-none">
+      <div className="flex items-stretch gap-2">
+        <div className="inline-flex shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/12">
+          {(['pct', 'money'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              title={m === 'pct' ? 'Give this row a share of its heading' : 'Give this row its own price'}
+              className={cn(
+                'min-h-11 min-w-9 px-2 text-sm font-semibold transition-colors duration-300 ease-ios',
+                mode === m
+                  ? 'bg-chart-1 text-white'
+                  : 'bg-background text-muted-foreground hover:bg-accent'
+              )}
+            >
+              {m === 'pct' ? '%' : symbol}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'pct' ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            defaultValue={seededPct}
+            placeholder="Share"
+            className="min-h-11 w-full min-w-0 rounded-lg bg-background px-3 text-right text-sm tabular-nums ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground focus:ring-2 focus:ring-chart-1 focus:outline-none"
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, '');
+              setTypedPct((t) => ({ ...t, [row.id]: raw }));
+            }}
+            onBlur={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, '');
+              if (raw !== seededPct) onCommitPercent(row.id, raw);
+            }}
+          />
+        ) : (
+          <MoneyInput
+            defaultValue={row.price != null ? String(row.price) : ''}
+            placeholder="Price"
+            className="min-h-11 w-full min-w-0 rounded-lg bg-background px-3 text-right text-sm tabular-nums ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground focus:ring-2 focus:ring-chart-1 focus:outline-none"
+            onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
+            onCommit={(raw) => onCommit(row.id, raw)}
+          />
+        )}
+      </div>
+
+      {/* The other unit, said back. In money mode the weight column beside this
+          one already answers it, so it would be the same number twice. */}
+      {mode === 'pct' && (
+        <p className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
+          {money > 0 ? `= ${formatMoney(money, currency)}` : 'No budget above it yet'}
+        </p>
+      )}
+    </div>
   );
 }
 

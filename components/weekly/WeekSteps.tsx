@@ -29,10 +29,20 @@ import { cn } from '@/lib/utils';
  *
  * Steps stay reachable in any order. This numbers the work, it does not gate
  * it: a wrong count must never be able to lock someone out of their own report.
+ *
+ * AN ENTRY WITHOUT A NUMBER IS NOT A STEP, and the row can carry one. Activities
+ * belongs to the PROJECT rather than to the week — prices and shares are true
+ * in week 4 and week 40 alike — so it takes no place in "first, then, then". It
+ * still belongs in this bar, because this bar is where someone looks to change
+ * screen, and a destination reachable only from a link under another page's map
+ * is a destination most people never find. It is drawn without a numeral and
+ * without a chevron, and a divider separates it from the sequence: the order is
+ * a claim about three things, and a fourth would make that claim false.
  */
 export interface WeekStep {
   key: string;
-  n: string;
+  /** Its place in the order. Absent on an entry that is a destination, not a stage. */
+  n?: string;
   label: string;
   href: string;
   /** Rendered as a pill after the label. Omitted when there is nothing to say. */
@@ -93,7 +103,7 @@ export default function WeekSteps({
                   you can swipe. The chevrons are the only thing here carrying
                   no information the numerals don't already carry, so they are
                   what goes: 1, 2, 3 states the order on its own. */}
-              {i > 0 && (
+              {i > 0 && s.n != null && steps[i - 1].n != null && (
                 <svg
                   aria-hidden
                   className="mx-0.5 hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block"
@@ -104,6 +114,11 @@ export default function WeekSteps({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
+              )}
+              {/* Where the sequence ends. A chevron here would say the row
+                  continues counting; a rule says it stopped. */}
+              {i > 0 && s.n == null && steps[i - 1].n != null && (
+                <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-foreground/15" />
               )}
               <PressLink
                 href={s.href}
@@ -126,16 +141,18 @@ export default function WeekSteps({
                 )}
               >
                 {active && <SlideTab id="week-step" className="rounded-md" />}
-                <span
-                  className={cn(
-                    'flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:size-5',
-                    active
-                      ? 'bg-foreground text-background'
-                      : 'bg-foreground/15 text-muted-foreground'
-                  )}
-                >
-                  {s.n}
-                </span>
+                {s.n != null && (
+                  <span
+                    className={cn(
+                      'flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:size-5',
+                      active
+                        ? 'bg-foreground text-background'
+                        : 'bg-foreground/15 text-muted-foreground'
+                    )}
+                  >
+                    {s.n}
+                  </span>
+                )}
                 {s.label}
                 {s.badge && (
                   <Badge

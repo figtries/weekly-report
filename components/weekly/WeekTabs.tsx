@@ -112,6 +112,13 @@ export default function WeekTabs({
     },
     // Lands on Summary, and the four sheets appear as a tab row beneath.
     { key: 'report', n: '3', label: 'Report', href: `/weekly/${selectedWeek}/summary` },
+    // NO NUMBER, because it is not a stage of the week: what an activity is
+    // worth belongs to the project and is as true in week 4 as in week 40.
+    // It is here all the same. It was left out of this bar on 13 Sep 2026,
+    // reachable only from the setup card and a quiet link under the map, and
+    // that reasoning was about not making it a fourth STEP. It skipped the
+    // question of whether people could find it at all, and they could not.
+    { key: 'weights', label: 'Activities', href: `/weekly/${selectedWeek}/weights` },
   ];
   const activeStep = onReport ? 'report' : activeTab;
 
@@ -183,15 +190,15 @@ export default function WeekTabs({
             group is justify-end, so the print button at the right edge never
             moves. */}
         <div className="col-start-2 row-start-1 flex shrink-0 flex-wrap items-center justify-end gap-2 md:col-start-3">
-          {/* ACTIVITIES IS NO LONGER A DESTINATION IN THIS HEADER. What an
-              activity is worth and how it is counted stopped being a screen on
-              13 Sep 2026: both now live in the row's own panel on Fill in, one
-              press from the map, which is what the third design of Data Overall
-              was for — three screens meant remembering which one held which
-              field. The bulk tool survives at `/weekly/[week]/weights` for the
-              afternoon when 200 prices are typed at once, reached from the
-              setup card and from a quiet link under the map. It is not worth a
-              permanent slot beside the stepper. */}
+          {/* ACTIVITIES IS BACK IN THIS HEADER, as an unnumbered entry in the
+              step row rather than as a fourth step. What an activity is worth
+              and how it is counted moved into the row's own panel on Fill in on
+              13 Sep 2026, and that is still where you change ONE of them; this
+              is the screen for the afternoon when two hundred are set at once,
+              and for seeing a heading's budget against what its rows have
+              claimed, which no per-row panel can show. Taking it out of here
+              answered "should it be a step" — it should not — but it also made
+              it unfindable, which was never the intention. */}
           {!isCurrent && !derivedCurrent && (
             <m.button {...pressMotion}
               onClick={setAsCurrent}

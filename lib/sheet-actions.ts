@@ -119,10 +119,20 @@ function checkFits(
   }
 }
 
-/** Renaming and pricing are the two writes that touch no dates at all. */
+/**
+ * Renaming, pricing and sharing out a heading: the writes that touch no dates.
+ *
+ * `percent` is the other half of `price`, and it writes the column the Gundih
+ * importer has been filling since day one while no screen could: a row states
+ * a fraction of its parent's budget instead of an amount of its own. The two
+ * are the same fact in different units, which is why they share an action and
+ * the same `syncDerivedWeights` tail — a project whose weights follow its
+ * money has to follow them here too, or a typed percent would show on this
+ * screen and nowhere else in the app.
+ */
 export async function updateRowTextAction(
   nodeId: string,
-  field: 'name' | 'price',
+  field: 'name' | 'price' | 'percent',
   value: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await beforeWrite();
@@ -131,6 +141,25 @@ export async function updateRowTextAction(
       const clean = value.trim();
       if (!clean) throw new Error('A row needs a name');
       db.update(schema.wbsNodes).set({ deskripsi: clean }).where(eq(schema.wbsNodes.id, nodeId)).run();
+    } else if (field === 'percent') {
+      const raw = value.replace(/[^0-9.]/g, '');
+      const n = raw === '' ? null : Number(raw);
+      if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a percent');
+      // OVER A HUNDRED IS ALLOWED THROUGH, and that is the decision rather than
+      // an omission. Rows claiming more than their heading holds is a real
+      // state of a real plan — Gundih has headings handed out at 140% — and the
+      // screen's job is to SAY SO, not to refuse the keystroke that reveals it.
+      // Refusing here would only push the person into typing 99 and calling it
+      // done. The absurd is still stopped, because a percent in the thousands
+      // is a slipped decimal rather than an opinion.
+      if (n !== null && n > 1000) throw new Error('A percent that large is a typo');
+      db
+        .update(schema.wbsNodes)
+        .set({ workstepFactor: n === null ? null : n / 100 })
+        .where(eq(schema.wbsNodes.id, nodeId))
+        .run();
+      const projectId = projectOfNode(nodeId);
+      if (projectId) syncDerivedWeights(projectId);
     } else {
       // A BRANCH MAY BE PRICED, and forbidding it was a contradiction this app
       // held against itself: `lib/weights.ts` is built on a branch price being
