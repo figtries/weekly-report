@@ -208,6 +208,30 @@ logistic, so an item lands on exactly 1.0 at its finish week; a curve that
 asymptotes leaves every item at 99.x% forever and leaks a permanent phantom
 deviation into the project total.
 
+**The week grid is the project's dates read a second way, and it follows them.**
+`weekRowsFor` in `lib/week-grid.ts` cuts seven-day blocks from the start date
+and clips the last one at the finish. It used to run ONCE, at creation, and
+editing the start date afterwards only wrote the column — so PHSS Samberah,
+whose start was typed 26 Dec 25 against a plan whose weeks run from Monday
+29 Dec, had every week end three days early for its whole life, with nothing on
+any screen able to move it. It cost 0.24 points of plan on week 36 and
+something on every week. `relayWeeks` re-lays the grid on any date edit,
+matching weeks by NUMBER so week 36 stays week 36 and keeps everything recorded
+against it. **A surplus week is only dropped if nothing was ever recorded
+against it** — `leaf_progress`, `milestone_progress` and `approvals` all cascade
+from `weeks`, and shortening a project is not a reason to destroy a signed
+approval.
+
+**`weekAnchorEndDate` is WEEK ONE'S END**, because every reader computes
+`anchor + (n - 1) weeks` from it. `lib/dashboard-db.ts` handed over the LAST
+week's end instead, so every period label in the app and on all five printed
+sheets sat (weeks - 1) weeks in the future: a 72-week project showed week 36 as
+"08 Jan – 14 Jan 2028" where the client's own signed report says 31 Aug –
+06 Sep 2026. The figures were never affected — `targetWF` reads each week row's
+own `endDate` — which is exactly why it survived so long. db.json has always
+stored week 1's end here (Gundih's `2025-10-30` is `weeks[0].periodEnd`), and
+that agreement is what keeps the two stores printing the same header.
+
 **A project's INITIAL is three letters, and it is stored in `projects.alias`.**
 `deriveInitial` in `lib/initial.ts` guesses it from the name: initials of the
 first three significant words, or for a one- or two-word name its first letter
@@ -629,6 +653,22 @@ leaf dan basi begitu ada yang di-indent ke bawahnya; `renumber()` di
 `lib/sheet-structure.ts` — satu-satunya jalan yang dilewati setiap perubahan
 struktur — sekarang menghapusnya, dan salinan renumber di `lib/paste-actions.ts`
 melakukan hal yang sama.
+
+**Paket menutupi apa pun yang ada di dalamnya, di kotak TERSIMPAN dan bukan
+cuma di layar.** Sebuah cabang menggambar kotaknya sendiri yang dilebarkan oleh
+anak-anaknya (`rowSpan`), sementara pagarnya membaca kotaknya saja (`boxAt`).
+Tidak ada yang menjaga keduanya sejalan: tanggal yang DIKETIK dipagari, tapi
+indent, drag dan tempel tidak pernah melihat tanggal paketnya sama sekali. Jadi
+sebuah paket bisa memegang kotak satu hari dengan pekerjaan berbulan-bulan di
+dalamnya, lalu setiap tanggal di bawahnya ditolak dengan menyebut rentang yang
+tidak muncul di layar mana pun — Engineering di PHSS Samberah tersimpan 30 Des
+25 sampai 30 Des 25, tergambar 30 Des 25 sampai 08 Nov 26, dan kedua barisnya
+beku permanen (14 Sep 2026). `coverChildren` di `lib/sheet.ts` menyusulkan kotak
+tersimpan ke bar yang sudah tergambar; dia hanya MELEBARKAN, karena kotaknya
+sendiri ikut jadi bahan min/max, jadi apa pun yang diketik orang selamat.
+Dipanggil dari `renumber()` (kedua salinannya) dan sekali lagi di
+`updateRowDatesAction` sebelum pagar diperiksa — pagar yang sudah bocor bukan
+pagar, dan rencana yang dibuat sebelum aturan ini ada hanya bisa lepas di situ.
 
 Papan ini disusun ulang 27 Agustus 2026 setelah data sumber dibaca baris demi
 baris. Rencana lengkapnya — alasan tiap urutan, tujuh belas temuan pada workbook

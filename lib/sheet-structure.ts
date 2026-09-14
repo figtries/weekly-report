@@ -13,7 +13,7 @@ import {
   schema,
   sqlite,
 } from './sqlite';
-import { boxAt, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
+import { boxAt, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
 import { syncDerivedWeights } from './weights-auto';
 
 /**
@@ -191,6 +191,13 @@ function renumber(projectId: string, tx: Writer = db) {
       .where(eq(schema.wbsNodes.id, f.id))
       .run();
   }
+
+  // AND THE PACKAGES COVER WHAT IS NOW INSIDE THEM. Indent, outdent, drag and
+  // delete all change what a package holds, and none of them ever looked at
+  // its dates — which is how a package came to hold a one-day box with months
+  // of work inside it and froze every date under it. See `coverChildren`.
+  const baselineId = getActiveBaselineId(projectId);
+  if (baselineId) coverChildren(projectId, baselineId, tx);
 
   // AND THE WEIGHTS, because this pass is what decides which rows are leaves.
   // Indenting a row makes its parent a branch and the parent's weight belongs

@@ -11,6 +11,7 @@ import { isKnownCurrency } from './currency';
 import { deriveInitial, INITIAL_LENGTH } from './initial';
 import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
+import { relayWeeks, weekRowsFor } from './week-grid';
 
 /**
  * Projects — the writes.
@@ -39,15 +40,10 @@ function fail(err: unknown): { ok: false; error: string } {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const MS_PER_DAY = 86_400_000;
 
 function utc(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);
   return Date.UTC(y, m - 1, d);
-}
-
-function iso(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
 }
 
 function touch(projectId: string) {
@@ -66,36 +62,6 @@ async function revalidateEverything() {
   // still in flight is a redirect landing on a project the next lambda has
   // never heard of. No store attached, no wait — the call returns at once.
   await flushDbSnapshot();
-}
-
-/**
- * Seven-day blocks from the project start, the last one clipped at the finish.
- *
- * Gundih's weeks end on a Thursday because its reporting week does; that is a
- * per-project agreement nobody has been asked for yet, so a new project gets
- * the one rule that needs no answer — week 1 starts the day the project does.
- */
-function weekRowsFor(projectId: string, startDate: string, finishDate: string) {
-  const start = utc(startDate);
-  const finish = utc(finishDate);
-  const rows: { id: string; projectId: string; weekNo: number; startDate: string; endDate: string }[] = [];
-  let cursor = start;
-  let n = 1;
-  // 20 years of weeks is far past any EPC contract and stops a typo'd century
-  // from trying to write a million rows.
-  while (cursor <= finish && n <= 1040) {
-    const end = Math.min(cursor + 6 * MS_PER_DAY, finish);
-    rows.push({
-      id: `${projectId}:W${n}`,
-      projectId,
-      weekNo: n,
-      startDate: iso(cursor),
-      endDate: iso(end),
-    });
-    cursor = end + MS_PER_DAY;
-    n += 1;
-  }
-  return rows;
 }
 
 export async function createProjectAction(input: {
@@ -423,6 +389,8 @@ export async function updateProjectFieldAction(
       .set({ [field]: next, updatedAt: new Date().toISOString() })
       .where(eq(schema.projects.id, projectId))
       .run();
+    // The weeks are the dates read a second way, so they move with them.
+    if (field === 'startDate' || field === 'finishDate') relayWeeks(projectId);
     await revalidateEverything();
     return { ok: true, id: projectId };
   } catch (e) {

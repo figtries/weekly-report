@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { beforeWrite, db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
-import { boxAbove, getActiveBaselineId, rowSpan } from './sheet';
+import { boxAbove, coverChildren, getActiveBaselineId, rowSpan } from './sheet';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
 import { projectOfNode, syncDerivedWeights } from './weights-auto';
 
@@ -278,6 +278,13 @@ export async function updateRowDatesAction(
       finish = value;
       duration = inclusiveDays(start, finish);
     }
+
+    // A fence that is already broken is not a fence. Packages catch up to what
+    // they are drawn holding first, so the box this refuses against is the one
+    // on screen — a plan built before `coverChildren` existed has branches
+    // whose stored box lost touch with their children, and every date under
+    // such a branch was refused against a range nobody could see or reach.
+    coverChildren(node.projectId, baselineId);
 
     // The fence, in both directions, BEFORE anything is written.
     if (start && finish) checkFits(nodeId, baselineId, start, finish);

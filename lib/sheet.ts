@@ -206,6 +206,95 @@ export function boxAt(nodeId: string, baselineId: string): Box | null {
   return null;
 }
 
+/**
+ * A PACKAGE COVERS WHAT IS INSIDE IT, in the stored box and not only on screen.
+ *
+ * A branch draws its own box widened to its children (`rowSpan`), but the fence
+ * reads the box alone (`boxAt`). Nothing kept the two in step: a date typed on
+ * a row is fenced, while INDENTING a row into a package, dragging one in or
+ * pasting a block never looked at the package's dates at all. So a package
+ * could end up holding a one-day box with months of work inside it, and then
+ * every date under it was refused against a range that appears nowhere on
+ * screen — reported 14 Sep 2026 on Engineering, stored 30 Dec 25 to 30 Dec 25,
+ * drawn 30 Dec 25 to 08 Nov 26, and its two lines frozen for good.
+ *
+ * So the stored box catches up to the bar that is already drawn. It only ever
+ * WIDENS: the box is one of the values the span is taken from, so a package
+ * can never be narrowed onto its children by this, and what somebody typed
+ * survives being widened around. Moving work into a package extends the
+ * package; typing a date is still a promise the fence keeps, unchanged.
+ *
+ * Deepest first — `order` is a depth-first sequence, so walking it backwards
+ * reaches every child before its parent and a grandchild carries all the way
+ * up. Returns how many boxes moved, which is what the verify script asserts.
+ */
+export function coverChildren(
+  projectId: string,
+  baselineId: string,
+  tx: Pick<typeof db, 'update'> = db
+): number {
+  const nodes = db
+    .select({ id: schema.wbsNodes.id, parentId: schema.wbsNodes.parentId })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.projectId, projectId))
+    .orderBy(asc(schema.wbsNodes.order))
+    .all();
+  if (!nodes.length) return 0;
+
+  const own = new Map<string, { start: string; finish: string }>();
+  for (const s of db
+    .select({
+      nodeId: schema.nodeSchedules.nodeId,
+      start: schema.nodeSchedules.startDate,
+      finish: schema.nodeSchedules.finishDate,
+    })
+    .from(schema.nodeSchedules)
+    .where(eq(schema.nodeSchedules.baselineId, baselineId))
+    .all()) {
+    if (s.start && s.finish) own.set(s.nodeId, { start: s.start, finish: s.finish });
+  }
+
+  const kids = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (!n.parentId) continue;
+    const list = kids.get(n.parentId);
+    if (list) list.push(n.id);
+    else kids.set(n.parentId, [n.id]);
+  }
+
+  const span = new Map<string, { start: string; finish: string }>();
+  let widened = 0;
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const id = nodes[i].id;
+    const box = own.get(id) ?? null;
+    let start: string | null = box?.start ?? null;
+    let finish: string | null = box?.finish ?? null;
+    for (const kid of kids.get(id) ?? []) {
+      const s = span.get(kid);
+      if (!s) continue;
+      if (!start || s.start < start) start = s.start;
+      if (!finish || s.finish > finish) finish = s.finish;
+    }
+    if (start && finish) span.set(id, { start, finish });
+    // A branch with no box of its own has nothing to widen: it already shows
+    // its children's span and fences nothing. Leave it that way.
+    if (!box || !start || !finish) continue;
+    if (start === box.start && finish === box.finish) continue;
+    tx.update(schema.nodeSchedules)
+      .set({ startDate: start, finishDate: finish, durationDays: inclusiveDays(start, finish) })
+      .where(
+        and(
+          eq(schema.nodeSchedules.baselineId, baselineId),
+          eq(schema.nodeSchedules.nodeId, id)
+        )
+      )
+      .run();
+    own.set(id, { start, finish });
+    widened += 1;
+  }
+  return widened;
+}
+
 /** The same fence, for a row that is not allowed to be its own. */
 export function boxAbove(nodeId: string, baselineId: string): Box | null {
   const parentId = nodeHead(nodeId)?.parentId ?? null;

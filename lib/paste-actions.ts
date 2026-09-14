@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { eq } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema, sqlite } from './sqlite';
-import { getActiveBaselineId } from './sheet';
+import { coverChildren, getActiveBaselineId } from './sheet';
 import { syncDerivedWeights } from './weights-auto';
 import { completeDates, parsePaste, type ParseResult } from './paste';
 
@@ -282,4 +282,8 @@ function renumberProject(projectId: string, tx: Writer) {
       .where(eq(schema.wbsNodes.id, f.id))
       .run();
   }
+
+  // And the same rule again: a package covers what the paste put inside it.
+  const baselineId = getActiveBaselineId(projectId);
+  if (baselineId) coverChildren(projectId, baselineId, tx);
 }

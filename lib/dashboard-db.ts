@@ -272,7 +272,16 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
       company: project.contractorName ?? '',
       name: '',
     },
-    weekAnchorEndDate: weekRows.length ? weekRows[weekRows.length - 1].endDate : '',
+    // THE ANCHOR IS WEEK ONE'S END, and every reader treats it as one:
+    // `weekEndDate(anchor, n)` is `anchor + (n - 1) weeks`. This handed over
+    // the LAST week's end instead, so every period label in the app and on all
+    // five printed sheets was (weeks - 1) weeks into the future — a 72-week
+    // project showed week 36 as "08 Jan – 14 Jan 2028" where the client's own
+    // report said 31 Aug – 06 Sep 2026 (14 Sep 2026). The figures were never
+    // wrong: `targetWF` above reads each week row's own `endDate`.
+    // db.json's side has always stored week 1's end here — Gundih's 2025-10-30
+    // is `weeks[0].periodEnd` — which is what makes the two stores agree.
+    weekAnchorEndDate: weekRows.length ? weekRows[0].endDate : '',
     currentWeek,
     contractValue: project.contractValue ?? undefined,
   };
