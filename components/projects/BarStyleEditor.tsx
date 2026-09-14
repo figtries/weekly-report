@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowDown, ArrowUp, Check as CheckIcon, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check as CheckIcon, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 
 import { MOTION } from '@/lib/design';
 import {
@@ -73,6 +73,38 @@ export default function BarStyleEditor({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  /**
+   * The list as this dialog is showing it, which is ahead of the server's.
+   *
+   * Every select here was driven straight off the props, so picking a colour
+   * changed nothing on screen until a server action AND the page refresh behind
+   * it had both come back — the dropdown sat on its old value for the best part
+   * of a second and the whole dialog went disabled while it waited. Reported as
+   * "ganti-ganti warnanya ngeleg banget" on 14 Sep 2026.
+   *
+   * The prop is adopted whenever nothing of ours is in the air. A change the
+   * server refuses is therefore put right by the refresh that follows it,
+   * without this component having to remember what it looked like before.
+   */
+  const [local, setLocal] = useState<{ list: BarStyle[]; source: 'custom' | BarPreset }>({
+    list: styles,
+    source,
+  });
+  const inFlight = useRef(0);
+  useEffect(() => {
+    if (inFlight.current === 0) setLocal({ list: styles, source });
+  }, [styles, source]);
+
+  /**
+   * Structural writes — add, move, delete, and switching lists. They keep the
+   * old shape: awaited, and the buttons disabled while they run.
+   *
+   * That is not laziness. A rule on a list that is still one of the READY-MADE
+   * ones has no row of its own yet; `resolveId` on the server finds it by its
+   * POSITION in the preset. Reordering or deleting optimistically would leave
+   * this dialog holding preset ids whose positions no longer mean what they
+   * meant, and the next edit would quietly land on the wrong rule.
+   */
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setError(null);
     startTransition(async () => {
@@ -85,8 +117,40 @@ export default function BarStyleEditor({
     });
   };
 
-  const patch = (id: string, p: Parameters<typeof updateBarStyleAction>[2]) =>
-    run(() => updateBarStyleAction(projectId, id, p));
+  /**
+   * One rule's fields, drawn at once and sent behind the screen.
+   *
+   * Serialised rather than fired in parallel: the first edit to a ready-made
+   * list COPIES it, and two copies racing is not a thing worth finding out
+   * about. `onChanged` waits for the whole burst rather than firing per field,
+   * because it costs the sheet a full re-read each time.
+   */
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const patch = (id: string, p: Parameters<typeof updateBarStyleAction>[2]) => {
+    setError(null);
+    setLocal((l) => ({
+      // Editing a line makes the list this project's own; the server does the
+      // same thing, and the choice above should not lag a field below it.
+      source: 'custom',
+      list: l.list.map((s) => (s.id === id ? { ...s, ...p } : s)),
+    }));
+    inFlight.current += 1;
+    startTransition(async () => {
+      const job = chain.current.then(
+        () => updateBarStyleAction(projectId, id, p),
+        () => updateBarStyleAction(projectId, id, p)
+      );
+      chain.current = job.then(
+        () => undefined,
+        () => undefined
+      );
+      const res = await job.catch(() => ({ ok: false, error: 'Something went wrong' }));
+      inFlight.current -= 1;
+      if (!res.ok) setError(res.error ?? 'Something went wrong');
+      // One refresh for a burst, once the last of it has landed.
+      if (inFlight.current === 0) onChanged();
+    });
+  };
 
   if (!mounted) return null;
 
@@ -99,7 +163,7 @@ export default function BarStyleEditor({
           exit={{ opacity: 0 }}
           transition={{ duration: MOTION.duration, ease: MOTION.ease }}
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-          onClick={() => !pending && onClose()}
+          onClick={onClose}
         >
           <m.div
             initial={{ opacity: 0, y: 12 }}
@@ -110,10 +174,26 @@ export default function BarStyleEditor({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 border-b p-4">
-              <h2 className="text-sm font-semibold">Bar styles</h2>
+              {/* A WAY OUT THAT IS ALWAYS THERE.
+                  Done at the foot of a list this long is below the fold on a
+                  phone, and the backdrop is a target you have to know about.
+                  There is nothing to cancel — every line is saved as it is
+                  changed — so this says Close and not Cancel, and "Let the app
+                  choose" at the foot is what undoes a list you regret. */}
+              <div className="flex items-start gap-2">
+                <h2 className="flex-1 text-sm font-semibold">Bar styles</h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="-mr-1 -mt-1 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 What the colours on the timeline mean. Pick one of the two ready-made answers, or
-                write your own list.
+                write your own list. Everything here is saved as you change it.
               </p>
 
               {/* The choice comes FIRST, because "why is everything a different
@@ -123,7 +203,7 @@ export default function BarStyleEditor({
                 {PRESETS.map((preset) => (
                   <Choice
                     key={preset.key}
-                    active={source === preset.key}
+                    active={local.source === preset.key}
                     disabled={pending}
                     title={preset.label}
                     help={preset.help}
@@ -131,7 +211,7 @@ export default function BarStyleEditor({
                   />
                 ))}
                 <Choice
-                  active={source === 'custom'}
+                  active={local.source === 'custom'}
                   disabled={pending}
                   title="My own rules"
                   help="Start from whichever list is showing and change it line by line."
@@ -139,7 +219,7 @@ export default function BarStyleEditor({
                 />
               </div>
 
-              {auto && (
+              {auto && local.source !== 'custom' && (
                 <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                   Chosen from the plan itself:{' '}
                   <strong className="font-medium text-foreground">
@@ -162,13 +242,13 @@ export default function BarStyleEditor({
             </div>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-auto p-4">
-              {source !== 'custom' && (
+              {local.source !== 'custom' && (
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
                   Read down the list; the first line that describes a bar is the one that draws it.
                   Changing anything here makes this list the project&apos;s own.
                 </p>
               )}
-              {styles.map((s, i) => {
+              {local.list.map((s, i) => {
                 const cond = CONDITIONS.find((c) => c.key === s.condition);
                 return (
                   <div
@@ -199,7 +279,7 @@ export default function BarStyleEditor({
                       </button>
                       <button
                         type="button"
-                        disabled={pending || i === styles.length - 1}
+                        disabled={pending || i === local.list.length - 1}
                         onClick={() => run(() => moveBarStyleAction(projectId, s.id, 'down'))}
                         aria-label="Move down"
                         className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted disabled:opacity-30"
@@ -335,7 +415,7 @@ export default function BarStyleEditor({
                 <Plus className="size-4" />
                 Add a rule
               </button>
-              {(source === 'custom' || !auto) && (
+              {(local.source === 'custom' || !auto) && (
                 <button
                   type="button"
                   disabled={pending}
