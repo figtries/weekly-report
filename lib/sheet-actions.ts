@@ -25,6 +25,13 @@ import { projectOfNode, syncDerivedWeights } from './weights-auto';
  * that slips takes just as long as it always did — holding the finish would
  * silently compress the job instead.
  *
+ * ONE EXCEPTION, and it is about not painting somebody into a corner: when
+ * holding the duration would push the finish outside the fence and the row fits
+ * perfectly well where it already ends, the finish is held and the duration
+ * gives way. Without it, moving a line INSIDE its own package took two edits in
+ * one particular order and the refusal said nothing about which — see the
+ * `start` branch.
+ *
  * **A summary row's dates are its BOX, and everything under it has to fit.**
  * Summary rows used to refuse date writes outright, on MS Project's reasoning
  * that a parent spans its children by definition. On this kind of plan the
@@ -91,17 +98,15 @@ function human(iso: string): string {
  * `node_schedules`: a branch with no dates of its own shows its children's, and
  * a fence it does not draw is not a fence.
  */
-function checkFits(
+function whyNotFits(
   nodeId: string,
   baselineId: string,
   start: string,
   finish: string
-): void {
+): string | null {
   const box = boxAbove(nodeId, baselineId);
   if (box && (start < box.start || finish > box.finish)) {
-    throw new Error(
-      `${box.name} runs ${human(box.start)} to ${human(box.finish)} — this row has to sit inside it`
-    );
+    return `${box.name} runs ${human(box.start)} to ${human(box.finish)} — this row has to sit inside it`;
   }
   const kids = db
     .select({ id: schema.wbsNodes.id, name: schema.wbsNodes.deskripsi })
@@ -112,11 +117,15 @@ function checkFits(
     const s = rowSpan(k.id, baselineId);
     if (!s) continue;
     if (s.start < start || s.finish > finish) {
-      throw new Error(
-        `${k.name} runs ${human(s.start)} to ${human(s.finish)}, outside those dates — move it first`
-      );
+      return `${k.name} runs ${human(s.start)} to ${human(s.finish)}, outside those dates — move it first`;
     }
   }
+  return null;
+}
+
+function checkFits(nodeId: string, baselineId: string, start: string, finish: string): void {
+  const why = whyNotFits(nodeId, baselineId, start, finish);
+  if (why) throw new Error(why);
 }
 
 /**
@@ -240,6 +249,14 @@ export async function updateRowDatesAction(
     const baselineId = getActiveBaselineId(node.projectId);
     if (!baselineId) throw new Error('This project has no schedule yet');
 
+    // A fence that is already broken is not a fence. Packages catch up to what
+    // they are drawn holding FIRST — before anything below is read — so every
+    // box this row is measured against is the one on screen. A plan built
+    // before `coverChildren` existed has branches whose stored box lost touch
+    // with their children, and every date under such a branch was refused
+    // against a range nobody could see or reach.
+    coverChildren(node.projectId, baselineId);
+
     const current = db
       .select()
       .from(schema.nodeSchedules)
@@ -267,10 +284,41 @@ export async function updateRowDatesAction(
       if (duration === 0) finish = start;
     } else if (edited === 'start') {
       if (!ISO.test(value)) throw new Error('That is not a date');
+      const heldFinish = finish;
       start = value;
       const keep = duration && duration > 0 ? duration : 1;
       finish = addDays(start, keep - 1);
       duration = keep;
+
+      /**
+       * HOLDING THE DURATION IS THE FIRST READING, NOT THE ONLY ONE.
+       *
+       * Moving a row INSIDE its package took two edits and only one order of
+       * the two worked, which nobody can be expected to know. Engineering by
+       * Solar had to go from 09 Feb – 17 May 26 to 28 Sep – 25 Oct 26 inside a
+       * package ending 08 Nov 26. Typing the finish first was taken (the row
+       * became 259 days), and then typing the start dragged that duration to
+       * June 2027 and was refused; typing the start first dragged the old 98
+       * days to January 2027 and was refused too. Only duration-then-start got
+       * there, and the refusal said nothing about that (14 Sep 2026).
+       *
+       * So when holding the duration would push the finish out of the fence,
+       * and the row fits perfectly well where it already ends, the finish is
+       * held instead and the duration is what moves. NOTHING TYPED IS CHANGED:
+       * the start is taken exactly as given, and the value that gives way is
+       * the derived one — the same trade the FINISH column already makes. A
+       * start that does not fit on its own is still refused, by name.
+       */
+      if (
+        heldFinish &&
+        finish > heldFinish &&
+        start <= heldFinish &&
+        whyNotFits(nodeId, baselineId, start, finish) &&
+        !whyNotFits(nodeId, baselineId, start, heldFinish)
+      ) {
+        finish = heldFinish;
+        duration = inclusiveDays(start, finish);
+      }
     } else {
       if (!ISO.test(value)) throw new Error('That is not a date');
       if (!start) throw new Error('Give the row a start date first');
@@ -278,13 +326,6 @@ export async function updateRowDatesAction(
       finish = value;
       duration = inclusiveDays(start, finish);
     }
-
-    // A fence that is already broken is not a fence. Packages catch up to what
-    // they are drawn holding first, so the box this refuses against is the one
-    // on screen — a plan built before `coverChildren` existed has branches
-    // whose stored box lost touch with their children, and every date under
-    // such a branch was refused against a range nobody could see or reach.
-    coverChildren(node.projectId, baselineId);
 
     // The fence, in both directions, BEFORE anything is written.
     if (start && finish) checkFits(nodeId, baselineId, start, finish);

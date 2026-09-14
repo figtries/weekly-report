@@ -239,7 +239,37 @@ say(
   `kept     the package kept its finish (${await cell(pkg, COL.finish)})`
 );
 
-/* ── 5. And it all survives a reload ─────────────────────────────────────── */
+/* ── 5. A row can be MOVED inside its package, in one edit ───────────────── */
+//
+// Moving a line inside its package took two edits and only one order of the two
+// worked. Engineering by Solar had to go from 09 Feb – 17 May 26 to 28 Sep –
+// 25 Oct 26 inside a package ending 08 Nov 26: typing the finish first was
+// taken (the row became 259 days), then typing the start dragged that duration
+// into June 2027 and was refused, and starting the other way round dragged the
+// old 98 days into January 2027 and was refused too. Only duration-then-start
+// reached it, and nothing said so (14 Sep 2026).
+//
+// So when holding the duration would push the finish out of the fence and the
+// row fits where it already ends, the FINISH is held and the duration gives
+// way. The start is taken exactly as typed either way.
+await typeCell(kid, COL.start, PKG_START);
+await typeCell(kid, COL.finish, PKG_FINISH);
+say(
+  (await cell(kid, COL.start)) === SHOWN_START && (await cell(kid, COL.finish)) === SHOWN_FINISH,
+  `fills    the row is stretched to fill its package (${await cell(kid, COL.duration)})`
+);
+await typeCell(kid, COL.start, '2026-06-01');
+const movedErr = await errorText();
+say(
+  (await cell(kid, COL.start)) === '01 Jun 26',
+  `move     the start was taken as typed (${await cell(kid, COL.start)}${movedErr ? ` — ${movedErr}` : ''})`
+);
+say(
+  (await cell(kid, COL.finish)) === SHOWN_FINISH,
+  `held     the finish held instead of being dragged past the package (${await cell(kid, COL.finish)})`
+);
+
+/* ── 6. And it all survives a reload ─────────────────────────────────────── */
 await page.reload({ waitUntil: 'networkidle0', timeout: 90_000 });
 await page.waitForSelector(ROW, { timeout: 30_000 });
 say(
