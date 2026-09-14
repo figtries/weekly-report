@@ -136,7 +136,7 @@ export default function OverallMap({
       <div className="border-b border-border p-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-[15px] font-semibold text-foreground">
               {!map.hasSchedule
                 ? 'No schedule yet, so nothing is due'
                 : map.due === 0
@@ -145,15 +145,17 @@ export default function OverallMap({
                     ? `This week · all ${map.due} filled in`
                     : `This week · ${map.filled} of ${map.due} filled in`}
             </p>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <m.div
-                className="h-full origin-left rounded-full bg-ok"
-                initial={false}
-                animate={{ scaleX: map.due > 0 ? Math.min(1, map.filled / map.due) : 0 }}
-                transition={MOTION.spring}
-                style={{ width: '100%' }}
-              />
-            </div>
+            {map.due > 0 && (
+              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-foreground/8">
+                <m.div
+                  className="h-full origin-left rounded-full bg-ok"
+                  initial={false}
+                  animate={{ scaleX: Math.min(1, map.filled / map.due) }}
+                  transition={MOTION.spring}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
           </div>
           {map.due > 0 && (
             <m.button
@@ -173,8 +175,8 @@ export default function OverallMap({
         </div>
 
         {map.stuck > 0 && (
-          <p className="mt-3 text-[13px] text-muted-foreground">
-            <span className="font-medium text-warn">{map.stuck} activities</span> are past their
+          <p className="mt-3 text-sm text-muted-foreground">
+            <span className="font-semibold text-warn">{map.stuck} activities</span> are past their
             finish week and still short.{' '}
             <a href={checkHref} className="font-medium text-chart-1 hover:underline">
               See them on Check
@@ -218,12 +220,36 @@ export default function OverallMap({
           together is still here — it just stopped being a destination in the
           header, which is what made Data Overall three screens to remember. */}
       {weightsHref && (
-        <div className="border-t border-border px-4 py-3">
+        <div className="border-t border-border p-3">
           <a
             href={weightsHref}
-            className="inline-flex min-h-11 items-center text-[13px] font-medium text-muted-foreground transition-colors duration-200 ease-ios hover:text-chart-1"
+            className="flex min-h-12 items-center gap-2.5 rounded-xl px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
           >
-            Prices and measures for every activity, together
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-chart-1/10 text-chart-1">
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">Prices and measures for every activity, together</span>
+            <svg
+              className="h-[18px] w-[18px] shrink-0 text-foreground/35"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M7.5 4.5l6 5.5-6 5.5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </a>
         </div>
       )}
@@ -310,10 +336,10 @@ const Row = memo(function Row({
       onClick={onPress}
       aria-expanded={isBranch ? !!open : undefined}
       className={cn(
-        'relative flex w-full items-start gap-2.5 py-3 pr-3 text-left transition-colors duration-200 ease-ios hover:bg-muted/40',
+        'relative flex w-full items-start gap-3 py-3.5 pr-4 text-left transition-colors duration-200 ease-ios hover:bg-muted/40',
         INDENT[Math.min(node.depth, INDENT.length - 1)],
         !first && 'border-t border-border/70',
-        node.kind === 'unit' && 'py-4',
+        node.kind === 'unit' && 'py-5',
         !isBranch && 'animate-fade-in-up'
       )}
     >
@@ -327,21 +353,21 @@ const Row = memo(function Row({
           // Softened on purpose. At full strength a project that is behind
           // paints a solid stripe down the left of every row, and a warning
           // shown on all two hundred rows is wallpaper rather than a warning.
-          'absolute top-2.5 bottom-2.5 w-[3px] rounded-full opacity-60',
+          'absolute top-3 bottom-3 w-[3.5px] rounded-full opacity-70',
           RAIL[Math.min(node.depth, RAIL.length - 1)],
           verdictFill[verdict]
         )}
       />
 
-      <span className="mt-0.5 w-4 shrink-0 text-muted-foreground">
+      <span className="mt-px w-[18px] shrink-0 text-foreground/45">
         {isBranch && (
           <m.span
             className="block"
             animate={{ rotate: open ? 90 : 0 }}
             transition={{ duration: MOTION.duration, ease: [...MOTION.ease] }}
           >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M7.5 4.5l6 5.5-6 5.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            <svg className="h-[18px] w-[18px]" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M7.5 4.5l6 5.5-6 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </m.span>
         )}
@@ -353,7 +379,11 @@ const Row = memo(function Row({
           <span
             className={cn(
               'min-w-0 flex-1 leading-snug text-foreground',
-              node.kind === 'unit' ? 'text-[15px] font-semibold' : 'text-sm'
+              node.kind === 'unit'
+                ? 'text-base font-semibold'
+                : node.kind === 'group'
+                  ? 'text-[15px] font-medium'
+                  : 'text-[14.5px]'
             )}
           >
             {name}
@@ -362,11 +392,16 @@ const Row = memo(function Row({
             {/* One decimal, not two. Two is a spreadsheet's precision and the
                 reason a wall of rows reads as a ledger; the exact figure is in
                 the panel and in the report. */}
-            <span className="block text-sm font-semibold tabular-nums text-foreground">
+            <span
+              className={cn(
+                'block font-semibold tabular-nums text-foreground',
+                node.kind === 'unit' ? 'text-lg' : 'text-base'
+              )}
+            >
               <AnimatedNumber value={node.actualPct} decimals={1} suffix="%" />
             </span>
             {node.weekPct > 0.004 && (
-              <span className="block text-[11px] font-medium tabular-nums text-ok">
+              <span className="block text-xs font-semibold tabular-nums text-ok">
                 +{fmt1(node.weekPct)}
               </span>
             )}
@@ -375,11 +410,11 @@ const Row = memo(function Row({
 
         <Bar actual={node.actualPct} plan={node.planPct} thick={node.kind === 'unit'} />
 
-        <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-muted-foreground">
           {node.dueCount > 0 && node.kind === 'leaf' && (
             <span
               className={cn(
-                'rounded-md px-1.5 py-0.5 font-medium',
+                'rounded-full px-2 py-0.5 font-semibold',
                 node.filledCount ? 'bg-ok-soft text-ok' : 'bg-chart-1/10 text-chart-1'
               )}
             >
@@ -389,17 +424,32 @@ const Row = memo(function Row({
           {isBranch && (
             <span className="tabular-nums">
               {node.leafCount} {node.leafCount === 1 ? 'activity' : 'activities'} · weight{' '}
-              {fmt2(node.weight)}%
+              <span className="font-semibold text-foreground/70">{fmt2(node.weight)}%</span>
               {node.dueCount > 0 && ` · ${node.dueCount} due`}
             </span>
           )}
           {node.kind === 'leaf' && (
             <span className="tabular-nums">
-              {node.method === 'qty'
-                ? `${(node.qtyDone ?? 0).toLocaleString('en-GB')} of ${(node.qtyTotal ?? 0).toLocaleString('en-GB')} ${node.unit ?? ''}`
-                : node.method === 'milestone'
-                  ? `${(node.milestones ?? []).filter((s) => s.done).length} of ${(node.milestones ?? []).length} steps`
-                  : `weight ${fmt2(node.weight)}%`}
+              {node.method === 'qty' ? (
+                <>
+                  <span className="font-semibold text-foreground/70">
+                    {(node.qtyDone ?? 0).toLocaleString('en-GB')}
+                  </span>{' '}
+                  of {(node.qtyTotal ?? 0).toLocaleString('en-GB')} {node.unit ?? ''}
+                </>
+              ) : node.method === 'milestone' ? (
+                <>
+                  <span className="font-semibold text-foreground/70">
+                    {(node.milestones ?? []).filter((s) => s.done).length}
+                  </span>{' '}
+                  of {(node.milestones ?? []).length} steps
+                </>
+              ) : (
+                <>
+                  weight{' '}
+                  <span className="font-semibold text-foreground/70">{fmt2(node.weight)}%</span>
+                </>
+              )}
             </span>
           )}
         </span>
@@ -424,8 +474,8 @@ function Bar({ actual, plan, thick }: { actual: number; plan: number; thick?: bo
   return (
     <span
       className={cn(
-        'relative mt-2 block w-full overflow-hidden rounded-full bg-muted',
-        thick ? 'h-2' : 'h-1.5'
+        'relative mt-2.5 block w-full overflow-hidden rounded-full bg-foreground/8',
+        thick ? 'h-2.5' : 'h-2'
       )}
     >
       <m.span
@@ -437,8 +487,8 @@ function Bar({ actual, plan, thick }: { actual: number; plan: number; thick?: bo
       {p > 0 && (
         <span
           aria-hidden="true"
-          className="absolute inset-y-0 w-[2px] rounded-full bg-chart-2"
-          style={{ left: `calc(${Math.min(99.5, p)}% - 1px)` }}
+          className="absolute inset-y-0 w-[3px] rounded-full bg-chart-2 ring-1 ring-card"
+          style={{ left: `calc(${Math.min(99.5, p)}% - 1.5px)` }}
         />
       )}
     </span>
