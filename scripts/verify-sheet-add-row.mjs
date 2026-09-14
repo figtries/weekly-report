@@ -22,6 +22,12 @@
  * So this presses Add row FOUR TIMES as fast as it can and then checks the
  * database, and it types a name into a row that is still arriving.
  *
+ * And Enter COMMITS THE NAME AND STOPS. The first fix for (3) had it add the
+ * next row as well, the way an outliner does; that lasted a day — "pas diketik
+ * enter malah gabisa, malah buka row baru" — because a key people press to mean
+ * "that is the name" was also leaving a row behind to delete. Enter on a
+ * SELECTED row still adds one.
+ *
  * Usage: node scripts/verify-sheet-add-row.mjs [baseUrl] [projectId]
  *   Needs a dev server on a THROWAWAY database — it adds and deletes rows.
  *   e.g. preview "dev-verify-db" (port 3221, REPORT_DB_PATH=data/verify.db)
@@ -155,20 +161,27 @@ say(!!focused, `caret   the new row's name is focused immediately${focused ? ` (
 if (!focused) failures.push('caret: nothing was focused after Add row — the row has to be hunted down and clicked');
 else if (!focused.selected) failures.push('caret: the placeholder name is not selected, so typing appends to "New task"');
 
-// Typed WHILE the add is in flight, and finished with Enter — which must both
-// keep the name and open the next row.
+// Typed WHILE the add is in flight, and finished with Enter, which has to keep
+// the name and do nothing else.
 await page.keyboard.type(TYPED, { delay: 25 });
 const midTyping = await page.evaluate(() => document.activeElement?.value ?? null);
 say(midTyping === TYPED, `typing  the field holds "${midTyping}" while the row is still arriving`);
 if (midTyping !== TYPED) failures.push(`typing: the field lost the draft mid-word (holds "${midTyping}")`);
 
+// Enter means "that is the name" and NOTHING else. It added the next row for
+// one day and that was rejected at once: a row you did not ask for, to delete,
+// for every name you finished.
+const beforeEnter = await rowCount();
 await page.keyboard.press('Enter');
-const next = await page.evaluate(() => {
-  const el = document.activeElement;
-  return el && el.tagName === 'INPUT' ? el.value : null;
-});
-say(next !== null, `enter   Enter opened the next row's name (${next === null ? 'nothing focused' : `"${next}"`})`);
-if (next === null) failures.push('enter: Enter left no cursor anywhere — a plan cannot be typed line after line');
+await new Promise((r) => setTimeout(r, 500));
+const stillTyping = await page.evaluate(() => document.activeElement?.tagName === 'INPUT');
+const afterEnter = await rowCount();
+say(
+  !stillTyping && afterEnter === beforeEnter,
+  `enter   Enter closed the name and added nothing (rows ${beforeEnter} → ${afterEnter}${stillTyping ? ', still inside an input' : ''})`
+);
+if (stillTyping) failures.push('enter: the cell was still open after Enter');
+if (afterEnter !== beforeEnter) failures.push(`enter: Enter added ${afterEnter - beforeEnter} row(s) nobody asked for`);
 
 await settle();
 await page.reload({ waitUntil: 'networkidle0', timeout: 90_000 });
@@ -178,12 +191,12 @@ say(after.includes(TYPED), `saved   "${TYPED}" is in the database after a reload
 if (!after.includes(TYPED)) failures.push(`saved: the typed name never reached the database (${after.join(' | ')})`);
 
 const total = await rowCount();
-say(total === start + BURST + 2, `total   ${total - start} rows added in all (want ${BURST + 2})`);
-if (total !== start + BURST + 2) failures.push(`total: ${total - start} rows added, wanted ${BURST + 2}`);
+say(total === start + BURST + 1, `total   ${total - start} rows added in all (want ${BURST + 1})`);
+if (total !== start + BURST + 1) failures.push(`total: ${total - start} rows added, wanted ${BURST + 1}`);
 
 /* ── Put the project back the way it was found ───────────────────────────── */
 await new Promise((r) => setTimeout(r, 2000));
-for (let i = 0; i < BURST + 2; i += 1) {
+for (let i = 0; i < BURST + 1; i += 1) {
   try {
     await page.evaluate(
       (sel, n) => {

@@ -914,9 +914,15 @@ export default function ScheduleSheet({
    * **The new row is selected and its name is opened at once.** A row that
    * appears somewhere below with nothing focused is a row you then have to go
    * and find and click twice, which is what made adding several in a row feel
-   * like fighting the sheet. Now Add row — or Enter at the end of a name — puts
-   * the caret in the next line's name, the way an outliner does, and the next
-   * Enter carries on from there.
+   * like fighting the sheet. Add row puts the caret straight in the new line's
+   * name with the placeholder selected, so the next thing typed is the name.
+   *
+   * What it does NOT do is chain: Enter inside a cell commits that cell and
+   * stops. Adding the next row from the end of a name lasted one day — you
+   * finish typing, press Enter to mean "that's the name", and a row you did not
+   * ask for appears underneath. Enter on a SELECTED row still adds one, which
+   * keeps the keyboard path without putting it behind a key people press to
+   * mean "done".
    */
   const addRow = useCallback(
     (anchorId: string | null, asChild = false) => {
@@ -1049,9 +1055,8 @@ export default function ScheduleSheet({
           (rs) => (shift ? predictOutdent(rs, resolveId(id)) : predictIndent(rs, resolveId(id))),
           (rs) => (shift ? predictIndent(rs, resolveId(id)) : predictOutdent(rs, resolveId(id)))
         ),
-      enter: (id) => addRow(id),
     }),
-    [commit, structureUndoable, addRow, resolveId]
+    [commit, structureUndoable, resolveId]
   );
 
   const rowsRef = useRef(rows);
@@ -1114,8 +1119,9 @@ export default function ScheduleSheet({
       }
       // The row menu has "Add row below" and the toolbar has Add row, but a
       // plan is typed one line after another and reaching for either of those
-      // between every line is the reason people go back to Excel. Enter from
-      // inside a cell already did this; a selected row had nothing.
+      // between every line is the reason people go back to Excel. This is the
+      // ONLY Enter that adds a row: inside a cell the same key means "that is
+      // the name", and it did both for a day, which cost a delete per row.
       if (e.key === 'Enter') {
         e.preventDefault();
         addRow(selectedId);
@@ -1611,7 +1617,6 @@ type RowHandlers = {
   commit: (row: SheetRow, field: Field, value: string) => void;
   menu: (row: SheetRow) => void;
   indent: (id: string, shift: boolean) => void;
-  enter: (id: string) => void;
 };
 
 const Row = memo(function Row({
@@ -1656,7 +1661,6 @@ const Row = memo(function Row({
   const onCommit = (f: Field, v: string) => on.commit(r, f, v);
   const onMenu = () => !pending && on.menu(r);
   const onIndent = (shift: boolean) => on.indent(r.id, shift);
-  const onEnter = () => on.enter(r.id);
 
   /**
    * A SUMMARY ROW'S DATES ARE TYPED, NOT READ-ONLY.
@@ -1731,7 +1735,6 @@ const Row = memo(function Row({
           onDone={onDone}
           onCommit={(v) => onCommit('name', v)}
           onTab={onIndent}
-          onEnterKey={onEnter}
           highlight={highlight}
           className="truncate"
         />
@@ -1853,7 +1856,6 @@ function EditableCell({
   type = 'text',
   inputMode,
   onTab,
-  onEnterKey,
   highlight,
   group,
 }: {
@@ -1874,8 +1876,6 @@ function EditableCell({
   inputMode?: 'numeric' | 'decimal';
   /** Tab indents the row, Shift+Tab outdents it — the outliner convention. */
   onTab?: (shift: boolean) => void;
-  /** Enter on a name adds the next row, so a plan can be typed without the mouse. */
-  onEnterKey?: () => void;
   /** The search term, marked inside the text while the cell is not being typed in. */
   highlight?: string;
   /** Money: group the digits as they are typed, and hand back a raw string. */
@@ -1925,10 +1925,21 @@ function EditableCell({
         onDone();
       }}
       onKeyDown={(e) => {
+        /**
+         * ENTER COMMITS THE CELL AND STOPS THERE.
+         *
+         * It used to add the next row as well, the way an outliner does, so a
+         * plan could be typed without the mouse. Rejected the same day it
+         * shipped: you finish a name, press Enter to mean "that's the name",
+         * and a row you did not ask for appears underneath — one to delete for
+         * every one you meant. Enter on a row that is SELECTED rather than
+         * being typed in still adds a row (see the window listener), so the
+         * fast path is two deliberate presses and neither of them surprises
+         * anybody.
+         */
         if (e.key === 'Enter') {
           send(draft);
           onDone();
-          onEnterKey?.();
         }
         if (e.key === 'Escape') onDone();
         if (e.key === 'Tab' && onTab) {
