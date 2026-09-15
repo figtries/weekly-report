@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import LiveProjectSwitcher, {
   ProjectSwitcherFallback,
 } from "@/components/layout/LiveProjectSwitcher";
+import OpenProjectTag from "@/components/layout/OpenProjectTag";
 import Sidebar from "@/components/layout/Sidebar";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
@@ -62,6 +63,7 @@ export default async function RootLayout({
                 <LiveProjectSwitcher />
               </Suspense>
             }
+            openTag={<OpenProjectTag />}
           />
           {/* `min-w-0` is load-bearing, not tidiness. A flex child's default
               `min-width: auto` sizes it to its CONTENT, so this column grew to

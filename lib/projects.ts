@@ -18,6 +18,7 @@
 import { asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
+import { deriveInitial } from './initial';
 import { db, ensureFreshDb, schema } from './sqlite';
 
 /**
@@ -49,6 +50,17 @@ export interface ProjectCard {
   name: string;
   /** Short handle. Null on projects made before 12 Sep 2026. */
   alias: string | null;
+  /**
+   * The handle to PRINT, which is not the same question as which one is
+   * STORED. `alias` when the project has one, derived from the name when it
+   * does not — the sidebar and the mobile bar both identify the open project
+   * by three letters, and a project predating the column fell through to its
+   * name there: seventy characters truncated into a 150px row reads
+   * "RELOKASI 2 …", which identifies nothing. Display only. Nothing is written
+   * back, so the field in Project details stays honestly empty until somebody
+   * types one.
+   */
+  initial: string;
   clientName: string | null;
   contractorName: string | null;
   contractNo: string | null;
@@ -136,20 +148,26 @@ export async function getActiveProject() {
 }
 
 /**
- * The list, newest touch first. NOTHING IS PINNED.
+ * The list, newest touch first, WITH THE OPEN PROJECT PINNED TO THE TOP.
  *
- * The open project used to be sorted to the front, and that one line made the
- * screen unusable in the way people actually use it. Opening a project
- * refreshes this list, the newly opened card jumps to position one, and every
- * other card shifts down — under a finger that is already moving toward the
- * next one. So you open the project you did not mean, and the card now at the
- * top is the one that is already open, whose menu has no "Open this project"
- * row at all. Reported on 8 Sep 2026 as "the wrong project comes out" and
- * "other projects cannot be opened", and reproduced exactly: three cards, two
- * clicks, and the third click had nothing to click.
+ * The pin was here, was taken out on 8 Sep 2026, and was put back on 15 Sep
+ * 2026 on the user's explicit call. Both halves of that matter, because the
+ * reason it came out has not stopped being true: opening a project refreshes
+ * this list, the newly opened card jumps to position one, and every other card
+ * shifts down — under a finger already moving toward the next one. Reported
+ * then as "the wrong project comes out" and "other projects cannot be opened",
+ * and reproduced exactly.
  *
- * The badge already says which project is open. A list that rearranges itself
- * in response to your own tap is not helping you find it.
+ * What outweighed it is the complaint from the other side, on a phone: the
+ * open project was the fourth card down a scrolling list, wearing a badge the
+ * same colour as the text around it. The app follows ONE project everywhere,
+ * and the screen that says which one made you hunt for the answer. It is first
+ * now, and the badge is the action blue.
+ *
+ * The opening tap is a bottom sheet rather than the card itself, which is what
+ * makes this survivable: the sheet closes, THEN the list re-lays. If the
+ * shifting bites again, freeze the order for the life of the screen inside
+ * `ProjectList` — do not unpin it and lose the answer again.
  */
 export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<ProjectCard[]> {
   const activeId = await getActiveProjectId();
@@ -184,6 +202,7 @@ export async function listProjects(opts: { includeArchived?: boolean } = {}): Pr
       id: p.id,
       name: p.name,
       alias: p.alias,
+      initial: p.alias || deriveInitial(p.name),
       clientName: p.clientName,
       contractorName: p.contractorName,
       contractNo: p.contractNo,
@@ -196,7 +215,10 @@ export async function listProjects(opts: { includeArchived?: boolean } = {}): Pr
       isActive: p.id === activeId,
       rowCount: counts.get(p.id) ?? 0,
       weekCount: weekCounts.get(p.id) ?? 0,
-    }));
+    }))
+    // Stable, so everything behind the open card keeps the newest-touch order
+    // the query just gave it.
+    .sort((a, b) => Number(b.isActive) - Number(a.isActive));
 }
 
 export function countArchived(): number {

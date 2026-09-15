@@ -332,6 +332,7 @@ function MobileDrawer({ currentWeek, switcher }: { currentWeek: number; switcher
 export default function Sidebar({
   currentWeek,
   switcher,
+  openTag,
 }: {
   currentWeek: number;
   /**
@@ -340,13 +341,25 @@ export default function Sidebar({
    * a server component cannot be imported into a client one — which this is.
    */
   switcher: ReactNode;
+  /**
+   * The open project's initial for the mobile bar — a NODE for the same reason
+   * as `switcher`, and it rides inside the drawer's own `<Suspense>` because
+   * the shell may not own a third streamed boundary. See OpenProjectTag.
+   */
+  openTag: ReactNode;
 }) {
   return (
     <>
       {/* Mobile / tablet: slim top bar with hamburger */}
       <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur lg:hidden print:hidden">
+        {/* ONE boundary, two children. Both of these are request data and
+            neither can prerender; giving the tag its own `<Suspense>` would be
+            the third in the shell, which is where the PPR resume segments start
+            colliding with React's. The title stays OUTSIDE it, in the static
+            shell, so the bar is never briefly empty. */}
         <Suspense>
           <MobileDrawer currentWeek={currentWeek} switcher={switcher} />
+          {openTag}
         </Suspense>
         <span className="text-sm font-semibold text-foreground">Progress Report</span>
       </header>

@@ -169,8 +169,17 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
               widest single item instead of the sum, so a long client name drops
               to its own line rather than widening the card. */}
           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
+            {/* THE ONE BLUE IN THIS APP THAT IS NOT AN ACTION, and it is a
+                deliberate exception to the rule at the top of globals.css.
+                Black on white said "open" in the same voice as every other
+                word on the card: on a phone, with the open project four cards
+                down, it was read as decoration and missed entirely (15 Sep
+                2026). The colour is doing the job a badge cannot do alone —
+                being seen before it is read — and it is the same blue as the
+                initial in the mobile top bar, so one colour answers "which
+                project is the app following" in both places. */}
             {p.isActive && (
-              <span className="rounded bg-foreground px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-background">
+              <span className="rounded bg-primary px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
                 Open
               </span>
             )}
