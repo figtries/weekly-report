@@ -25,9 +25,10 @@ import {
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, getSummaryRows, promoteNestedSpkContracts } from '@/lib/rollup';
-import { getWeekRollup } from '@/lib/data';
+import { getLatestWeek, getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
 import { getActiveProjectId } from '@/lib/projects';
+import { getOpenProject } from '@/lib/legacy-bridge';
 import { buildSCurveSeries } from '@/lib/scurve';
 import ProgressCurve from '@/components/dashboard/ProgressCurve';
 import {
@@ -38,7 +39,7 @@ import {
   VelocityBars,
   type LeafSpread,
 } from '@/components/dashboard/charts';
-import WeekSelect from '@/components/weekly/WeekSelect';
+import DashboardWeekBar from '@/components/dashboard/DashboardWeekBar';
 import { Reveal } from '@/components/motion/Reveal';
 import { CountUp } from '@/components/motion/CountUp';
 import { TYPE, verdictChip, verdictOf, verdictText } from '@/lib/design';
@@ -143,10 +144,27 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     );
   }
 
+  // THE CURRENT WEEK IS THE PROJECT'S, NOT THIS PAGE'S. Weekly Progress,
+  // Reports and Document Control all read it the same way — through the open
+  // project's own store — and this page used to answer with the last week that
+  // had any recorded progress instead, which on the imported project is week 43
+  // against the 36 every other screen calls current. It is written only for
+  // that project; everywhere else it is worked out from what was last filled
+  // in, and is already what `data.currentWeek` holds.
+  const open = await getOpenProject();
+  const settable = !!open?.hasLegacyData;
+  const stored = settable ? getLatestWeek(await getOpenDb()) : data.currentWeek;
+  const currentWeek = data.weeks.includes(stored) ? stored : data.currentWeek;
+
+  // How far the FIGURES go, which is a different fact from the pointer above
+  // and stays measured off the data: the banner below promises that anything
+  // past it is carried forward, and only the data can answer that.
+  const reportedWeek = data.currentWeek;
+
   // The week being viewed: whatever was asked for if the project has it,
-  // otherwise the last week anybody reported — never a week off the calendar.
+  // otherwise the project's current week — never a week off the calendar.
   const asked = Number(weekParam);
-  const fallback = data.currentWeek || data.weeks[0];
+  const fallback = currentWeek || data.weeks[0];
   const week = data.weeks.includes(asked) ? asked : fallback;
 
   const db = data.db;
@@ -195,7 +213,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   const weeksLeft = Math.max(0, health.lastWeek - health.week);
   const curveWeeks = curve.map((r) => r.week);
   const firstWeek = curveWeeks.length ? Math.min(...curveWeeks) : health.week;
-  const unreported = data.currentWeek > 0 && week > data.currentWeek;
+  const unreported = reportedWeek > 0 && week > reportedWeek;
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8">
@@ -224,24 +242,27 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {db.project.customer || 'No customer set'}
-            {data.currentWeek > 0 ? ` · reported up to week ${data.currentWeek}` : ' · nothing reported yet'}
+            {/* The week used to be stated here too — ' · reported up to week 43' — and
+                once the picker beside it carries the Current badge that is the same
+                fact printed twice, disagreeing with itself on the one project whose
+                two stores disagree. The picker owns the week; the banner below owns
+                how far the figures actually go. */}
+            {reportedWeek > 0 || currentWeek > 0 ? '' : ' · nothing reported yet'}
           </p>
         </div>
         <div className="shrink-0">
-          <WeekSelect
+          <DashboardWeekBar
             weeks={data.weeks}
             selectedWeek={week}
-            projectCurrentWeek={data.currentWeek}
-            activeTab=""
-            hrefPattern="/?week={week}"
-            prefetch={false}
+            projectCurrentWeek={currentWeek}
+            settable={settable}
           />
         </div>
       </header>
 
       {unreported && (
         <p className="animate-fade-in-up rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2.5 text-sm text-warn">
-          Nothing has been reported after week {data.currentWeek}. The actual figures below are
+          Nothing has been reported after week {reportedWeek}. The actual figures below are
           carried forward; the plan keeps climbing, so the gap you see is the weeks nobody has filed.
         </p>
       )}
