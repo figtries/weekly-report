@@ -25,7 +25,7 @@ import {
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, getSummaryRows, promoteNestedSpkContracts } from '@/lib/rollup';
-import { getLatestWeek, getOpenDb, getWeekRollup } from '@/lib/data';
+import { getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
 import { getActiveProjectId } from '@/lib/projects';
 import { getOpenProject } from '@/lib/legacy-bridge';
@@ -65,7 +65,10 @@ export const metadata = { title: 'Dashboard' };
  * to read `db.json`, which holds exactly one project, so opening any other left
  * this page drawing Gundih under a sidebar naming something else — and it was
  * pinned to the latest week with no way to look at any other. Both come from
- * `lib/dashboard-db.ts` now: SQLite, per project, per week.
+ * `getOpenDb()` now: whichever store the open project reads, per week. The fix
+ * for the first of those went too far and read SQLite for EVERY project, which
+ * put this page's figures on a store the imported project does not report from;
+ * see the note on `getOpenDb()` below.
  *
  * THE WEEK LIVES IN THE QUERY, AND THAT IS WHAT KEEPS THIS PAGE HONEST. Reading
  * `searchParams` is an uncached read, so the body sits behind `<Suspense>` and
@@ -144,30 +147,52 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     );
   }
 
-  // THE CURRENT WEEK IS THE PROJECT'S, NOT THIS PAGE'S. Weekly Progress,
-  // Reports and Document Control all read it the same way — through the open
-  // project's own store — and this page used to answer with the last week that
-  // had any recorded progress instead, which on the imported project is week 43
-  // against the 36 every other screen calls current. It is written only for
-  // that project; everywhere else it is worked out from what was last filled
-  // in, and is already what `data.currentWeek` holds.
-  const open = await getOpenProject();
-  const settable = !!open?.hasLegacyData;
-  const stored = settable ? getLatestWeek(await getOpenDb()) : data.currentWeek;
-  const currentWeek = data.weeks.includes(stored) ? stored : data.currentWeek;
+  // THE FIGURES COME FROM THE STORE THE PROJECT READS, not from whichever one
+  // this page can reach. `getOpenDb()` is that fork — the imported project reads
+  // db.json, every other project reads SQLite — and Weekly Progress, Data
+  // Overall and the printed report have gone through it for months. This page
+  // went straight to the SQLite adapter instead, and the two stores do not
+  // agree: on Gundih it drew week 36 as 68.20 against 72.57 while every other
+  // screen drew the same week of the same project as 70.39 against 71.93. The
+  // front page was the one number nobody else could reproduce.
+  //
+  // `buildProjectDashboardData` still answers for the PROJECT — whether it has
+  // weights at all, and the currency and contract value its money is priced in.
+  // Those belong to the project rather than to a week, they are the same in
+  // either store, and db.json simply never had a field for them.
+  const openDb = await getOpenDb();
+  const db = {
+    ...openDb,
+    project: {
+      ...openDb.project,
+      contractValue: openDb.project.contractValue ?? data.db.project.contractValue,
+    },
+  };
 
-  // How far the FIGURES go, which is a different fact from the pointer above
-  // and stays measured off the data: the banner below promises that anything
-  // past it is carried forward, and only the data can answer that.
-  const reportedWeek = data.currentWeek;
+  // The last week actually reported, asked of that same store — which is also
+  // how far the FIGURES go, so the banner below and the week picker can no
+  // longer name different weeks. db.json states it outright; the SQLite adapter
+  // works it out from what was filled in and writes it into the same field.
+  // NOT `getLatestWeek()`: that falls back to the last MATERIALISED week when
+  // nothing has been reported, which opens a project nobody has filled in on
+  // its final week with the plan already at 100%. Zero is the honest answer.
+  const currentWeek = db.project.currentWeek;
+  const reportedWeek = currentWeek;
+
+  // Whether that week can be MOVED from here, which is a different question and
+  // still the project's: it is written only for the imported project and worked
+  // out from what was last filled in everywhere else, so a button that could
+  // only fail is not offered.
+  const settable = !!(await getOpenProject())?.hasLegacyData;
 
   // The week being viewed: whatever was asked for if the project has it,
-  // otherwise the project's current week — never a week off the calendar.
+  // otherwise the project's current week — never a week off the calendar. The
+  // list is the store's own, for the same reason the figures are.
+  const weeks = db.weeks.map((w) => w.week);
   const asked = Number(weekParam);
-  const fallback = currentWeek || data.weeks[0];
-  const week = data.weeks.includes(asked) ? asked : fallback;
+  const fallback = weeks.includes(currentWeek) ? currentWeek : weeks[0];
+  const week = weeks.includes(asked) ? asked : fallback;
 
-  const db = data.db;
   const rollup = getWeekRollup(db, week);
   const health = computeHealth(db, week);
 
@@ -252,7 +277,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
         </div>
         <div className="shrink-0">
           <DashboardWeekBar
-            weeks={data.weeks}
+            weeks={weeks}
             selectedWeek={week}
             projectCurrentWeek={currentWeek}
             settable={settable}
