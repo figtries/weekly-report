@@ -87,14 +87,10 @@ export const metadata = { title: 'Dashboard' };
  * was told nothing about where to go after the hero.
  *
  * Colour and type come from `lib/design.ts` and nothing here invents either.
- * Measurement is `--chart-1` actual / `--chart-2` plan on every line and bar,
- * and THE HEADLINE IS A MEASUREMENT. It used to take the verdict colour and
- * turn red the week the project fell behind — which painted the actual figure
- * in the colour this app uses for the plan, on the one screen where the two sit
- * side by side. Data Overall settled this first and the hero follows it now:
- * colour says which figure you are looking at, the chip under it says how to
- * feel about it. Verdict is `--ok` / `--bad` and still lands on chips, words
- * and the figures that carry no measurement colour of their own.
+ * Measurement is `--chart-1` actual / `--chart-2` plan on every line and bar;
+ * verdict is `--ok` / `--bad` and lands only on figures, chips and words —
+ * including the headline percentage itself, which turns red the week the
+ * project falls behind its plan.
  *
  * Motion comes from framer-motion through `Reveal`, one curve and one duration
  * for the whole app. Every chart is hand-drawn SVG rather than Recharts: they
@@ -308,7 +304,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               <p className="text-sm font-medium text-muted-foreground">
                 Week {health.week} of {health.lastWeek}
               </p>
-              <p className={cn('mt-1.5', TYPE.hero, 'text-chart-1')}>
+              <p className={cn('mt-1.5', TYPE.hero, verdictText[verdict])}>
                 <CountUp value={health.actualPct} />
               </p>
               <p className="mt-2.5 text-sm text-muted-foreground">Project completed to date</p>
