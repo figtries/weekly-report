@@ -2,10 +2,11 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 
-import { getLatestWeek, getOpenDb } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
+import { currentWeekOf } from '@/lib/current-week';
 
 /**
- * Data Overall opens on the open project's latest week, not db.json's.
+ * Data Overall opens on the week the open project is IN, not db.json's.
  *
  * This used to read `getDb()`, which holds exactly one project, so opening any
  * other project and tapping Data Overall landed on ITS week number: a
@@ -19,13 +20,13 @@ import { getLatestWeek, getOpenDb } from '@/lib/data';
 export default function WeeklyIndexPage() {
   return (
     <Suspense fallback={null}>
-      <GoToLatestWeek />
+      <GoToCurrentWeek />
     </Suspense>
   );
 }
 
-async function GoToLatestWeek(): Promise<never> {
+async function GoToCurrentWeek(): Promise<never> {
   await connection();
   const db = await getOpenDb();
-  redirect(`/weekly/${getLatestWeek(db) || 1}/overall`);
+  redirect(`/weekly/${currentWeekOf(db)}/overall`);
 }

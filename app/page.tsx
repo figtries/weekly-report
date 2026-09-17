@@ -25,10 +25,10 @@ import {
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, getSummaryRows, promoteNestedSpkContracts } from '@/lib/rollup';
+import { currentWeekOf } from '@/lib/current-week';
 import { getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
 import { getActiveProjectId } from '@/lib/projects';
-import { getOpenProject } from '@/lib/legacy-bridge';
 import { buildSCurveSeries } from '@/lib/scurve';
 import ProgressCurve from '@/components/dashboard/ProgressCurve';
 import {
@@ -169,21 +169,17 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     },
   };
 
-  // The last week actually reported, asked of that same store — which is also
-  // how far the FIGURES go, so the banner below and the week picker can no
-  // longer name different weeks. db.json states it outright; the SQLite adapter
-  // works it out from what was filled in and writes it into the same field.
-  // NOT `getLatestWeek()`: that falls back to the last MATERIALISED week when
-  // nothing has been reported, which opens a project nobody has filled in on
-  // its final week with the plan already at 100%. Zero is the honest answer.
-  const currentWeek = db.project.currentWeek;
-  const reportedWeek = currentWeek;
-
-  // Whether that week can be MOVED from here, which is a different question and
-  // still the project's: it is written only for the imported project and worked
-  // out from what was last filled in everywhere else, so a button that could
-  // only fail is not offered.
-  const settable = !!(await getOpenProject())?.hasLegacyData;
+  // TWO WEEKS, AND THEY ANSWER DIFFERENT QUESTIONS. Holding one number for both
+  // is what made this screen disagree with itself.
+  //
+  // `reportedWeek` is how far the FIGURES go: the last week anybody filed. The
+  // banner reads it, and zero is the honest answer on a project nobody has
+  // filled in yet. `currentWeek` is the week the project is IN, which is a fact
+  // about the calendar and true before a single figure is entered. It used to
+  // be the reported week here as well, so a new project opened on week 1 while
+  // the work was somewhere in the middle of the plan.
+  const reportedWeek = db.project.currentWeek;
+  const currentWeek = currentWeekOf(db);
 
   // The week being viewed: whatever was asked for if the project has it,
   // otherwise the project's current week — never a week off the calendar. The
@@ -272,7 +268,12 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 fact printed twice, disagreeing with itself on the one project whose
                 two stores disagree. The picker owns the week; the banner below owns
                 how far the figures actually go. */}
-            {reportedWeek > 0 || currentWeek > 0 ? '' : ' · nothing reported yet'}
+            {/* `currentWeek` was in this test until 17 Sep 2026, when it stopped
+                meaning "somebody filed something" and started meaning "the week the
+                calendar says we are in", which is never zero. Leaving it here would
+                have retired this line permanently. Only the REPORTED week can say
+                whether anything has been reported. */}
+            {reportedWeek > 0 ? '' : ' · nothing reported yet'}
           </p>
         </div>
         <div className="shrink-0">
@@ -280,7 +281,6 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             weeks={weeks}
             selectedWeek={week}
             projectCurrentWeek={currentWeek}
-            settable={settable}
           />
         </div>
       </header>

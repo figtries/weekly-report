@@ -27,7 +27,8 @@ import {
   saveWeekUpdatesSqlite,
   setProgressMethodSqlite,
 } from './progress-sqlite';
-import { beforeWrite, flushDbSnapshot } from './sqlite';
+import { and, eq } from 'drizzle-orm';
+import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
 import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
 import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
@@ -78,7 +79,32 @@ function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
 }
 
+/**
+ * Pin the week the project is currently in.
+ *
+ * It used to reach db.json only, so the button that calls it was shown on the
+ * imported project and HIDDEN on every other one — and those projects had no
+ * pin at all, only a guess that read 0 until somebody filed a week. Now both
+ * stores can hold it, which is what lets one button appear everywhere. The
+ * dates still answer when nothing is pinned; see `currentWeekOf`.
+ */
 export async function setCurrentWeekAction(week: number): Promise<ActionResult> {
+  const projectId = await sqliteProject();
+  if (projectId) {
+    return sqliteWrite(() => {
+      const exists = sqlite
+        .select({ id: sqliteSchema.weeks.id })
+        .from(sqliteSchema.weeks)
+        .where(and(eq(sqliteSchema.weeks.projectId, projectId), eq(sqliteSchema.weeks.weekNo, week)))
+        .all();
+      if (exists.length === 0) throw new Error(`Week ${week} not found`);
+      sqlite
+        .update(sqliteSchema.projects)
+        .set({ pinnedCurrentWeek: week, updatedAt: new Date().toISOString() })
+        .where(eq(sqliteSchema.projects.id, projectId))
+        .run();
+    });
+  }
   try {
     await mutateDb((db) => {
       if (!db.weeks.some((w) => w.week === week)) throw new Error(`Week ${week} not found`);

@@ -125,6 +125,19 @@ export interface ProjectInfo {
   /** The latest week that has real recorded actuals — drives the S-Curve's actual line. */
   currentWeek: number;
   /**
+   * The week somebody PINNED as current, or null for "let the dates decide".
+   *
+   * Separate from `currentWeek` above because the two answer different
+   * questions and conflating them broke both: the S-curve needs the last week
+   * with actuals so its line stops where the reporting stops, while navigation
+   * needs the week the project is IN. See `currentWeekOf` in
+   * `lib/current-week.ts`.
+   *
+   * Undefined on the db.json side, which has no such field — there the pin is
+   * `currentWeek` itself, because that store only ever had the one number.
+   */
+  currentWeekOverride?: number | null;
+  /**
    * Total contract value in Rupiah. Optional because seeded projects predate
    * it. When present every percentage in the app also has a money figure —
    * which is the only language the layers above PM actually read.

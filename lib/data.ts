@@ -31,11 +31,15 @@ export function getPrevWeekMeta(db: Database, week: number): WeeklyMeta | null {
   return db.weeks.find((w) => w.week === week - 1) ?? null;
 }
 
-export function getLatestWeek(db: Database): number {
-  // The "current" reporting week (latest with real actuals), not the last
-  // materialised future week — that's where users land by default.
-  return db.project.currentWeek || (db.weeks.length ? Math.max(...db.weeks.map((w) => w.week)) : 0);
-}
+/**
+ * REMOVED, and left named here so it is not reintroduced by habit:
+ * `getLatestWeek(db)` was `currentWeek || max(weeks)`, and both halves were
+ * wrong for the one thing every caller used it for — deciding which week to
+ * open. `currentWeek` is the last week with ACTUALS, which is 0 on a project
+ * nobody has filed yet, and `max(weeks)` is the END of the plan, so a fresh
+ * 22-week project opened on week 22 and 404d out of it. Use `currentWeekOf`
+ * from `lib/current-week.ts`: it asks the dates, which every project has.
+ */
 
 export interface WeekRollup {
   meta: WeeklyMeta;

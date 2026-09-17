@@ -313,6 +313,10 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // is `weeks[0].periodEnd` — which is what makes the two stores agree.
     weekAnchorEndDate: weekRows.length ? weekRows[0].endDate : '',
     currentWeek,
+    // Always a number or null on this side, never undefined: that is what tells
+    // `pinnedWeekOf` it is reading a SQLite project and must not mistake the
+    // computed `currentWeek` above for a pin. See lib/current-week.ts.
+    currentWeekOverride: project.pinnedCurrentWeek ?? null,
     contractValue: project.contractValue ?? undefined,
   };
 

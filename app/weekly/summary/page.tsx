@@ -2,10 +2,11 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 
-import { getLatestWeek, getOpenDb } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
+import { currentWeekOf } from '@/lib/current-week';
 
 /**
- * Weekly Progress opens on the OPEN project's latest week.
+ * Weekly Progress opens on the week the OPEN project is in.
  *
  * The sibling `app/weekly/page.tsx` does the same for Data Overall, and this
  * one exists because the sidebar needs a second landing tab and cannot carry a
@@ -25,13 +26,13 @@ import { getLatestWeek, getOpenDb } from '@/lib/data';
 export default function WeeklySummaryIndexPage() {
   return (
     <Suspense fallback={null}>
-      <GoToLatestSummary />
+      <GoToCurrentSummary />
     </Suspense>
   );
 }
 
-async function GoToLatestSummary(): Promise<never> {
+async function GoToCurrentSummary(): Promise<never> {
   await connection();
   const db = await getOpenDb();
-  redirect(`/weekly/${getLatestWeek(db) || 1}/summary`);
+  redirect(`/weekly/${currentWeekOf(db)}/summary`);
 }

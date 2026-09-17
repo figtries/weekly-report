@@ -60,20 +60,22 @@ export default function WeekTabs({
   weeks,
   selectedWeek,
   projectCurrentWeek,
-  derivedCurrent = false,
   dueCount,
   checkCount,
 }: {
   weeks: number[];
   selectedWeek: number;
-  projectCurrentWeek: number;
   /**
-   * True where the current week is WORKED OUT rather than set — a project in
-   * SQLite, whose current week is whichever one was last filled in. There is
-   * nothing for the button to write, so it is not offered: a control that can
-   * only fail is worse than no control.
+   * The week the project is in, by the one rule every project follows now —
+   * `currentWeekOf` in `lib/current-week.ts`.
+   *
+   * There used to be a `derivedCurrent` flag beside this that hid the button
+   * below on every project except the imported one, because only db.json could
+   * store a pin and there was nothing for the button to write anywhere else.
+   * Both stores hold one now (`projects.current_week`), so the flag is gone and
+   * the control is the same on every project.
    */
-  derivedCurrent?: boolean;
+  projectCurrentWeek: number;
   /** Items the schedule says are due this week and not yet dealt with. */
   dueCount: number;
   /** Validation findings that are errors or warnings. */
@@ -199,12 +201,12 @@ export default function WeekTabs({
               claimed, which no per-row panel can show. Taking it out of here
               answered "should it be a step" — it should not — but it also made
               it unfindable, which was never the intention. */}
-          {!isCurrent && !derivedCurrent && (
+          {!isCurrent && (
             <m.button {...pressMotion}
               onClick={setAsCurrent}
               disabled={isPending}
               className="inline-flex min-h-11 animate-scale-in items-center justify-center gap-1.5 rounded-lg bg-ok px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:brightness-110 disabled:opacity-70"
-              title="Make this the latest reported week: the S-Curve actual line runs up to here"
+              title="Pin this as the week the project is in. It is where the app opens, until you move it or clear it."
             >
               <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
               <span className="sm:hidden">Set as Current</span>

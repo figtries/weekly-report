@@ -4,7 +4,7 @@ import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { LegacyChromeGate } from '@/components/projects/LegacyGate';
-import { getOpenProject } from '@/lib/legacy-bridge';
+import { currentWeekOf } from '@/lib/current-week';
 import { Skeleton } from '@/components/ui/skeleton';
 
 
@@ -57,14 +57,12 @@ async function WeeklyTabsFor({ week }: { week: number }) {
       }).due.length
     : 0;
   const validation = validateWeek(db, week);
-  const open = await getOpenProject();
 
   return (
     <WeekTabs
       weeks={weeks}
       selectedWeek={week}
-      projectCurrentWeek={db.project.currentWeek}
-      derivedCurrent={!!open && !open.hasLegacyData}
+      projectCurrentWeek={currentWeekOf(db)}
       dueCount={dueCount}
       checkCount={validation.errors + validation.warnings}
     />

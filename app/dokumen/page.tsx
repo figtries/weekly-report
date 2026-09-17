@@ -2,7 +2,8 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 
-import { getLatestWeek, getOpenDb } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
+import { currentWeekOf } from '@/lib/current-week';
 
 /**
  * Document Control opens on the week the weekly report is on.
@@ -27,5 +28,5 @@ export default function DocumentControlIndexPage() {
 async function GoToCurrentWeek(): Promise<never> {
   await connection();
   const db = await getOpenDb();
-  redirect(`/dokumen/${getLatestWeek(db) || 1}/summary`);
+  redirect(`/dokumen/${currentWeekOf(db)}/summary`);
 }

@@ -3,7 +3,8 @@ import { Suspense } from 'react';
 import { RegisterTabs } from '@/components/dokumen/RegisterTabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { getLatestWeek, getOpenDb } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
+import { currentWeekOf } from '@/lib/current-week';
 import { getAllRegisterWeekNumbers, getRegisterWeeks } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -88,7 +89,7 @@ async function RegisterTabsForOpenProject({ week }: { week: number }) {
   const weeks = getRegisterWeeks(projectId).map((w) => w.weekNo);
   const db = await getOpenDb();
 
-  return <RegisterTabs weeks={weeks} selectedWeek={week} projectCurrentWeek={getLatestWeek(db) || 1} />;
+  return <RegisterTabs weeks={weeks} selectedWeek={week} projectCurrentWeek={currentWeekOf(db)} />;
 }
 
 /** Held space, so the scroller below does not jump when the real row lands. */

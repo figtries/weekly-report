@@ -19,21 +19,21 @@ import { setCurrentWeekAction } from '@/lib/actions';
  * there was no way to move the pointer from here. Same value, same badge, same
  * button now (reported 15 September 2026).
  *
- * `settable` mirrors the inverse of `WeekTabs`' `derivedCurrent`: the current
- * week is WRITTEN only for the imported project, and worked out from whatever
- * was last filled in everywhere else. A button that can only fail is worse than
- * no button, so it is not offered there.
+ * There used to be a `settable` flag here, the inverse of `WeekTabs`'
+ * `derivedCurrent`, because only db.json could store a pinned week: the button
+ * was shown on the imported project and withheld everywhere else, and the
+ * projects that could not pin had their current week guessed from whatever was
+ * last filled in. Both stores hold a pin now (`projects.current_week`), so
+ * there is no project the button can only fail on and no flag to carry.
  */
 export default function DashboardWeekBar({
   weeks,
   selectedWeek,
   projectCurrentWeek,
-  settable,
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
-  settable: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   // Optimistic, exactly as the weekly header is: the badge flips on the press
@@ -67,13 +67,13 @@ export default function DashboardWeekBar({
           Current
         </span>
       )}
-      {!isCurrent && settable && (
+      {!isCurrent && (
         <m.button
           {...pressMotion}
           onClick={setAsCurrent}
           disabled={isPending}
           className="inline-flex min-h-11 animate-scale-in items-center justify-center gap-1.5 rounded-lg bg-ok px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:brightness-110 disabled:opacity-70"
-          title="Make this the latest reported week: the S-Curve actual line runs up to here"
+          title="Pin this as the week the project is in. It is where the app opens, until you move it or clear it."
         >
           <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
           <span className="sm:hidden">Set as Current</span>

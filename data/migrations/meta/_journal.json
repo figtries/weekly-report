@@ -85,6 +85,13 @@
       "when": 1789221208894,
       "tag": "0011_chief_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789617327485,
+      "tag": "0012_small_celestials",
+      "breakpoints": true
     }
   ]
 }

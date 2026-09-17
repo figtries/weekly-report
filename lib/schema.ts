@@ -74,6 +74,22 @@ export const projects = sqliteTable('projects', {
   barPreset: text('bar_preset').$type<BarPreset>(),
   startDate: text('start_date'),
   finishDate: text('finish_date'),
+  /**
+   * The week the owner PINNED as current, or null to let the dates decide.
+   *
+   * Only db.json could hold this before, as `project.currentWeek`, so "Set as
+   * current" was shown on the imported project and hidden everywhere else —
+   * and a project made in the app had its current week guessed as "the last
+   * week anybody recorded anything", which is 0 until somebody files one. The
+   * guess then fell through to the LAST week of the plan, so a fresh 22-week
+   * project opened on week 22 (17 Sep 2026). See `currentWeekOf` in
+   * `lib/current-week.ts` for the rule this feeds.
+   *
+   * Nullable on purpose: a pin is a statement, and most projects never need to
+   * make one. It is never written by the importer or by progress — only by
+   * somebody pressing the button.
+   */
+  pinnedCurrentWeek: integer('current_week'),
   createdAt: now(),
   archivedAt: text('archived_at'),
 
