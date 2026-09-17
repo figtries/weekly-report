@@ -113,14 +113,18 @@ function planPctOf(n: RollupNode): number {
 }
 
 /**
- * Zero-weight leaves are milestone ROWS, not work.
+ * Zero-weight leaves are milestone ROWS, not work — ON A LOCKED PLAN.
  *
- * Every weekly surface in this app hides them, and the map has to agree: a row
- * carrying no weight cannot move a report, so offering it for filling in is
- * asking for work that changes nothing.
+ * Where the weights are the plan's own statement (`ProjectInfo.weightsLocked`)
+ * a row it left weightless cannot move a report, and every weekly surface hides
+ * it; the map agrees. Where they are DERIVED, the same row is work no price
+ * reached, and deleting it is how a heading ends up as an empty branch counting
+ * itself — "1 activity · weight 0.00%" over two activities that are no longer
+ * anywhere in the app. A row that changes no total is still a row somebody has
+ * to be able to say has started.
  */
-function isMilestoneRow(n: RollupNode): boolean {
-  return n.children.length === 0 && n.bobot === 0;
+function isMilestoneRow(n: RollupNode, weightsLocked: boolean): boolean {
+  return weightsLocked && n.children.length === 0 && n.bobot === 0;
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -161,6 +165,7 @@ export function buildOverallMap({
   schedule,
   changeLog,
   facts,
+  weightsLocked = true,
 }: {
   roots: RollupNode[];
   snapshots: Record<string, LeafSnapshot> | undefined;
@@ -170,6 +175,8 @@ export function buildOverallMap({
   /** The whole log, for "last touched"; the week's own entries decide `filled`. */
   changeLog: ChangeLogEntry[] | undefined;
   facts?: Record<string, RowFact>;
+  /** `db.project.weightsLocked`. Defaults to locked, which is today's behaviour. */
+  weightsLocked?: boolean;
 }): OverallMap {
   const dueIds = new Set<string>([
     ...worklist.due.map((e) => e.node.id),
@@ -194,7 +201,7 @@ export function buildOverallMap({
   let filled = 0;
 
   function walk(node: RollupNode, depth: number): MapNode | null {
-    if (isMilestoneRow(node)) return null;
+    if (isMilestoneRow(node, weightsLocked)) return null;
 
     const kids = node.children.map((c) => walk(c, depth + 1)).filter((c): c is MapNode => c !== null);
     const isLeaf = kids.length === 0;

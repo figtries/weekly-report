@@ -318,6 +318,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // computed `currentWeek` above for a pin. See lib/current-week.ts.
     currentWeekOverride: project.pinnedCurrentWeek ?? null,
     contractValue: project.contractValue ?? undefined,
+    weightsLocked: project.weightBasis === 'boq',
   };
 
   const totalBobot = nodes

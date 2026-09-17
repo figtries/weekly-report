@@ -54,6 +54,7 @@ async function WeeklyTabsFor({ week }: { week: number }) {
         schedule: db.schedule,
         week,
         changeLog: db.changeLog,
+        weightsLocked: db.project.weightsLocked,
       }).due.length
     : 0;
   const validation = validateWeek(db, week);

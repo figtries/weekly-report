@@ -143,6 +143,25 @@ export interface ProjectInfo {
    * which is the only language the layers above PM actually read.
    */
   contractValue?: number;
+  /**
+   * True where this project's weights are its own STATEMENT rather than a
+   * figure derived from its prices — `weight_basis = 'boq'`.
+   *
+   * It is what tells a weightless leaf apart from a weightless leaf. On the
+   * imported project the workbook left 42 rows with no weight on purpose
+   * (Project Award, Process PO, SPK-002 Completed): markers, not work, and
+   * every weekly surface hides them. On a project built in the app the same
+   * shape means the opposite — the money never reached the row, because its
+   * heading has no price and the contract had already been handed out — and
+   * hiding it deletes real work. Kickoff and Site Survey vanished that way,
+   * leaving their heading standing as an empty branch counting itself:
+   * "1 activity · weight 0.00%", a chevron opening onto nothing, and no row
+   * anywhere to record against (17 Sep 2026).
+   *
+   * Undefined means LOCKED, because the db.json side carries no such column
+   * and the one project that reads it is the imported one.
+   */
+  weightsLocked?: boolean;
 }
 
 export interface DailyReport {

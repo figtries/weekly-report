@@ -81,9 +81,14 @@ export interface Worklist {
   hasSchedule: boolean;
 }
 
-/** Zero-weight leaves are milestone rows, not work — every weekly UI hides them. */
-function isMilestoneRow(n: RollupNode): boolean {
-  return n.children.length === 0 && n.bobot === 0;
+/**
+ * Zero-weight leaves are milestone rows, not work — ON A PLAN WHOSE WEIGHTS
+ * SPEAK FOR THEMSELVES. See `ProjectInfo.weightsLocked`: unlocked, the same
+ * shape is work the money never reached, and hiding it takes real activities
+ * off every weekly surface with nothing on screen able to bring them back.
+ */
+function isMilestoneRow(n: RollupNode, weightsLocked: boolean): boolean {
+  return weightsLocked && n.children.length === 0 && n.bobot === 0;
 }
 
 /**
@@ -107,12 +112,15 @@ export function buildWorklist({
   schedule,
   week,
   changeLog,
+  weightsLocked = true,
 }: {
   roots: RollupNode[];
   schedule: ScheduleItem[] | undefined;
   week: number;
   /** The whole log; this filters to the week itself. */
   changeLog: ChangeLogEntry[] | undefined;
+  /** `db.project.weightsLocked`. Defaults to locked, which is today's behaviour. */
+  weightsLocked?: boolean;
 }): Worklist {
   const byLeaf = new Map<string, ScheduleItem>();
   for (const s of schedule ?? []) byLeaf.set(s.leafId, s);
@@ -134,7 +142,7 @@ export function buildWorklist({
       node.children.forEach((c) => visit(c, next));
       return;
     }
-    if (isMilestoneRow(node)) return;
+    if (isMilestoneRow(node, weightsLocked)) return;
 
     const s = byLeaf.get(node.id);
     if (!s) return;

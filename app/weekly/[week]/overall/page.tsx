@@ -53,7 +53,13 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
   // It is no longer a LIST on this screen. The map comes first and this is the
   // lens over it, which is what the 13 Sep 2026 brief asked for after two cuts
   // that led with a queue were rejected.
-  const worklist = buildWorklist({ roots, schedule: db.schedule, week, changeLog: db.changeLog });
+  const worklist = buildWorklist({
+    roots,
+    schedule: db.schedule,
+    week,
+    changeLog: db.changeLog,
+    weightsLocked: db.project.weightsLocked,
+  });
 
   // The one thing still missing, if anything is. One card, in dependency
   // order, and it collapses to nothing once the project is set up: a banner
@@ -90,6 +96,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
     schedule: db.schedule,
     changeLog: db.changeLog,
     facts,
+    weightsLocked: db.project.weightsLocked,
   });
 
   const guide =

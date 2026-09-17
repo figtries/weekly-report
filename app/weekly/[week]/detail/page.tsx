@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getOpenWeekRollup } from '@/lib/data';
+import { getOpenDb, getOpenWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
 import PageHeader from '@/components/layout/PageHeader';
@@ -32,14 +32,18 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
-  const result = await getOpenWeekRollup(week);
+  const [db, result] = await Promise.all([getOpenDb(), getOpenWeekRollup(week)]);
   if (!result) notFound();
   const { roots } = result;
-  // The same leaves the page itself counts: zero-weight rows are milestone
-  // markers, not activities, and every weekly UI hides them. Counting them here
-  // put "218 activities" in the title above a hero reading "176 activities".
+  const weightsLocked = db.project.weightsLocked !== false;
+  // The same leaves the page itself counts: on a LOCKED plan a zero-weight row
+  // is a milestone marker rather than an activity, and every weekly UI hides
+  // it — counting them here put "218 activities" in the title above a hero
+  // reading "176 activities". Where the weights are derived the tree shows
+  // those rows, so the title has to count them too or it disagrees with the
+  // page underneath it.
   const leafCount = flattenTree(roots).filter(
-    (n) => n.children.length === 0 && n.bobot > 0
+    (n) => n.children.length === 0 && (!weightsLocked || n.bobot > 0)
   ).length;
 
   return (
@@ -58,7 +62,7 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
         {/* One step behind the header, and no further: this tree can render
             every leaf at once, so nothing inside it is staggered per row. */}
         <div className="animate-enter stagger-1">
-          <WbsTreeVisual roots={roots} />
+          <WbsTreeVisual roots={roots} weightsLocked={weightsLocked} />
         </div>
       </div>
     </RouteTransition>

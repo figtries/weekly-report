@@ -24,8 +24,14 @@ import { cn } from '@/lib/utils';
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
-function isMilestone(n: RollupNode): boolean {
-  return n.children.length === 0 && n.bobot === 0;
+/**
+ * A weightless leaf is a milestone marker ONLY where the weights are the plan's
+ * own statement — see `ProjectInfo.weightsLocked`. Derived weights leave the
+ * same shape behind on work no price reached, and hiding that takes real
+ * activities off this page with no way to get them back.
+ */
+function isMilestone(n: RollupNode, weightsLocked: boolean): boolean {
+  return weightsLocked && n.children.length === 0 && n.bobot === 0;
 }
 
 function planPctOf(n: RollupNode): number {
@@ -42,8 +48,8 @@ function flattenAll(roots: RollupNode[]): RollupNode[] {
   return out;
 }
 
-function visibleChildren(n: RollupNode): RollupNode[] {
-  return n.children.filter((c) => !isMilestone(c));
+function visibleChildren(n: RollupNode, weightsLocked: boolean): RollupNode[] {
+  return n.children.filter((c) => !isMilestone(c, weightsLocked));
 }
 
 /**
@@ -64,8 +70,9 @@ function visibleChildren(n: RollupNode): RollupNode[] {
  */
 const cascade = (index: number) => `${Math.min(index, 8) * 55}ms`;
 
-function leafCount(n: RollupNode): number {
-  return flattenAll([n]).filter((x) => x.children.length === 0 && !isMilestone(x)).length;
+function leafCount(n: RollupNode, weightsLocked: boolean): number {
+  return flattenAll([n]).filter((x) => x.children.length === 0 && !isMilestone(x, weightsLocked))
+    .length;
 }
 
 /** "100%" not "100.00%"; keep one decimal only when it carries information. */
@@ -189,14 +196,24 @@ function Level({
 
 // ============================================================================
 
-export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
+export default function WbsTreeVisual({
+  roots,
+  weightsLocked = true,
+}: {
+  roots: RollupNode[];
+  /** `db.project.weightsLocked`. Defaults to locked, which is today's behaviour. */
+  weightsLocked?: boolean;
+}) {
   const flatAll = useMemo(() => flattenAll(roots), [roots]);
 
   // With a single umbrella root the SPK contracts underneath are the folders
   // users actually think in — mirror Data Overall's home resolution exactly.
   const homeNodes = useMemo(
-    () => (roots.length === 1 ? visibleChildren(roots[0]) : roots.filter((r) => !isMilestone(r))),
-    [roots]
+    () =>
+      roots.length === 1
+        ? visibleChildren(roots[0], weightsLocked)
+        : roots.filter((r) => !isMilestone(r, weightsLocked)),
+    [roots, weightsLocked]
   );
   const pathBase = roots.length === 1 ? 1 : 0;
   const grand = useMemo(() => computeGrandTotal(roots), [roots]);
@@ -222,13 +239,13 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
   }, [path, homeNodes]);
 
   const currentNode = currentPath.length ? currentPath[currentPath.length - 1] : null;
-  const currentNodes = currentNode ? visibleChildren(currentNode) : homeNodes;
+  const currentNodes = currentNode ? visibleChildren(currentNode, weightsLocked) : homeNodes;
 
   // Status distribution across every leaf — powers the overview strip.
   const dist = useMemo(() => {
     const counts: Record<string, number> = { done: 0, ontrack: 0, slight: 0, behind: 0, idle: 0 };
     flatAll.forEach((n) => {
-      if (n.children.length === 0 && !isMilestone(n)) {
+      if (n.children.length === 0 && !isMilestone(n, weightsLocked)) {
         counts[statusOf(round2(n.curProgressPct), round2(planPctOf(n))).key]++;
       }
     });
@@ -295,7 +312,12 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
     const q = query.trim().toLowerCase();
     if (!q) return null;
     return flatAll
-      .filter((n) => n.children.length === 0 && !isMilestone(n) && n.deskripsi.toLowerCase().includes(q))
+      .filter(
+        (n) =>
+          n.children.length === 0 &&
+          !isMilestone(n, weightsLocked) &&
+          n.deskripsi.toLowerCase().includes(q)
+      )
       .slice(0, 20);
   }, [flatAll, query]);
 
@@ -384,7 +406,13 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
             </p>
             <div className="space-y-2.5">
               {homeNodes.map((node, idx) => (
-                <FolderCard key={node.id} node={node} index={idx} onOpen={() => navigateInto(node)} />
+                <FolderCard
+                  key={node.id}
+                  node={node}
+                  index={idx}
+                  onOpen={() => navigateInto(node)}
+                  weightsLocked={weightsLocked}
+                />
               ))}
             </div>
           </Level>
@@ -425,7 +453,7 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
             </div>
             {currentNode && (
               <div className="mt-3">
-                <FolderFace node={currentNode} />
+                <FolderFace node={currentNode} weightsLocked={weightsLocked} />
               </div>
             )}
             </CardContent>
@@ -435,7 +463,13 @@ export default function WbsTreeVisual({ roots }: { roots: RollupNode[] }) {
             <div className="space-y-2.5">
               {currentNodes.map((node, idx) =>
                 node.children.length > 0 ? (
-                  <FolderCard key={node.id} node={node} index={idx} onOpen={() => navigateInto(node)} />
+                  <FolderCard
+                  key={node.id}
+                  node={node}
+                  index={idx}
+                  onOpen={() => navigateInto(node)}
+                  weightsLocked={weightsLocked}
+                />
                 ) : (
                   <div
                     key={node.id}
@@ -672,7 +706,17 @@ function RailStat({ label, value, valueCls = 'text-gray-900' }: { label: string;
  * The percentage is blue because it is the actual — rule 1 of lib/design.ts.
  * The chip beside it is where the verdict lives.
  */
-function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; onOpen: () => void }) {
+function FolderCard({
+  node,
+  index,
+  onOpen,
+  weightsLocked,
+}: {
+  node: RollupNode;
+  index: number;
+  onOpen: () => void;
+  weightsLocked: boolean;
+}) {
   return (
     <Card
       className="group animate-fade-in-up py-0 transition-shadow duration-300 ease-ios hover:shadow-md"
@@ -682,7 +726,7 @@ function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; 
         onClick={onOpen}
         className="w-full px-4 py-4 text-left transition-transform duration-300 ease-ios active:scale-[0.99] sm:px-5"
       >
-        <FolderFace node={node} chevron />
+        <FolderFace node={node} chevron weightsLocked={weightsLocked} />
       </button>
     </Card>
   );
@@ -700,7 +744,15 @@ function FolderCard({ node, index, onOpen }: { node: RollupNode; index: number; 
  * row changed how the same four numbers looked. They render the same markup
  * now; the row adds a button and a chevron around it, and nothing else.
  */
-function FolderFace({ node, chevron = false }: { node: RollupNode; chevron?: boolean }) {
+function FolderFace({
+  node,
+  chevron = false,
+  weightsLocked,
+}: {
+  node: RollupNode;
+  chevron?: boolean;
+  weightsLocked: boolean;
+}) {
   const cum = round2(node.curProgressPct);
   const plan = round2(planPctOf(node));
   const st = statusOf(cum, plan);
@@ -730,7 +782,7 @@ function FolderFace({ node, chevron = false }: { node: RollupNode; chevron?: boo
           </div>
           <div className="mt-1 text-[13px] text-muted-foreground">
             <span className="font-semibold text-foreground tabular-nums">{node.bobot.toFixed(2)}%</span> of the
-            project · {leafCount(node)} activities · Plan {plan.toFixed(1)}%
+            project · {leafCount(node, weightsLocked)} activities · Plan {plan.toFixed(1)}%
             <GapInline cum={cum} plan={plan} />
           </div>
         </div>

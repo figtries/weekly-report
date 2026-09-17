@@ -256,6 +256,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
     schedule: db.schedule,
     week,
     changeLog: db.changeLog,
+    weightsLocked: db.project.weightsLocked,
   });
 
   // EVERY CHECK REPORTS, PASS OR FAIL. It used to push a finding only when

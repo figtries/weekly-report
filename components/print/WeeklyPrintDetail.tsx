@@ -26,8 +26,13 @@ export default function WeeklyPrintDetail({
   meta: WeeklyMeta;
   roots: RollupNode[];
 }) {
+  // Weightless leaves are the imported workbook's milestone markers — Project
+  // Award, Process PO — and the client's own signed sheet does not print them.
+  // On a plan whose weights are DERIVED the same shape is work no price
+  // reached, and leaving it off the paper is how a report ends up shorter than
+  // the plan it reports on. `weightsLocked` is the line between the two.
   const flat = flattenTree(roots).filter(
-    (n) => !(n.children.length === 0 && n.bobot === 0),
+    (n) => !(project.weightsLocked !== false && n.children.length === 0 && n.bobot === 0),
   );
   const pages = chunk(flat, ROWS_PER_PAGE);
 
