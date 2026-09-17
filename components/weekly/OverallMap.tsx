@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
@@ -41,6 +41,60 @@ const fmt2 = (v: number) => v.toFixed(2);
  */
 const INDENT = ['pl-3', 'pl-7', 'pl-11', 'pl-12'];
 const RAIL = ['left-0', 'left-4', 'left-8', 'left-9'];
+
+/**
+ * One fact about a row, in the shape the row already used for its status chip.
+ *
+ * What was here before was a sentence of 12.5px muted text — "6 activities ·
+ * weight 69.72%" — and on this screen muted reads as absent: the figure a
+ * heading is WORTH was the hardest thing on the map to find, sitting in the
+ * lightest grey on the row. The pill is not decoration. It gives the number a
+ * ground, and a ground is what makes it survive a glance down two hundred rows.
+ *
+ * `plain` carries no colour on purpose. In this app blue is actual and red is
+ * plan, so a tinted weight would claim to be progress; only `due` (the same
+ * tint the leaf chip uses for the same meaning) and `warn` say anything.
+ */
+const PILL_TONE = {
+  plain: 'bg-foreground/[0.06] text-foreground/60',
+  ok: 'bg-ok-soft font-semibold text-ok',
+  due: 'bg-chart-1/10 font-semibold text-chart-1',
+  warn: 'bg-warn/10 font-semibold text-warn',
+} as const;
+
+function Pill({
+  tone = 'plain',
+  children,
+}: {
+  tone?: keyof typeof PILL_TONE;
+  children: ReactNode;
+}) {
+  return (
+    <span className={cn('rounded-full px-2 py-0.5 text-[12.5px] tabular-nums', PILL_TONE[tone])}>
+      {children}
+    </span>
+  );
+}
+
+/** The number inside a pill, which is the part anyone is actually reading. */
+const Figure = ({ children }: { children: ReactNode }) => (
+  <span className="font-semibold text-foreground">{children}</span>
+);
+
+/**
+ * A weight of zero is not a weight of zero. It is a row nobody has priced yet,
+ * and printing "0.00%" states it as a decision — the same confident nothing
+ * that made a fully priced heading read "No value yet" beside 69.72%. Say which
+ * one it is.
+ */
+const WeightPill = ({ weight }: { weight: number }) =>
+  weight > 0.0001 ? (
+    <Pill>
+      <Figure>{fmt2(weight)}%</Figure> weight
+    </Pill>
+  ) : (
+    <Pill tone="warn">no weight yet</Pill>
+  );
 
 export default function OverallMap({
   map,
@@ -410,57 +464,46 @@ const Row = memo(function Row({
 
         <Bar actual={node.actualPct} plan={node.planPct} thick={node.kind === 'unit'} />
 
-        <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-muted-foreground">
+        <span className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {node.dueCount > 0 && node.kind === 'leaf' && (
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 font-semibold',
-                node.filledCount ? 'bg-ok-soft text-ok' : 'bg-chart-1/10 text-chart-1'
-              )}
-            >
+            <Pill tone={node.filledCount ? 'ok' : 'due'}>
               {node.completeCount
                 ? 'Complete'
                 : node.filledCount
                   ? 'Filled in'
                   : 'Due this week'}
-            </span>
+            </Pill>
           )}
           {isBranch && (
-            <span className="tabular-nums">
-              {node.leafCount} {node.leafCount === 1 ? 'activity' : 'activities'} · weight{' '}
-              <span className="font-semibold text-foreground/70">{fmt2(node.weight)}%</span>
+            <>
+              <Pill>
+                <Figure>{node.leafCount}</Figure>{' '}
+                {node.leafCount === 1 ? 'activity' : 'activities'}
+              </Pill>
+              <WeightPill weight={node.weight} />
               {/* What is still OUTSTANDING, not what was scheduled. A branch
                   reading "1 due" over a row whose own chip says Complete is one
                   card making two statements, and the person checking the week
                   has to open it to find out which is true. */}
-              {node.dueCount - node.filledCount > 0 &&
-                ` · ${node.dueCount - node.filledCount} due`}
-            </span>
-          )}
-          {node.kind === 'leaf' && (
-            <span className="tabular-nums">
-              {node.method === 'qty' ? (
-                <>
-                  <span className="font-semibold text-foreground/70">
-                    {(node.qtyDone ?? 0).toLocaleString('en-GB')}
-                  </span>{' '}
-                  of {(node.qtyTotal ?? 0).toLocaleString('en-GB')} {node.unit ?? ''}
-                </>
-              ) : node.method === 'milestone' ? (
-                <>
-                  <span className="font-semibold text-foreground/70">
-                    {(node.milestones ?? []).filter((s) => s.done).length}
-                  </span>{' '}
-                  of {(node.milestones ?? []).length} steps
-                </>
-              ) : (
-                <>
-                  weight{' '}
-                  <span className="font-semibold text-foreground/70">{fmt2(node.weight)}%</span>
-                </>
+              {node.dueCount - node.filledCount > 0 && (
+                <Pill tone="due">{node.dueCount - node.filledCount} due</Pill>
               )}
-            </span>
+            </>
           )}
+          {node.kind === 'leaf' &&
+            (node.method === 'qty' ? (
+              <Pill>
+                <Figure>{(node.qtyDone ?? 0).toLocaleString('en-GB')}</Figure> of{' '}
+                {(node.qtyTotal ?? 0).toLocaleString('en-GB')} {node.unit ?? ''}
+              </Pill>
+            ) : node.method === 'milestone' ? (
+              <Pill>
+                <Figure>{(node.milestones ?? []).filter((s) => s.done).length}</Figure> of{' '}
+                {(node.milestones ?? []).length} steps
+              </Pill>
+            ) : (
+              <WeightPill weight={node.weight} />
+            ))}
         </span>
       </span>
     </m.button>
