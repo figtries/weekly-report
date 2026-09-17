@@ -57,6 +57,36 @@ function buildTree(items: WbsItem[]): RollupNode[] {
   return roots;
 }
 
+/** Every leaf under this node, for the average that cannot use weight. */
+function leavesUnder(node: RollupNode, out: RollupNode[] = []): RollupNode[] {
+  if (node.children.length === 0) out.push(node);
+  else node.children.forEach((c) => leavesUnder(c, out));
+  return out;
+}
+
+/**
+ * A branch's percentage.
+ *
+ * Normally its children's WEIGHTED average, which is all `wf / bobot` is. But a
+ * heading whose whole subtree carries no weight divides zero by zero, and
+ * printing 0.0% there says the work has not started when it may be finished:
+ * KICKOFF AND SITE SURVEY sat at 0.0% above two rows both reading 100.0%
+ * (17 Sep 2026). The bobot is what is zero there, not the progress.
+ *
+ * So with no weight to average by, every leaf under it counts the same — the
+ * rule `deriveWeights` already falls back to on a plan with no prices at all.
+ * LEAF DESCENDANTS rather than direct children, because a mean of means lets a
+ * branch holding one leaf outvote a sibling holding ten.
+ *
+ * None of this can reach a report total. `curWF` is still `bobot × pct / 100`
+ * and the bobot is zero, so the figure says what happened and adds nothing.
+ */
+function branchPct(node: RollupNode, wf: number, read: (n: RollupNode) => number): number {
+  if (node.bobot > 0) return (wf / node.bobot) * 100;
+  const leaves = leavesUnder(node);
+  return leaves.length ? leaves.reduce((s, l) => s + read(l), 0) / leaves.length : 0;
+}
+
 export function computeRollup(
   items: WbsItem[],
   current: WeeklyLeafData,
@@ -87,8 +117,8 @@ export function computeRollup(
       node.curWF = node.children.reduce((sum, c) => sum + c.curWF, 0);
       node.prevWF = node.children.reduce((sum, c) => sum + c.prevWF, 0);
       node.targetWF = node.children.reduce((sum, c) => sum + c.targetWF, 0);
-      node.curProgressPct = node.bobot > 0 ? (node.curWF / node.bobot) * 100 : 0;
-      node.prevProgressPct = node.bobot > 0 ? (node.prevWF / node.bobot) * 100 : 0;
+      node.curProgressPct = branchPct(node, node.curWF, (n) => n.curProgressPct);
+      node.prevProgressPct = branchPct(node, node.prevWF, (n) => n.prevProgressPct);
     }
     node.thisWeekWF = node.curWF - node.prevWF;
     node.thisWeekProgressPct = node.curProgressPct - node.prevProgressPct;
@@ -154,8 +184,8 @@ export function promoteNestedSpkContracts(roots: RollupNode[]): RollupNode[] {
       node.curWF = node.children.reduce((sum, c) => sum + c.curWF, 0);
       node.prevWF = node.children.reduce((sum, c) => sum + c.prevWF, 0);
       node.targetWF = node.children.reduce((sum, c) => sum + c.targetWF, 0);
-      node.curProgressPct = node.bobot > 0 ? (node.curWF / node.bobot) * 100 : 0;
-      node.prevProgressPct = node.bobot > 0 ? (node.prevWF / node.bobot) * 100 : 0;
+      node.curProgressPct = branchPct(node, node.curWF, (n) => n.curProgressPct);
+      node.prevProgressPct = branchPct(node, node.prevWF, (n) => n.prevProgressPct);
       node.thisWeekWF = node.curWF - node.prevWF;
       node.thisWeekProgressPct = node.curProgressPct - node.prevProgressPct;
       node.variance = node.curWF - node.targetWF;

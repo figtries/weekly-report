@@ -305,7 +305,11 @@ export function matchingIds(
  * branch's percent is its children's weighted average, because a leaf's
  * weighted factor is `weight × pct / 100` and a branch's is the sum of its
  * children's. Anything else here would be a second origin for a number this app
- * keeps in exactly one place.
+ * keeps in exactly one place — including the fallback, which is `branchPct`'s:
+ * with no weight to average by, every leaf under the branch counts the same.
+ * Summing `leafCount × actualPct` is that same mean, and it is exact here
+ * because this branch weighs nothing only when every branch beneath it does
+ * too, so each child's own percent is already its leaves' plain average.
  */
 export function withOptimistic(units: MapNode[], pending: Record<string, number>): MapNode[] {
   if (!Object.keys(pending).length) return units;
@@ -318,9 +322,13 @@ export function withOptimistic(units: MapNode[], pending: Record<string, number>
     }
     const children = n.children.map(walk);
     const weight = children.reduce((s, c) => s + c.weight, 0);
-    const actualPct = weight > 0
-      ? children.reduce((s, c) => s + c.weight * c.actualPct, 0) / weight
-      : n.actualPct;
+    const leaves = children.reduce((s, c) => s + c.leafCount, 0);
+    const actualPct =
+      weight > 0
+        ? children.reduce((s, c) => s + c.weight * c.actualPct, 0) / weight
+        : leaves > 0
+          ? children.reduce((s, c) => s + c.leafCount * c.actualPct, 0) / leaves
+          : n.actualPct;
     return {
       ...n,
       children,
