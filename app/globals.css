@@ -106,6 +106,23 @@
   --bad-soft: #fee2e2;
   --warn: #b45309;    /* amber-700 — needs attention, not yet a failure */
   --warn-soft: #fef3c7;
+  /* META — what a row STATES about itself (how many activities it holds, what
+     it is worth), as against the figures that say how it is DOING. Those two
+     kinds of number sit on the same line and had the same grey, which is how
+     the weight of a heading ended up being the hardest thing on the map to
+     find.
+
+     Indigo because it is the one hue this app owns that means nothing HERE.
+     Every other colour is spoken for: blue is actual, red is plan, emerald is
+     done, amber is at risk, slate is dormant, and the verdict pair answers
+     whether the news is good. --plan-1 is this same indigo in the planner's
+     Gantt, where it names the first package — a different screen, and a
+     categorical name rather than a measurement, so nothing on Data Overall can
+     read a meta pill as a figure about progress. A seventh invented hue would
+     have been a second palette, which this file does not have. */
+  --meta: #4338ca;        /* indigo-700 — the word */
+  --meta-strong: #312e81; /* indigo-900 — the figure, which is what is read */
+  --meta-soft: #eef2ff;   /* indigo-50  — its ground */
   /* IDENTITY, NOT VERDICT. The weekly stat row colours its four figures so they
      are told apart at a glance instead of read one label at a time; Plan and
      Actual reuse --chart-2/--chart-1 so that row teaches the same pair as the
@@ -162,6 +179,9 @@
   --color-bad-soft: var(--bad-soft);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
+  --color-meta: var(--meta);
+  --color-meta-strong: var(--meta-strong);
+  --color-meta-soft: var(--meta-soft);
   --color-deviation: var(--deviation);
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -1424,6 +1444,11 @@ a:active {
   --bad-soft: color-mix(in oklab, #f87171 18%, transparent);
   --warn: #fbbf24;
   --warn-soft: color-mix(in oklab, #fbbf24 18%, transparent);
+  /* Indigo-700 on a dark card is unreadable, so the meta pair lifts the way
+     the verdicts above it do: a lighter face and a washed ground. */
+  --meta: #a5b4fc;
+  --meta-strong: #e0e7ff;
+  --meta-soft: color-mix(in oklab, #818cf8 18%, transparent);
   /* Free to be the bright yellow here: on the dark card this is 9.5:1, where
      the same hue on white was 1.5:1. */
   --deviation: #facc15;

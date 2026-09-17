@@ -51,15 +51,20 @@ const RAIL = ['left-0', 'left-4', 'left-8', 'left-9'];
  * lightest grey on the row. The pill is not decoration. It gives the number a
  * ground, and a ground is what makes it survive a glance down two hundred rows.
  *
- * `plain` carries no colour on purpose. In this app blue is actual and red is
- * plan, so a tinted weight would claim to be progress; only `due` (the same
- * tint the leaf chip uses for the same meaning) and `warn` say anything.
+ * `plain` takes --meta, which is the one hue this app owns that means nothing
+ * on this screen — blue is actual, red is plan, emerald done, amber at risk.
+ * `due` and `warn` keep their own colours because they SAY something; the rest
+ * are facts, and facts share one theme.
+ *
+ * Upper case, and that is the point rather than a flourish: at this size it is
+ * the shape of the word that carries, and small lower-case grey was invisible
+ * to the person who has to read two hundred of these.
  */
 const PILL_TONE = {
-  plain: 'bg-foreground/[0.06] text-foreground/60',
-  ok: 'bg-ok-soft font-semibold text-ok',
-  due: 'bg-chart-1/10 font-semibold text-chart-1',
-  warn: 'bg-warn/10 font-semibold text-warn',
+  plain: 'bg-meta-soft text-meta',
+  ok: 'bg-ok-soft text-ok',
+  due: 'bg-chart-1/10 text-chart-1',
+  warn: 'bg-warn/10 text-warn',
 } as const;
 
 function Pill({
@@ -70,7 +75,12 @@ function Pill({
   children: ReactNode;
 }) {
   return (
-    <span className={cn('rounded-full px-2 py-0.5 text-[12.5px] tabular-nums', PILL_TONE[tone])}>
+    <span
+      className={cn(
+        'rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold tracking-[0.045em] uppercase tabular-nums',
+        PILL_TONE[tone]
+      )}
+    >
       {children}
     </span>
   );
@@ -78,7 +88,7 @@ function Pill({
 
 /** The number inside a pill, which is the part anyone is actually reading. */
 const Figure = ({ children }: { children: ReactNode }) => (
-  <span className="font-semibold text-foreground">{children}</span>
+  <span className="text-meta-strong">{children}</span>
 );
 
 /**
