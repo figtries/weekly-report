@@ -85,20 +85,29 @@ function MeasureBar({
  * comfortably ahead while the 47.65%-weight contract underneath it is behind,
  * and only a per-unit breakdown shows that.
  */
-export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
+export function UnitBreakdown({ rows, limit }: { rows: SummaryRow[]; limit?: number }) {
   if (rows.length < 2) return null;
+  // A plan with four contracts prints all four; a plan whose breakdown is its
+  // own top level can have thirty, and thirty rows is the Overall Summary
+  // screen, not a dashboard card. The card header says how many there are and
+  // links to the rest — the same admission the laggards card above it makes.
+  const shown = limit ? rows.slice(0, limit) : rows;
 
   return (
     <ul className="divide-y">
-      {rows.map((r) => {
+      {shown.map((r) => {
         const actual = r.bobot > 0 ? (r.curWF / r.bobot) * 100 : 0;
         const plan = r.bobot > 0 ? (r.targetWF / r.bobot) * 100 : 0;
         // A finished contract has nothing to be ahead or behind of, and "+0.00%"
         // reads as a measurement rather than as done.
         const done = actual >= 99.995;
         const verdict = done ? 'done' : verdictOf(r.variance);
-        // Strip the "(SPK-###)" tag out of the label and show it as its own chip.
+        // Strip the "(SPK-###)" tag out of the label and show it as its own
+        // chip. A unit or a section carries no tag in its name, so it hands
+        // over its WBS code instead — the chip is what makes two rows starting
+        // "Procurement Material…" tell themselves apart at 390px.
         const { tag, name } = splitCode(r.deskripsi);
+        const chip = tag ?? r.code;
 
         return (
           <li key={r.id} className="py-3 first:pt-0 last:pb-0">
@@ -107,7 +116,7 @@ export function UnitBreakdown({ rows }: { rows: SummaryRow[] }) {
                   390px it stole enough room to truncate every contract down to
                   "Pekerjaan Relok…", which is the same name three times over. */}
               <div className="flex min-w-0 items-baseline gap-2">
-                {tag && <CodeChip>{tag}</CodeChip>}
+                {chip && <CodeChip>{chip}</CodeChip>}
                 <p className={cn('truncate', TYPE.row)}>{name}</p>
               </div>
               <span className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText[verdict])}>

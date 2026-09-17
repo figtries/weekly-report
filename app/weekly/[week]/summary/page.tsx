@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getOpenWeekRollup } from '@/lib/data';
-import { getSummaryRows } from '@/lib/rollup';
+import { summariseUnits } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
 import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -59,7 +59,7 @@ async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }
   const result = await getOpenWeekRollup(week);
   if (!result) notFound();
   const { roots, grandTotal } = result;
-  const summaryRows = getSummaryRows(roots);
+  const { basis, rows: summaryRows } = summariseUnits(roots);
 
   return (
     // The root carries no animation of its own any more. On a tab change the
@@ -69,8 +69,8 @@ async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }
     <RouteTransition id="weekly-summary">
       <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
         <PageHeader section="Weekly Progress" title="Overall Summary" className="animate-enter">
-          <span className="font-medium text-foreground">Week {week}</span> · Progress per SPK
-          contract.
+          <span className="font-medium text-foreground">Week {week}</span> · Progress per{' '}
+          {basis === 'branch' ? 'section' : 'contract'}.
         </PageHeader>
 
         {/* SummaryCards staggers its own hero and contract grid from here. */}

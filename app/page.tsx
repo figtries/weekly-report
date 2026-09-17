@@ -24,7 +24,7 @@ import {
   validateWeek,
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
-import { flattenTree, getSummaryRows, promoteNestedSpkContracts } from '@/lib/rollup';
+import { flattenTree, promoteNestedSpkContracts, summariseUnits, summaryTitle } from '@/lib/rollup';
 import { currentWeekOf } from '@/lib/current-week';
 import { getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
@@ -100,6 +100,16 @@ export const metadata = { title: 'Dashboard' };
  * card in each pair stop early, which left a white hole the height of a hand
  * beside "Work spread" and again beside "Forecast".
  */
+
+/**
+ * How many rows the breakdown card prints before it hands over to the Overall
+ * Summary screen. Six because the cards in that row are stretched to a common
+ * height (see above) — an uncapped list on a plan with no contracts is its own
+ * top level, thirty rows long, and "Work spread" beside it becomes the white
+ * hole that rule was written to close.
+ */
+const UNIT_ROWS = 6;
+
 export default function DashboardPage({
   searchParams,
 }: {
@@ -211,7 +221,14 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   // together, which is the one figure the list itself cannot state.
   const totalDrag = Math.abs(laggards.reduce((sum, l) => sum + l.varianceWF, 0));
   const curve = buildSCurveSeries(db, week);
-  const units = getSummaryRows(promoteNestedSpkContracts(rollup.roots));
+  // What this splits into, in whichever of the three ways the plan supports:
+  // the units it marked, the "(SPK-###)" contracts the importer wrote, or its
+  // own top level. A project that was never given packages still gets the
+  // breakdown — "where does the percentage come from" is the question this card
+  // answers, and every plan can answer it somehow.
+  const { basis: unitBasis, rows: units } = summariseUnits(
+    promoteNestedSpkContracts(rollup.roots)
+  );
 
   // By weight, not by count: a 3.3% leaf and a 0.03% leaf are not equals.
   const spread: LeafSpread = flattenTree(rollup.roots)
@@ -411,13 +428,23 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           {units.length > 1 && (
             <Card className="h-full lg:col-span-2">
               <CardHeader>
-                <CardTitle className={TYPE.cardTitle}>By contract</CardTitle>
+                <CardTitle className={TYPE.cardTitle}>{summaryTitle(unitBasis)}</CardTitle>
                 <CardDescription className={TYPE.cardDesc}>
                   Where the overall percentage comes from
                 </CardDescription>
+                {units.length > UNIT_ROWS && (
+                  <CardAction>
+                    <Link
+                      href={`/weekly/${week}/summary`}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-chart-1 hover:underline"
+                    >
+                      All {fmtNum(units.length)} <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </CardAction>
+                )}
               </CardHeader>
               <CardContent>
-                <UnitBreakdown rows={units} />
+                <UnitBreakdown rows={units} limit={UNIT_ROWS} />
               </CardContent>
             </Card>
           )}

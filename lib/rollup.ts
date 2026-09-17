@@ -244,6 +244,14 @@ export function findNode(roots: RollupNode[], id: string): RollupNode | null {
 export interface SummaryRow {
   id: string;
   deskripsi: string;
+  /**
+   * The identifier to chip in front of the name, when the name does not already
+   * carry one. Gundih's contracts are called "Pekerjaan … (SPK-002)" and the
+   * screens pull that tag out of the description themselves (`splitCode`), so
+   * this stays null there; a unit or a branch has no tag in its name and lends
+   * its WBS code instead.
+   */
+  code: string | null;
   bobot: number;
   prevProgressPct: number;
   prevWF: number;
@@ -256,19 +264,83 @@ export interface SummaryRow {
 }
 
 /**
- * The rows shown in "Overall Progress Summary" — one per SPK contract, matching
- * the Excel Summary Overall sheet.
- *
- * Grouping is by contract, NOT by tree depth: each group header carries its
- * "(SPK-###)" tag in its description, and every leaf belongs to its nearest such
- * ancestor. This matters because SPK-007 (Overhaul Turbine, WBS 1.4.4) is nested
- * under SPK-004 (WBS 1.4) in the tree, yet the report lists them as two separate
- * contracts — SPK-004 = the 1.4 branch excluding 1.4.4, SPK-007 = 1.4.4.
+ * What the summary ended up grouping by. The screens read it to title
+ * themselves: "By contract" is a lie on a plan that has no contracts in it, and
+ * a card that silently disappears instead reads as a broken screen.
  */
-export function getSummaryRows(roots: RollupNode[]): SummaryRow[] {
-  const SPK = /\(SPK-\d+\)/;
+export type SummaryBasis = 'unit' | 'spk' | 'branch';
+
+export interface SummaryUnits {
+  basis: SummaryBasis;
+  rows: SummaryRow[];
+}
+
+const SPK_TAG = /\(SPK-\d+\)/;
+
+/** Where the group headers are, in the first of three ways the tree offers. */
+function summaryAnchors(roots: RollupNode[]): {
+  basis: SummaryBasis;
+  anchorAt: (node: RollupNode) => { key: string; label: string; code: string | null } | null;
+} {
+  const flat = flattenTree(roots);
+
+  // 1. What the plan MARKED. `isReportingUnit` is the first-class flag the
+  //    planner's row menu writes; it beats the tag because it is a decision
+  //    somebody made rather than a string an importer happened to produce.
+  if (flat.some((n) => n.isReportingUnit)) {
+    return {
+      basis: 'unit',
+      anchorAt: (n) =>
+        n.isReportingUnit
+          ? { key: n.id, label: n.deskripsi.trim(), code: n.wbsCode || null }
+          : null,
+    };
+  }
+
+  // 2. The "(SPK-###)" tag — Gundih, and every project that came out of the
+  //    importer. Kept ahead of the structural fallback and unchanged, because
+  //    its grouping is not the tree's: SPK-007 (Overhaul Turbine, WBS 1.4.4)
+  //    sits inside SPK-004's 1.4 yet the signed report lists them separately.
+  if (flat.some((n) => SPK_TAG.test(n.deskripsi))) {
+    return {
+      basis: 'spk',
+      anchorAt: (n) => {
+        const m = n.deskripsi.match(SPK_TAG);
+        return m ? { key: m[0], label: n.deskripsi.trim(), code: null } : null;
+      },
+    };
+  }
+
+  // 3. Nothing marked and nothing tagged: fall back to the plan's own top
+  //    level, so the breakdown still says where the percentage comes from.
+  //    A SINGLE ROOT IS UNWRAPPED — the same rule the overall map follows,
+  //    because Gundih-shaped plans hang everything under one top row and a
+  //    breakdown of one row is not a breakdown.
+  let level = roots;
+  while (level.length === 1 && level[0].children.length > 0) level = level[0].children;
+  const top = new Set(level.map((n) => n.id));
+  return {
+    basis: 'branch',
+    anchorAt: (n) =>
+      top.has(n.id) ? { key: n.id, label: n.deskripsi.trim(), code: n.wbsCode || null } : null,
+  };
+}
+
+/**
+ * The rows shown in "Overall Progress Summary" — one per contract on a project
+ * that has contracts, matching the Excel Summary Overall sheet.
+ *
+ * Grouping is by ANCHOR, never by tree depth: `summaryAnchors` picks which
+ * nodes are headers, and every leaf is credited to its nearest such ancestor.
+ * An anchor nested inside another therefore subtracts itself out of the outer
+ * one, which is what lets SPK-004 and SPK-007 both be reported in full without
+ * the total reaching 114%.
+ */
+export function summariseUnits(roots: RollupNode[]): SummaryUnits {
+  const { basis, anchorAt } = summaryAnchors(roots);
   interface Group {
     label: string;
+    code: string | null;
     order: number;
     bobot: number;
     prevWF: number;
@@ -279,14 +351,13 @@ export function getSummaryRows(roots: RollupNode[]): SummaryRow[] {
   const groups = new Map<string, Group>();
   let order = 0;
 
-  const walk = (node: RollupNode, ctx: { key: string; label: string } | null) => {
-    const m = node.deskripsi.match(SPK);
-    const cur = m ? { key: m[0], label: node.deskripsi.trim() } : ctx;
+  const walk = (node: RollupNode, ctx: { key: string; label: string; code: string | null } | null) => {
+    const cur = anchorAt(node) ?? ctx;
     if (node.children.length === 0) {
       if (cur && node.bobot > 0) {
         let g = groups.get(cur.key);
         if (!g) {
-          g = { label: cur.label, order: order++, bobot: 0, prevWF: 0, curWF: 0, thisWeekWF: 0, targetWF: 0 };
+          g = { label: cur.label, code: cur.code, order: order++, bobot: 0, prevWF: 0, curWF: 0, thisWeekWF: 0, targetWF: 0 };
           groups.set(cur.key, g);
         }
         g.bobot += node.bobot;
@@ -301,11 +372,12 @@ export function getSummaryRows(roots: RollupNode[]): SummaryRow[] {
   };
   roots.forEach((r) => walk(r, null));
 
-  return [...groups.values()]
+  const rows = [...groups.values()]
     .sort((a, b) => a.order - b.order)
     .map((g, i) => ({
-      id: `spk-${i}`,
+      id: `${basis === 'spk' ? 'spk' : basis}-${i}`,
       deskripsi: g.label,
+      code: g.code,
       bobot: g.bobot,
       prevWF: g.prevWF,
       curWF: g.curWF,
@@ -316,4 +388,16 @@ export function getSummaryRows(roots: RollupNode[]): SummaryRow[] {
       curProgressPct: g.bobot > 0 ? (g.curWF / g.bobot) * 100 : 0,
       variance: g.curWF - g.targetWF,
     }));
+
+  return { basis, rows };
+}
+
+/** What every caller wanted before the basis mattered to anyone. */
+export function getSummaryRows(roots: RollupNode[]): SummaryRow[] {
+  return summariseUnits(roots).rows;
+}
+
+/** "By contract" is only true of a plan that has contracts in it. */
+export function summaryTitle(basis: SummaryBasis): string {
+  return basis === 'branch' ? 'By section' : 'By contract';
 }

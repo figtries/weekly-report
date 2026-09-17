@@ -127,6 +127,11 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     order: n.order,
     progressMethod: legacyMethod(n.progressMethod),
     milestones: msByNode.get(n.id),
+    // The flag the planner's row menu writes. Dropping it here is what made
+    // "Make it a reporting unit" change nothing on the dashboard or on the
+    // Overall Summary sheet for every project made inside the app.
+    isReportingUnit: n.isReportingUnit,
+    unitLabel: n.unitLabel,
   }));
 
   // Dates come from the ACTIVE baseline, like every other reader: the

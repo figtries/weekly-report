@@ -28,6 +28,15 @@ export interface WbsItem {
   /** Absent means 'lumpsum' — every pre-existing item. */
   progressMethod?: ProgressMethod;
   milestones?: Milestone[];
+  /**
+   * SPK / package / lot / area. The SQLite store's first-class
+   * `is_reporting_unit` flag, carried through so `getSummaryRows` can group by
+   * what the plan actually marked instead of by a "(SPK-###)" string the Gundih
+   * importer happened to write into a description. Absent on the db.json path,
+   * which has no such column — which is what keeps Gundih on its old grouping.
+   */
+  isReportingUnit?: boolean;
+  unitLabel?: string | null;
 }
 
 export interface LeafSnapshot {
