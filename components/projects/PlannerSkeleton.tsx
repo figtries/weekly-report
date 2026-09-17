@@ -72,8 +72,11 @@ export default function PlannerSkeleton() {
           </Link>
           <div className="order-2 flex shrink-0 animate-pulse items-center gap-2 sm:order-3">
             <Block className="h-9 w-20 rounded-lg" />
-            {/* "Dashboard" on a phone, "Go to dashboard" above it. */}
-            <Block className="h-9 w-28 rounded-lg sm:w-36" />
+            {/* "Data Overall" on a phone, "Go to Data Overall" above it —
+                measured at 126px and 165px. Sized to the OPEN project's button
+                rather than to "Open this project" (58 / 137), which is the same
+                choice this block already made when the words were "Dashboard". */}
+            <Block className="h-9 w-32 rounded-lg sm:w-40" />
           </div>
           {/* `sm:w-[38rem] sm:max-w-full` IS THE WRAP, not decoration. The real
               title block is `sm:w-auto`, so the width flexbox lays this row out
