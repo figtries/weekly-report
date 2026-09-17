@@ -34,10 +34,44 @@ export async function GET() {
   // rather than whatever this instance happened to boot with.
   const refreshed = await ensureFreshDb();
 
-  let projects: { count: number; ids: string[] } | { error: string };
+  // WHAT EACH PROJECT SAYS ABOUT ITS OWN WEIGHTS, because that is what decides
+  // whether a weightless row is a milestone marker to hide or work to show —
+  // see `ProjectInfo.weightsLocked`. A row missing from the map and a row that
+  // was never given a weight look identical from outside, and from a phone
+  // there is no way at all to tell them apart.
+  let projects:
+    | {
+        count: number;
+        ids: string[];
+        rows: { id: string; basis: string; leaves: number; unweighted: number }[];
+      }
+    | { error: string };
   try {
-    const rows = db.select({ id: schema.projects.id }).from(schema.projects).all();
-    projects = { count: rows.length, ids: rows.map((r) => r.id) };
+    const rows = db
+      .select({ id: schema.projects.id, basis: schema.projects.weightBasis })
+      .from(schema.projects)
+      .all();
+    const nodes = db
+      .select({
+        projectId: schema.wbsNodes.projectId,
+        isLeaf: schema.wbsNodes.isLeaf,
+        bobot: schema.wbsNodes.bobot,
+      })
+      .from(schema.wbsNodes)
+      .all();
+    projects = {
+      count: rows.length,
+      ids: rows.map((r) => r.id),
+      rows: rows.map((r) => {
+        const mine = nodes.filter((n) => n.projectId === r.id && n.isLeaf);
+        return {
+          id: r.id,
+          basis: r.basis,
+          leaves: mine.length,
+          unweighted: mine.filter((n) => !n.bobot).length,
+        };
+      }),
+    };
   } catch (err) {
     projects = { error: (err as Error).message };
   }
