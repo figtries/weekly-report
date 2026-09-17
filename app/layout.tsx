@@ -16,8 +16,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Weekly Progress Report",
-  description: "Weekly Progress Report System - Track project progress and generate reports",
+  // A template, not a bare string: every page below sets its own title
+  // ('Projects', 'Dashboard', …), and without this the browser tab — the one
+  // place a desktop user reads the app's name — never said which app it was.
+  title: { default: "Lucille", template: "%s · Lucille" },
+  description: "Lucille - project control: plan, track progress and issue reports",
 };
 
 export default async function RootLayout({

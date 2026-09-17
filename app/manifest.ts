@@ -15,10 +15,10 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Weekly Progress Report",
-    short_name: "Report",
+    name: "Lucille",
+    short_name: "Lucille",
     description:
-      "Weekly Progress Report System - Track project progress and generate reports",
+      "Lucille - project control: plan, track progress and issue reports",
     start_url: "/",
     display: "standalone",
     background_color: "#f9fafb",

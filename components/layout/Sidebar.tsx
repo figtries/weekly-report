@@ -256,17 +256,17 @@ function LiveNavList() {
 function Brand({ compact }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
+      {/* The mark is taller than it is wide (307x512), so it is sized by
+          HEIGHT and left to find its own width. Squared off it would have had
+          to shrink to fit, and at 32px it read as a speck beside the word. */}
       <Image
-        src="/figtries-logo (1).png"
-        alt="Figtries"
-        width={compact ? 28 : 32}
+        src="/lucille-mark.png"
+        alt=""
+        width={compact ? 17 : 19}
         height={compact ? 28 : 32}
-        className={compact ? 'h-7 w-7 object-contain' : 'h-8 w-8 object-contain'}
+        className={compact ? 'h-7 w-auto' : 'h-8 w-auto'}
       />
-      <div>
-        <h1 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Figtries</h1>
-        <p className={cn('text-muted-foreground', compact ? 'text-[10px]' : 'text-xs')}>Progress Report</p>
-      </div>
+      <h1 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Lucille</h1>
     </div>
   );
 }
@@ -382,7 +382,10 @@ export default function Sidebar({
           <MobileDrawer switcher={switcher} />
           {openTag}
         </Suspense>
-        <span className="text-sm font-semibold text-foreground">Progress Report</span>
+        {/* The mark and the name, not <Brand>: the desktop sidebar already
+            renders that <h1>, and both halves sit in the DOM at once. */}
+        <Image src="/lucille-mark.png" alt="" width={14} height={24} className="h-6 w-auto" />
+        <span className="text-sm font-semibold text-foreground">Lucille</span>
       </header>
 
       {/* Desktop: full sidebar */}
