@@ -12,6 +12,7 @@ import { listProjects, type ProjectSummary, type Workspace } from './workspace';
 import { buildProjectDashboardData } from './dashboard-db';
 import { isLegacyProject, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
+import { currentWeekOf } from './current-week';
 import type { Database, WeeklyMeta } from './types';
 
 // Cached so every page renders into an instant static shell (see
@@ -241,6 +242,24 @@ export async function getPrintDb(projectId: string | null): Promise<Database> {
   if (!projectId) return getOpenDb();
   if (isLegacyProject(projectId)) return getDb();
   return buildProjectDashboardData(projectId)?.db ?? NO_PROJECT;
+}
+
+/**
+ * Which week a NAMED project is in — the same question `/weekly` asks, asked
+ * before the navigation instead of during it.
+ *
+ * Opening a project used to send the browser to `/weekly` and let that index
+ * redirect, which spends a second round trip on a screen with nothing on it:
+ * 475 ms of empty main area, measured on a warm dev server.
+ * `setActiveProjectAction` answers it on the spot instead, so the press lands
+ * on `/weekly/N/overall` directly and the route's own skeleton covers the wait.
+ *
+ * The RULE is still `currentWeekOf` and nothing here decides anything — this is
+ * `getPrintDb`'s "told which project rather than asking" pointed at a second
+ * caller. Not cached, and it must not be: it reads the clock.
+ */
+export async function currentWeekForProject(projectId: string | null): Promise<number> {
+  return currentWeekOf(await getPrintDb(projectId));
 }
 
 export async function getPrintWeekRollup(

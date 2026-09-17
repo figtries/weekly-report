@@ -12,6 +12,7 @@ import { deriveInitial, INITIAL_LENGTH } from './initial';
 import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 import { relayWeeks, weekRowsFor } from './week-grid';
+import { currentWeekForProject } from './data';
 
 /**
  * Projects — the writes.
@@ -33,7 +34,9 @@ import { relayWeeks, weekRowsFor } from './week-grid';
  * `getProjectContents`, not from the word "sure".
  */
 
-export type ProjectResult = { ok: true; id: string } | { ok: false; error: string };
+export type ProjectResult =
+  | { ok: true; id: string; week?: number | null }
+  | { ok: false; error: string };
 
 function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
@@ -191,7 +194,19 @@ export async function setActiveProjectAction(projectId: string): Promise<Project
       httpOnly: true,
     });
     await revalidateEverything();
-    return { ok: true, id: projectId };
+    // Where the press lands, resolved HERE rather than by a second round trip.
+    // The button used to push to `/weekly` and let that index redirect, which
+    // is one more request spent on an empty screen. Asked after
+    // `revalidateEverything()` so the answer comes from the project that is now
+    // open, and after the cookie for the same reason. A failure to work it out
+    // is not a failure to open: the caller falls back to `/weekly`.
+    let week: number | null = null;
+    try {
+      week = await currentWeekForProject(projectId);
+    } catch {
+      week = null;
+    }
+    return { ok: true, id: projectId, week };
   } catch (e) {
     return fail(e);
   }

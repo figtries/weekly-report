@@ -12,6 +12,7 @@ import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projec
 import { refreshDbSnapshot } from '@/lib/sqlite';
 import { getSheet, getWeekSpans } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
+import { currentWeekForProject } from '@/lib/data';
 import ValueStrip from '@/components/projects/ValueStrip';
 import { getBarStyles } from '@/lib/bar-styles-read';
 
@@ -95,6 +96,14 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const bars = getBarStyles(id, sheet.rows);
   const weeks = getWeekSpans(id);
   const isOpen = (await getActiveProjectId()) === id;
+  // The week Data Overall opens on, for the button beside this title — and only
+  // when this project is already the open one, which is the only case where the
+  // answer is cheap (the same database every other screen has just read) and
+  // the only case where the button is a link at all. Working it out here is
+  // what saves the press a stop at `/weekly`: that index resolves the same
+  // number, but it does it in a second round trip with an empty main area on
+  // screen for the ~490 ms it takes.
+  const openWeek = isOpen ? await currentWeekForProject(id) : null;
 
   // Lexicographic order on ISO dates is chronological, which is most of the
   // reason every date in this app is stored as one.
@@ -136,7 +145,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
             </Link>
             <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3">
               <ProjectDetails project={project} />
-              <OpenProjectButton id={id} isOpen={isOpen} />
+              <OpenProjectButton id={id} isOpen={isOpen} openWeek={openWeek} />
             </div>
             <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">
               {/* The badge is INLINE, inside the heading, not a flex sibling of
