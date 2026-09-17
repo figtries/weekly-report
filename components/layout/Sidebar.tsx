@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 interface Destination {
   label: string;
   icon: LucideIcon;
-  href: (week: number) => string;
+  href: (week: number | null) => string;
   match: (pathname: string) => boolean;
 }
 
@@ -54,7 +54,7 @@ const DESTINATIONS: Destination[] = [
   {
     label: 'Data Overall',
     icon: Activity,
-    href: (w) => `/weekly/${w}/overall`,
+    href: (w) => (w ? `/weekly/${w}/overall` : '/weekly'),
     match: (p) => DATA_OVERALL.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
   {
@@ -66,7 +66,7 @@ const DESTINATIONS: Destination[] = [
   {
     label: 'Weekly Progress',
     icon: FileText,
-    href: (w) => `/weekly/${w}/summary`,
+    href: (w) => (w ? `/weekly/${w}/summary` : '/weekly/summary'),
     // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
     // named `summary` and `detail` too, so a bare endsWith lit this entry as well
     // on every /dokumen page — two destinations highlighted at once.
@@ -75,7 +75,7 @@ const DESTINATIONS: Destination[] = [
   {
     label: 'Document Control',
     icon: Files,
-    href: (w) => `/dokumen/${w}/summary`,
+    href: (w) => (w ? `/dokumen/${w}/summary` : '/dokumen'),
     match: (p) => p.startsWith('/dokumen'),
   },
   {
@@ -112,7 +112,7 @@ const itemClass = (active: boolean) =>
       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
   );
 
-function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pathname: string | null }) {
+function NavItem({ dest, week, pathname }: { dest: Destination; week: number | null; pathname: string | null }) {
   const Icon = dest.icon;
   const active = pathname ? dest.match(pathname) : false;
   return (
@@ -123,9 +123,32 @@ function NavItem({ dest, week, pathname }: { dest: Destination; week: number; pa
   );
 }
 
-function NavList({ pathname, currentWeek }: { pathname: string | null; currentWeek: number }) {
-  // Keep links on the week being viewed; fall back to the reporting week.
-  const week = Number(pathname?.match(/^\/weekly\/(\d+)/)?.[1] ?? currentWeek);
+function NavList({ pathname }: { pathname: string | null }) {
+  /*
+   * Keep links on the week being viewed; when the path holds no week, send
+   * them to the INDEX route rather than guess a number.
+   *
+   * THE NUMBER USED TO BE GUESSED, and it was guessed from the wrong store.
+   * `app/layout.tsx` read `getDb()`, which is db.json and holds exactly ONE
+   * project, so every week-scoped entry in this menu was stamped with Gundih's
+   * week 36. Open any other project and the whole menu pointed outside it: a
+   * 22-week project tapping Data Overall landed on `/weekly/36/overall`, a week
+   * it does not have, and got a 404 with nothing on screen able to move it
+   * (17 Sep 2026). Weekly Progress and Document Control carried the same 36.
+   * The index routes were fixed for exactly this in 766b3ae; the sidebar never
+   * went through them, so that fix could not reach it.
+   *
+   * The layout cannot resolve it either: the open project is a cookie, and an
+   * uncached read there blocks every route and fails the build. So the menu
+   * stops carrying a week at all and lets `/weekly`, `/weekly/summary` and
+   * `/dokumen` answer it, each reading the OPEN project behind `<Suspense>`.
+   *
+   * `/dokumen/` is in the pattern deliberately. It is per-week for the same
+   * project, and leaving it out meant a Document Control page tapping Data
+   * Overall fell through to the same wrong number.
+   */
+  const inPath = pathname?.match(/^\/(?:weekly|dokumen)\/(\d+)/)?.[1];
+  const week = inPath ? Number(inPath) : null;
 
   /*
    * THE SIDEBAR NO LONGER WARMS ANYTHING, and the reason is a measurement.
@@ -209,7 +232,7 @@ function NavList({ pathname, currentWeek }: { pathname: string | null; currentWe
  *
  * `scripts/verify-hydration.mjs` fails the moment a fourth boundary comes back.
  */
-function ActiveNavList({ currentWeek }: { currentWeek: number }) {
+function ActiveNavList() {
   // `useSyncExternalStore` rather than a mounted flag in an effect: it takes a
   // server snapshot and a client one directly, so there is no setState during
   // an effect and no extra render pass to get there.
@@ -219,15 +242,15 @@ function ActiveNavList({ currentWeek }: { currentWeek: number }) {
     () => false
   );
   return live ? (
-    <LiveNavList currentWeek={currentWeek} />
+    <LiveNavList />
   ) : (
-    <NavList pathname={null} currentWeek={currentWeek} />
+    <NavList pathname={null} />
   );
 }
 
 /** Mounted only after hydration, which is what keeps `usePathname()` off the prerender. */
-function LiveNavList({ currentWeek }: { currentWeek: number }) {
-  return <NavList pathname={usePathname()} currentWeek={currentWeek} />;
+function LiveNavList() {
+  return <NavList pathname={usePathname()} />;
 }
 
 function Brand({ compact }: { compact?: boolean }) {
@@ -248,7 +271,7 @@ function Brand({ compact }: { compact?: boolean }) {
   );
 }
 
-function MobileDrawer({ currentWeek, switcher }: { currentWeek: number; switcher: ReactNode }) {
+function MobileDrawer({ switcher }: { switcher: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -301,7 +324,7 @@ function MobileDrawer({ currentWeek, switcher }: { currentWeek: number; switcher
               </div>
 
               {switcher}
-              <NavList pathname={pathname} currentWeek={currentWeek} />
+              <NavList pathname={pathname} />
             </div>
           </div>
         </>,
@@ -330,11 +353,9 @@ function MobileDrawer({ currentWeek, switcher }: { currentWeek: number; switcher
 }
 
 export default function Sidebar({
-  currentWeek,
   switcher,
   openTag,
 }: {
-  currentWeek: number;
   /**
    * The open project's card, handed down as a NODE rather than as data. It is a
    * server component that reads at request time (see LiveProjectSwitcher), and
@@ -358,7 +379,7 @@ export default function Sidebar({
             colliding with React's. The title stays OUTSIDE it, in the static
             shell, so the bar is never briefly empty. */}
         <Suspense>
-          <MobileDrawer currentWeek={currentWeek} switcher={switcher} />
+          <MobileDrawer switcher={switcher} />
           {openTag}
         </Suspense>
         <span className="text-sm font-semibold text-foreground">Progress Report</span>
@@ -373,7 +394,7 @@ export default function Sidebar({
 
           {switcher}
 
-          <ActiveNavList currentWeek={currentWeek} />
+          <ActiveNavList />
         </div>
       </aside>
     </>

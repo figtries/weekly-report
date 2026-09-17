@@ -9,7 +9,6 @@ import OpenProjectTag from "@/components/layout/OpenProjectTag";
 import Sidebar from "@/components/layout/Sidebar";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
-import { getDb, getLatestWeek } from "@/lib/data";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,10 +25,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // getDb is 'use cache' (tag: 'db'), so the sidebar's week-scoped sub-links
-  // stay part of the static shell and refresh when the current week changes.
-  const db = await getDb();
-  const currentWeek = getLatestWeek(db) || 1;
+  // THE LAYOUT NO LONGER READS A WEEK, and that is the fix rather than a
+  // tidy-up. It used to hand the sidebar `getLatestWeek(await getDb())`, and
+  // `getDb()` is db.json, which holds exactly ONE project: every week-scoped
+  // link in the menu was stamped with that project's week no matter which
+  // project was open, so a 22-week project's Data Overall pointed at week 36
+  // and 404d (17 Sep 2026). The open project is a cookie and cannot be read
+  // here at all without blocking every route, so the menu asks the index
+  // routes instead. See the note in components/layout/Sidebar.tsx.
   return (
     // data-scroll-behavior lets Next.js suspend smooth scrolling during route
     // transitions so page changes don't visibly scroll-animate.
@@ -57,7 +60,6 @@ export default async function RootLayout({
               from the prerendered shell — a shell is per deployment, and the
               open project changes between them. See LiveProjectSwitcher. */}
           <Sidebar
-            currentWeek={currentWeek}
             switcher={
               <Suspense fallback={<ProjectSwitcherFallback />}>
                 <LiveProjectSwitcher />
