@@ -55,7 +55,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-export const metadata = { title: 'Dashboard' };
+// Spelled out, NOT left to the root layout's title template: a template only
+// reaches CHILD segments, and this page sits in the root segment beside the
+// layout that defines it — so '/' was the one screen whose tab never said
+// Lucille, which is the screen most people leave open.
+export const metadata = { title: 'Lucille · Dashboard' };
 
 /**
  * The dashboard is the product's main advantage, so it does not stop at the

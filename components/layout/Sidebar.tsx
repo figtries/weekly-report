@@ -255,18 +255,23 @@ function LiveNavList() {
 
 function Brand({ compact }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className={cn('flex items-center', compact ? 'gap-3' : 'gap-2')}>
       {/* The mark is taller than it is wide (307x512), so it is sized by
           HEIGHT and left to find its own width. Squared off it would have had
-          to shrink to fit, and at 32px it read as a speck beside the word. */}
+          to shrink to fit, and at 32px it read as a speck beside the word.
+          THE ROW IS ALIGNED TO THE MENU BELOW IT, not centred by eye: its
+          wrapper carries px-6 because a nav icon sits at 24px (nav px-3 + item
+          px-3), and the gap is picked so the word lands on the nav LABELS at
+          54px — 36px tall is 21.6px wide, + gap-2 = 53.6. Change the height or
+          the gap and the word steps out of the column; re-do that sum. */}
       <Image
         src="/lucille-mark.png"
         alt=""
-        width={compact ? 17 : 19}
-        height={compact ? 28 : 32}
-        className={compact ? 'h-7 w-auto' : 'h-8 w-auto'}
+        width={compact ? 17 : 22}
+        height={compact ? 28 : 36}
+        className={compact ? 'h-7 w-auto' : 'h-9 w-auto'}
       />
-      <h1 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Lucille</h1>
+      <h1 className={cn('font-semibold tracking-tight text-foreground', compact ? 'text-base' : 'text-lg')}>Lucille</h1>
     </div>
   );
 }
@@ -311,7 +316,7 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
             )}
           >
             <div className="flex h-full flex-col">
-              <div className="flex h-14 items-center justify-between border-b px-4">
+              <div className="flex h-14 items-center justify-between border-b px-6">
                 <Brand compact />
                 <m.button
                   {...pressMotion}
@@ -384,14 +389,14 @@ export default function Sidebar({
         </Suspense>
         {/* The mark and the name, not <Brand>: the desktop sidebar already
             renders that <h1>, and both halves sit in the DOM at once. */}
-        <Image src="/lucille-mark.png" alt="" width={14} height={24} className="h-6 w-auto" />
-        <span className="text-sm font-semibold text-foreground">Lucille</span>
+        <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
+        <span className="text-base font-semibold tracking-tight text-foreground">Lucille</span>
       </header>
 
       {/* Desktop: full sidebar */}
       <aside className="hidden h-screen w-56 flex-shrink-0 border-r bg-card lg:block print:hidden">
         <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center border-b px-5">
+          <div className="flex h-16 items-center border-b px-6">
             <Brand />
           </div>
 

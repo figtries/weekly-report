@@ -19,7 +19,10 @@ export const metadata: Metadata = {
   // A template, not a bare string: every page below sets its own title
   // ('Projects', 'Dashboard', …), and without this the browser tab — the one
   // place a desktop user reads the app's name — never said which app it was.
-  title: { default: "Lucille", template: "%s · Lucille" },
+  // The name goes FIRST. A tab is narrow and truncates from the RIGHT, so
+  // "Dashboard · Lucille" spent its visible half on the screen's own name and
+  // dropped the app's — which is the half that has to survive every navigation.
+  title: { default: "Lucille", template: "Lucille · %s" },
   description: "Lucille - project control: plan, track progress and issue reports",
 };
 
