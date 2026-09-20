@@ -6,9 +6,9 @@ import { m } from 'framer-motion';
 import { setWorkKindAction } from '@/lib/actions';
 import { ladderFor } from '@/lib/work-kind-apply';
 import {
+  agreeingPeers,
   BUILT_IN_KINDS,
   guessWorkKind,
-  normalizeName,
   shapeOf,
   suggestFromPeers,
   type Shape,
@@ -76,17 +76,10 @@ export default function WorkKindPicker({
   const suggestion = useMemo<Suggestion | null>(() => {
     const peerHit = suggestFromPeers(node.name, peers);
     if (peerHit) {
-      const n = normalizeName(node.name);
-      // `suggestFromPeers` matches on NAME alone (`.find()`), so two rows
-      // spelled the same way can have been answered differently. Count only
-      // the peers that AGREE with the suggestion on both kind and shape —
-      // citing a disagreeing row as supporting evidence would be a claim
-      // about the user's own past decisions that they cannot check. When
-      // every other same-named peer disagrees, this correctly falls to zero
-      // and the sentence below names just the one row it is following.
-      const agreeing = peers.filter(
-        (p) => normalizeName(p.name) === n && p.kindId === peerHit.kindId && p.shape === peerHit.shape
-      );
+      // Only the peers that AGREE with this suggestion count — see
+      // `agreeingPeers`'s own comment in `lib/work-kind.ts` for why a
+      // disagreeing peer must never inflate this number.
+      const agreeing = agreeingPeers(node.name, peerHit, peers);
       return {
         kindId: peerHit.kindId,
         shape: peerHit.shape,

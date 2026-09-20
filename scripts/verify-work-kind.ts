@@ -6,7 +6,10 @@
  * ladder is a gate, which is the whole reason 110 of Gundih's 218 rows only ever
  * held 0 or 100. Three: a row named after a system takes the whole ladder. Four:
  * a peer the user has already answered for beats any guess, because the user's
- * own correction is the strongest evidence in the project.
+ * own correction is the strongest evidence in the project. Five: the count
+ * behind that evidence never includes a peer that disagrees with it — a row
+ * spelled the same way but answered differently must not inflate a claim about
+ * what the user themselves already decided.
  *
  * No database. Everything is built by hand so a failure here is a failure in
  * `lib/work-kind.ts` and nowhere else.
@@ -14,6 +17,7 @@
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-work-kind.ts
  */
 import {
+  agreeingPeers,
   BUILT_IN_KINDS,
   gateLadder,
   guessWorkKind,
@@ -71,6 +75,31 @@ const fromPeer = suggestFromPeers('PO Unprice', peers);
 check('exact peer wins', fromPeer?.kindId === 'construction' && fromPeer?.shape === 'steps');
 check('peer match ignores case and spacing', suggestFromPeers('po  unprice', peers)?.kindId === 'construction');
 check('no peer yields null', suggestFromPeers('Something Else', peers) === null);
+
+/* 5 — the suggestion's own peer count never inflates itself with a peer that
+   CONTRADICTS the suggestion. `suggestFromPeers` matches on name alone, so
+   two rows spelled "PO Unprice" can have been answered differently; the
+   count behind the sentence must only include the ones that actually agree,
+   or the app cites a disagreeing row as evidence for a guess it contradicts. */
+const hit = { kindId: 'procurement', shape: 'gate' as const };
+
+check(
+  'agreeingPeers: a peer matching name, kind AND shape is counted',
+  agreeingPeers('PO Unprice', hit, [{ name: 'PO Unprice', kindId: 'procurement', shape: 'gate' }]).length === 1
+);
+check(
+  'agreeingPeers: same name and kind but a DIFFERENT shape does not count',
+  agreeingPeers('PO Unprice', hit, [{ name: 'PO Unprice', kindId: 'procurement', shape: 'steps' }]).length === 0
+);
+check(
+  'agreeingPeers: same name but a different kind does not count',
+  agreeingPeers('PO Unprice', hit, [{ name: 'PO Unprice', kindId: 'construction', shape: 'gate' }]).length === 0
+);
+check(
+  'agreeingPeers: a different name does not count, even with the same kind and shape',
+  agreeingPeers('PO Unprice', hit, [{ name: 'Something Else', kindId: 'procurement', shape: 'gate' }]).length === 0
+);
+check('agreeingPeers: no peers returns empty rather than throwing', agreeingPeers('PO Unprice', hit, []).length === 0);
 
 /* normalize is what makes 18 identical rows one decision */
 check('normalize folds case, spaces and punctuation', normalizeName(' PO  Unprice. ') === 'po unprice');

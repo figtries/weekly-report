@@ -177,6 +177,27 @@ export function suggestFromPeers(
 }
 
 /**
+ * Which of a suggestion's own peers actually SUPPORT it.
+ *
+ * `suggestFromPeers` matches on NAME ALONE, so two rows spelled the same way
+ * can have been answered differently — one "PO Unprice" saying Procurement,
+ * another saying Construction. The suggestion sentence turns a peer count
+ * into "and 17 other rows", and that count is the whole economy of this
+ * feature: it is what makes correcting one row answer seventeen. A count
+ * that includes rows CONTRADICTING the suggestion is a claim about the
+ * user's own past decisions that the user cannot check — worse than no count
+ * at all, because a wrong count still looks like evidence.
+ */
+export function agreeingPeers(
+  name: string,
+  hit: { kindId: string; shape: Shape },
+  peers: Array<{ name: string; kindId: string; shape: Shape }>
+): Array<{ name: string; kindId: string; shape: Shape }> {
+  const n = normalizeName(name);
+  return peers.filter((p) => normalizeName(p.name) === n && p.kindId === hit.kindId && p.shape === hit.shape);
+}
+
+/**
  * A gate is a ladder with one rung.
  *
  * Which is why this feature needs no new progress method: `milestone` already
