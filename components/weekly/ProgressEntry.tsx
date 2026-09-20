@@ -39,6 +39,73 @@ type SetDraft = (fn: (d: Draft) => Draft) => void;
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 const fmt1 = (v: number) => v.toFixed(1);
+const fmt2 = (v: number) => v.toFixed(2);
+
+/**
+ * The percent this draft comes to right now, whatever shape is on screen.
+ *
+ * Mirrors `pctOfDraft` in ActivityPanel.tsx rather than importing it: that
+ * file imports `ProgressEntry`/`deriveShape` from this one already, and a
+ * second cross-import would make the two circular. This is preview
+ * arithmetic over what is already sitting in the draft, not a leaf's
+ * percentage — `lib/progress.ts` is still the only thing allowed to write
+ * one, and this value is never saved anywhere.
+ */
+function currentPct(node: MapNode, draft: Draft, manual: boolean): number {
+  if (!manual && node.method === 'qty') {
+    const total = node.qtyTotal && node.qtyTotal > 0 ? node.qtyTotal : 1;
+    return clampPct(round2((draft.qtyDone / total) * 100));
+  }
+  if (!manual && node.method === 'milestone') {
+    const ms = node.milestones ?? [];
+    const total = ms.reduce((s, step) => s + step.weight, 0);
+    if (!total) return 0;
+    const done = ms
+      .filter((step) => draft.milestonesDone.includes(step.id))
+      .reduce((s, step) => s + step.weight, 0);
+    return clampPct(round2((done / total) * 100));
+  }
+  return clampPct(round2(draft.pct));
+}
+
+/**
+ * What today's answer just did to the plan, in three short facts: the rise
+ * since last week, where that puts the row against the plan, and what the
+ * row is worth to the project at that figure. Every value here is already on
+ * `node` or `draft` — no new query, no new prop, and no re-derivation of a
+ * leaf's own percentage.
+ */
+function PlanFacts({ node, draft, manual }: { node: MapNode; draft: Draft; manual: boolean }) {
+  const pct = currentPct(node, draft, manual);
+  const lastWeek = round2(node.actualPct - node.weekPct);
+  const rise = round2(pct - lastWeek);
+
+  let riseLine: string;
+  if (rise > 0.05) riseLine = `Up ${fmt1(rise)} points to ${fmt1(pct)}%`;
+  else if (rise < -0.05) riseLine = `Down ${fmt1(-rise)} points to ${fmt1(pct)}%`;
+  else riseLine = `Unchanged, still at ${fmt1(pct)}%`;
+
+  // No schedule reaches this row: compared against zero it would always
+  // read as "ahead", which is not a fact about the row, just an absence.
+  let planLine: string | null = null;
+  if (node.planPct > 0) {
+    const behind = round2(node.planPct - pct);
+    if (behind > 0.05) planLine = `Plan says ${fmt1(node.planPct)} this week, so ${fmt1(behind)} behind`;
+    else if (behind < -0.05)
+      planLine = `Plan says ${fmt1(node.planPct)} this week, so ${fmt1(-behind)} ahead`;
+    else planLine = `Plan says ${fmt1(node.planPct)} this week, exactly on plan`;
+  }
+
+  const points = round2((pct / 100) * node.weight);
+
+  return (
+    <div className="mt-3 space-y-0.5 text-[12px] leading-relaxed text-muted-foreground">
+      <p>{riseLine}</p>
+      {planLine && <p>{planLine}</p>}
+      <p>This row carries {fmt2(points)} points of the project</p>
+    </div>
+  );
+}
 
 export default function ProgressEntry({
   node,
@@ -78,6 +145,8 @@ export default function ProgressEntry({
       )}
       {!showQuantity && shape === 'quote' && <QuoteEntry draft={draft} setDraft={setDraft} />}
       {!showQuantity && shape === 'manual' && <PercentEntry draft={draft} setDraft={setDraft} />}
+
+      <PlanFacts node={node} draft={draft} manual={manual} />
 
       {!isManualForm && (
         <button

@@ -90,9 +90,21 @@ function CheckRow({ f }: { f: Finding }) {
 export default function WeekChecks({
   week,
   validation,
+  handTyped,
 }: {
   week: number;
   validation: ValidationResult;
+  /**
+   * How many of this week's standing figures trace back to a hand-typed
+   * percent, out of how many real (weighted) leaves the plan has. Computed on
+   * the PAGE, not here — this component only ever gets `{ week, validation }`
+   * plus this, and cannot see leaf snapshots itself. Deliberately not a
+   * `Finding`: those carry a level of error/warn/ok, and this is neither — a
+   * report is allowed to have hand-typed figures in it, the same stance this
+   * app takes toward a heading handed out at 140% of its budget. Reported,
+   * never corrected.
+   */
+  handTyped: { count: number; total: number };
 }) {
   const { findings, errors, warnings, canIssue } = validation;
   const passed = findings.filter((f) => f.level === 'ok').length;
@@ -172,6 +184,25 @@ export default function WeekChecks({
           </ul>
         </div>
       </Reveal>
+
+      {/* A fact, not a check: it never passes or fails, so it sits outside
+          the list above rather than wearing one of that list's three colours.
+          Plain neutral styling on purpose — reported, never corrected. */}
+      {handTyped.total > 0 && (
+        <Reveal delay={0.12}>
+          <Link
+            href={`/weekly/${week}/overall`}
+            className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3.5 text-[13px] text-muted-foreground shadow-sm ring-1 ring-foreground/10 transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground sm:px-5"
+          >
+            <span>
+              <span className="font-semibold text-foreground">{handTyped.count}</span> of{' '}
+              {handTyped.total} {handTyped.total === 1 ? 'figure' : 'figures'}{' '}
+              {handTyped.count === 1 ? 'was' : 'were'} typed by hand
+            </span>
+            <span aria-hidden className="shrink-0 text-foreground/50">→</span>
+          </Link>
+        </Reveal>
+      )}
     </div>
   );
 }

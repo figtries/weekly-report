@@ -39,6 +39,7 @@ import { parseSignature } from './signature';
 import type {
   ChangeLogEntry,
   Database,
+  LeafSnapshot,
   ProgressMethod,
   ProjectInfo,
   ScheduleItem,
@@ -175,11 +176,23 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
         .all()
     : [];
 
-  const byWeek = new Map<string, Map<string, { pct: number; qtyDone: number | null }>>();
+  const byWeek = new Map<
+    string,
+    Map<string, { pct: number; qtyDone: number | null; source: LeafSnapshot['source'] }>
+  >();
   for (const row of progress) {
     let m = byWeek.get(row.weekId);
     if (!m) byWeek.set(row.weekId, (m = new Map()));
-    m.set(row.nodeId, { pct: row.cumProgressPct ?? 0, qtyDone: row.qtyDone ?? null });
+    m.set(row.nodeId, {
+      pct: row.cumProgressPct ?? 0,
+      qtyDone: row.qtyDone ?? null,
+      // Dropped here originally: this map only kept {pct, qtyDone}, so every
+      // SQLite leaf's snapshot carried `source: undefined` regardless of how
+      // the figure was actually recorded — a report claiming nothing was
+      // typed by hand even when it was. `leaf_progress.source` is selected by
+      // the `.select()` above like every other column; it just was not read.
+      source: (row.source ?? undefined) as LeafSnapshot['source'],
+    });
   }
   const msByWeekNode = new Map<string, Map<string, string[]>>();
   for (const row of msDone) {
@@ -228,7 +241,10 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
   // the figure it last had rather than falling back to zero. The EVIDENCE is
   // carried with it: a quantity that stopped being reported has not stopped
   // being done.
-  const carried = new Map<string, { pct: number; qtyDone: number | null }>();
+  const carried = new Map<
+    string,
+    { pct: number; qtyDone: number | null; source: LeafSnapshot['source'] }
+  >();
   const carriedMs = new Map<string, string[]>();
   const weeks: WeeklyMeta[] = weekRows.map((w) => {
     const recorded = byWeek.get(w.id);
@@ -247,6 +263,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
         targetWF: d ? (node.bobot ?? 0) * leafPlanFraction(d.startDate, d.finishDate, w.endDate) : 0,
         ...(held?.qtyDone != null ? { qtyDone: held.qtyDone } : {}),
         ...(carriedMs.has(node.id) ? { milestonesDone: carriedMs.get(node.id) } : {}),
+        ...(held?.source ? { source: held.source } : {}),
       };
     }
     return {

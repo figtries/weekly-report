@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { computeHealth, validateWeek } from '@/lib/analysis';
+import { computeRollup, flattenTree, promoteNestedSpkContracts } from '@/lib/rollup';
 import { getOpenDb } from '@/lib/data';
 import WeekChecks from '@/components/weekly/WeekChecks';
 import PageHeader from '@/components/layout/PageHeader';
@@ -58,6 +59,23 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
   if (!health) notFound();
   const validation = validateWeek(db, week);
 
+  // How much of this week's standing figures were typed by hand rather than
+  // counted, over the same leaf set `validateWeek` reports "Weights total...
+  // All N leaf items add up" against (weighted leaves, promoted the same
+  // way) so this number never disagrees with the checklist beside it.
+  // `WeekChecks` gets only the count: it cannot see leaf snapshots itself.
+  const weekMeta = db.weeks.find((w) => w.week === week);
+  const roots = promoteNestedSpkContracts(
+    computeRollup(db.wbsItems, weekMeta?.leafData ?? {}, null)
+  );
+  const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const handTyped = {
+    total: leaves.length,
+    count: weekMeta
+      ? leaves.filter((n) => weekMeta.leafData[n.id]?.source === 'manual').length
+      : 0,
+  };
+
   return (
     <RouteTransition id="weekly-control">
       <div className="space-y-4 px-3 py-4 sm:p-6 lg:p-8 print:hidden">
@@ -72,7 +90,7 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
         </PageHeader>
 
         <div className="animate-enter stagger-1">
-          <WeekChecks week={week} validation={validation} />
+          <WeekChecks week={week} validation={validation} handTyped={handTyped} />
         </div>
       </div>
     </RouteTransition>
