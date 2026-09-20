@@ -84,6 +84,8 @@ function standingAt(projectId: string, nodeId: string, weekNo: number): LeafSnap
     .select({
       cumProgressPct: schema.leafProgress.cumProgressPct,
       qtyDone: schema.leafProgress.qtyDone,
+      note: schema.leafProgress.note,
+      source: schema.leafProgress.source,
       weekId: schema.leafProgress.weekId,
     })
     .from(schema.leafProgress)
@@ -118,6 +120,8 @@ function standingAt(projectId: string, nodeId: string, weekNo: number): LeafSnap
     targetWF: 0,
     ...(row?.qtyDone != null ? { qtyDone: row.qtyDone } : {}),
     ...(done.length ? { milestonesDone: done } : {}),
+    ...(row?.note != null ? { note: row.note } : {}),
+    ...(row?.source != null ? { source: row.source as LeafSnapshot['source'] } : {}),
   };
 }
 
@@ -137,6 +141,8 @@ function writeSnapshot(
       method,
       cumProgressPct: snap.cumProgressPct,
       qtyDone: snap.qtyDone ?? null,
+      note: snap.note ?? null,
+      source: snap.source ?? null,
       recordedAt: at,
     })
     .onConflictDoUpdate({
@@ -145,6 +151,8 @@ function writeSnapshot(
         method,
         cumProgressPct: snap.cumProgressPct,
         qtyDone: snap.qtyDone ?? null,
+        note: snap.note ?? null,
+        source: snap.source ?? null,
         recordedAt: at,
       },
     })
@@ -193,6 +201,8 @@ export function saveFieldProgressSqlite(
         const valid = new Set((item.milestones ?? []).map((m) => m.id));
         next.milestonesDone = u.milestonesDone.filter((id) => valid.has(id));
       }
+      if (u.note !== undefined) next.note = u.note;
+      if (u.source !== undefined) next.source = u.source;
       next = syncLeafSnapshot(item, next);
       writeSnapshot(tx, week.id, item, next, at);
     }
@@ -323,6 +333,8 @@ export function setProgressMethodSqlite(
       .select({
         weekId: schema.leafProgress.weekId,
         cumProgressPct: schema.leafProgress.cumProgressPct,
+        note: schema.leafProgress.note,
+        source: schema.leafProgress.source,
       })
       .from(schema.leafProgress)
       .where(eq(schema.leafProgress.nodeId, nodeId))
@@ -333,7 +345,14 @@ export function setProgressMethodSqlite(
 
     for (const row of rows) {
       const pct = Math.max(0, Math.min(100, row.cumProgressPct ?? 0));
-      const snap: LeafSnapshot = { cumProgressPct: pct, targetWF: 0 };
+      // A method switch re-expresses the FIGURE, not the annotation beside it —
+      // carried through untouched, same as a note survives any other resave.
+      const snap: LeafSnapshot = {
+        cumProgressPct: pct,
+        targetWF: 0,
+        ...(row.note != null ? { note: row.note } : {}),
+        ...(row.source != null ? { source: row.source as LeafSnapshot['source'] } : {}),
+      };
       if (method === 'qty') {
         snap.qtyDone = (pct / 100) * total;
       } else if (method === 'milestone') {
@@ -361,4 +380,26 @@ export function setProgressMethodSqlite(
         .run();
     }
   });
+}
+
+/**
+ * What kind of work a row is, and the ladder that answer implies.
+ *
+ * Does what `setProgressMethodSqlite` does, plus the one field that isn't
+ * progress at all: `work_kind` names the question this row was asked, so the
+ * panel can show it back rather than asking again. Reuses the same
+ * transaction shape so "switching clears the other method's evidence" keeps
+ * holding here too.
+ */
+export function setWorkKindSqlite(
+  nodeId: string,
+  kindId: string,
+  method: ProgressMethod,
+  milestones: Milestone[]
+): void {
+  setProgressMethodSqlite(nodeId, method, { milestones });
+  db.update(schema.wbsNodes)
+    .set({ workKind: kindId })
+    .where(eq(schema.wbsNodes.id, nodeId))
+    .run();
 }

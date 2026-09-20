@@ -32,7 +32,10 @@ const {
   saveFieldProgressSqlite,
   saveWeekUpdatesSqlite,
   setProgressMethodSqlite,
+  setWorkKindSqlite,
 } = await import('../lib/progress-sqlite.ts');
+const { BUILT_IN_KINDS } = await import('../lib/work-kind.ts');
+const { ladderFor } = await import('../lib/work-kind-apply.ts');
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -155,6 +158,29 @@ check(
   'and back to a quantity, still without inventing work',
   Math.abs(backToQty - afterMs) < 1e-9 && pctAt(w1, leaf.id)?.qtyDone != null,
   `${backToQty.toFixed(2)}% on ${pctAt(w1, leaf.id)?.qtyDone} m`
+);
+
+/* ------------------------------------- a work kind must not move the figure */
+
+const kindBefore = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
+const ladder = ladderFor('construction', 'steps', leaf.deskripsi, BUILT_IN_KINDS);
+setWorkKindSqlite(leaf.id, 'construction', 'milestone', ladder);
+const kindAfter = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
+const nodeRow = db
+  .select({ workKind: schema.wbsNodes.workKind })
+  .from(schema.wbsNodes)
+  .where(eq(schema.wbsNodes.id, leaf.id))
+  .all()[0];
+
+check(
+  'the work kind round-trips',
+  nodeRow?.workKind === 'construction',
+  `read back as ${nodeRow?.workKind}`
+);
+check(
+  "asking what kind of work a row is does not change how much of it is done",
+  Math.abs(kindBefore - kindAfter) < 1e-9,
+  `${kindBefore.toFixed(2)}% before, ${kindAfter.toFixed(2)}% after`
 );
 
 /* ------------------------------------------- and the project can be read */

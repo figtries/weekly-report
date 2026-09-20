@@ -28,6 +28,8 @@ export interface WbsItem {
   /** Absent means 'lumpsum' — every pre-existing item. */
   progressMethod?: ProgressMethod;
   milestones?: Milestone[];
+  /** Which kind of work this row is. See `lib/work-kind.ts`. Null until asked. */
+  workKind?: string | null;
   /**
    * SPK / package / lot / area. The SQLite store's first-class
    * `is_reporting_unit` flag, carried through so `getSummaryRows` can group by
@@ -51,6 +53,10 @@ export interface LeafSnapshot {
   qtyDone?: number;
   /** 'milestone' items: ids of the milestones reached. */
   milestonesDone?: string[];
+  /** Free text the person recorded beside the figure, e.g. a vendor's report reference. */
+  note?: string;
+  /** How the figure was arrived at. 'quote' and 'manual' are both lumpsum and are not the same claim. */
+  source?: 'gate' | 'steps' | 'quote' | 'manual';
 }
 
 export type WeeklyLeafData = Record<string, LeafSnapshot>;

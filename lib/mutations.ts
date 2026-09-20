@@ -268,6 +268,10 @@ export interface FieldProgressUpdate {
   leafId: string;
   qtyDone?: number;
   milestonesDone?: string[];
+  /** Free text the person recorded beside the figure, e.g. a vendor's report reference. */
+  note?: string;
+  /** How the figure was arrived at. 'quote' and 'manual' are both lumpsum and are not the same claim. */
+  source?: LeafSnapshot['source'];
 }
 
 /**
@@ -343,6 +347,8 @@ export function applyFieldProgress(
       const valid = new Set((item.milestones ?? []).map((m) => m.id));
       next.milestonesDone = u.milestonesDone.filter((id) => valid.has(id));
     }
+    if (u.note !== undefined) next.note = u.note;
+    if (u.source !== undefined) next.source = u.source;
     next = syncLeafSnapshot(item, next);
     meta.leafData[u.leafId] = next;
 

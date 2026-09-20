@@ -26,11 +26,14 @@ import {
   saveFieldProgressSqlite,
   saveWeekUpdatesSqlite,
   setProgressMethodSqlite,
+  setWorkKindSqlite,
 } from './progress-sqlite';
 import { and, eq } from 'drizzle-orm';
 import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
 import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
+import { BUILT_IN_KINDS, type Shape } from './work-kind';
+import { ladderFor } from './work-kind-apply';
 import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
@@ -277,6 +280,39 @@ export async function setProgressMethodAction(
   if (projectId) return sqliteWrite(() => setProgressMethodSqlite(leafId, method, opts));
   try {
     await mutateDb((db) => applyProgressMethod(db, leafId, method, opts));
+    updateTag('db');
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * `rowName` is passed in rather than looked up. The panel already holds
+ * `node.name`, and adding a database read to an action that does not need one
+ * is how a clock or an uncached read creeps into a path that must stay cheap.
+ */
+export async function setWorkKindAction(
+  leafId: string,
+  rowName: string,
+  kindId: string,
+  shape: Shape,
+  steps?: Milestone[]
+): Promise<ActionResult> {
+  // A quote and a hand-typed percent are both lumpsum; a gate and a ladder are
+  // both milestone. The kind decides the question, the shape decides the method.
+  const method: ProgressMethod = shape === 'quote' ? 'lumpsum' : 'milestone';
+  const milestones = steps ?? ladderFor(kindId, shape, rowName, BUILT_IN_KINDS);
+
+  const projectId = await sqliteProject();
+  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, milestones));
+  try {
+    await mutateDb((db) => {
+      applyProgressMethod(db, leafId, method, { milestones });
+      const item = db.wbsItems.find((i) => i.id === leafId);
+      if (item) item.workKind = kindId;
+    });
     updateTag('db');
     refresh();
     return { ok: true };
