@@ -162,9 +162,21 @@ check(
 
 /* ------------------------------------- a work kind must not move the figure */
 
+// Seeded fresh, right here — not inherited from whatever an earlier case left
+// this leaf at. A leaf sitting at 0% before AND after would pass this check
+// whether setWorkKindSqlite carries the figure or silently zeroes it, which is
+// exactly the August 2026 bug this case exists to catch. 137 of 200 m is a
+// genuine, non-round, non-zero percentage that depends on nothing upstream.
+setProgressMethodSqlite(leaf.id, 'qty', { vol: 200, satuan: 'm' });
+saveFieldProgressSqlite(project.id, w1, [{ leafId: leaf.id, qtyDone: 137 }]);
 const kindBefore = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
-const ladder = ladderFor('construction', 'steps', leaf.deskripsi, BUILT_IN_KINDS);
-setWorkKindSqlite(leaf.id, 'construction', 'milestone', ladder);
+
+// 'quote' is lumpsum with an empty ladder (see lib/work-kind-apply.ts), so this
+// is the one shape a restatement is required to leave EXACTLY alone — a
+// 'steps' ladder is allowed to restate a between-rungs figure down to the
+// nearest rung, which is correct behaviour, not the bug under test here.
+const ladder = ladderFor('procurement', 'quote', leaf.deskripsi, BUILT_IN_KINDS);
+setWorkKindSqlite(leaf.id, 'procurement', 'lumpsum', ladder);
 const kindAfter = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
 const nodeRow = db
   .select({ workKind: schema.wbsNodes.workKind })
@@ -174,12 +186,12 @@ const nodeRow = db
 
 check(
   'the work kind round-trips',
-  nodeRow?.workKind === 'construction',
+  nodeRow?.workKind === 'procurement',
   `read back as ${nodeRow?.workKind}`
 );
 check(
-  "asking what kind of work a row is does not change how much of it is done",
-  Math.abs(kindBefore - kindAfter) < 1e-9,
+  'asking what kind of work a row is does not change how much of it is done',
+  kindBefore > 0 && Math.abs(kindBefore - kindAfter) < 1e-9,
   `${kindBefore.toFixed(2)}% before, ${kindAfter.toFixed(2)}% after`
 );
 
