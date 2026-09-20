@@ -83,6 +83,12 @@ export interface MapNode {
 
   /* leaf only ------------------------------------------------------------- */
   method?: ProgressMethod;
+  /** Which kind of work this row is, or null if nobody has been asked yet. */
+  workKind?: string | null;
+  /** What the person recorded beside this week's figure. */
+  note?: string | null;
+  /** How this week's figure was arrived at. */
+  source?: string | null;
   qtyDone?: number;
   qtyTotal?: number;
   unit?: string | null;
@@ -140,6 +146,9 @@ function leafDetail(
   const done = snap?.milestonesDone ?? [];
   return {
     method,
+    workKind: node.workKind ?? null,
+    note: snap?.note ?? null,
+    source: snap?.source ?? null,
     qtyDone: snap?.qtyDone ?? 0,
     qtyTotal: totalQty(node),
     unit: node.satuan ?? null,

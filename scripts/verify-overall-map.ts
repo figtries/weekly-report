@@ -17,6 +17,7 @@
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-overall-map.ts
  */
 import type { RollupNode } from '../lib/rollup.ts';
+import type { LeafSnapshot } from '../lib/types.ts';
 import type { Worklist } from '../lib/worklist.ts';
 import { buildOverallMap, findNode, matchingIds, withOptimistic } from '../lib/overall-map.ts';
 
@@ -77,9 +78,9 @@ function branch(id: string, kids: RollupNode[], extra: Partial<RollupNode> = {})
  * milestone row that must never show up, and a second contract nobody has
  * touched.
  */
-const a1 = leaf('a1', 30, 50, 18); // plan 60%, actual 50% → 10 behind
-const a2 = leaf('a2', 20, 100, 20);
-const a3 = leaf('a3', 10, 0, 2);
+const a1 = leaf('a1', 30, 50, 18, { workKind: 'civil' }); // plan 60%, actual 50% → 10 behind
+const a2 = leaf('a2', 20, 100, 20, { workKind: null }); // asked, and the answer is none of the above
+const a3 = leaf('a3', 10, 0, 2); // never asked
 const flag = leaf('a9', 0, 0, 0);
 const unitA = branch('1', [a1, a2, a3, flag]);
 const b1 = leaf('b1', 40, 25, 16);
@@ -94,7 +95,11 @@ const worklist: Worklist = {
 
 const map = buildOverallMap({
   roots: [unitA, unitB],
-  snapshots: { a1: { cumProgressPct: 50, targetWF: 18 } },
+  snapshots: {
+    a1: { cumProgressPct: 50, targetWF: 18, note: 'vendor report #4', source: 'gate' },
+    // The nullable DB column can hold an explicit null, not just "absent".
+    a3: { cumProgressPct: 0, targetWF: 2, source: null } as unknown as LeafSnapshot,
+  },
   worklist,
   schedule: [{ leafId: 'a1', startWeek: 3, finishWeek: 9, pattern: 'linear' }],
   changeLog: [
@@ -134,6 +139,43 @@ check('a leaf carries its measurement method', mA1.method === 'lumpsum', String(
 check('a leaf carries its price when SQLite has one', mA1.price === 1000, String(mA1.price));
 check('last touched is the LATEST entry, not the first', mA1.lastTouchedAt === '2026-09-12T02:00:00.000Z', String(mA1.lastTouchedAt));
 check('schedule weeks come through', mA1.startWeek === 3 && mA1.finishWeek === 9);
+
+/* --------------------------------------------------- work kind, note, source */
+
+const mA2 = findNode(map.units, 'a2')!;
+const mA3 = findNode(map.units, 'a3')!;
+
+check('a leaf carries its work kind unchanged', mA1.workKind === 'civil', String(mA1.workKind));
+check("this week's note comes through unchanged", mA1.note === 'vendor report #4', String(mA1.note));
+check('how the figure was arrived at comes through unchanged', mA1.source === 'gate', String(mA1.source));
+
+check('an explicit null work kind stays null, not undefined', mA2.workKind === null, String(mA2.workKind));
+check('no snapshot at all leaves the note null', mA2.note === null, String(mA2.note));
+check('no snapshot at all leaves the source null', mA2.source === null, String(mA2.source));
+
+check('a work kind nobody set reads null, not a default', mA3.workKind === null, String(mA3.workKind));
+check('a snapshot with no note leaves it null', mA3.note === null, String(mA3.note));
+check('an explicit null source stays null, not defaulted to a method', mA3.source === null, String(mA3.source));
+
+/* ------------------------------------------ the new fields move no percentage */
+
+function expectedPlanPct(n: RollupNode): number {
+  return n.bobot > 0 ? (n.targetWF / n.bobot) * 100 : 0;
+}
+[unitA, unitB, a1, a2, a3, b1].forEach((n) => {
+  const m = findNode(map.units, n.id)!;
+  const plan = expectedPlanPct(n);
+  const ok =
+    near(m.weight, n.bobot) &&
+    near(m.actualPct, n.curProgressPct) &&
+    near(m.planPct, plan) &&
+    near(m.behindPct, plan - n.curProgressPct);
+  check(
+    `${n.id} keeps every percentage exactly as before work kind/note/source were added`,
+    ok,
+    `weight=${m.weight} actual=${m.actualPct} plan=${m.planPct} behind=${m.behindPct}`
+  );
+});
 
 /* ------------------------------------------------- a single root is unwrapped */
 
