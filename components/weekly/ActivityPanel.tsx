@@ -54,6 +54,32 @@ const METHOD_LABEL: Record<ProgressMethod, string> = {
   lumpsum: 'Typed percent',
 };
 
+/**
+ * What the "How it is counted" disclosure calls a row, which must name the
+ * FORM ABOVE IT rather than the raw stored method — `milestone` covers both a
+ * single-rung gate and a real multi-step ladder, and `lumpsum` covers both a
+ * quote and a hand-typed percent. `METHOD_LABEL` above answers "how is this
+ * measured", which is still the right question for the three-way switcher in
+ * `MethodSection` (that IS choosing a stored method); this answers "what does
+ * the form on screen ask", which is a `Shape`, not a `ProgressMethod`. Reuses
+ * `deriveShape` rather than a second copy of its logic — same words as
+ * `WorkKindPicker`'s own shape buttons, so the disclosure never disagrees with
+ * the picker that put the row here.
+ */
+const SHAPE_METHOD_LABEL: Record<EntryShape, string> = {
+  gate: 'One-off',
+  steps: 'Stages',
+  quote: 'Quoted',
+  manual: 'Typed percent',
+};
+
+function countedAs(node: MapNode): string {
+  // Quantity is the one method with no shape at all — `deriveShape` would
+  // otherwise read it as 'manual', which is a real label but the wrong one.
+  if ((node.method ?? 'lumpsum') === 'qty') return METHOD_LABEL.qty;
+  return SHAPE_METHOD_LABEL[deriveShape(node)];
+}
+
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 const fmt1 = (v: number) => v.toFixed(1);
@@ -413,7 +439,7 @@ function PanelBody({
           <div className="mt-4 border-t border-border">
             <Disclosure
               label="How it is counted"
-              value={METHOD_LABEL[effectiveNode.method ?? 'lumpsum']}
+              value={countedAs(effectiveNode)}
               open={open === 'method'}
               onToggle={() => setOpen(open === 'method' ? null : 'method')}
             >

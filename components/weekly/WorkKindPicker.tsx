@@ -77,12 +77,21 @@ export default function WorkKindPicker({
     const peerHit = suggestFromPeers(node.name, peers);
     if (peerHit) {
       const n = normalizeName(node.name);
-      const matches = peers.filter((p) => normalizeName(p.name) === n);
+      // `suggestFromPeers` matches on NAME alone (`.find()`), so two rows
+      // spelled the same way can have been answered differently. Count only
+      // the peers that AGREE with the suggestion on both kind and shape —
+      // citing a disagreeing row as supporting evidence would be a claim
+      // about the user's own past decisions that they cannot check. When
+      // every other same-named peer disagrees, this correctly falls to zero
+      // and the sentence below names just the one row it is following.
+      const agreeing = peers.filter(
+        (p) => normalizeName(p.name) === n && p.kindId === peerHit.kindId && p.shape === peerHit.shape
+      );
       return {
         kindId: peerHit.kindId,
         shape: peerHit.shape,
-        exampleName: matches[0]?.name ?? null,
-        otherCount: matches.length - 1,
+        exampleName: agreeing[0]?.name ?? null,
+        otherCount: agreeing.length - 1,
       };
     }
     const guess = guessWorkKind(node.name, BUILT_IN_KINDS);
