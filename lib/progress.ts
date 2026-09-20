@@ -52,13 +52,21 @@ export function milestoneProgress(milestones: Milestone[], done: string[]): numb
  *
  * A `qty` or `milestone` item ignores any stored `cumProgressPct` entirely —
  * that field is a cache, and trusting it over the evidence is how a report ends
- * up disagreeing with the site.
+ * up disagreeing with the site. The one exception is `source: 'manual'`: a
+ * number a person typed AND LABELLED as typed is evidence of its own kind,
+ * declared rather than disguised as a calculation, so it wins over the
+ * method's own computation until the row is measured a different way again —
+ * which is exactly what a later gate/steps/quote save does by writing its own
+ * `source` back over this one.
  */
 export function resolveLeafProgress(
   item: Pick<WbsItem, 'progressMethod' | 'vol' | 'milestones'>,
   snap: LeafSnapshot | null | undefined
 ): number {
   if (!snap) return 0;
+  if (snap.source === 'manual' && snap.cumProgressPct != null) {
+    return Math.max(0, Math.min(100, snap.cumProgressPct));
+  }
   switch (methodOf(item)) {
     case 'qty': {
       const done = Math.max(0, snap.qtyDone ?? 0);
@@ -98,13 +106,17 @@ export function progressEvidence(
  * Recompute and store the cached percent after an edit.
  *
  * Callers mutate `qtyDone` / `milestonesDone`; this puts `cumProgressPct` back
- * in step. Kept separate from `resolveLeafProgress` so reads never write.
+ * in step. Kept separate from `resolveLeafProgress` so reads never write. A
+ * snapshot carrying `source: 'manual'` is left alone here too — recomputing it
+ * would immediately overwrite the very figure the override just recorded with
+ * whatever the ladder or quantity says, which is the bug this whole function
+ * exists to prevent for every other method.
  */
 export function syncLeafSnapshot(
   item: Pick<WbsItem, 'progressMethod' | 'vol' | 'milestones'>,
   snap: LeafSnapshot
 ): LeafSnapshot {
-  if (methodOf(item) === 'lumpsum') return snap;
+  if (methodOf(item) === 'lumpsum' || snap.source === 'manual') return snap;
   return { ...snap, cumProgressPct: resolveLeafProgress(item, snap) };
 }
 

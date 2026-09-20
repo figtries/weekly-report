@@ -61,6 +61,11 @@ export default function ProgressEntry({
   // it, because point 8 is unconditional: every row, whatever form it is
   // showing, can be typed over by hand.
   const showQuantity = !manual && node.method === 'qty';
+  // The form actually on screen is the manual percent form either because the
+  // escape hatch was pressed, or because the row has no ladder/quote and
+  // never needed one. Either way, offering to swap TO the form already
+  // showing reads as a control that does nothing.
+  const isManualForm = manual || (!showQuantity && shape === 'manual');
 
   return (
     <>
@@ -74,13 +79,15 @@ export default function ProgressEntry({
       {!showQuantity && shape === 'quote' && <QuoteEntry draft={draft} setDraft={setDraft} />}
       {!showQuantity && shape === 'manual' && <PercentEntry draft={draft} setDraft={setDraft} />}
 
-      <button
-        type="button"
-        onClick={onManual}
-        className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
-      >
-        Type a percent instead
-      </button>
+      {!isManualForm && (
+        <button
+          type="button"
+          onClick={onManual}
+          className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
+        >
+          Type a percent instead
+        </button>
+      )}
     </>
   );
 }

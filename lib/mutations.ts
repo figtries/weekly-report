@@ -342,10 +342,16 @@ export function applyFieldProgress(
     let next: LeafSnapshot = { ...prev };
     if (u.qtyDone !== undefined) {
       next.qtyDone = Math.max(0, Math.min(totalQty(item), u.qtyDone));
+      // Real evidence just arrived through the quantity form, which is never
+      // the escape hatch — a stale `manual` tag left over from an earlier
+      // override would otherwise freeze this figure forever (see
+      // `syncLeafSnapshot`). An explicit `u.source` still wins below.
+      if (u.source === undefined && next.source === 'manual') next.source = undefined;
     }
     if (u.milestonesDone !== undefined) {
       const valid = new Set((item.milestones ?? []).map((m) => m.id));
       next.milestonesDone = u.milestonesDone.filter((id) => valid.has(id));
+      if (u.source === undefined && next.source === 'manual') next.source = undefined;
     }
     if (u.note !== undefined) next.note = u.note;
     if (u.source !== undefined) next.source = u.source;
