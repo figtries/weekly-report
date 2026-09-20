@@ -337,15 +337,17 @@ export function setProgressMethodSqlite(
       if (method === 'qty') {
         snap.qtyDone = (pct / 100) * total;
       } else if (method === 'milestone') {
-        // Awarded in order until the next one would exceed what was already
-        // reported — the closest honest restatement, never more generous.
+        // A ladder is climbed in order: awarded while the running total stays
+        // at or below what was already reported, and stopped at the first rung
+        // that would exceed it — the closest honest restatement, never more
+        // generous.
         const done: string[] = [];
         let acc = 0;
         for (const m of milestones) {
           if (((acc + m.weight) / totalW) * 100 <= pct + 1e-9) {
             acc += m.weight;
             done.push(m.id);
-          }
+          } else break; // a ladder is climbed in order; a rung missed ends the climb
         }
         snap.milestonesDone = done;
       }

@@ -417,9 +417,10 @@ export function applyProgressMethod(
       snap.qtyDone = (pct / 100) * total;
       delete snap.milestonesDone;
     } else if (method === 'milestone') {
-      // Award milestones in order until their cumulative weight would exceed
-      // what was already reported — the closest honest restatement, and never
-      // more generous than the number it came from.
+      // A ladder is climbed in order: award each milestone only while the
+      // running total stays at or below what was already reported, and stop
+      // at the first one that would exceed it — the closest honest
+      // restatement, and never more generous than the number it came from.
       const done: string[] = [];
       let acc = 0;
       const totalW = ms.reduce((a, m) => a + m.weight, 0) || 1;
@@ -427,7 +428,7 @@ export function applyProgressMethod(
         if (((acc + m.weight) / totalW) * 100 <= pct + 1e-9) {
           acc += m.weight;
           done.push(m.id);
-        }
+        } else break; // a ladder is climbed in order; a rung missed ends the climb
       }
       snap.milestonesDone = done;
       delete snap.qtyDone;
