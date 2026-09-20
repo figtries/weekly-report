@@ -108,6 +108,16 @@ const WeightPill = ({ weight }: { weight: number }) =>
     <Pill tone="warn">no weight yet</Pill>
   );
 
+/**
+ * The one filter the map applies to itself. `'due'` is the pre-existing
+ * "this week" queue-as-a-lens; `'manual'` is Task 8's admission — the Check
+ * screen's "N of M figures were typed by hand" line links here rather than
+ * inventing a second filtering concept, because `matchingIds` already keeps
+ * a node's whole ancestor chain for anything it keeps, whatever the
+ * predicate checks.
+ */
+type Lens = 'due' | 'manual' | null;
+
 export default function OverallMap({
   map,
   week,
@@ -115,6 +125,7 @@ export default function OverallMap({
   projectHref,
   checkHref,
   weightsHref,
+  initialLens = null,
 }: {
   map: MapModel;
   week: number;
@@ -123,10 +134,12 @@ export default function OverallMap({
   checkHref: string;
   /** The bulk pricing screen, or null for a project that cannot be priced here. */
   weightsHref: string | null;
+  /** Arrived via `?lens=manual` from the Check screen. Read once, on mount. */
+  initialLens?: Lens;
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [lens, setLens] = useState(false);
+  const [lens, setLens] = useState<Lens>(initialLens);
   const [query, setQuery] = useState('');
   /** Branches folded BACK while a filter is showing. */
   const [folded, setFolded] = useState<Set<string>>(() => new Set());
@@ -179,7 +192,11 @@ export default function OverallMap({
   const filter = useMemo(() => {
     if (!needle && !lens) return null;
     return matchingIds(units, (n) => {
-      if (lens && !n.dueCount) return false;
+      if (lens === 'due' && !n.dueCount) return false;
+      // `source` is a leaf-only field (branches never carry one), so a branch
+      // never matches this arm directly — it is pulled in as an ancestor of a
+      // matching leaf instead, same as every branch above a "due" leaf.
+      if (lens === 'manual' && n.source !== 'manual') return false;
       if (needle && !`${n.code} ${n.name}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -225,6 +242,25 @@ export default function OverallMap({
           activity most of a phone screen down, and the brief asked for the work
           to be the thing you land on. */}
       <div className="border-b border-border p-4">
+        {/* Arrived via `?lens=manual` from the Check screen's admission line.
+            Its own strip rather than folding into the "this week" row below:
+            the two lenses answer different questions and can both be true of
+            the same row, so they get their own on/off rather than sharing
+            one button that could only ever say one of them. */}
+        {lens === 'manual' && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-chart-1/30 bg-chart-1/10 px-3.5 py-2.5 text-[13px] font-medium text-chart-1">
+            <span>Showing the figures typed by hand</span>
+            <m.button
+              {...pressMotion}
+              type="button"
+              onClick={() => setLens(null)}
+              className="flex min-h-11 shrink-0 items-center rounded-lg px-2.5 text-[12px] font-semibold text-chart-1 hover:bg-chart-1/10"
+            >
+              Show everything
+            </m.button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold text-foreground">
@@ -251,16 +287,16 @@ export default function OverallMap({
           {map.due > 0 && (
             <m.button
               {...pressMotion}
-              onClick={() => setLens((v) => !v)}
-              aria-pressed={lens}
+              onClick={() => setLens((v) => (v === 'due' ? null : 'due'))}
+              aria-pressed={lens === 'due'}
               className={cn(
                 'min-h-11 shrink-0 rounded-xl border px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
-                lens
+                lens === 'due'
                   ? 'border-chart-1/40 bg-chart-1/10 text-chart-1'
                   : 'border-input bg-card text-foreground hover:bg-muted/60'
               )}
             >
-              {lens ? 'Showing this week' : 'Show only these'}
+              {lens === 'due' ? 'Showing this week' : 'Show only these'}
             </m.button>
           )}
         </div>
@@ -302,7 +338,9 @@ export default function OverallMap({
       ))}
       {filter && filter.size === 0 && (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          Nothing matches. Clear the search to see the whole project.
+          {lens
+            ? 'Nothing matches. Clear the search, or turn off the filter above, to see the whole project.'
+            : 'Nothing matches. Clear the search to see the whole project.'}
         </p>
       )}
 

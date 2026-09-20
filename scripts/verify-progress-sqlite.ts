@@ -248,6 +248,43 @@ check(
   `reads ${unfrozenPct.toFixed(2)}%, not the stale typed 40%`
 );
 
+/* ------------------- the bulk multi-week read must not drop `source` */
+
+// Task 8 found `lib/dashboard-db.ts`'s multi-week history read selecting
+// `source` off `leaf_progress` and then dropping it before building
+// `leafData` — every SQLite project therefore read `source: undefined` on
+// every leaf, forever. The failure mode is not a wrong number, it is a FALSE
+// DENIAL: a report stating "0 figures were typed by hand" while some were.
+// `buildProjectDashboardData` is the exact function `getOpenDb()` calls for a
+// SQLite project (see lib/data.ts), so reading through `pctAt` here is reading
+// through the same path the app does. Two leaves untouched by anything above,
+// so this section stands on its own regardless of what earlier cases left
+// leaves[0] at.
+if (leaves.length < 3) throw new Error('Need at least 3 leaves for the source-threading check');
+const manualLeaf = leaves[1];
+const quietLeaf = leaves[2];
+
+saveWeekUpdatesSqlite(project.id, w1, {
+  [manualLeaf.id]: { cumProgressPct: 61, source: 'manual' },
+});
+saveWeekUpdatesSqlite(project.id, w1, {
+  [quietLeaf.id]: { cumProgressPct: 30 }, // no `source` at all
+});
+
+const manualSource = pctAt(w1, manualLeaf.id)?.source;
+const quietSource = pctAt(w1, quietLeaf.id)?.source;
+
+check(
+  'a figure typed by hand carries its source through the bulk read getOpenDb() uses',
+  manualSource === 'manual',
+  `source reads ${JSON.stringify(manualSource)}`
+);
+check(
+  'a figure nobody typed by hand reads with no source, not a false "manual"',
+  quietSource === undefined,
+  `source reads ${JSON.stringify(quietSource)}`
+);
+
 /* ------------------------------------------- and the project can be read */
 
 const data = buildProjectDashboardData(project.id);

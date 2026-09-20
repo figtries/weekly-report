@@ -191,7 +191,7 @@ export default function WeekChecks({
       {handTyped.total > 0 && (
         <Reveal delay={0.12}>
           <Link
-            href={`/weekly/${week}/overall`}
+            href={`/weekly/${week}/overall?lens=manual`}
             className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3.5 text-[13px] text-muted-foreground shadow-sm ring-1 ring-foreground/10 transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground sm:px-5"
           >
             <span>

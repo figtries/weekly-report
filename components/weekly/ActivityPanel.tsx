@@ -258,7 +258,6 @@ function PanelBody({
   // normally measured — that is the whole point of typing a percent instead.
   const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(effectiveNode, draft);
   const dirty = Math.abs(pct - node.actualPct) > 0.004;
-  const behind = round2(node.planPct - pct);
 
   // Escape closes, the scroll behind is frozen, and focus starts inside the
   // panel — the three things a hand-rolled overlay always forgets.
@@ -420,18 +419,13 @@ function PanelBody({
               />
             )}
 
+            {/* The anchor figure only. Its own translation into plan terms —
+                rise, plan comparison, contribution — is `PlanFacts` inside
+                `ProgressEntry` now: printing the plan sentence here too read
+                as a stutter, the same fact said twice on one screen. */}
             <div className="mt-4 flex items-baseline gap-2 border-t border-border/60 pt-3">
               <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
                 {fmt1(pct)}%
-              </span>
-              <span className="text-[12px] leading-snug text-muted-foreground">
-                {node.planPct > 0
-                  ? behind > 0.05
-                    ? `plan says ${fmt1(node.planPct)}%, so ${fmt1(behind)} behind`
-                    : behind < -0.05
-                      ? `plan says ${fmt1(node.planPct)}%, so ${fmt1(-behind)} ahead`
-                      : `exactly on plan`
-                  : 'not scheduled yet'}
               </span>
             </div>
           </div>

@@ -26,22 +26,35 @@ export const unstable_instant = {
   unstable_disableValidation: true,
 };
 
+type PageProps = {
+  params: Promise<{ week: string }>;
+  // `?lens=manual` arrives from the Check screen's "N of M figures were typed
+  // by hand" line — see WeekChecks.tsx. Reading it here rather than adding a
+  // second uncached read: `DataOverallPageBody` sits inside `LegacyGate`'s own
+  // `<Suspense>` already (for `connection()`), which is what a dynamic read
+  // needs under cacheComponents — and `unstable_disableValidation` above is
+  // what keeps a new searchParam from failing the build the way `?only=` did
+  // under this same `/weekly/[week]` layout (see app/print/weekly/[week]).
+  searchParams: Promise<{ lens?: string }>;
+};
+
 /**
  * The gate is asked PER REQUEST, and the answer is never prerendered — a
  * project's name baked into this page's static HTML was served from the CDN to
  * whoever opened a different one. See components/projects/LegacyGate.tsx.
  */
-export default function DataOverallPage({ params }: { params: Promise<{ week: string }> }) {
+export default function DataOverallPage({ params, searchParams }: PageProps) {
   return (
     <LegacyGate what="weekly reports" planned>
-      <DataOverallPageBody params={params} />
+      <DataOverallPageBody params={params} searchParams={searchParams} />
     </LegacyGate>
   );
 }
 
-async function DataOverallPageBody({ params }: { params: Promise<{ week: string }> }) {
-  const { week: weekParam } = await params;
+async function DataOverallPageBody({ params, searchParams }: PageProps) {
+  const [{ week: weekParam }, { lens }] = await Promise.all([params, searchParams]);
   const week = Number(weekParam);
+  const initialLens = lens === 'manual' ? ('manual' as const) : null;
   const [db, result] = await Promise.all([getOpenDb(), getOpenWeekRollup(week)]);
   if (!result) notFound();
   const { roots, grandTotal } = result;
@@ -236,6 +249,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
           projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
           checkHref={`/weekly/${week}/control`}
           weightsHref={open && !open.legacyJsonId ? `/weekly/${week}/weights` : null}
+          initialLens={initialLens}
         />
       </Reveal>
     </div>
