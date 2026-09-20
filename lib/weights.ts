@@ -569,8 +569,30 @@ export function allocationOf(nodes: WeightNode[], result: WeightResult): Map<str
  * its own contract inside SPK-004's `1.4`, exactly as `deriveWeights` and
  * `allocationOf` already treat it, so it is left out of its parent's sum.
  */
+/** One heading that hands out more than it was given. */
+export interface OverGiving {
+  id: string;
+  /** What the derivation handed this heading. */
+  budget: number;
+  /** What its rows took between them. */
+  claimed: number;
+  /** claimed - budget. Always positive; that is what puts it in the list. */
+  over: number;
+}
+
 export interface Overrun {
-  /** Headings that hand out more than they were given. */
+  /**
+   * EVERY heading that hands out more than it holds, biggest first.
+   *
+   * A count was not enough and saying so cost a round trip: the strip read
+   * "26 headings hand out more than they hold" and then "open the cards below
+   * that say they are over", while every card on that screen said it had money
+   * LEFT. The six worst sit four and five levels down inside three different
+   * SPK, and nothing on the screen could reach them. A number nobody can act
+   * on is the same as no number.
+   */
+  headings: OverGiving[];
+  /** `headings.length`, kept because two call sites only want the count. */
   branches: number;
   /** Money the derived leaves exceed the contract by. Zero when they do not. */
   amount: number;
@@ -585,7 +607,7 @@ export function overrunOf(nodes: WeightNode[], result: WeightResult): Overrun {
     kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
   }
 
-  let branches = 0;
+  const headings: OverGiving[] = [];
   for (const [parentId, children] of kids) {
     const own = result.valueOf.get(parentId);
     if (own == null || own <= 0) continue;
@@ -594,12 +616,16 @@ export function overrunOf(nodes: WeightNode[], result: WeightResult): Overrun {
       if (c.isReportingUnit && (c.unitContractValue ?? c.price ?? 0) > 0) continue;
       claimed += result.valueOf.get(c.id) ?? 0;
     }
-    if (claimed - own > EPSILON) branches += 1;
+    if (claimed - own > EPSILON) {
+      headings.push({ id: parentId, budget: own, claimed, over: claimed - own });
+    }
   }
+  headings.sort((a, b) => b.over - a.over);
 
   const points = Math.max(0, result.total - 100);
   return {
-    branches,
+    headings,
+    branches: headings.length,
     amount: points > EPSILON ? (points / 100) * result.contractValue : 0,
     points,
   };

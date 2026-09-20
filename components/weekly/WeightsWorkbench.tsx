@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
 
@@ -14,6 +14,7 @@ import {
   overrunOf,
   topLevelPricedTotal,
   type Allocation,
+  type OverGiving,
   type Overrun,
   type WeightNode,
 } from '@/lib/weights';
@@ -64,6 +65,15 @@ export default function WeightsWorkbench({
   projectId: string;
 }) {
   const [openUnit, setOpenUnit] = useState<string | null>(null);
+  /**
+   * The row the strip sent someone to, highlighted until they touch something.
+   *
+   * Naming a heading is only half of it. The six worst on Gundih sit four and
+   * five levels inside three different SPK, so a list that only NAMES them
+   * leaves the reader to open cards one at a time looking for a code. The
+   * strip opens the right card and puts the row under the eye instead.
+   */
+  const [focusRow, setFocusRow] = useState<string | null>(null);
   /** Prices typed since the page loaded, raw digit strings, keyed by row id. */
   const [typed, setTyped] = useState<Record<string, string>>({});
   /**
@@ -181,6 +191,58 @@ export default function WeightsWorkbench({
    */
   const overrun = useMemo(() => overrunOf(patched, live), [patched, live]);
 
+  /** Which card a row lives in, so naming a row is enough to reach it. */
+  const unitOfRow = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const u of screen.units) for (const r of u.rows) out.set(r.id, u.id);
+    return out;
+  }, [screen.units]);
+
+  /** Every row on the screen by id, for the strip to name what it found. */
+  const rowOf = useMemo(() => {
+    const out = new Map<string, WeightsRow>();
+    for (const u of screen.units) for (const r of u.rows) out.set(r.id, r);
+    for (const r of screen.looseRows) out.set(r.id, r);
+    return out;
+  }, [screen.units, screen.looseRows]);
+
+  /**
+   * What to call a row, CARDS INCLUDED.
+   *
+   * A unit's own row is not among `unit.rows` — it is the card — so two of
+   * the headings the strip lists on Gundih (SPK-004 at `1.4`, and SPK-007
+   * nested at `1.4.4`) had no entry at all and printed as the word "Row".
+   */
+  const labelOf = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const [id, r] of rowOf) out.set(id, `${r.code} ${r.name}`.trim());
+    for (const u of screen.units) out.set(u.id, `${u.code} ${u.name}`.trim());
+    return out;
+  }, [rowOf, screen.units]);
+
+  /** The over-giving headings keyed by row, so a row can carry its own pill. */
+  const overOf = useMemo(() => {
+    const out = new Map<string, OverGiving>();
+    for (const h of overrun.headings) out.set(h.id, h);
+    return out;
+  }, [overrun]);
+
+  /** How many of them are inside each card, so you know which card to open. */
+  const overInUnit = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const h of overrun.headings) {
+      const u = unitOfRow.get(h.id);
+      if (u) out.set(u, (out.get(u) ?? 0) + 1);
+    }
+    return out;
+  }, [overrun, unitOfRow]);
+
+  /** Open whichever card holds this row, then leave it highlighted. */
+  function goToRow(rowId: string) {
+    setOpenUnit(unitOfRow.get(rowId) ?? null);
+    setFocusRow(rowId);
+  }
+
   /** How many activities carry a price now, counting what is only typed. */
   const pricedCount = useMemo(
     () => patched.filter((n) => n.isLeaf && (n.price ?? 0) > 0).length,
@@ -203,6 +265,9 @@ export default function WeightsWorkbench({
         live={live}
         gap={gap}
         overrun={overrun}
+        rowOf={rowOf}
+        labelOf={labelOf}
+        onGoToRow={goToRow}
         priced={pricedCount}
         total={leafCount}
         projectId={projectId}
@@ -215,6 +280,8 @@ export default function WeightsWorkbench({
           currency={screen.summary.currency}
           live={live}
           alloc={liveAlloc.get(unit.id) ?? null}
+          overOf={overOf}
+          focusRow={focusRow}
           unitTotal={unitTotals.get(unit.id) ?? 0}
           typed={typed}
           setTyped={setTyped}
@@ -241,6 +308,7 @@ export default function WeightsWorkbench({
               currency={screen.summary.currency}
               bobot={unitTotals.get(u.id) ?? 0}
               alloc={liveAlloc.get(u.id) ?? null}
+              overInside={overInUnit.get(u.id) ?? 0}
               value={liveValueOf(u, live)}
               onOpen={() => setOpenUnit(u.id)}
             />
@@ -249,9 +317,19 @@ export default function WeightsWorkbench({
           {/* Rows no card holds. On a flat plan this IS the plan, and it is the
               only place a price can be typed. */}
           {screen.looseRows.length > 0 && (
+            <LooseHeading
+              rows={screen.looseRows}
+              live={live}
+              hasUnits={screen.units.length > 0}
+            />
+          )}
+
+          {screen.looseRows.length > 0 && (
             <RowList
               rows={screen.looseRows}
               live={live}
+              overOf={overOf}
+              focusRow={focusRow}
               against={looseTotal}
               currency={screen.summary.currency}
               typed={typed}
@@ -263,6 +341,7 @@ export default function WeightsWorkbench({
               onMeasure={setMeasuring}
               showBoth={false}
               scopeLabel="project"
+              lockRoot
             />
           )}
 
@@ -329,6 +408,9 @@ function PricingHero({
   live,
   gap,
   overrun,
+  rowOf,
+  labelOf,
+  onGoToRow,
   priced,
   total,
   projectId,
@@ -339,6 +421,9 @@ function PricingHero({
   /** SIGNED: positive is work with no price yet, negative is past the contract. */
   gap: number;
   overrun: Overrun;
+  rowOf: Map<string, WeightsRow>;
+  labelOf: Map<string, string>;
+  onGoToRow: (rowId: string) => void;
   priced: number;
   total: number;
   projectId: string;
@@ -437,59 +522,69 @@ function PricingHero({
                 block that decides whether a figure in the report can be
                 trusted. */}
             {over || under ? (
-              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-destructive">
-                    The weights add up to {governing.toFixed(2)}%, and they have to be 100%
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {overContract ? (
-                      <>
-                        The prices come to{' '}
-                        <strong className="tabular-nums text-foreground">
-                          {formatMoney(allocated, currency)}
-                        </strong>
-                        , which is{' '}
-                        <strong className="tabular-nums text-foreground">
-                          {formatMoney(-gap, currency)}
-                        </strong>{' '}
-                        more than the contract value. Raise the contract value, or lower a price.
-                      </>
-                    ) : over ? (
-                      <>
-                        {overrun.branches} headings hand out more than they hold,{' '}
-                        <strong className="tabular-nums text-foreground">
-                          {formatMoney(overrun.amount, currency)}
-                        </strong>{' '}
-                        over between them. Open the cards below that say they are over.
-                      </>
-                    ) : (
-                      <>
-                        The prices come to{' '}
-                        <strong className="tabular-nums text-foreground">
-                          {formatMoney(allocated, currency)}
-                        </strong>{' '}
-                        and every activity already has one, so nothing is left to take the rest of
-                        the contract. Lower the contract value, or a price is missing.
-                      </>
-                    )}
-                  </p>
+              <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-destructive">
+                      The weights add up to {governing.toFixed(2)}%, and they have to be 100%
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {overContract ? (
+                        <>
+                          The prices come to{' '}
+                          <strong className="tabular-nums text-foreground">
+                            {formatMoney(allocated, currency)}
+                          </strong>
+                          , which is{' '}
+                          <strong className="tabular-nums text-foreground">
+                            {formatMoney(-gap, currency)}
+                          </strong>{' '}
+                          more than the contract value. Raise the contract value, or lower a price.
+                        </>
+                      ) : over ? (
+                        <>
+                          {overrun.branches} headings hand out more than they hold,{' '}
+                          <strong className="tabular-nums text-foreground">
+                            {formatMoney(overrun.amount, currency)}
+                          </strong>{' '}
+                          over between them. Every one of them is listed below — tap one to go
+                          straight to it.
+                        </>
+                      ) : (
+                        <>
+                          The prices come to{' '}
+                          <strong className="tabular-nums text-foreground">
+                            {formatMoney(allocated, currency)}
+                          </strong>{' '}
+                          and every activity already has one, so nothing is left to take the rest of
+                          the contract. Lower the contract value, or a price is missing.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  {(overContract || under) && (
+                    <PressLink
+                      {...pressMotion}
+                      href={`/projects/${projectId}`}
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white"
+                    >
+                      Open project details
+                    </PressLink>
+                  )}
                 </div>
-                {(overContract || under) && (
-                  <PressLink
-                    {...pressMotion}
-                    href={`/projects/${projectId}`}
-                    className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Open project details
-                  </PressLink>
-                )}
+                <OverList
+                  headings={overrun.headings}
+                  labelOf={labelOf}
+                  currency={currency}
+                  onGo={onGoToRow}
+                />
+                <StrandedNote live={live} rowOf={rowOf} onGo={onGoToRow} />
               </div>
             ) : priceDrift ? (
               // Locked, so the report is safe and this is not an alarm — but
               // the prices and the weights are telling different stories and
               // the person pricing rows is the only one who can see it.
-              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
+              <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-warn">
                     The prices no longer add up to these weights
@@ -507,9 +602,17 @@ function PricingHero({
                     <strong className="tabular-nums text-foreground">
                       {formatMoney(overrun.amount, currency)}
                     </strong>{' '}
-                    over between them. Open the cards below that say they are over.
+                    over between them. Every one of them is listed below — tap one to go straight
+                    to it.
                   </p>
                 </div>
+                <OverList
+                  headings={overrun.headings}
+                  labelOf={labelOf}
+                  currency={currency}
+                  onGo={onGoToRow}
+                />
+                <StrandedNote live={live} rowOf={rowOf} onGo={onGoToRow} />
               </div>
             ) : shortOfContract && total > 0 && priced >= total ? (
               // Every row is in and the contract is still not spent. The report
@@ -604,6 +707,169 @@ function PricingHero({
   );
 }
 
+/**
+ * The headings that hand out more than they hold, named and reachable.
+ *
+ * ALL OF THEM, not a sample. The first version of this warning gave a count and
+ * a total and told the reader to "open the cards below that say they are over",
+ * and there were none: on Gundih the six worst sit four and five levels down
+ * inside three different SPK, while every card on that screen reported money
+ * LEFT. Being told 26 things are wrong with no way to reach one of them is the
+ * same as being told nothing, and it was reported in exactly those words.
+ *
+ * Each line says the two figures the fix is made of — what the heading was
+ * given, and what its rows took — because the number somebody has to type is
+ * the second one, and printing only the difference makes them subtract it back.
+ *
+ * It POINTS, and it changes nothing. `allocationOf`'s note holds here too:
+ * scaling the rows back would move figures nobody asked to move, and a price
+ * this app invented would travel into every printed report as though it came
+ * off a BOQ.
+ */
+const OVER_SHOWN = 8;
+
+function OverList({
+  headings,
+  labelOf,
+  currency,
+  onGo,
+}: {
+  headings: OverGiving[];
+  labelOf: Map<string, string>;
+  currency: string;
+  onGo: (rowId: string) => void;
+}) {
+  // EIGHT, then the rest behind one press. Not a sample — the count is on
+  // the button and every one of them is one tap away — but twenty-six rows
+  // in an opening strip pushes the work itself off the screen, and the first
+  // eight already carry most of the money on the project this was reported
+  // against.
+  const [all, setAll] = useState(false);
+  if (headings.length === 0) return null;
+  const shown = all ? headings : headings.slice(0, OVER_SHOWN);
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {shown.map((h) => {
+        const label = labelOf.get(h.id);
+        return (
+          <li key={h.id}>
+            <m.button
+              {...pressMotion}
+              onClick={() => onGo(h.id)}
+              className="flex w-full min-h-11 flex-col gap-0.5 rounded-lg bg-background/70 px-3 py-2 text-left ring-1 ring-foreground/10 transition-colors duration-300 ease-ios hover:bg-background sm:flex-row sm:items-center sm:gap-3"
+            >
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
+                {label ?? 'This heading'}
+              </span>
+              <span className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
+                holds {formatMoney(h.budget, currency)} · rows take{' '}
+                {formatMoney(h.claimed, currency)}
+              </span>
+              <span className="shrink-0 text-[13px] font-semibold tabular-nums text-destructive">
+                over by {formatMoney(h.over, currency)}
+              </span>
+            </m.button>
+          </li>
+        );
+      })}
+      {headings.length > OVER_SHOWN && (
+        <li>
+          <m.button
+            {...pressMotion}
+            onClick={() => setAll((v) => !v)}
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-[13px] font-semibold text-destructive underline underline-offset-2"
+          >
+            {all
+              ? `Show only the ${OVER_SHOWN} biggest`
+              : `Show all ${headings.length} headings`}
+          </m.button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/**
+ * The activities the arithmetic left with no weight at all.
+ *
+ * The consequence nobody could see. Gundih's `1.1 Project Award` and
+ * `1.5 Finish` both carry 0.00%, because the contract was already handed out
+ * one and a half times over and `deriveWeights` shares a remainder only when
+ * there IS one. A leaf with no weight never reaches the S-curve and can never
+ * be reported against — it is work that, as far as every report is concerned,
+ * does not exist. That belongs beside the cause rather than two screens away.
+ */
+function StrandedNote({
+  live,
+  rowOf,
+  onGo,
+}: {
+  live: ReturnType<typeof deriveWeights>;
+  rowOf: Map<string, WeightsRow>;
+  onGo: (rowId: string) => void;
+}) {
+  const stranded = [...rowOf.values()].filter((r) => r.isLeaf && !live.bobotOf.has(r.id));
+  if (stranded.length === 0) return null;
+  return (
+    <p className="text-[13px] text-muted-foreground">
+      <strong className="text-foreground">
+        {stranded.length} {stranded.length === 1 ? 'activity is' : 'activities are'} left with no
+        weight at all
+      </strong>{' '}
+      — nothing is reporting on{' '}
+      {stranded.slice(0, 3).map((r, i) => (
+        <span key={r.id}>
+          {i > 0 ? ', ' : ''}
+          <button
+            type="button"
+            onClick={() => onGo(r.id)}
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            {r.code} {r.name}
+          </button>
+        </span>
+      ))}
+      {stranded.length > 3 ? ` and ${stranded.length - 3} more` : ''}.
+    </p>
+  );
+}
+
+/**
+ * What the list at the bottom of the screen actually is.
+ *
+ * It had no heading of any kind, so it read as a stray third list under the
+ * cards — "itu activity dibawah itu apa ya?", asked in those words. These are
+ * the rows no card contains: the top of the WBS, and anything outside every
+ * SPK. On a flat plan this IS the plan and the only place a price can be typed,
+ * which is why it is never hidden.
+ */
+function LooseHeading({
+  rows,
+  live,
+  hasUnits,
+}: {
+  rows: WeightsRow[];
+  live: ReturnType<typeof deriveWeights>;
+  hasUnits: boolean;
+}) {
+  const stranded = rows.filter((r) => r.isLeaf && !live.bobotOf.has(r.id)).length;
+  return (
+    <div className="mt-2 px-1">
+      <p className="text-[13px] font-semibold">
+        {hasUnits ? 'Outside every SPK' : 'The plan'}
+      </p>
+      <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+        {hasUnits
+          ? 'The top of the WBS, and the rows that no SPK card above holds.'
+          : 'No SPK is marked, so every row is priced here.'}
+        {stranded > 0
+          ? ` ${stranded} of ${stranded === 1 ? 'them carries' : 'them carry'} no weight, so ${stranded === 1 ? 'it is' : 'they are'} invisible to every report.`
+          : ''}
+      </p>
+    </div>
+  );
+}
+
 /** Drop one key without mutating, so a stale entry cannot outlive its save. */
 function omit<T>(map: Record<string, T>, key: string): Record<string, T> {
   const next = { ...map };
@@ -685,6 +951,7 @@ function UnitFace({
   currency,
   priced,
   total,
+  overInside = 0,
   big,
   pressable,
 }: {
@@ -697,6 +964,8 @@ function UnitFace({
   currency: string;
   priced: number;
   total: number;
+  /** Over-giving headings somewhere beneath this one. */
+  overInside?: number;
   /** The drilled-in header says it one size louder than a card in a list. */
   big?: boolean;
   pressable?: boolean;
@@ -803,6 +1072,11 @@ function UnitFace({
         <Pill tone={total > 0 && priced >= total ? 'ok' : priced > 0 ? 'info' : 'quiet'}>
           {priced} of {total} {total === 1 ? 'row' : 'rows'} set
         </Pill>
+        {overInside > 0 && (
+          <Pill tone="bad">
+            {overInside} {overInside === 1 ? 'heading' : 'headings'} over inside
+          </Pill>
+        )}
         {alloc ? (
           over ? (
             <Pill tone="bad">Over by {formatMoney(-alloc.left, currency)}</Pill>
@@ -832,6 +1106,7 @@ function UnitCard({
   currency,
   bobot,
   alloc,
+  overInside,
   value,
   onOpen,
 }: {
@@ -839,10 +1114,17 @@ function UnitCard({
   currency: string;
   bobot: number;
   alloc: Allocation | null;
+  /** Headings INSIDE this card that hand out more than they hold. */
+  overInside: number;
   value: number;
   onOpen: () => void;
 }) {
-  const over = alloc != null && alloc.left < -0.5;
+  // A card can be perfectly in balance at its own level and still hold three
+  // headings four levels down that are not. SPK-003 read "IDR 2 506 816 left
+  // for 3 rows" — money to spare — while three of the six worst headings in
+  // the project were inside it. The card has to carry what is under it or the
+  // list above has nowhere to send anyone.
+  const over = (alloc != null && alloc.left < -0.5) || overInside > 0;
   return (
     <m.button
       {...pressMotion}
@@ -863,6 +1145,7 @@ function UnitCard({
         currency={currency}
         priced={unit.decidedRows}
         total={unit.totalRows}
+        overInside={overInside}
         pressable
       />
     </m.button>
@@ -874,6 +1157,8 @@ function UnitRows({
   currency,
   live,
   alloc,
+  overOf,
+  focusRow,
   unitTotal,
   typed,
   setTyped,
@@ -888,6 +1173,8 @@ function UnitRows({
   currency: string;
   live: ReturnType<typeof deriveWeights>;
   alloc: Allocation | null;
+  overOf: Map<string, OverGiving>;
+  focusRow: string | null;
   unitTotal: number;
   typed: Record<string, string>;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -940,6 +1227,8 @@ function UnitRows({
       <RowList
         rows={unit.rows}
         live={live}
+        overOf={overOf}
+        focusRow={focusRow}
         against={unitTotal}
         currency={currency}
         typed={typed}
@@ -971,6 +1260,8 @@ function UnitRows({
 function RowList({
   rows,
   live,
+  overOf,
+  focusRow,
   against,
   currency,
   typed,
@@ -982,9 +1273,14 @@ function RowList({
   onMeasure,
   showBoth,
   scopeLabel,
+  lockRoot = false,
 }: {
   rows: WeightsRow[];
   live: ReturnType<typeof deriveWeights>;
+  /** Headings here that hand out more than they hold, keyed by row id. */
+  overOf: Map<string, OverGiving>;
+  /** The row the strip sent someone to. Highlighted and scrolled to. */
+  focusRow: string | null;
   /** Denominator for the left figure: this scope's own leaf total. */
   against: number;
   currency: string;
@@ -998,6 +1294,16 @@ function RowList({
   /** Whether the scope figure and the project figure are different questions. */
   showBoth: boolean;
   scopeLabel: string;
+  /**
+   * Draw the top of the WBS as a heading rather than as something to price.
+   *
+   * Row `1` is the project itself said twice. A price on it is the contract
+   * restated on a line, which is exactly the shape `isTotalRow` exists to
+   * throw away — Gundih already carries one of those at `1.5 Finish`. The box
+   * sat there reading "No budget above it yet", which is an invitation to
+   * create the second one.
+   */
+  lockRoot?: boolean;
 }) {
   const maxScope =
     against > 0
@@ -1008,6 +1314,16 @@ function RowList({
           0
         )
       : 0;
+
+  // The screen does not scroll the document — `<main>` does, and inside a
+  // drilled-in SPK there is a second scroller in there. `scrollIntoView`
+  // walks up to whichever one it finds, which is why the browser is left to
+  // do it rather than computing against a container this component would
+  // otherwise have to know about.
+  const focusRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (focusRow) focusRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusRow]);
 
   return (
     <>
@@ -1024,6 +1340,8 @@ function RowList({
       <div className="flex flex-col gap-2">
         {rows.map((row) => {
           const overall = row.isLeaf ? (live.bobotOf.get(row.id) ?? 0) : subtreeOf(row.id, rows, live);
+          const over = overOf.get(row.id);
+          const focused = focusRow === row.id;
           const inScope = against > 0 ? (overall / against) * 100 : 0;
           const priced = (typed[row.id] ?? String(row.price ?? '')) !== '';
           // DECIDED, not priced. A stated share is somebody's decision just as
@@ -1059,11 +1377,16 @@ function RowList({
               // "3 Procurement Material Solar" both came out as
               // "Procurement ..." and the list became unreadable. Same lesson
               // the planner learned about its own name column.
+              ref={focused ? focusRef : undefined}
               className={cn(
                 'rounded-xl bg-card px-3.5 py-3 shadow-sm ring-1 transition-colors duration-300 ease-ios sm:flex sm:items-center sm:gap-3',
                 // A priced row is visibly settled. Reading down the list you can
                 // see how far you got without counting anything.
-                decided ? 'ring-chart-1/35' : 'ring-foreground/10'
+                decided ? 'ring-chart-1/35' : 'ring-foreground/10',
+                // Over-giving wins the ring: it is the one thing on this row
+                // somebody has to act on.
+                over && 'bg-destructive/[0.04] ring-destructive/40',
+                focused && 'ring-2 ring-destructive'
               )}
               style={{ marginLeft: `${Math.min(row.depth, 4) * 12}px` }}
             >
@@ -1072,9 +1395,27 @@ function RowList({
                   {row.code} {row.name}
                 </p>
                 {!row.isLeaf ? (
-                  <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-                    Branch. Its figure is the rows beneath it.
-                  </p>
+                  over ? (
+                    // The two figures the fix is made of, on the row itself, so
+                    // arriving here from the list above needs no second reading.
+                    <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                      Holds{' '}
+                      <strong className="tabular-nums text-foreground">
+                        {formatMoney(over.budget, currency)}
+                      </strong>
+                      , its rows take{' '}
+                      <strong className="tabular-nums text-foreground">
+                        {formatMoney(over.claimed, currency)}
+                      </strong>{' '}
+                      <strong className="tabular-nums text-destructive">
+                        · over by {formatMoney(over.over, currency)}
+                      </strong>
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                      Branch. Its figure is the rows beneath it.
+                    </p>
+                  )
                 ) : (
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                     {/* The schedule, read only. It sits here because in the
@@ -1096,6 +1437,11 @@ function RowList({
               </div>
 
               <div className="mt-2 flex items-center gap-3 sm:mt-0 sm:shrink-0">
+                {lockRoot && !row.isLeaf && row.depth === 0 ? (
+                  <p className="w-44 text-right text-[12.5px] text-muted-foreground">
+                    The whole project. Its value is the contract above.
+                  </p>
+                ) : (
                 <ValueField
                   row={row}
                   currency={currency}
@@ -1105,6 +1451,7 @@ function RowList({
                   onCommit={onCommit}
                   onCommitPercent={onCommitPercent}
                 />
+                )}
 
                 <div className="w-28 shrink-0">
                   <div className="flex items-baseline justify-end gap-1.5">
