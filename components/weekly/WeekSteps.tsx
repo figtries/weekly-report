@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
  * Steps stay reachable in any order. This numbers the work, it does not gate
  * it: a wrong count must never be able to lock someone out of their own report.
  *
- * AN ENTRY WITHOUT A NUMBER IS NOT A STEP, and the row can carry one. Activities
+ * AN ENTRY WITHOUT A NUMBER IS NOT A STEP, and the row can carry one. Weights
  * belongs to the PROJECT rather than to the week — prices and shares are true
  * in week 4 and week 40 alike — so it takes no place in "first, then, then". It
  * still belongs in this bar, because this bar is where someone looks to change

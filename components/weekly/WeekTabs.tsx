@@ -44,7 +44,7 @@ const GROUPS = {
     // order a WEEK is worked through, and prices belong to the project. Being
     // listed here is what makes the tab detect as active and get prefetched;
     // its visible entry is the pill in the action group.
-    { key: 'weights', label: 'Activities', short: 'Activities', printable: false },
+    { key: 'weights', label: 'Weights', short: 'Weights', printable: false },
   ],
   laporan: [
     { key: 'summary', label: 'Overall Summary', short: 'Summary', printable: true },
@@ -120,7 +120,7 @@ export default function WeekTabs({
     // reachable only from the setup card and a quiet link under the map, and
     // that reasoning was about not making it a fourth STEP. It skipped the
     // question of whether people could find it at all, and they could not.
-    { key: 'weights', label: 'Activities', href: `/weekly/${selectedWeek}/weights` },
+    { key: 'weights', label: 'Weights', href: `/weekly/${selectedWeek}/weights` },
   ];
   const activeStep = onReport ? 'report' : activeTab;
 

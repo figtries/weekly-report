@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
  * This panel is the third answer to the question two earlier cuts of Data
  * Overall got wrong. Both of them spread one row's facts over three screens —
  * the percentage on Fill in, the price and the measurement method on
- * Activities, the dates in the planner — so using the app meant remembering
+ * Weights, the dates in the planner — so using the app meant remembering
  * which screen held which field. Here the row is the subject and the screens
  * are gone: the figure at the top, and under it the three things that decide
  * what that figure MEANS.

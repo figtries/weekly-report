@@ -44,7 +44,7 @@ async function WeightsPageBody() {
   return (
     <RouteTransition id="weekly-weights">
       <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
-        <PageHeader section="Data Overall" title="Activities" className="mb-0 animate-enter">
+        <PageHeader section="Data Overall" title="Weights" className="mb-0 animate-enter">
           {/* Both promises, said once, at the top, in the words that remove the
               two fears. Nobody arrives with a complete BOQ, and believing you
               need one is what stops a project getting set up at all. And nobody

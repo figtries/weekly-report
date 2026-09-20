@@ -154,7 +154,7 @@ never gets set up.
 **A row is set by its PRICE or by its SHARE, and they are the same fact.** A
 heading has a budget; what people decide about the rows inside it is how much of
 that budget each one takes, and asking for rupiah there makes someone do the
-multiplication by hand and type the answer. So Activities gives every row one
+multiplication by hand and type the answer. So Weights gives every row one
 box with two units: money lands in `price`, a percent lands in
 `workstep_factor` — a column the Gundih importer had been writing since day one
 while no screen could. Weight is still DERIVED from whichever was given; a share
@@ -310,11 +310,11 @@ out. The figures were never wrong; the shape was. What shipped on 13 Sep 2026 is
 `components/weekly/OverallMap.tsx` over `lib/overall-map.ts`: contract → group →
 activity, opened where you stand, NO COLUMN HEADERS ANYWHERE, and three things
 per row — name, one bar, one number. Everything else about a row is one press
-away in `ActivityPanel`, which is also where Activities went: **price, method
+away in `ActivityPanel`, which is also where Weights went: **price, method
 and schedule stopped being a screen**, because three screens meant remembering
 which one held which field. `/weekly/[week]/weights` survives as the BULK tool
 (two hundred prices in one sitting is not a per-row job), and on 14 Sep 2026 it
-came BACK into the week bar as an unnumbered entry called Activities. The old
+came BACK into the week bar as an unnumbered entry called Weights. The old
 rule here said not to put it beside the stepper, and the half of it that still
 holds is that it is not a STEP: what an activity is worth belongs to the project
 and is as true in week 4 as in week 40, so it carries no numeral and no chevron,

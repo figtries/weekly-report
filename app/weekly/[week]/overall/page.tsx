@@ -124,7 +124,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
               // every percentage in every report is measured against this
               // total, so a plan that does not close at 100 is reporting
               // against the wrong denominator everywhere at once. Said here
-              // as well as on Activities because this is the screen people
+              // as well as on Weights because this is the screen people
               // actually open.
               title: `The weights add up to ${governing!.toFixed(2)}%, not 100%`,
               body:
@@ -226,7 +226,7 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
 
       {/* The project itself. Everything about one activity — its figure, how it
           is counted, what it is worth, when it runs — is one press away inside
-          it, which is what took Activities off the menu as a screen people had
+          it, which is what took Weights off the menu as a screen people had
           to know about. */}
       <Reveal delay={MOTION.stagger * (guide ? 3 : 2)}>
         <OverallMap

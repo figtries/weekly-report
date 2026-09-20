@@ -299,7 +299,7 @@ export default function OverallMap({
                 />
               </svg>
             </span>
-            <span className="min-w-0 flex-1">Prices and measures for every activity, together</span>
+            <span className="min-w-0 flex-1">Weights: what each activity is worth</span>
             <svg
               className="h-[18px] w-[18px] shrink-0 text-foreground/35"
               viewBox="0 0 20 20"
