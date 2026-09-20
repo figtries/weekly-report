@@ -256,9 +256,16 @@ export function saveWeekUpdatesSqlite(
       if (!item || item.projectId !== projectId) continue;
       const snap = standingAt(projectId, nodeId, weekNo);
       snap.cumProgressPct = Math.max(0, Math.min(100, patch.cumProgressPct));
+      if (patch.note !== undefined) snap.note = patch.note;
+      if (patch.source !== undefined) snap.source = patch.source;
       // A qty or milestone leaf still answers to its evidence, so the typed
-      // figure is re-expressed rather than trusted: `syncLeafSnapshot` puts the
-      // percentage back to whatever the evidence says it is.
+      // figure is re-expressed rather than trusted — UNLESS it is declared
+      // `source: 'manual'` above, in which case `syncLeafSnapshot` leaves it
+      // alone. Without copying `patch.source` first, that declaration would
+      // never reach the snapshot at all: this call would go on carrying
+      // forward whatever `source` the row already stood at, `syncLeafSnapshot`
+      // would see the OLD value (never 'manual'), and a percent typed through
+      // the escape hatch would be silently recomputed away on this store.
       writeSnapshot(tx, week.id, item, syncLeafSnapshot(item, snap), at);
     }
   });

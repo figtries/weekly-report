@@ -195,6 +195,59 @@ check(
   `${kindBefore.toFixed(2)}% before, ${kindAfter.toFixed(2)}% after`
 );
 
+/* --------------------- a hand-typed override, through the real writers,
+   and its un-freezing when the row is measured a different way again */
+
+// Seeded fresh here too, for the same reason as the work-kind case above:
+// the starting point must be the LADDER's own figure, not whatever an
+// earlier case left this leaf reporting.
+const overrideLadder = ladderFor('construction', 'steps', leaf.deskripsi, BUILT_IN_KINDS);
+setWorkKindSqlite(leaf.id, 'construction', 'milestone', overrideLadder);
+const rungRows = db
+  .select()
+  .from(schema.milestones)
+  .where(eq(schema.milestones.nodeId, leaf.id))
+  .all();
+const rungId = (label: string) => rungRows.find((r) => r.id.endsWith(`:${label}`))!.id;
+const materialId = rungId('material');
+const installId = rungId('install');
+const connectId = rungId('connect');
+
+// 1. A real figure through the normal save path: material (15) + install
+//    (50) = 65, the ladder's own number.
+saveFieldProgressSqlite(project.id, w1, [
+  { leafId: leaf.id, milestonesDone: [materialId, installId], source: 'steps' },
+]);
+const ladderPct = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
+check(
+  'the starting point is the ladder\'s own figure',
+  Math.abs(ladderPct - 65) < 1e-9,
+  `${ladderPct.toFixed(2)}%`
+);
+
+// 2. The escape hatch's own path: saveWeekUpdatesSqlite with source: 'manual',
+//    clearly different from the ladder's 65.
+saveWeekUpdatesSqlite(project.id, w1, { [leaf.id]: { cumProgressPct: 40, source: 'manual' } });
+const overriddenPct = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
+check(
+  'a hand-typed override through the real writer reports the typed figure',
+  Math.abs(overriddenPct - 40) < 1e-9,
+  `reads ${overriddenPct.toFixed(2)}%, not the ladder's ${ladderPct.toFixed(2)}%`
+);
+
+// 3. THE UN-FREEZING. A rung tick through the normal milestone path —
+//    material + install + connect (15+50+25=90) — must return the row to the
+//    LADDER's figure, not leave it pinned to the stale typed 40.
+saveFieldProgressSqlite(project.id, w1, [
+  { leafId: leaf.id, milestonesDone: [materialId, installId, connectId], source: 'steps' },
+]);
+const unfrozenPct = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
+check(
+  'ticking a rung afterwards un-freezes the figure back to the ladder',
+  Math.abs(unfrozenPct - 90) < 1e-9,
+  `reads ${unfrozenPct.toFixed(2)}%, not the stale typed 40%`
+);
+
 /* ------------------------------------------- and the project can be read */
 
 const data = buildProjectDashboardData(project.id);
