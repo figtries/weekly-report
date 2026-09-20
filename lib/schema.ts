@@ -226,6 +226,13 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
    */
   linkedStage: text('linked_stage').$type<DocStage>(),
 
+  /**
+   * Which kind of work this row is, and therefore which question it is asked.
+   * Null means nobody has answered yet, which is what makes the panel ask.
+   * See `lib/work-kind.ts`.
+   */
+  workKind: text('work_kind'),
+
   createdAt: now(),
 }, (t) => [
   index('wbs_project_idx').on(t.projectId),
@@ -391,6 +398,15 @@ export const leafProgress = sqliteTable('leaf_progress', {
   /** `qty` items: cumulative quantity completed, in the item's own unit. */
   qtyDone: real('qty_done'),
   note: text('note'),
+  /**
+   * How this week's figure was arrived at: 'gate' | 'steps' | 'quote' | 'manual'.
+   *
+   * Gate and steps are also readable from the method, but quote and manual are
+   * both lumpsum and are not the same claim at all: one is somebody else's
+   * measurement, the other is this person's judgement. A report cannot say how
+   * much of it was judged unless the two are told apart here.
+   */
+  source: text('source'),
   recordedBy: text('recorded_by').references(() => users.id),
   recordedAt: text('recorded_at'),
 }, (t) => [uniqueIndex('leaf_progress_week_node_idx').on(t.weekId, t.nodeId)]);

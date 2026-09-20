@@ -33,14 +33,15 @@ mkdirSync(DIR, { recursive: true });
   source.close();
 }
 
-const columns = (): string[] => {
+const columnsOf = (table: string): string[] => {
   const db = new Database(COPY, { readonly: true });
-  const names = (db.prepare('pragma table_info(projects)').all() as Array<{ name: string }>).map(
+  const names = (db.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>).map(
     (c) => c.name
   );
   db.close();
   return names;
 };
+const columns = (): string[] => columnsOf('projects');
 const projectCount = (): number => {
   const db = new Database(COPY, { readonly: true });
   const { n } = db.prepare('select count(*) as n from projects').get() as { n: number };
@@ -88,6 +89,52 @@ if (projectCount() !== before) {
 if (ensureSchema(COPY).length !== 0) {
   failed += 1;
   console.error('✗ the repair is not idempotent');
+}
+
+// Same manufactured state, for wbs_nodes.work_kind.
+{
+  const db = new Database(COPY);
+  db.prepare('alter table wbs_nodes drop column work_kind').run();
+  db.close();
+}
+if (columnsOf('wbs_nodes').includes('work_kind')) {
+  failed += 1;
+  console.error('✗ setup failed: the column was not actually dropped');
+}
+
+const addedWorkKind = ensureSchema(COPY);
+if (!addedWorkKind.includes('wbs_nodes.work_kind')) {
+  failed += 1;
+  console.error(
+    `✗ expected wbs_nodes.work_kind to be reported as added, got ${JSON.stringify(addedWorkKind)}`
+  );
+}
+if (!columnsOf('wbs_nodes').includes('work_kind')) {
+  failed += 1;
+  console.error('✗ the column is still missing after the repair');
+}
+
+// Same manufactured state, for leaf_progress.source.
+{
+  const db = new Database(COPY);
+  db.prepare('alter table leaf_progress drop column source').run();
+  db.close();
+}
+if (columnsOf('leaf_progress').includes('source')) {
+  failed += 1;
+  console.error('✗ setup failed: the column was not actually dropped');
+}
+
+const addedSource = ensureSchema(COPY);
+if (!addedSource.includes('leaf_progress.source')) {
+  failed += 1;
+  console.error(
+    `✗ expected leaf_progress.source to be reported as added, got ${JSON.stringify(addedSource)}`
+  );
+}
+if (!columnsOf('leaf_progress').includes('source')) {
+  failed += 1;
+  console.error('✗ the column is still missing after the repair');
 }
 
 rmSync(DIR, { recursive: true, force: true });

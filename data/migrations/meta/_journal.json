@@ -92,6 +92,13 @@
       "when": 1789617327485,
       "tag": "0012_small_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789916377368,
+      "tag": "0013_small_celestials",
+      "breakpoints": true
     }
   ]
 }
