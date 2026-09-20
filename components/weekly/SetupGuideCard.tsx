@@ -24,14 +24,34 @@ export default function SetupGuideCard({
   body,
   cta,
   href,
+  tone = 'info',
 }: {
   title: string;
   body: string;
   cta: string;
   href: string;
+  /**
+   * `info` is something UNFINISHED, `warn` is something WRONG.
+   *
+   * The note above says two yellow cards read as two of the same thing, and
+   * that still holds — which is why this is a deliberate switch and not a
+   * free colour. A plan that has not been weighted yet is a step nobody has
+   * taken; a plan whose weights do not add up to 100 is a number that is
+   * already wrong, and a person should be able to tell those apart from
+   * across the room.
+   */
+  tone?: 'info' | 'warn';
 }) {
+  const warn = tone === 'warn';
   return (
-    <Card size="sm" className="animate-enter bg-chart-1/6 ring-chart-1/30">
+    <Card
+      size="sm"
+      className={
+        warn
+          ? 'animate-enter bg-warn-soft ring-warn/30'
+          : 'animate-enter bg-chart-1/6 ring-chart-1/30'
+      }
+    >
       <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="font-semibold">{title}</p>
@@ -40,7 +60,11 @@ export default function SetupGuideCard({
         <PressLink
           {...pressMotion}
           href={href}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-chart-1 px-4 py-2 text-sm font-medium text-white"
+          className={
+            warn
+              ? 'inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-warn px-4 py-2 text-sm font-medium text-white'
+              : 'inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-chart-1 px-4 py-2 text-sm font-medium text-white'
+          }
         >
           {cta}
         </PressLink>

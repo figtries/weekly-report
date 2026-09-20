@@ -15,6 +15,7 @@ import LegacyGate from '@/components/projects/LegacyGate';
 import SetupGuideCard from '@/components/weekly/SetupGuideCard';
 import { getOpenProject } from '@/lib/legacy-bridge';
 import { loadWeightsScreen } from '@/lib/weights-screen';
+import { formatMoney } from '@/lib/currency';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -99,6 +100,14 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
     weightsLocked: db.project.weightsLocked,
   });
 
+  // WHICH TOTAL GOVERNS. A locked project reports on its STORED weights and
+  // the prices no longer move them; everything else reports on whatever the
+  // prices derive. Gundih stores 100.000000 and derives 154.58, so asking the
+  // wrong one would put a red card on the one project in the database whose
+  // weights are correct.
+  const governing = wscreen?.locked ? money?.storedTotal : money?.derivedTotal;
+  const weightsOff = governing != null && Math.abs(governing - 100) > 0.5;
+
   const guide =
     !money || !open
       ? null
@@ -109,21 +118,38 @@ async function DataOverallPageBody({ params }: { params: Promise<{ week: string 
             cta: 'Open the planner',
             href: `/projects/${open.id}`,
           }
-        : money.basis !== 'boq' && money.wouldChange > 0
+        : weightsOff
           ? {
-              title: `${money.leaves} activities are not weighted from prices yet`,
-              body: 'Every activity counts the same until prices say otherwise, so the report cannot tell big work from small.',
-              cta: 'Set prices',
+              // The weights are the one figure here that is not negotiable:
+              // every percentage in every report is measured against this
+              // total, so a plan that does not close at 100 is reporting
+              // against the wrong denominator everywhere at once. Said here
+              // as well as on Activities because this is the screen people
+              // actually open.
+              title: `The weights add up to ${governing!.toFixed(2)}%, not 100%`,
+              body:
+                money.overrun.branches > 0
+                  ? `${money.overrun.branches} headings hand out more than they hold, ${formatMoney(money.overrun.amount, money.currency)} over between them. Every figure above is measured against that total.`
+                  : `The prices cover ${formatMoney(money.allocated, money.currency)} of a ${formatMoney(money.contractValue, money.currency)} contract and nothing is left to take the rest. Every figure above is measured against that total.`,
+              cta: 'Check the prices',
               href: `/weekly/${week}/weights`,
+              tone: 'warn' as const,
             }
-          : estimated > 0
+          : money.basis !== 'boq' && money.wouldChange > 0
             ? {
-                title: `${estimated} activities are still measured by a typed percent`,
-                body: 'Say how each one is counted and the weekly figure comes from evidence instead of a guess.',
-                cta: 'Set how they are counted',
+                title: `${money.leaves} activities are not weighted from prices yet`,
+                body: 'Every activity counts the same until prices say otherwise, so the report cannot tell big work from small.',
+                cta: 'Set prices',
                 href: `/weekly/${week}/weights`,
               }
-            : null;
+            : estimated > 0
+              ? {
+                  title: `${estimated} activities are still measured by a typed percent`,
+                  body: 'Say how each one is counted and the weekly figure comes from evidence instead of a guess.',
+                  cta: 'Set how they are counted',
+                  href: `/weekly/${week}/weights`,
+                }
+              : null;
 
   // Four figures on one calm ground, not four tinted cards — the backgrounds
   // stay white; only the numerals carry colour.

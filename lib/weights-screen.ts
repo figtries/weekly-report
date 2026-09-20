@@ -177,6 +177,16 @@ export interface WeightsScreen {
    * one screen that can fix an unweighted project unreachable from it.
    */
   hasUnits: boolean;
+  /**
+   * `projects.weight_basis === 'boq'` — the REAL lock, read from the project.
+   *
+   * The screen used to ask `summary.basis`, which is the DERIVED basis and a
+   * different question: whether deriving from the prices would produce a
+   * clean value-based result. Gundih is locked in the database and derives
+   * to 'partial', so the one project in here whose weights are authoritative
+   * was the one being offered a button to overwrite them.
+   */
+  locked: boolean;
 }
 
 /**
@@ -203,7 +213,9 @@ export function buildWeightsScreen(
   nodes: WeightNode[],
   meta: Map<string, RowFacts>,
   currency: string,
-  signedValue: number | null
+  signedValue: number | null,
+  /** `projects.weight_basis === 'boq'`. Defaults to unlocked, which is what a plan built in the app is. */
+  locked = false
 ): WeightsScreen {
   const summary = summariseWeights(nodes, currency, signedValue);
   const result = deriveWeights(nodes, signedValue ?? undefined);
@@ -344,12 +356,23 @@ export function buildWeightsScreen(
     .filter((n) => n.isLeaf)
     .reduce((s, n) => s + (result.bobotOf.get(n.id) ?? 0), 0);
 
-  return { summary, units, looseRows: toRows(loose, 0, looseTotal), hasUnits, nodes };
+  return {
+    summary,
+    units,
+    looseRows: toRows(loose, 0, looseTotal),
+    hasUnits,
+    nodes,
+    locked,
+  };
 }
 
 export function loadWeightsScreen(projectId: string): WeightsScreen | null {
   const project = db
-    .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
+    .select({
+      currency: schema.projects.currency,
+      contractValue: schema.projects.contractValue,
+      weightBasis: schema.projects.weightBasis,
+    })
     .from(schema.projects)
     .where(eq(schema.projects.id, projectId))
     .all()[0];
@@ -410,5 +433,11 @@ export function loadWeightsScreen(projectId: string): WeightsScreen | null {
     })
   );
 
-  return buildWeightsScreen(nodes, meta, project.currency, project.contractValue);
+  return buildWeightsScreen(
+    nodes,
+    meta,
+    project.currency,
+    project.contractValue,
+    project.weightBasis === 'boq'
+  );
 }

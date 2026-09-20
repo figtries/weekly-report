@@ -6,13 +6,15 @@ import { useMemo, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
 
-import { pressMotion } from '@/components/motion/Press';
+import { PressLink, pressMotion } from '@/components/motion/Press';
 import { updateRowTextAction } from '@/lib/sheet-actions';
 import {
   allocationOf,
   deriveWeights,
+  overrunOf,
   topLevelPricedTotal,
   type Allocation,
+  type Overrun,
   type WeightNode,
 } from '@/lib/weights';
 import type { WeightsRow, WeightsScreen, WeightsUnit } from '@/lib/weights-screen';
@@ -120,7 +122,7 @@ export default function WeightsWorkbench({
    * you just typed into is worse than no figure.
    */
   const gap = useMemo(
-    () => (signed ? Math.max(0, signed - topLevelPricedTotal(patched)) : 0),
+    () => (signed ? signed - topLevelPricedTotal(patched) : 0),
     [patched, signed]
   );
 
@@ -171,6 +173,14 @@ export default function WeightsWorkbench({
    */
   const liveAlloc = useMemo(() => allocationOf(patched, live), [patched, live]);
 
+  /**
+   * How far past 100 the weights run right now, and how many headings did
+   * it. Same function the server called, over the same patched rows, so the
+   * warning moves with the box being typed into instead of quoting a figure
+   * the screen has already contradicted.
+   */
+  const overrun = useMemo(() => overrunOf(patched, live), [patched, live]);
+
   /** How many activities carry a price now, counting what is only typed. */
   const pricedCount = useMemo(
     () => patched.filter((n) => n.isLeaf && (n.price ?? 0) > 0).length,
@@ -192,8 +202,10 @@ export default function WeightsWorkbench({
         screen={screen}
         live={live}
         gap={gap}
+        overrun={overrun}
         priced={pricedCount}
         total={leafCount}
+        projectId={projectId}
         onLock={() => setDeriving(true)}
       />
 
@@ -298,32 +310,78 @@ export default function WeightsWorkbench({
  * the top of it has to answer "how far am I" at a glance and move while they
  * work. A bar does that; a sentence makes you read three numbers and subtract.
  *
- * The 100.00% is not decoration either. It is the screen taking responsibility
- * for the one thing people get wrong by hand, so that closing at 100 stops
- * being something to check. If it ever reads anything else, that is a bug here,
- * not a job for whoever is typing.
+ * **The 100.00% is the one figure here that is not negotiable**, and the screen
+ * used to state it as though it could not be anything else. It can: Gundih
+ * reads 154.58%, and the strip still printed "Every activity has a price" in
+ * green over the top of it, because `done` only ever asked whether the contract
+ * had been spent and never asked what the weights came to. One flag was telling
+ * two different facts. They are separate now — the WEIGHTS are the must,
+ * because a plan whose leaves do not add up to 100 measures every percentage in
+ * every report against the wrong total, and the BUDGET is the flexible one,
+ * where a gap is usually just a project half set up.
+ *
+ * **Reported, never corrected.** `deriveWeights` is untouched and every figure
+ * stands exactly as it did; what changed is that the screen says so. The two
+ * things that actually push Gundih past 100 are in `overrunOf`.
  */
 function PricingHero({
   screen,
   live,
   gap,
+  overrun,
   priced,
   total,
+  projectId,
   onLock,
 }: {
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
+  /** SIGNED: positive is work with no price yet, negative is past the contract. */
   gap: number;
+  overrun: Overrun;
   priced: number;
   total: number;
+  projectId: string;
   onLock: () => void;
 }) {
   const { summary } = screen;
   const signed = summary.contractValue > 0;
-  const allocated = Math.max(0, summary.contractValue - gap);
-  const pct = signed ? Math.min(100, (allocated / summary.contractValue) * 100) : 0;
-  const done = gap <= 0.5 && signed;
-  const locked = summary.basis === 'boq';
+  const currency = summary.currency;
+  /** What the prices actually add up to, typed boxes included. */
+  const allocated = summary.contractValue - gap;
+  const locked = screen.locked;
+
+  /**
+   * The total the REPORT is built on, which is not always the derived one.
+   *
+   * A locked project's stored weights are authoritative and the prices stop
+   * pushing them around — that is what the lock IS. Gundih stores 176 leaves
+   * closing at exactly 100.000000 while deriving from its prices gives
+   * 154.58, and this strip printed the 154.58 under a label reading "Weights
+   * total". It was answering a question nobody asked: not what this project
+   * weighs, but what recalculating would do to it. Both facts matter and
+   * they are told separately now.
+   */
+  const governing = locked ? summary.storedTotal : live.total;
+  const over = governing > 100.5;
+  const under = governing < 99.5;
+  /** Locked, and the prices no longer reproduce the weights they are locked at. */
+  const priceDrift = locked && Math.abs(live.total - 100) > 0.5;
+  /** The prices themselves run past the signed figure — a contract question. */
+  const overContract = gap < -0.5;
+  const shortOfContract = gap > 0.5;
+  const settled = !over && !under && !shortOfContract && !priceDrift;
+
+  // The bar stops being a progress bar the moment the claims run past the
+  // contract, because full-and-tidy is the one thing it must not look like
+  // then. Blue is the contract, red is what was claimed beyond it, and the two
+  // are drawn against everything claimed so together they fill the bar exactly.
+  const bluePct = !signed
+    ? 0
+    : over
+      ? (100 / governing) * 100
+      : Math.min(100, (Math.max(0, allocated) / summary.contractValue) * 100);
+  const redPct = over ? Math.max(0, ((governing - 100) / governing) * 100) : 0;
 
   return (
     <Card className="gap-3 rounded-2xl bg-gradient-to-br from-chart-1/10 to-transparent shadow-sm ring-chart-1/20">
@@ -334,17 +392,24 @@ function PricingHero({
               Contract value
             </p>
             <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
-              {signed
-                ? formatMoney(summary.contractValue, summary.currency)
-                : 'No contract value yet'}
+              {signed ? formatMoney(summary.contractValue, currency) : 'No contract value yet'}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Weights total
             </p>
-            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-chart-1 sm:text-3xl">
-              {live.total.toFixed(2)}%
+            {/* The numeral carries the verdict, because it is the figure people
+                look at and it wore chart-1 blue at 154.58% — the same colour it
+                wears when it is right, which made a broken total read as a
+                normal one. */}
+            <p
+              className={cn(
+                'mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl',
+                over || under ? 'text-destructive' : 'text-ok'
+              )}
+            >
+              {governing.toFixed(2)}%
             </p>
           </div>
         </div>
@@ -353,27 +418,156 @@ function PricingHero({
           <>
             {/* Priced against the contract. It fills as prices are typed, which
                 is the only moving thing on the screen that says "progress". */}
-            <div className="h-3 w-full overflow-hidden rounded-full bg-foreground/8">
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-foreground/8">
               <div
                 className="animate-bar-grow h-full rounded-full bg-chart-1 transition-[width] duration-500 ease-out-expo"
-                style={{ width: `${pct}%` }}
+                style={{ width: `${bluePct}%` }}
               />
+              {redPct > 0 && (
+                <div
+                  className="animate-bar-grow h-full rounded-r-full bg-destructive transition-[width] duration-500 ease-out-expo"
+                  style={{ width: `${redPct}%` }}
+                />
+              )}
             </div>
+
+            {/* A WHOLE BLOCK, not a grey line. Muted content is invisible to
+                the people who use this app — it has been reported twice in
+                those words, about two different screens — and this is the
+                block that decides whether a figure in the report can be
+                trusted. */}
+            {over || under ? (
+              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-destructive">
+                    The weights add up to {governing.toFixed(2)}%, and they have to be 100%
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {overContract ? (
+                      <>
+                        The prices come to{' '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(allocated, currency)}
+                        </strong>
+                        , which is{' '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(-gap, currency)}
+                        </strong>{' '}
+                        more than the contract value. Raise the contract value, or lower a price.
+                      </>
+                    ) : over ? (
+                      <>
+                        {overrun.branches} headings hand out more than they hold,{' '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(overrun.amount, currency)}
+                        </strong>{' '}
+                        over between them. Open the cards below that say they are over.
+                      </>
+                    ) : (
+                      <>
+                        The prices come to{' '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(allocated, currency)}
+                        </strong>{' '}
+                        and every activity already has one, so nothing is left to take the rest of
+                        the contract. Lower the contract value, or a price is missing.
+                      </>
+                    )}
+                  </p>
+                </div>
+                {(overContract || under) && (
+                  <PressLink
+                    {...pressMotion}
+                    href={`/projects/${projectId}`}
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Open project details
+                  </PressLink>
+                )}
+              </div>
+            ) : priceDrift ? (
+              // Locked, so the report is safe and this is not an alarm — but
+              // the prices and the weights are telling different stories and
+              // the person pricing rows is the only one who can see it.
+              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-warn">
+                    The prices no longer add up to these weights
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    The weights are locked at{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {governing.toFixed(2)}%
+                    </strong>{' '}
+                    and the report uses them. Deriving from the prices would give{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {live.total.toFixed(2)}%
+                    </strong>
+                    , because {overrun.branches} headings hand out more than they hold,{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {formatMoney(overrun.amount, currency)}
+                    </strong>{' '}
+                    over between them. Open the cards below that say they are over.
+                  </p>
+                </div>
+              </div>
+            ) : shortOfContract && total > 0 && priced >= total ? (
+              // Every row is in and the contract is still not spent. The report
+              // is not wrong here — the leftover is shared out and the total
+              // closes at 100 — so this is a reminder, not an alarm.
+              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-warn">
+                    Every activity has a price, and they do not reach the contract value
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    They come to{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {formatMoney(allocated, currency)}
+                    </strong>
+                    , leaving{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {formatMoney(gap, currency)}
+                    </strong>{' '}
+                    spread evenly across the plan. Lower the contract value, or a price is missing.
+                  </p>
+                </div>
+                <PressLink
+                  {...pressMotion}
+                  href={`/projects/${projectId}`}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background px-4 py-2 text-sm font-medium ring-1 ring-foreground/12"
+                >
+                  Open project details
+                </PressLink>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <p className="text-sm text-muted-foreground">
-                {done ? (
+                {settled ? (
                   <span className="font-medium text-ok">
                     Every activity has a price. These weights come from the money.
                   </span>
+                ) : !shortOfContract ? (
+                  // Nothing is open, so "US$0 still open" beside a full bar is a
+                  // sentence that answers nothing. What is worth saying instead is
+                  // how much of the plan was priced by hand, since the block above
+                  // has already said what that did to the weights.
+                  <>
+                    The contract is fully priced ·{' '}
+                    <strong className="tabular-nums text-foreground">
+                      {priced} of {total}
+                    </strong>{' '}
+                    activities carry a price of their own
+                  </>
                 ) : (
                   <>
                     <strong className="tabular-nums text-foreground">
-                      {formatMoney(allocated, summary.currency)}
+                      {formatMoney(Math.max(0, allocated), currency)}
                     </strong>{' '}
                     priced,{' '}
                     <strong className="tabular-nums text-foreground">
-                      {formatMoney(gap, summary.currency)}
+                      {formatMoney(Math.max(0, gap), currency)}
                     </strong>{' '}
                     still open · {priced} of {total} activities
                   </>

@@ -358,6 +358,15 @@ export interface WeightSummary {
   derivedCovers: number;
   wouldChange: number;
   pricedRows: number;
+  /**
+   * How far past 100 the derived weights run, and how many headings did it.
+   *
+   * Read from the DERIVED result rather than from the stored weights, because
+   * this is the figure the Activities screen shows live while someone types,
+   * and two screens quoting different numbers for the same fact is how a card
+   * ends up disagreeing with the bar underneath it. See `overrunOf`.
+   */
+  overrun: Overrun;
 }
 
 export function summariseWeights(
@@ -397,6 +406,7 @@ export function summariseWeights(
     derivedCovers: result.covered,
     wouldChange: changes.length,
     pricedRows: priced.length,
+    overrun: overrunOf(nodes, result),
   };
 }
 
@@ -525,4 +535,72 @@ export function allocationOf(nodes: WeightNode[], result: WeightResult): Map<str
     out.set(parentId, { budget, claimed, left: budget - claimed, openChildren, statedFraction });
   }
   return out;
+}
+
+/**
+ * What the weights are over by, and how many headings caused it.
+ *
+ * `deriveWeights` hands money DOWN, but every level decides its own claim
+ * independently and nothing ever checks that what a heading gives out equals
+ * what it holds. On Gundih that reaches 154.58%: the leaves add up to 9,150,942
+ * against a contract of 5,920,000, with the money closing exactly at the top
+ * level. Two causes, both real in that data and both deliberate on their own
+ * terms, which is why this REPORTS and never corrects:
+ *
+ * - **Stated percents plus rows with nothing.** `1.3.1.1.1` holds 167,600 and
+ *   its five rows read — / 30% / — / 40% / 30%. The three percents take the
+ *   whole budget, and the two blank rows still count as 2 of 5 in the even
+ *   split, so the heading hands out 140%. A percent is deliberately read
+ *   against the WHOLE budget, and the blank rows are deliberately not zeroed —
+ *   a leaf with no weight is invisible to every report.
+ * - **Real prices deeper than the share handed down.** `1.3.1.2.1 Electrical`
+ *   was given 124,851 by even split because nothing above it carries a price,
+ *   while its five rows carry the SPK's own figures totalling 849,542. The
+ *   724,691 difference is subtracted nowhere.
+ *
+ * **`amount` is read off the total, not off the branches.** The branch scan
+ * double-counts wherever an over-giving heading sits inside another one, so its
+ * sum does not reconcile with the percentage on screen — and a screen printing
+ * "154.58%" beside a figure that is not (154.58 − 100)% of the contract is one
+ * card making two statements. The count answers "where", the money answers
+ * "how much", and each comes from the measure that can answer it.
+ *
+ * **A nested reporting unit is not its parent spending twice.** SPK-007 carries
+ * its own contract inside SPK-004's `1.4`, exactly as `deriveWeights` and
+ * `allocationOf` already treat it, so it is left out of its parent's sum.
+ */
+export interface Overrun {
+  /** Headings that hand out more than they were given. */
+  branches: number;
+  /** Money the derived leaves exceed the contract by. Zero when they do not. */
+  amount: number;
+  /** Percentage points over 100. Zero when the weights close. */
+  points: number;
+}
+
+export function overrunOf(nodes: WeightNode[], result: WeightResult): Overrun {
+  const kids = new Map<string, WeightNode[]>();
+  for (const n of nodes) {
+    if (n.parentId == null) continue;
+    kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
+  }
+
+  let branches = 0;
+  for (const [parentId, children] of kids) {
+    const own = result.valueOf.get(parentId);
+    if (own == null || own <= 0) continue;
+    let claimed = 0;
+    for (const c of children) {
+      if (c.isReportingUnit && (c.unitContractValue ?? c.price ?? 0) > 0) continue;
+      claimed += result.valueOf.get(c.id) ?? 0;
+    }
+    if (claimed - own > EPSILON) branches += 1;
+  }
+
+  const points = Math.max(0, result.total - 100);
+  return {
+    branches,
+    amount: points > EPSILON ? (points / 100) * result.contractValue : 0,
+    points,
+  };
 }
