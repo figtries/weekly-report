@@ -20,6 +20,7 @@ import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
+import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 
 /**
  * Everything about ONE activity, in one place, over the map that was not
@@ -69,10 +70,12 @@ function fmtMoney(v: number | null | undefined) {
 }
 
 /** What the panel is currently holding, before it is saved. */
-interface Draft {
+export interface Draft {
   qtyDone: number;
   milestonesDone: string[];
   pct: number;
+  /** Free text beside the figure — a date, a vendor name, whatever the shape asks for. */
+  note: string;
 }
 
 function draftOf(node: MapNode): Draft {
@@ -80,6 +83,7 @@ function draftOf(node: MapNode): Draft {
     qtyDone: node.qtyDone ?? 0,
     milestonesDone: (node.milestones ?? []).filter((m) => m.done).map((m) => m.id),
     pct: node.actualPct,
+    note: node.note ?? '',
   };
 }
 
@@ -165,6 +169,16 @@ function PanelBody({
   const [held, setHeld] = useState<{ seed: string; draft: Draft }>(() => ({ seed, draft: draftOf(node) }));
   const draft = held.seed === seed ? held.draft : draftOf(node);
   const setDraft = (fn: (d: Draft) => Draft) => setHeld({ seed, draft: fn(draft) });
+
+  // The escape hatch: a one-off swap to the manual form, not a decision about
+  // what the row is. Reset whenever the row starts measuring itself
+  // differently, same keyed pattern as the draft above rather than an effect.
+  const [heldManual, setHeldManual] = useState<{ seed: string; manual: boolean }>(() => ({ seed, manual: false }));
+  const manual = heldManual.seed === seed ? heldManual.manual : false;
+  const setManual = (v: boolean) => setHeldManual({ seed, manual: v });
+  const shape: EntryShape = deriveShape(node);
+  const source: EntryShape = manual ? 'manual' : shape;
+
   const [open, setOpen] = useState<'method' | 'money' | 'schedule' | null>(null);
   const [saving, startSaving] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -180,7 +194,9 @@ function PanelBody({
     typeof window === 'undefined' ? false : window.matchMedia('(min-width: 640px)').matches
   );
 
-  const pct = pctOfDraft(node, draft);
+  // The escape hatch reads from `draft.pct` regardless of how the row is
+  // normally measured — that is the whole point of typing a percent instead.
+  const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(node, draft);
   const dirty = Math.abs(pct - node.actualPct) > 0.004;
   const behind = round2(node.planPct - pct);
 
@@ -213,16 +229,27 @@ function PanelBody({
     if (!dirty || saving) return;
     setError(null);
     startSaving(async () => {
-      if (node.method === 'qty') {
+      if (!manual && node.method === 'qty') {
+        // Quantity mode is untouched by this feature: still its own count,
+        // still no note or source attached.
         const res = await saveFieldProgressAction(week, [{ leafId: node.id, qtyDone: draft.qtyDone }]);
         if (!res.ok) return setError(res.error ?? 'Could not save');
-      } else if (node.method === 'milestone') {
+      } else if (!manual && node.method === 'milestone') {
         const res = await saveFieldProgressAction(week, [
-          { leafId: node.id, milestonesDone: draft.milestonesDone },
+          { leafId: node.id, milestonesDone: draft.milestonesDone, note: draft.note || undefined, source },
         ]);
         if (!res.ok) return setError(res.error ?? 'Could not save');
       } else {
-        const res = await saveWeekUpdatesAction(week, { [node.id]: { cumProgressPct: pct } });
+        // Lumpsum rows (quote or plain manual), and the escape hatch on any
+        // other row. `resolveLeafProgress` still recomputes a 'qty' or
+        // 'milestone' row from its own evidence and ignores this stored
+        // figure, so a one-off override only fully takes effect on a row
+        // that is already lumpsum-measured — it is still recorded honestly
+        // either way, which is what lets a report later say how much of
+        // itself was judged.
+        const res = await saveWeekUpdatesAction(week, {
+          [node.id]: { cumProgressPct: pct, note: draft.note || undefined, source },
+        });
         if (!res.ok) return setError(res.error ?? 'Could not save');
       }
       finish(pct);
@@ -314,15 +341,14 @@ function PanelBody({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
           <div className="rounded-2xl bg-muted/40 p-4">
-            {node.method === 'qty' && (
-              <QuantityEntry node={node} draft={draft} setDraft={setDraft} />
-            )}
-            {node.method === 'milestone' && (
-              <MilestoneEntry node={node} draft={draft} setDraft={setDraft} />
-            )}
-            {(!node.method || node.method === 'lumpsum') && (
-              <PercentEntry draft={draft} setDraft={setDraft} />
-            )}
+            <ProgressEntry
+              node={node}
+              draft={draft}
+              setDraft={setDraft}
+              shape={shape}
+              manual={manual}
+              onManual={() => setManual(true)}
+            />
 
             <div className="mt-4 flex items-baseline gap-2 border-t border-border/60 pt-3">
               <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
@@ -403,165 +429,6 @@ function PanelBody({
   );
 
   return createPortal(body, document.body);
-}
-
-/* ------------------------------------------------------------------ entry */
-
-function QuantityEntry({
-  node,
-  draft,
-  setDraft,
-}: {
-  node: MapNode;
-  draft: Draft;
-  setDraft: (fn: (d: Draft) => Draft) => void;
-}) {
-  const total = node.qtyTotal && node.qtyTotal > 0 ? node.qtyTotal : 1;
-  const step = total >= 1000 ? 50 : total >= 100 ? 10 : 1;
-  const set = (v: number) => setDraft((d) => ({ ...d, qtyDone: Math.max(0, Math.min(total, v)) }));
-
-  return (
-    <>
-      <p className="text-[13px] text-muted-foreground">
-        {node.unit ? `${node.unit} done, total` : 'Quantity done, total'}
-      </p>
-      <div className="mt-2 flex items-center gap-2">
-        <StepBtn label="Less" onClick={() => set(round2(draft.qtyDone - step))}>−</StepBtn>
-        <input
-          type="number"
-          inputMode="decimal"
-          value={String(draft.qtyDone)}
-          onChange={(e) => set(Number(e.target.value))}
-          className="h-12 min-w-0 flex-1 rounded-xl border border-input bg-card px-3 text-center text-xl font-semibold tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-        />
-        <StepBtn label="More" onClick={() => set(round2(draft.qtyDone + step))}>+</StepBtn>
-      </div>
-      <p className="mt-2 text-[13px] text-muted-foreground">
-        of {total.toLocaleString('en-GB')} {node.unit ?? ''}
-      </p>
-    </>
-  );
-}
-
-function MilestoneEntry({
-  node,
-  draft,
-  setDraft,
-}: {
-  node: MapNode;
-  draft: Draft;
-  setDraft: (fn: (d: Draft) => Draft) => void;
-}) {
-  const ms = node.milestones ?? [];
-  const toggle = (id: string) =>
-    setDraft((d) => ({
-      ...d,
-      milestonesDone: d.milestonesDone.includes(id)
-        ? d.milestonesDone.filter((x) => x !== id)
-        : [...d.milestonesDone, id],
-    }));
-
-  return (
-    <>
-      <p className="text-[13px] text-muted-foreground">
-        {draft.milestonesDone.length} of {ms.length} steps done
-      </p>
-      <div className="mt-2 space-y-1.5">
-        {ms.map((step) => {
-          const done = draft.milestonesDone.includes(step.id);
-          return (
-            <m.button
-              key={step.id}
-              {...pressMotion}
-              onClick={() => toggle(step.id)}
-              aria-pressed={done}
-              className={cn(
-                'flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm transition-colors duration-200 ease-ios',
-                done
-                  ? 'border-ok/30 bg-ok-soft text-foreground'
-                  : 'border-input bg-card text-foreground hover:bg-muted/50'
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ease-ios',
-                  done ? 'border-ok bg-ok text-white' : 'border-input bg-card'
-                )}
-              >
-                {done && (
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <path d="M5 10.5l3.5 3.5L15 7" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="min-w-0 flex-1">{step.label}</span>
-              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{fmt1(step.weight)}%</span>
-            </m.button>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-function PercentEntry({
-  draft,
-  setDraft,
-}: {
-  draft: Draft;
-  setDraft: (fn: (d: Draft) => Draft) => void;
-}) {
-  const set = (v: number) => setDraft((d) => ({ ...d, pct: clampPct(round2(v)) }));
-  return (
-    <>
-      <p className="text-[13px] text-muted-foreground">Percent complete, cumulative</p>
-      <div className="mt-2 flex items-center gap-2">
-        <StepBtn label="Less" onClick={() => set(draft.pct - 1)}>−</StepBtn>
-        <input
-          type="number"
-          inputMode="decimal"
-          value={String(draft.pct)}
-          onChange={(e) => set(Number(e.target.value))}
-          className="h-12 min-w-0 flex-1 rounded-xl border border-input bg-card px-3 text-center text-xl font-semibold tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-        />
-        <StepBtn label="More" onClick={() => set(draft.pct + 1)}>+</StepBtn>
-      </div>
-      {/* The slider is not decoration. A typed percent is a judgement, and a
-          judgement is made by feel before it is made by digits — dragging to
-          "about three quarters" is the motion the number comes from. */}
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={1}
-        value={draft.pct}
-        onChange={(e) => set(Number(e.target.value))}
-        aria-label="Percent complete"
-        className="mt-3 h-11 w-full accent-chart-1"
-      />
-    </>
-  );
-}
-
-function StepBtn({
-  children,
-  onClick,
-  label,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <m.button
-      {...pressMotion}
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-input bg-card text-lg font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
-    >
-      {children}
-    </m.button>
-  );
 }
 
 /* ------------------------------------------------------------- disclosures */
