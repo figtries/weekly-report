@@ -14,6 +14,7 @@ import {
 import { updateRowTextAction } from '@/lib/sheet-actions';
 import type { MapNode } from '@/lib/overall-map';
 import type { Milestone, ProgressMethod } from '@/lib/types';
+import type { Shape } from '@/lib/work-kind';
 import { MOTION } from '@/lib/design';
 import { Expand } from '@/components/motion/Expand';
 import { pressMotion } from '@/components/motion/Press';
@@ -21,6 +22,7 @@ import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
+import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 
 /**
  * Everything about ONE activity, in one place, over the map that was not
@@ -109,6 +111,7 @@ export default function ActivityPanel({
   week,
   canPrice,
   projectHref,
+  peers,
   onClose,
   onSaved,
 }: {
@@ -118,6 +121,8 @@ export default function ActivityPanel({
   /** SQLite projects only: the imported project's rows live in db.json. */
   canPrice: boolean;
   projectHref: string | null;
+  /** Every leaf elsewhere in the tree that already has an answer, for the work-kind picker. */
+  peers: WorkKindPeer[];
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
@@ -130,6 +135,7 @@ export default function ActivityPanel({
         week={week}
         canPrice={canPrice}
         projectHref={projectHref}
+        peers={peers}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -143,6 +149,7 @@ function PanelBody({
   week,
   canPrice,
   projectHref,
+  peers,
   onClose,
   onSaved,
 }: {
@@ -151,9 +158,33 @@ function PanelBody({
   week: number;
   canPrice: boolean;
   projectHref: string | null;
+  peers: WorkKindPeer[];
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
+  /**
+   * Set once, right after `setWorkKindAction` succeeds, so the very same open
+   * panel can show the form for the kind just chosen. `node` itself will not
+   * carry the new `workKind` until the route refreshes behind it — that is
+   * seconds away, not zero — so until it lands this override stands in for
+   * the fields a freshly-answered leaf would have.
+   */
+  const [kindOverride, setKindOverride] = useState<{
+    kindId: string;
+    shape: Shape;
+    milestones: Milestone[];
+  } | null>(null);
+  const asking = !node.workKind && !kindOverride;
+  const effectiveNode: MapNode = kindOverride
+    ? {
+        ...node,
+        workKind: kindOverride.kindId,
+        method: kindOverride.shape === 'quote' ? 'lumpsum' : 'milestone',
+        milestones: kindOverride.milestones.map((m) => ({ ...m, done: false })),
+        source: kindOverride.shape === 'quote' ? 'quote' : node.source,
+      }
+    : node;
+
   /**
    * The draft is RE-SEEDED when the row stops being measured the same way.
    *
@@ -164,10 +195,13 @@ function PanelBody({
    * read 0% on a row sitting at 40, count as dirty, and Save would write the
    * zero. Keyed state rather than an effect, and rather than remounting: a
    * remount would slide the sheet out and back for what is not a new row.
+   *
+   * A work-kind pick reseeds it the same way, for the same reason: `seed`
+   * reads off `effectiveNode`, which changes the moment `kindOverride` lands.
    */
-  const seed = `${node.method}:${node.qtyTotal}:${(node.milestones ?? []).length}`;
-  const [held, setHeld] = useState<{ seed: string; draft: Draft }>(() => ({ seed, draft: draftOf(node) }));
-  const draft = held.seed === seed ? held.draft : draftOf(node);
+  const seed = `${effectiveNode.method}:${effectiveNode.qtyTotal}:${(effectiveNode.milestones ?? []).length}`;
+  const [held, setHeld] = useState<{ seed: string; draft: Draft }>(() => ({ seed, draft: draftOf(effectiveNode) }));
+  const draft = held.seed === seed ? held.draft : draftOf(effectiveNode);
   const setDraft = (fn: (d: Draft) => Draft) => setHeld({ seed, draft: fn(draft) });
 
   // The escape hatch: a one-off swap to the manual form, not a decision about
@@ -176,7 +210,7 @@ function PanelBody({
   const [heldManual, setHeldManual] = useState<{ seed: string; manual: boolean }>(() => ({ seed, manual: false }));
   const manual = heldManual.seed === seed ? heldManual.manual : false;
   const setManual = (v: boolean) => setHeldManual({ seed, manual: v });
-  const shape: EntryShape = deriveShape(node);
+  const shape: EntryShape = deriveShape(effectiveNode);
   const source: EntryShape = manual ? 'manual' : shape;
 
   const [open, setOpen] = useState<'method' | 'money' | 'schedule' | null>(null);
@@ -196,7 +230,7 @@ function PanelBody({
 
   // The escape hatch reads from `draft.pct` regardless of how the row is
   // normally measured — that is the whole point of typing a percent instead.
-  const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(node, draft);
+  const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(effectiveNode, draft);
   const dirty = Math.abs(pct - node.actualPct) > 0.004;
   const behind = round2(node.planPct - pct);
 
@@ -229,12 +263,12 @@ function PanelBody({
     if (!dirty || saving) return;
     setError(null);
     startSaving(async () => {
-      if (!manual && node.method === 'qty') {
+      if (!manual && effectiveNode.method === 'qty') {
         // Quantity mode is untouched by this feature: still its own count,
         // still no note or source attached.
         const res = await saveFieldProgressAction(week, [{ leafId: node.id, qtyDone: draft.qtyDone }]);
         if (!res.ok) return setError(res.error ?? 'Could not save');
-      } else if (!manual && node.method === 'milestone') {
+      } else if (!manual && effectiveNode.method === 'milestone') {
         const res = await saveFieldProgressAction(week, [
           { leafId: node.id, milestonesDone: draft.milestonesDone, note: draft.note || undefined, source },
         ]);
@@ -341,14 +375,24 @@ function PanelBody({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
           <div className="rounded-2xl bg-muted/40 p-4">
-            <ProgressEntry
-              node={node}
-              draft={draft}
-              setDraft={setDraft}
-              shape={shape}
-              manual={manual}
-              onManual={() => setManual(true)}
-            />
+            {asking ? (
+              <WorkKindPicker
+                node={node}
+                peers={peers}
+                onDone={(kindId, kindShape, milestones) =>
+                  setKindOverride({ kindId, shape: kindShape, milestones })
+                }
+              />
+            ) : (
+              <ProgressEntry
+                node={effectiveNode}
+                draft={draft}
+                setDraft={setDraft}
+                shape={shape}
+                manual={manual}
+                onManual={() => setManual(true)}
+              />
+            )}
 
             <div className="mt-4 flex items-baseline gap-2 border-t border-border/60 pt-3">
               <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
@@ -369,11 +413,11 @@ function PanelBody({
           <div className="mt-4 border-t border-border">
             <Disclosure
               label="How it is counted"
-              value={METHOD_LABEL[node.method ?? 'lumpsum']}
+              value={METHOD_LABEL[effectiveNode.method ?? 'lumpsum']}
               open={open === 'method'}
               onToggle={() => setOpen(open === 'method' ? null : 'method')}
             >
-              <MethodSection node={node} />
+              <MethodSection node={effectiveNode} />
             </Disclosure>
 
             <Disclosure

@@ -4,6 +4,8 @@ import { m } from 'framer-motion';
 import { memo, useMemo, useState, type ReactNode } from 'react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
+import { deriveShape } from '@/components/weekly/ProgressEntry';
+import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { pressMotion } from '@/components/motion/Press';
@@ -147,6 +149,31 @@ export default function OverallMap({
   }, [map.units, pending]);
 
   const units = useMemo(() => withOptimistic(map.units, live), [map.units, live]);
+
+  /**
+   * Every leaf elsewhere in the tree that already has an answer, for the
+   * work-kind picker's suggestion. Computed off `map.units` (the server's own
+   * tree) rather than the optimistic `units` above: a work kind is never set
+   * optimistically, so recomputing this on every in-flight percentage would
+   * just be wasted walks over up to 285 rows. `ActivityPanel` cannot see its
+   * own siblings — it receives one node — so the peer list is built HERE,
+   * once, and handed down as a single prop.
+   */
+  const peers = useMemo(() => {
+    const out: WorkKindPeer[] = [];
+    function walk(n: MapNode) {
+      if (n.kind === 'leaf' && n.workKind) {
+        // `deriveShape` can also answer 'manual' — the escape hatch, for a
+        // leaf whose ladder was overridden by a typed percent. That is not a
+        // shape this feature ever offers, so it is not one to suggest either.
+        const s = deriveShape(n);
+        if (s !== 'manual') out.push({ name: n.name, kindId: n.workKind, shape: s });
+      }
+      n.children.forEach(walk);
+    }
+    map.units.forEach(walk);
+    return out;
+  }, [map.units]);
 
   const needle = query.trim().toLowerCase();
   const filter = useMemo(() => {
@@ -325,6 +352,7 @@ export default function OverallMap({
         week={week}
         canPrice={canPrice}
         projectHref={projectHref}
+        peers={peers}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />
