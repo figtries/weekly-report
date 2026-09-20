@@ -237,9 +237,57 @@ export default function WeightsWorkbench({
     return out;
   }, [overrun, unitOfRow]);
 
-  /** Open whichever card holds this row, then leave it highlighted. */
+  /**
+   * Rows the pricing list does not offer, because nothing typed on them can
+   * move a figure.
+   *
+   * Gundih shows three, and all three are how the workbook was WRITTEN rather
+   * than work anybody does: the WBS root, `1.1 Project Award`, and `1.5
+   * Finish`, which carries the entire contract as its price and is already
+   * thrown away by `isTotalRow` everywhere else. Reported as reading like a
+   * stray third list under the cards.
+   *
+   * **A leaf with NO derived weight is the whole rule**, and it is narrow on
+   * purpose. An unpriced leaf normally takes an even share of what is left of
+   * the contract, so it has a weight and stays; a leaf reaches zero only when
+   * its price was discarded as a total row, or when the contract was already
+   * handed out and there was no remainder to share. Either way whatever sits
+   * on that row is being ignored, and a box that changes nothing is the thing
+   * being complained about.
+   *
+   * They do NOT vanish silently: `StrandedNote` in the strip above names
+   * every one of them, which is the whole reason hiding them here is honest.
+   * The SINGLE unwrapped root goes for the older reason `buildOverallMap`
+   * already unwraps it — it is the project, and the project is the figure at
+   * the top of this screen. Two top-level branches are a different plan and
+   * are both left alone.
+   */
+  const hidden = useMemo(() => {
+    const out = new Set<string>();
+    const roots = screen.looseRows.filter((r) => r.depth === 0);
+    if (roots.length === 1 && !roots[0].isLeaf) out.add(roots[0].id);
+    for (const r of rowOf.values()) {
+      if (r.isLeaf && !live.bobotOf.has(r.id)) out.add(r.id);
+    }
+    return out;
+  }, [screen.looseRows, rowOf, live]);
+
+  const looseShown = useMemo(
+    () => screen.looseRows.filter((r) => !hidden.has(r.id)),
+    [screen.looseRows, hidden]
+  );
+
+  /**
+   * Open whichever card holds this row, then leave it highlighted.
+   *
+   * TWO OF GUNDIH'S TWENTY-SIX ARE CARDS, not rows inside one: SPK-004 at
+   * `1.4` and SPK-007 nested at `1.4.4` both hand out more than they hold. A
+   * card's own row is not among its `rows`, so looking one up by row would
+   * have closed every card and landed on nothing.
+   */
   function goToRow(rowId: string) {
-    setOpenUnit(unitOfRow.get(rowId) ?? null);
+    const isUnit = screen.units.some((u) => u.id === rowId);
+    setOpenUnit(isUnit ? rowId : (unitOfRow.get(rowId) ?? null));
     setFocusRow(rowId);
   }
 
@@ -277,6 +325,7 @@ export default function WeightsWorkbench({
       {unit ? (
         <UnitRows
           unit={unit}
+          hidden={hidden}
           currency={screen.summary.currency}
           live={live}
           alloc={liveAlloc.get(unit.id) ?? null}
@@ -316,17 +365,11 @@ export default function WeightsWorkbench({
 
           {/* Rows no card holds. On a flat plan this IS the plan, and it is the
               only place a price can be typed. */}
-          {screen.looseRows.length > 0 && (
-            <LooseHeading
-              rows={screen.looseRows}
-              live={live}
-              hasUnits={screen.units.length > 0}
-            />
-          )}
+          {looseShown.length > 0 && <LooseHeading hasUnits={screen.units.length > 0} />}
 
-          {screen.looseRows.length > 0 && (
+          {looseShown.length > 0 && (
             <RowList
-              rows={screen.looseRows}
+              rows={looseShown}
               live={live}
               overOf={overOf}
               focusRow={focusRow}
@@ -341,11 +384,10 @@ export default function WeightsWorkbench({
               onMeasure={setMeasuring}
               showBoth={false}
               scopeLabel="project"
-              lockRoot
             />
           )}
 
-          {screen.units.length === 0 && screen.looseRows.length === 0 && (
+          {screen.units.length === 0 && looseShown.length === 0 && (
             <p className="text-sm text-muted-foreground">
               This project has no work laid out yet. Add rows in the planner first.
             </p>
@@ -578,7 +620,7 @@ function PricingHero({
                   currency={currency}
                   onGo={onGoToRow}
                 />
-                <StrandedNote live={live} rowOf={rowOf} onGo={onGoToRow} />
+                <StrandedNote live={live} rowOf={rowOf} />
               </div>
             ) : priceDrift ? (
               // Locked, so the report is safe and this is not an alarm — but
@@ -612,7 +654,7 @@ function PricingHero({
                   currency={currency}
                   onGo={onGoToRow}
                 />
-                <StrandedNote live={live} rowOf={rowOf} onGo={onGoToRow} />
+                <StrandedNote live={live} rowOf={rowOf} />
               </div>
             ) : shortOfContract && total > 0 && priced >= total ? (
               // Every row is in and the contract is still not spent. The report
@@ -802,11 +844,9 @@ function OverList({
 function StrandedNote({
   live,
   rowOf,
-  onGo,
 }: {
   live: ReturnType<typeof deriveWeights>;
   rowOf: Map<string, WeightsRow>;
-  onGo: (rowId: string) => void;
 }) {
   const stranded = [...rowOf.values()].filter((r) => r.isLeaf && !live.bobotOf.has(r.id));
   if (stranded.length === 0) return null;
@@ -818,15 +858,9 @@ function StrandedNote({
       </strong>{' '}
       — nothing is reporting on{' '}
       {stranded.slice(0, 3).map((r, i) => (
-        <span key={r.id}>
+        <span key={r.id} className="font-medium text-foreground">
           {i > 0 ? ', ' : ''}
-          <button
-            type="button"
-            onClick={() => onGo(r.id)}
-            className="font-medium text-foreground underline underline-offset-2"
-          >
-            {r.code} {r.name}
-          </button>
+          {r.code} {r.name}
         </span>
       ))}
       {stranded.length > 3 ? ` and ${stranded.length - 3} more` : ''}.
@@ -843,16 +877,7 @@ function StrandedNote({
  * SPK. On a flat plan this IS the plan and the only place a price can be typed,
  * which is why it is never hidden.
  */
-function LooseHeading({
-  rows,
-  live,
-  hasUnits,
-}: {
-  rows: WeightsRow[];
-  live: ReturnType<typeof deriveWeights>;
-  hasUnits: boolean;
-}) {
-  const stranded = rows.filter((r) => r.isLeaf && !live.bobotOf.has(r.id)).length;
+function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
   return (
     <div className="mt-2 px-1">
       <p className="text-[13px] font-semibold">
@@ -860,11 +885,8 @@ function LooseHeading({
       </p>
       <p className="mt-0.5 text-[12.5px] text-muted-foreground">
         {hasUnits
-          ? 'The top of the WBS, and the rows that no SPK card above holds.'
+          ? 'Rows that no SPK card above holds.'
           : 'No SPK is marked, so every row is priced here.'}
-        {stranded > 0
-          ? ` ${stranded} of ${stranded === 1 ? 'them carries' : 'them carry'} no weight, so ${stranded === 1 ? 'it is' : 'they are'} invisible to every report.`
-          : ''}
       </p>
     </div>
   );
@@ -1154,6 +1176,7 @@ function UnitCard({
 
 function UnitRows({
   unit,
+  hidden,
   currency,
   live,
   alloc,
@@ -1170,6 +1193,8 @@ function UnitRows({
   onBack,
 }: {
   unit: WeightsUnit;
+  /** Rows this screen does not offer. See the rule where it is built. */
+  hidden: Set<string>;
   currency: string;
   live: ReturnType<typeof deriveWeights>;
   alloc: Allocation | null;
@@ -1225,7 +1250,7 @@ function UnitRows({
       </div>
 
       <RowList
-        rows={unit.rows}
+        rows={unit.rows.filter((r) => !hidden.has(r.id))}
         live={live}
         overOf={overOf}
         focusRow={focusRow}
