@@ -22,7 +22,7 @@ import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
-import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
+import ProgressEntry, { deriveShape, StepBtn, type EntryShape } from './ProgressEntry';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 
 /**
@@ -297,6 +297,20 @@ function PanelBody({
   const [open, setOpen] = useState<'money' | 'schedule' | null>(null);
   // The raw string in the percent box while it has focus. See the input.
   const [typing, setTyping] = useState<string | null>(null);
+
+  /**
+   * One point up or down. Pressing these IS typing by hand, so they take the
+   * override the same way the box does, and they start from whatever is on
+   * screen now — the ladder's figure on a row nobody has touched, the typed
+   * one after that.
+   */
+  function stepPct(delta: number) {
+    const from = manual ? draft.pct : pct;
+    const next = clampPct(round2(from + delta));
+    setTyping(null);
+    setManual(true);
+    setDraft((d) => ({ ...d, pct: next }));
+  }
   const [saving, startSaving] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -514,8 +528,11 @@ function PanelBody({
                 the typed figure wins until somebody touches a rung or the
                 count, and then the evidence takes over again. Nothing is
                 asked, and nothing has to be pressed first. */}
-            <div className="mt-4 border-t border-border/60 pt-3">
-              <div className="flex h-12 w-full items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
+            <div className="mt-4 flex items-center gap-2 border-t border-border/60 pt-3">
+              <StepBtn label="Less" onClick={() => stepPct(-1)}>
+                −
+              </StepBtn>
+              <div className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
               <input
                 /* TEXT, NEVER `type="number"`. A number input renders its value
                    through the BROWSER's locale, so "100.0" came back on screen
@@ -560,6 +577,9 @@ function PanelBody({
                   %
                 </span>
               </div>
+              <StepBtn label="More" onClick={() => stepPct(1)}>
+                +
+              </StepBtn>
             </div>
           </div>
 

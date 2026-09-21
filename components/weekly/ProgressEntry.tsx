@@ -256,7 +256,12 @@ function MilestoneEntry({
 }
 
 
-function StepBtn({
+/**
+ * One step of a number, in a size a thumb can hit. Exported because the
+ * percent box in `ActivityPanel` needs the same pair beside it and a second
+ * copy would drift the moment one of them was restyled.
+ */
+export function StepBtn({
   children,
   onClick,
   label,
