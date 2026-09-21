@@ -9,18 +9,22 @@ import { cn } from '@/lib/utils';
 import type { Draft } from './ActivityPanel';
 
 /**
- * The four questions, and none of them is "how many percent".
+ * The form that asks for EVIDENCE, and never for a percent.
  *
  * Of 218 leaves in the reference project at week 60, 85 sat at exactly 0 and
  * 108 at exactly 100. Only 25 were ever anywhere in between. Nobody was
  * estimating — they were flipping a switch, because for most rows a switch is
- * the honest instrument and the app never offered one. Each shape below asks
- * for a FACT a site foreman says out loud every day; only Manual asks for a
- * judgement, and it says so.
+ * the honest instrument and the app never offered one. Each form below asks
+ * for a fact a site foreman says out loud every day: a rung reached, a count
+ * done, a thing finished on a date.
  *
- * SHAPE IS DERIVED, NEVER STORED — `deriveShape` reads it off `method`,
- * `milestones.length` and `source` every time, so there is no fourth column
- * for something two existing ones already imply.
+ * The percent itself is not here. It is the figure at the bottom of the panel,
+ * which is an input: editable at any moment, on any row, with nothing to press
+ * first. Typing in it wins until somebody touches the evidence again.
+ *
+ * SHAPE IS DERIVED, NEVER STORED — `deriveShape` reads it off `method` and
+ * `milestones.length` every time, so there is no extra column for something
+ * two existing ones already imply.
  */
 
 /**
@@ -44,154 +48,48 @@ export function deriveShape(node: Pick<MapNode, 'method' | 'milestones' | 'sourc
 type SetDraft = (fn: (d: Draft) => Draft) => void;
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
-const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 const fmt1 = (v: number) => v.toFixed(1);
-const fmt2 = (v: number) => v.toFixed(2);
-
-/**
- * The percent this draft comes to right now, whatever shape is on screen.
- *
- * Mirrors `pctOfDraft` in ActivityPanel.tsx rather than importing it: that
- * file imports `ProgressEntry`/`deriveShape` from this one already, and a
- * second cross-import would make the two circular. This is preview
- * arithmetic over what is already sitting in the draft, not a leaf's
- * percentage — `lib/progress.ts` is still the only thing allowed to write
- * one, and this value is never saved anywhere.
- */
-function currentPct(node: MapNode, draft: Draft, manual: boolean): number {
-  if (!manual && node.method === 'qty') {
-    const total = node.qtyTotal && node.qtyTotal > 0 ? node.qtyTotal : 1;
-    return clampPct(round2((draft.qtyDone / total) * 100));
-  }
-  if (!manual && node.method === 'milestone') {
-    const ms = node.milestones ?? [];
-    const total = ms.reduce((s, step) => s + step.weight, 0);
-    if (!total) return 0;
-    const done = ms
-      .filter((step) => draft.milestonesDone.includes(step.id))
-      .reduce((s, step) => s + step.weight, 0);
-    return clampPct(round2((done / total) * 100));
-  }
-  return clampPct(round2(draft.pct));
-}
-
-/**
- * What today's answer just did to the plan, in three short facts: the rise
- * since last week, where that puts the row against the plan, and what the
- * row is worth to the project at that figure. Every value here is already on
- * `node` or `draft` — no new query, no new prop, and no re-derivation of a
- * leaf's own percentage.
- */
-function PlanFacts({ node, draft, manual }: { node: MapNode; draft: Draft; manual: boolean }) {
-  const pct = currentPct(node, draft, manual);
-  const lastWeek = round2(node.actualPct - node.weekPct);
-  const rise = round2(pct - lastWeek);
-
-  let riseLine: string;
-  if (rise > 0.05) riseLine = `Up ${fmt1(rise)} points to ${fmt1(pct)}%`;
-  else if (rise < -0.05) riseLine = `Down ${fmt1(-rise)} points to ${fmt1(pct)}%`;
-  else riseLine = `Unchanged, still at ${fmt1(pct)}%`;
-
-  // No schedule reaches this row: compared against zero it would always
-  // read as "ahead", which is not a fact about the row, just an absence.
-  let planLine: string | null = null;
-  if (node.planPct > 0) {
-    const behind = round2(node.planPct - pct);
-    if (behind > 0.05) planLine = `Plan says ${fmt1(node.planPct)} this week, so ${fmt1(behind)} behind`;
-    else if (behind < -0.05)
-      planLine = `Plan says ${fmt1(node.planPct)} this week, so ${fmt1(-behind)} ahead`;
-    else planLine = `Plan says ${fmt1(node.planPct)} this week, exactly on plan`;
-  }
-
-  const points = round2((pct / 100) * node.weight);
-
-  return (
-    <div className="mt-3 space-y-0.5 text-[12px] leading-relaxed text-muted-foreground">
-      <p>{riseLine}</p>
-      {planLine && <p>{planLine}</p>}
-      <p>This row carries {fmt2(points)} points of the project</p>
-    </div>
-  );
-}
 
 export default function ProgressEntry({
   node,
   draft,
   setDraft,
   shape,
-  manual,
-  onManual,
   onManualOff,
 }: {
   node: MapNode;
   draft: Draft;
   setDraft: SetDraft;
   shape: EntryShape;
-  manual: boolean;
-  onManual: () => void;
   onManualOff: () => void;
 }) {
-  // Quantity mode exists in the app, is not part of this ladder, and is left
-  // exactly as it was: a count is already a fact, so it keeps its own form
-  // rather than being folded into "manual". The escape hatch still reaches
-  // it, because point 8 is unconditional: every row, whatever form it is
-  // showing, can be typed over by hand.
-  const showQuantity = !manual && node.method === 'qty';
-  // The form actually on screen is the manual percent form either because the
-  // escape hatch was pressed, or because the row is measured by a typed
-  // percent and never had another form to leave. Either way, offering to swap TO the form already
-  // showing reads as a control that does nothing.
-  const isManualForm = manual || (!showQuantity && shape === 'manual');
+  /**
+   * THE FORM IS NEVER SWAPPED AWAY, AND THERE IS NO BUTTON TO SWAP IT.
+   *
+   * Typing a percent by hand used to hide the ladder and put a percent box in
+   * its place, reached through one button and left through another. Three
+   * controls for one row. The figure at the bottom of the panel is an input
+   * now, so the percent is simply editable, always: type in it and the typed
+   * figure wins, touch a rung or the count and the evidence takes over again.
+   * That handover is what this wrapper does, and it is why nothing here asks
+   * anybody anything.
+   */
+  const setFromEvidence: SetDraft = (fn) => {
+    onManualOff();
+    setDraft(fn);
+  };
 
   return (
     <>
-      {/* EVERY arm below is gated on `isManualForm`, not on `shape` alone.
-          The first cut keyed them off `shape` only, so pressing the escape
-          hatch on a ladder row hid the button, left the ladder on screen and
-          never rendered the percent box: the form could not be typed into at
-          all. Worse, the save path already honoured `manual`, so the press
-          silently changed what would be written while showing nothing. The
-          escape hatch is point 8 of the spec and it is unconditional, so the
-          thing that decides which form is drawn has to be the same value that
-          decides whether the hatch is open. */}
-      {showQuantity && <QuantityEntry node={node} draft={draft} setDraft={setDraft} />}
-      {isManualForm && <PercentEntry draft={draft} setDraft={setDraft} />}
-      {!showQuantity && !isManualForm && shape === 'gate' && (
-        <GateEntry node={node} draft={draft} setDraft={setDraft} />
+      {node.method === 'qty' && (
+        <QuantityEntry node={node} draft={draft} setDraft={setFromEvidence} />
       )}
-      {!showQuantity && !isManualForm && shape === 'steps' && (
-        <MilestoneEntry node={node} draft={draft} setDraft={setDraft} />
+      {node.method !== 'qty' && shape === 'gate' && (
+        <GateEntry node={node} draft={draft} setDraft={setFromEvidence} />
       )}
-
-      {/* DIRECTLY under the form, not at the bottom of the panel. Typing a
-          percent by hand is always allowed, on every row, whatever it is
-          measured by — and a permission that has to be scrolled to is one
-          people do not believe they have. A one-way door is not flexibility
-          either, so the way back sits in the same place. */}
-      {!isManualForm && (
-        <button
-          type="button"
-          onClick={onManual}
-          className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
-        >
-          Type the percent by hand instead
-        </button>
+      {node.method !== 'qty' && shape === 'steps' && (
+        <MilestoneEntry node={node} draft={draft} setDraft={setFromEvidence} />
       )}
-      {manual && shape !== 'manual' && (
-        <button
-          type="button"
-          onClick={onManualOff}
-          className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
-        >
-          {shape === 'gate'
-            ? 'Go back to Not yet / Done'
-            : shape === 'qty'
-              ? 'Go back to the count'
-              : 'Go back to the steps'}
-        </button>
-      )}
-
-      <PlanFacts node={node} draft={draft} manual={manual} />
     </>
   );
 }
@@ -357,46 +255,6 @@ function MilestoneEntry({
   );
 }
 
-/* --------------------------------------------------------------- manual */
-
-function PercentEntry({
-  draft,
-  setDraft,
-}: {
-  draft: Draft;
-  setDraft: SetDraft;
-}) {
-  const set = (v: number) => setDraft((d) => ({ ...d, pct: clampPct(round2(v)) }));
-  return (
-    <>
-      <p className="text-[13px] text-muted-foreground">Percent complete, cumulative</p>
-      <div className="mt-2 flex items-center gap-2">
-        <StepBtn label="Less" onClick={() => set(draft.pct - 1)}>−</StepBtn>
-        <input
-          type="number"
-          inputMode="decimal"
-          value={String(draft.pct)}
-          onChange={(e) => set(Number(e.target.value))}
-          className="h-12 min-w-0 flex-1 rounded-xl border border-input bg-card px-3 text-center text-xl font-semibold tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-        />
-        <StepBtn label="More" onClick={() => set(draft.pct + 1)}>+</StepBtn>
-      </div>
-      {/* The slider is not decoration. A typed percent is a judgement, and a
-          judgement is made by feel before it is made by digits — dragging to
-          "about three quarters" is the motion the number comes from. */}
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={1}
-        value={draft.pct}
-        onChange={(e) => set(Number(e.target.value))}
-        aria-label="Percent complete"
-        className="mt-3 h-11 w-full accent-chart-1"
-      />
-    </>
-  );
-}
 
 function StepBtn({
   children,

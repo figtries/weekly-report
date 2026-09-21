@@ -295,6 +295,8 @@ function PanelBody({
     BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
   const [open, setOpen] = useState<'money' | 'schedule' | null>(null);
+  // The raw string in the percent box while it has focus. See the input.
+  const [typing, setTyping] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -494,21 +496,53 @@ function PanelBody({
                   draft={draft}
                   setDraft={setDraft}
                   shape={shape}
-                  manual={manual}
-                  onManual={() => setManual(true)}
-                  onManualOff={() => setManual(false)}
+                  /* Clearing the raw string matters as much as clearing the flag:
+                     the box may still be holding "42.5" from a moment ago, and
+                     a display that outranks the evidence would keep showing it
+                     over the rung that was just ticked. */
+                  onManualOff={() => {
+                    setManual(false);
+                    setTyping(null);
+                  }}
                 />
               </>
             )}
 
-            {/* The anchor figure only. Its own translation into plan terms —
-                rise, plan comparison, contribution — is `PlanFacts` inside
-                `ProgressEntry` now: printing the plan sentence here too read
-                as a stutter, the same fact said twice on one screen. */}
-            <div className="mt-4 flex items-baseline justify-center gap-2 border-t border-border/60 pt-3">
-              <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
-                {fmt1(pct)}%
-              </span>
+            {/* THE FIGURE IS THE INPUT. It was a read-only number with a pair
+                of buttons above it for swapping to a percent box and back;
+                three controls saying one thing. Typing here is the override:
+                the typed figure wins until somebody touches a rung or the
+                count, and then the evidence takes over again. Nothing is
+                asked, and nothing has to be pressed first. */}
+            <div className="mt-4 flex items-baseline justify-center gap-1 border-t border-border/60 pt-3">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min={0}
+                max={100}
+                aria-label="Percent complete"
+                /* `typing` is what makes a decimal typeable at all: parsing
+                   every keystroke back into the value turns "4." into "4" and
+                   eats the dot before the digit after it can be pressed. The
+                   raw string stands while the box has focus, the parsed figure
+                   is what the draft carries, and blur hands the display back to
+                   whatever the evidence says. */
+                value={typing ?? (manual ? String(draft.pct) : fmt1(pct))}
+                onFocus={(e) => e.currentTarget.select()}
+                onBlur={() => setTyping(null)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setTyping(raw);
+                  setManual(true);
+                  const n = Number(raw);
+                  if (raw !== '' && Number.isFinite(n)) {
+                    setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
+                  }
+                }}
+                className="w-[5.5ch] appearance-none border-0 bg-transparent p-0 text-right text-2xl font-semibold tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] focus-visible:rounded focus-visible:ring-2 focus-visible:ring-chart-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">%</span>
             </div>
           </div>
 
