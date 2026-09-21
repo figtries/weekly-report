@@ -22,7 +22,7 @@ import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
-import ProgressEntry, { deriveShape, StepBtn, type EntryShape } from './ProgressEntry';
+import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 
 /**
@@ -335,6 +335,10 @@ function PanelBody({
   const dirty =
     Math.abs(pct - node.actualPct) > 0.004 || (draft.note ?? '') !== (node.note ?? '');
 
+  // What the percent field is showing right now: the raw string while it has
+  // focus, the typed figure after that, the evidence's own figure otherwise.
+  const shownPct = typing ?? (manual ? String(draft.pct) : fmt1(pct));
+
   // Escape closes, the scroll behind is frozen, and focus starts inside the
   // panel — the three things a hand-rolled overlay always forgets.
   useEffect(() => {
@@ -528,11 +532,18 @@ function PanelBody({
                 the typed figure wins until somebody touches a rung or the
                 count, and then the evidence takes over again. Nothing is
                 asked, and nothing has to be pressed first. */}
-            <div className="mt-4 flex items-center gap-2 border-t border-border/60 pt-3">
-              <StepBtn label="Less" onClick={() => stepPct(-1)}>
+            <div className="mt-4 flex items-center gap-3 border-t border-border/60 pt-3">
+              <BareStep label="Less" onClick={() => stepPct(-1)}>
                 −
-              </StepBtn>
-              <div className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
+              </BareStep>
+              {/* NO BOX. The panel's own card is already a rounded surface, so
+                  a bordered field inside it is a box in a box, and it made the
+                  figure look like a widget dropped on the card rather than the
+                  card's own headline. What says "you can change this" instead
+                  is the size and the rule under it: 40px, the largest thing on
+                  the screen, over a line that lights up when the caret lands. */}
+              <div className="group min-w-0 flex-1">
+                <div className="flex items-baseline justify-center gap-1">
               <input
                 /* TEXT, NEVER `type="number"`. A number input renders its value
                    through the BROWSER's locale, so "100.0" came back on screen
@@ -548,7 +559,17 @@ function PanelBody({
                    raw string stands while the box has focus, the parsed figure
                    is what the draft carries, and blur hands the display back to
                    whatever the evidence says. */
-                value={typing ?? (manual ? String(draft.pct) : fmt1(pct))}
+                value={shownPct}
+                /* Sized to its own digits rather than to a fixed width, so
+                   "7.5 %" sits in the middle of the card exactly as "100.0 %"
+                   does. A right-aligned box of constant width would put a
+                   short figure visibly off centre. `ch` is the width of a
+                   DIGIT under tabular-nums; a dot is about half that, so a
+                   plain character count over-measures and opens a gap before
+                   the per-cent sign. */
+                style={{
+                  width: `${Math.max(shownPct.length - (shownPct.split('.').length - 1) * 0.55, 1)}ch`,
+                }}
                 onFocus={(e) => e.currentTarget.select()}
                 onBlur={() => setTyping(null)}
                 onChange={(e) => {
@@ -571,15 +592,17 @@ function PanelBody({
                     setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
                   }
                 }}
-                className="w-[5.5ch] appearance-none border-0 bg-transparent p-0 text-right text-2xl font-semibold tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-                <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
-                  %
-                </span>
+                className="appearance-none border-0 bg-transparent p-0 text-center text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1">
+                    %
+                  </span>
+                </div>
+                <div className="mt-1.5 h-[2px] w-full rounded-full bg-border transition-colors duration-200 ease-ios group-focus-within:bg-chart-1" />
               </div>
-              <StepBtn label="More" onClick={() => stepPct(1)}>
+              <BareStep label="More" onClick={() => stepPct(1)}>
                 +
-              </StepBtn>
+              </BareStep>
             </div>
           </div>
 
@@ -637,6 +660,34 @@ function PanelBody({
   );
 
   return createPortal(body, document.body);
+}
+
+/**
+ * A step button with no box on it, because the figure beside it has no box
+ * either. Bordered ones would put two more rectangles on a card that is
+ * already a rectangle, which is exactly what the field lost its border for.
+ * Still 44px, which is the part that is not taste.
+ */
+function BareStep({
+  children,
+  onClick,
+  label,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <m.button
+      {...pressMotion}
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
+    >
+      {children}
+    </m.button>
+  );
 }
 
 /* ------------------------------------------------------------- disclosures */
