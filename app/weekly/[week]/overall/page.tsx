@@ -245,6 +245,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
         <OverallMap
           map={map}
           week={week}
+          projectId={open?.id ?? null}
           canPrice={!!open && !open.legacyJsonId}
           projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
           checkHref={`/weekly/${week}/control`}

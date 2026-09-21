@@ -111,7 +111,26 @@ export async function readOpenDb(): Promise<Database | null> {
 export async function mutateOpenDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
   const id = await getActiveProjectId();
   if (!id) throw new Error('No project is open.');
-  const key = jsonKeyFor(id);
+  return mutateProjectDb(id, mutator);
+}
+
+/**
+ * The same write, into a NAMED project rather than into whichever one is open.
+ *
+ * A screen that is already rendered knows which project its rows came from;
+ * "which project is open" is a second question, asked later, that can answer
+ * differently — a cached page, a cookie that moved on, two tabs. When the two
+ * disagree the row ids on screen belong to one store and the write goes to
+ * another, and the only symptom is `Item not found` on every save. The panel
+ * passes the id the page was rendered for, the same way `lib/pdf.ts` passes
+ * `?project=` because headless Chromium has no cookie to ask.
+ */
+export async function mutateProjectDb<T>(
+  projectId: string,
+  mutator: (db: Database) => T | Promise<T>
+): Promise<T> {
+  const key = jsonKeyFor(projectId);
+  const id = projectId;
   return mutateWorkspace(async (ws) => {
     let project = ws.projects[key];
     if (!project) {

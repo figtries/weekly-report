@@ -121,6 +121,7 @@ type Lens = 'due' | 'manual' | null;
 export default function OverallMap({
   map,
   week,
+  projectId,
   canPrice,
   projectHref,
   checkHref,
@@ -129,6 +130,13 @@ export default function OverallMap({
 }: {
   map: MapModel;
   week: number;
+  /**
+   * The project this page was RENDERED for. Handed to every write the panel
+   * makes, because "which project is open" is a different question asked at a
+   * different time, and when the two disagree the save goes to the wrong store
+   * and reports "Item not found" on a row that is plainly on screen.
+   */
+  projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
   checkHref: string;
@@ -389,6 +397,7 @@ export default function OverallMap({
         node={active}
         trail={trail}
         week={week}
+        projectId={projectId}
         canPrice={canPrice}
         projectHref={projectHref}
         peers={peers}

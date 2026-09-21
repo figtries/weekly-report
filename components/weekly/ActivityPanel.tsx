@@ -121,6 +121,7 @@ export default function ActivityPanel({
   node,
   trail,
   week,
+  projectId,
   canPrice,
   projectHref,
   peers,
@@ -130,7 +131,12 @@ export default function ActivityPanel({
   node: MapNode | null;
   trail: MapNode[];
   week: number;
-  /** SQLite projects only: the imported project's rows live in db.json. */
+  /**
+   * The project this page was rendered for, passed to every write below. See
+   * `OverallMap`'s own note: asking again at save time is what made a save
+   * land in another project's store and answer "Item not found".
+   */
+  projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
   /** Every leaf elsewhere in the tree that already has an answer, for the work-kind picker. */
@@ -145,6 +151,7 @@ export default function ActivityPanel({
         node={node}
         trail={trail}
         week={week}
+        projectId={projectId}
         canPrice={canPrice}
         projectHref={projectHref}
         peers={peers}
@@ -159,6 +166,7 @@ function PanelBody({
   node,
   trail,
   week,
+  projectId,
   canPrice,
   projectHref,
   peers,
@@ -168,6 +176,7 @@ function PanelBody({
   node: MapNode;
   trail: MapNode[];
   week: number;
+  projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
   peers: WorkKindPeer[];
@@ -250,7 +259,14 @@ function PanelBody({
     // Deliberately not inside the panel's own transition: that one drives the
     // Save button, and a question that has already been answered should not
     // leave the button reading "Saving…" over a form nobody has typed in yet.
-    void setWorkKindAction(node.id, node.name, kindId, kindShape, { steps: milestones }).then(
+    void setWorkKindAction(
+      node.id,
+      node.name,
+      kindId,
+      kindShape,
+      { steps: milestones },
+      projectId
+    ).then(
       (res) => {
         if (res.ok) return;
         setKindOverride(previous);
@@ -377,12 +393,12 @@ function PanelBody({
         // walked the line and when is a fact about a count too.
         const res = await saveFieldProgressAction(week, [
           { leafId: node.id, qtyDone: draft.qtyDone, note: draft.note || undefined, source },
-        ]);
+        ], projectId);
         if (!res.ok) return setError(res.error ?? 'Could not save');
       } else if (!manual && effectiveNode.method === 'milestone') {
         const res = await saveFieldProgressAction(week, [
           { leafId: node.id, milestonesDone: draft.milestonesDone, note: draft.note || undefined, source },
-        ]);
+        ], projectId);
         if (!res.ok) return setError(res.error ?? 'Could not save');
       } else {
         // Lumpsum rows (quote or plain manual), and the escape hatch on any
@@ -394,7 +410,7 @@ function PanelBody({
         // itself was judged.
         const res = await saveWeekUpdatesAction(week, {
           [node.id]: { cumProgressPct: pct, note: draft.note || undefined, source },
-        });
+        }, projectId);
         if (!res.ok) return setError(res.error ?? 'Could not save');
       }
       finish(pct);
@@ -405,7 +421,7 @@ function PanelBody({
     if (saving) return;
     setError(null);
     startSaving(async () => {
-      const res = await markNoProgressAction(week, [node.id]);
+      const res = await markNoProgressAction(week, [node.id], projectId);
       if (!res.ok) return setError(res.error ?? 'Could not save');
       finish(node.actualPct);
     });

@@ -2,7 +2,7 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { after } from 'next/server';
-import { mutateDb, mutateOpenDb, mutateWorkspace } from './db';
+import { mutateDb, mutateOpenDb, mutateProjectDb, mutateWorkspace } from './db';
 import type { CatalogKey } from './catalogs';
 import { emptyDatabase, newProjectId } from './workspace';
 import {
@@ -34,7 +34,7 @@ import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
 import { BUILT_IN_KINDS, type Shape } from './work-kind';
 import { ladderFor } from './work-kind-apply';
-import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
+import type { CatalogEntry, Database, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
 // one round trip that mutates, expires the 'db' cache tag (updateTag = read
@@ -54,10 +54,31 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
  * Null means "this is a db.json project" — the imported one — and every action
  * below then behaves exactly as it always has.
  */
-async function sqliteProject(): Promise<string | null> {
-  const id = await getActiveProjectId();
+async function sqliteProject(explicit?: string | null): Promise<string | null> {
+  // AN ID PASSED IN WINS. The screen that is asking was rendered for one
+  // project and its row ids belong to that project's store. Re-deriving the
+  // answer from the cookie here is how a save lands in a different store and
+  // answers "Item not found" for a row that is plainly on screen — which is
+  // what every work-kind save did once the open project and the rendered page
+  // drifted apart (a cached page, a second tab, a cookie that moved on).
+  const id = explicit ?? (await getActiveProjectId());
   if (!id || isLegacyProject(id)) return null;
   return id;
+}
+
+/**
+ * The json record a WRITE belongs to, given the project the caller names.
+ *
+ * `mutateDb` writes whatever db.json itself calls active and guards that with
+ * `assertLegacyWritable`; that is the right shape for the setup paths, which
+ * genuinely mean "the legacy project". A weekly write means "the project this
+ * row came from", so it goes through the id it was handed.
+ */
+function mutateFor<T>(
+  projectId: string | null | undefined,
+  mutator: (db: Database) => T | Promise<T>
+): Promise<T> {
+  return projectId ? mutateProjectDb(projectId, mutator) : mutateDb(mutator);
 }
 
 /**
@@ -191,12 +212,13 @@ export async function saveDailyAction(
 
 export async function saveWeekUpdatesAction(
   week: number,
-  updates: Record<string, Partial<LeafSnapshot>>
+  updates: Record<string, Partial<LeafSnapshot>>,
+  forProject?: string | null
 ): Promise<ActionResult> {
-  const projectId = await sqliteProject();
+  const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => saveWeekUpdatesSqlite(projectId, week, updates));
   try {
-    await mutateDb((db) => applyWeekUpdates(db, week, updates));
+    await mutateFor(forProject, (db) => applyWeekUpdates(db, week, updates));
     updateTag('db');
     refresh();
     return { ok: true };
@@ -235,12 +257,13 @@ export async function commitSetupAction(draft: SetupDraft): Promise<ActionResult
 
 export async function saveFieldProgressAction(
   week: number,
-  updates: FieldProgressUpdate[]
+  updates: FieldProgressUpdate[],
+  forProject?: string | null
 ): Promise<ActionResult> {
-  const projectId = await sqliteProject();
+  const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => saveFieldProgressSqlite(projectId, week, updates));
   try {
-    await mutateDb((db) => applyFieldProgress(db, week, updates));
+    await mutateFor(forProject, (db) => applyFieldProgress(db, week, updates));
     updateTag('db');
     refresh();
     return { ok: true };
@@ -257,12 +280,13 @@ export async function saveFieldProgressAction(
  */
 export async function markNoProgressAction(
   week: number,
-  leafIds: string[]
+  leafIds: string[],
+  forProject?: string | null
 ): Promise<ActionResult> {
-  const projectId = await sqliteProject();
+  const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => markNoProgressSqlite(projectId, week, leafIds));
   try {
-    await mutateDb((db) => markNoProgress(db, week, leafIds));
+    await mutateFor(forProject, (db) => markNoProgress(db, week, leafIds));
     updateTag('db');
     refresh();
     return { ok: true };
@@ -298,7 +322,8 @@ export async function setWorkKindAction(
   rowName: string,
   kindId: string,
   shape: Shape,
-  opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null } = {}
+  opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null } = {},
+  forProject?: string | null
 ): Promise<ActionResult> {
   // One door for all four forms, because the panel now asks one question. A
   // gate and a ladder are both milestone, a typed percent is lumpsum, and a
@@ -309,10 +334,10 @@ export async function setWorkKindAction(
   const methodOpts =
     shape === 'qty' ? { vol: opts.vol, satuan: opts.satuan } : { milestones };
 
-  const projectId = await sqliteProject();
+  const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts));
   try {
-    await mutateDb((db) => {
+    await mutateFor(forProject, (db) => {
       applyProgressMethod(db, leafId, method, methodOpts);
       const item = db.wbsItems.find((i) => i.id === leafId);
       if (item) item.workKind = kindId;
