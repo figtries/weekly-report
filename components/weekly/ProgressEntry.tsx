@@ -37,7 +37,7 @@ export function deriveShape(node: Pick<MapNode, 'method' | 'milestones' | 'sourc
     return (node.milestones ?? []).length === 1 ? 'gate' : 'steps';
   }
   // Includes every row saved as a quote before that form was folded away: it
-  // was lumpsum all along, and its note comes back in `SourceNote`.
+  // was lumpsum all along, and its stored note is left exactly where it is.
   return 'manual';
 }
 
@@ -190,12 +190,6 @@ export default function ProgressEntry({
               : 'Go back to the steps'}
         </button>
       )}
-
-      {/* Everywhere except the gate, whose one free-text field is already
-          carrying its completion date. Who said so and when is worth recording
-          on a ladder and on a count too, and it used to be reachable only by
-          declaring the whole row a quote. */}
-      {shape !== 'gate' && <SourceNote draft={draft} setDraft={setDraft} />}
 
       <PlanFacts node={node} draft={draft} manual={manual} />
     </>
@@ -360,65 +354,6 @@ function MilestoneEntry({
         })}
       </div>
     </>
-  );
-}
-
-/* ---------------------------------------------------------- source note */
-
-/**
- * Who said so, and when. Optional, and offered on every form that has a spare
- * note field rather than on one form that had to be chosen in advance.
- *
- * This is the whole surviving body of the old Quoted shape. As a shape it made
- * people classify a figure by its provenance before they were allowed to type
- * it, and gave them a percent box either way; as two fields under whatever
- * form is already on screen it records the same fact without asking anyone to
- * decide anything first. A ladder can have a vendor behind it too.
- *
- * Who and when live inside the one free-text `note` field the store already
- * has, so re-derived from it on every render rather than kept as separate
- * draft state that could drift out of sync with what gets saved.
- */
-function SourceNote({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
-  const parsed = /^(.*) · reported (\d{4}-\d{2}-\d{2})$/.exec(draft.note ?? '');
-  const who = parsed ? parsed[1] : draft.note ?? '';
-  const date = parsed ? parsed[2] : '';
-
-  const setWho = (value: string) =>
-    setDraft((d) => ({ ...d, note: date ? `${value} · reported ${date}` : value }));
-  // Deliberately not defaulted to today: a vendor report read a week late is
-  // still that week's report, and a default here would quietly backdate
-  // nothing and post-date everything.
-  const setDate = (value: string) =>
-    setDraft((d) => ({ ...d, note: value ? `${who} · reported ${value}` : who }));
-
-  return (
-    <div className="mt-4 border-t border-border/60 pt-3">
-      <p className="text-[13px] text-muted-foreground">
-        Where it came from <span className="text-[12px]">(optional)</span>
-      </p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <label className="block text-[13px] text-muted-foreground">
-          Reported by
-          <input
-            type="text"
-            placeholder="Who said so"
-            value={who}
-            onChange={(e) => setWho(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-          />
-        </label>
-        <label className="block text-[13px] text-muted-foreground">
-          Report date
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-          />
-        </label>
-      </div>
-    </div>
   );
 }
 
