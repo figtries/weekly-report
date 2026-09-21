@@ -115,7 +115,28 @@ export async function getActiveProjectId(): Promise<string | null> {
   // attached — see lib/db-snapshot.ts.
   await ensureFreshDb();
   const chosen = jar.get(OPEN_PROJECT_COOKIE)?.value;
-  if (chosen && isOpenable(chosen)) return chosen;
+  if (chosen) {
+    if (isOpenable(chosen)) return chosen;
+    // A COOKIE NAMING A PROJECT THIS DATABASE HAS NEVER HEARD OF IS NOT PROOF
+    // THE PROJECT IS GONE.
+    //
+    // On the deployment the database is a snapshot pulled over a copy of
+    // `data/seed.db` (see lib/db-snapshot.ts), and a cold instance can answer a
+    // request from the seed before that pull has landed. The seed holds Gundih
+    // and nothing made since, so any newer project's cookie failed this test
+    // and the reader fell through to `app_state` — which in the seed also says
+    // Gundih. That is the whole of "sometimes, on first open, Data Overall is
+    // Gundih whatever I had open": not a stale render, a cookie silently
+    // overruled by bytes that had not arrived yet.
+    //
+    // So a MISS re-checks against fresh bytes before giving up. An archived
+    // project still falls through, because that is a real answer.
+    const known = getProject(chosen) !== null;
+    if (!known) {
+      await ensureFreshDb(true);
+      if (isOpenable(chosen)) return chosen;
+    }
+  }
 
   const state = db.select().from(schema.appState).where(eq(schema.appState.id, 'singleton')).all()[0];
   if (state?.activeProjectId && isOpenable(state.activeProjectId)) return state.activeProjectId;

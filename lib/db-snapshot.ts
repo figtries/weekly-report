@@ -422,10 +422,13 @@ async function applyRemote(conditional: boolean): Promise<boolean> {
  * design: a 304 at most every 1.5 s, and nothing at all when no store is
  * attached.
  */
-export async function ensureFreshDb(): Promise<boolean> {
+export async function ensureFreshDb(force = false): Promise<boolean> {
   if (!snapshotConfigured) return false;
   const now = Date.now();
-  if (now - checkedAt < FRESH_MS) return false;
+  // `force` skips the throttle. Only one caller uses it, and it has earned it:
+  // a cookie naming a project this instance has never heard of is far more
+  // likely to be bytes that have not arrived than a project that is gone.
+  if (!force && now - checkedAt < FRESH_MS) return false;
   checkedAt = now;
   try {
     return await applyRemote(true);
