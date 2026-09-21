@@ -514,13 +514,16 @@ function PanelBody({
                 the typed figure wins until somebody touches a rung or the
                 count, and then the evidence takes over again. Nothing is
                 asked, and nothing has to be pressed first. */}
-            <div className="mt-4 flex items-baseline justify-center gap-1 border-t border-border/60 pt-3">
+            <div className="mt-4 border-t border-border/60 pt-3">
+              <div className="mx-auto flex h-12 w-full max-w-[11rem] items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
               <input
-                type="number"
+                /* TEXT, NEVER `type="number"`. A number input renders its value
+                   through the BROWSER's locale, so "100.0" came back on screen
+                   as "100,0" — a decimal comma, in an app whose every other
+                   figure is written with a point, and a string `Number()`
+                   reads as NaN. A text box shows the string it was given. */
+                type="text"
                 inputMode="decimal"
-                step="0.1"
-                min={0}
-                max={100}
                 aria-label="Percent complete"
                 /* `typing` is what makes a decimal typeable at all: parsing
                    every keystroke back into the value turns "4." into "4" and
@@ -532,7 +535,18 @@ function PanelBody({
                 onFocus={(e) => e.currentTarget.select()}
                 onBlur={() => setTyping(null)}
                 onChange={(e) => {
-                  const raw = e.target.value;
+                  // A comma is what an Indonesian phone keyboard puts under the
+                  // decimal key, and it means the same thing here: a percent is
+                  // 0 to 100, so there is no thousands separator for it to be
+                  // confused with. Everything else that is not a digit or a dot
+                  // is dropped rather than rejected.
+                  const cleaned = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                  // One dot only. A second one makes `Number()` return NaN, and
+                  // the box would then sit showing "7.42.55" while the draft
+                  // quietly kept the last figure that did parse.
+                  const parts = cleaned.split('.');
+                  const raw =
+                    parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
                   setTyping(raw);
                   setManual(true);
                   const n = Number(raw);
@@ -540,9 +554,12 @@ function PanelBody({
                     setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
                   }
                 }}
-                className="w-[5.5ch] appearance-none border-0 bg-transparent p-0 text-right text-2xl font-semibold tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] focus-visible:rounded focus-visible:ring-2 focus-visible:ring-chart-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">%</span>
+                className="w-[5.5ch] appearance-none border-0 bg-transparent p-0 text-right text-2xl font-semibold tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
+                  %
+                </span>
+              </div>
             </div>
           </div>
 
