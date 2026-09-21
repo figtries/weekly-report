@@ -163,24 +163,18 @@ export default function ProgressEntry({
         <MilestoneEntry node={node} draft={draft} setDraft={setDraft} />
       )}
 
-      {/* Everywhere except the gate, whose one free-text field is already
-          carrying its completion date. Who said so and when is worth recording
-          on a ladder and on a count too, and it used to be reachable only by
-          declaring the whole row a quote. */}
-      {shape !== 'gate' && <SourceNote draft={draft} setDraft={setDraft} />}
-
-      <PlanFacts node={node} draft={draft} manual={manual} />
-
-      {/* A one-way door is not flexibility. Someone who types a percent and
-          then wants the ladder back had to close the panel and reopen it,
-          which looks like the app losing their place. */}
+      {/* DIRECTLY under the form, not at the bottom of the panel. Typing a
+          percent by hand is always allowed, on every row, whatever it is
+          measured by — and a permission that has to be scrolled to is one
+          people do not believe they have. A one-way door is not flexibility
+          either, so the way back sits in the same place. */}
       {!isManualForm && (
         <button
           type="button"
           onClick={onManual}
           className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
         >
-          Type this week&rsquo;s percent by hand
+          Type the percent by hand instead
         </button>
       )}
       {manual && shape !== 'manual' && (
@@ -196,6 +190,14 @@ export default function ProgressEntry({
               : 'Go back to the steps'}
         </button>
       )}
+
+      {/* Everywhere except the gate, whose one free-text field is already
+          carrying its completion date. Who said so and when is worth recording
+          on a ladder and on a count too, and it used to be reachable only by
+          declaring the whole row a quote. */}
+      {shape !== 'gate' && <SourceNote draft={draft} setDraft={setDraft} />}
+
+      <PlanFacts node={node} draft={draft} manual={manual} />
     </>
   );
 }

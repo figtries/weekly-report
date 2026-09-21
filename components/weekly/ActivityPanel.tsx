@@ -9,11 +9,13 @@ import {
   markNoProgressAction,
   saveFieldProgressAction,
   saveWeekUpdatesAction,
+  setWorkKindAction,
 } from '@/lib/actions';
 import { updateRowTextAction } from '@/lib/sheet-actions';
 import type { MapNode } from '@/lib/overall-map';
 import type { Milestone } from '@/lib/types';
-import type { Shape } from '@/lib/work-kind';
+import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
+import { changeFor } from '@/lib/work-kind-apply';
 import { MOTION } from '@/lib/design';
 import { Expand } from '@/components/motion/Expand';
 import { pressMotion } from '@/components/motion/Press';
@@ -48,17 +50,14 @@ import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
  */
 
 /**
- * ONE set of words for how a row is measured, used by the picker that asks and
- * by the line that reports the answer back.
+ * A name for the form on screen, used ONLY when a row got its method from
+ * somewhere other than the question — the importer, the planner, a paste.
  *
- * There used to be three sets. The picker offered One-off / Stages / Quoted,
- * a disclosure underneath offered Quantity / Steps / Typed percent, and
- * `MeasurePanel` on the Weights screen offered a third spelling of the same
- * three. So the only way back to a decision was a control that named it
- * differently from the question that took it, could not offer Quantity at all,
- * and offered Quantity in the one place the question never mentioned it. The
- * disclosure is gone: the picker itself reopens now, and it is the only thing
- * on this panel that names a measurement.
+ * A row that was asked carries its kind, and the kind is what the way back is
+ * labelled with, because that is the word the person replied with. This panel
+ * used to carry a second vocabulary as well, a "How it is counted" disclosure
+ * offering Quantity / Steps / Typed percent beside a picker offering One-off /
+ * Stages / Quoted. It is gone: the question itself reopens now.
  */
 const SHAPE_LABEL: Record<EntryShape, string> = {
   gate: 'One-off',
@@ -176,17 +175,19 @@ function PanelBody({
   onSaved: (id: string, pct: number) => void;
 }) {
   /**
-   * Set once, right after `setWorkKindAction` succeeds, so the very same open
-   * panel can show the form for the kind just chosen. `node` itself will not
-   * carry the new `workKind` until the route refreshes behind it — that is
-   * seconds away, not zero — so until it lands this override stands in for
-   * the fields a freshly-answered leaf would have.
+   * Set on the TAP, before the write goes out, so the form for the kind just
+   * chosen is on screen immediately. `node` itself will not carry the new
+   * `workKind` until the route refreshes behind it — that is a round trip
+   * away, not zero — so until it lands this override stands in for the fields
+   * a freshly-answered leaf would have. `pickKind` drops it again if the write
+   * comes back a failure.
    */
   const [kindOverride, setKindOverride] = useState<{
     kindId: string;
     shape: Shape;
     milestones: Milestone[];
-    qty?: { total: number; unit: string | null };
+    /** Rungs the restatement awards, so the optimistic figure is the server's. */
+    done: string[];
   } | null>(null);
 
   /**
@@ -213,19 +214,51 @@ function PanelBody({
             : kindOverride.shape === 'manual'
               ? 'lumpsum'
               : 'milestone',
-        milestones: kindOverride.milestones.map((m) => ({ ...m, done: false })),
-        qtyTotal: kindOverride.qty ? kindOverride.qty.total : node.qtyTotal,
-        unit: kindOverride.qty ? kindOverride.qty.unit ?? undefined : node.unit,
-        // Mirrors `applyProgressMethod`'s own seeding, which re-expresses the
-        // percent the row already had as a quantity. A zero here would be the
-        // August 2026 bug back again: the draft would read 0 on a row sitting
-        // at 40, count as dirty, and Save would write the zero over it.
-        qtyDone: kindOverride.qty
-          ? (node.actualPct / 100) * kindOverride.qty.total
-          : node.qtyDone,
+        milestones: kindOverride.milestones.map((m) => ({
+          ...m,
+          done: kindOverride.done.includes(m.id),
+        })),
         source: kindOverride.shape,
       }
     : node;
+
+  /**
+   * The answer is applied on the TAP, and the write follows it.
+   *
+   * Nothing on this path needs the server's opinion: the rungs come from
+   * `ladderFor`, which is the same pure function the action itself calls, so
+   * waiting for the round trip bought a spinner and nothing else. The form is
+   * on screen before the request leaves. If the write does fail, the override
+   * is dropped and the question comes back with the reason on it, which is the
+   * only part of this that has to be true rather than fast.
+   */
+  function pickKind(kindId: string, kindShape: Shape, milestones: Milestone[]) {
+    const previous = kindOverride;
+    // CHANGING HOW YOU MEASURE MUST NOT CHANGE WHAT WAS MEASURED, and the
+    // optimistic view has to keep that promise too. The server restates the
+    // figure into the new ladder's own terms through `changeFor`; showing an
+    // untouched ladder here instead read a row sitting at 100% as 0.0%, which
+    // is not only wrong on screen — the draft would have counted as dirty and
+    // Save would have written the zero over it.
+    const { done } = changeFor(
+      { id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct },
+      milestones
+    );
+    setKindOverride({ kindId, shape: kindShape, milestones, done });
+    setPicking(false);
+    setError(null);
+    // Deliberately not inside the panel's own transition: that one drives the
+    // Save button, and a question that has already been answered should not
+    // leave the button reading "Saving…" over a form nobody has typed in yet.
+    void setWorkKindAction(node.id, node.name, kindId, kindShape, { steps: milestones }).then(
+      (res) => {
+        if (res.ok) return;
+        setKindOverride(previous);
+        setPicking(true);
+        setError(res.error ?? 'Could not save');
+      }
+    );
+  }
 
   /**
    * The draft is RE-SEEDED when the row stops being measured the same way.
@@ -254,6 +287,12 @@ function PanelBody({
   const setManual = (v: boolean) => setHeldManual({ seed, manual: v });
   const shape: EntryShape = deriveShape(effectiveNode);
   const source: EntryShape = manual ? 'manual' : shape;
+  // Named by the ANSWER somebody gave, not by the form that answer produced:
+  // the question was "what kind of work is this", so the way back to it has to
+  // carry the word they replied with. The shape is the fallback for a row the
+  // importer or the planner set a method on without anyone being asked.
+  const kindLabel =
+    BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
   const [open, setOpen] = useState<'money' | 'schedule' | null>(null);
   const [saving, startSaving] = useTransition();
@@ -302,7 +341,10 @@ function PanelBody({
   function finish(nextPct: number) {
     onSaved(node.id, nextPct);
     setSaved(true);
-    window.setTimeout(onClose, 420);
+    // Short enough that the tick is a confirmation rather than a wait. It used
+    // to be 420ms, which is most of a beat added to the end of every single
+    // row on a screen people fill in nine at a time.
+    window.setTimeout(onClose, 140);
   }
 
   function save() {
@@ -428,11 +470,8 @@ function PanelBody({
               <WorkKindPicker
                 node={node}
                 peers={peers}
-                current={answered ? { kindId: effectiveNode.workKind ?? null, shape } : null}
-                onDone={(kindId, kindShape, milestones, qty) => {
-                  setKindOverride({ kindId, shape: kindShape, milestones, qty });
-                  setPicking(false);
-                }}
+                current={answered ? effectiveNode.workKind ?? null : null}
+                onPick={pickKind}
                 onCancel={answered ? () => setPicking(false) : undefined}
               />
             ) : (
@@ -445,8 +484,7 @@ function PanelBody({
                   onClick={() => setPicking(true)}
                   className="-mt-1 mb-3 flex min-h-11 w-full items-center gap-1.5 rounded-lg text-left text-[13px] text-muted-foreground transition-colors duration-200 ease-ios hover:text-foreground"
                 >
-                  <span>Measured by</span>
-                  <span className="font-medium text-foreground">{SHAPE_LABEL[shape]}</span>
+                  <span className="font-medium text-foreground">{kindLabel}</span>
                   <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="M8 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
