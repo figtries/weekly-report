@@ -114,6 +114,7 @@ export default function ProgressEntry({
   shape,
   manual,
   onManual,
+  onManualOff,
 }: {
   node: MapNode;
   draft: Draft;
@@ -121,6 +122,7 @@ export default function ProgressEntry({
   shape: EntryShape;
   manual: boolean;
   onManual: () => void;
+  onManualOff: () => void;
 }) {
   // Quantity mode exists in the app, is not part of this ladder, and is left
   // exactly as it was: a count is already a fact, so it keeps its own form
@@ -136,18 +138,32 @@ export default function ProgressEntry({
 
   return (
     <>
+      {/* EVERY arm below is gated on `isManualForm`, not on `shape` alone.
+          The first cut keyed them off `shape` only, so pressing the escape
+          hatch on a ladder row hid the button, left the ladder on screen and
+          never rendered the percent box: the form could not be typed into at
+          all. Worse, the save path already honoured `manual`, so the press
+          silently changed what would be written while showing nothing. The
+          escape hatch is point 8 of the spec and it is unconditional, so the
+          thing that decides which form is drawn has to be the same value that
+          decides whether the hatch is open. */}
       {showQuantity && <QuantityEntry node={node} draft={draft} setDraft={setDraft} />}
-      {!showQuantity && shape === 'gate' && (
+      {isManualForm && <PercentEntry draft={draft} setDraft={setDraft} />}
+      {!showQuantity && !isManualForm && shape === 'gate' && (
         <GateEntry node={node} draft={draft} setDraft={setDraft} />
       )}
-      {!showQuantity && shape === 'steps' && (
+      {!showQuantity && !isManualForm && shape === 'steps' && (
         <MilestoneEntry node={node} draft={draft} setDraft={setDraft} />
       )}
-      {!showQuantity && shape === 'quote' && <QuoteEntry draft={draft} setDraft={setDraft} />}
-      {!showQuantity && shape === 'manual' && <PercentEntry draft={draft} setDraft={setDraft} />}
+      {!showQuantity && !isManualForm && shape === 'quote' && (
+        <QuoteEntry draft={draft} setDraft={setDraft} />
+      )}
 
       <PlanFacts node={node} draft={draft} manual={manual} />
 
+      {/* A one-way door is not flexibility. Someone who types a percent and
+          then wants the ladder back had to close the panel and reopen it,
+          which looks like the app losing their place. */}
       {!isManualForm && (
         <button
           type="button"
@@ -155,6 +171,19 @@ export default function ProgressEntry({
           className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
         >
           Type a percent instead
+        </button>
+      )}
+      {manual && shape !== 'manual' && (
+        <button
+          type="button"
+          onClick={onManualOff}
+          className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
+        >
+          {shape === 'gate'
+            ? 'Go back to Not yet / Done'
+            : shape === 'quote'
+              ? 'Go back to the vendor report'
+              : 'Go back to the steps'}
         </button>
       )}
     </>

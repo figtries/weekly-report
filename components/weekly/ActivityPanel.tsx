@@ -416,6 +416,7 @@ function PanelBody({
                 shape={shape}
                 manual={manual}
                 onManual={() => setManual(true)}
+                onManualOff={() => setManual(false)}
               />
             )}
 
