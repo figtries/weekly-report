@@ -171,12 +171,12 @@ setProgressMethodSqlite(leaf.id, 'qty', { vol: 200, satuan: 'm' });
 saveFieldProgressSqlite(project.id, w1, [{ leafId: leaf.id, qtyDone: 137 }]);
 const kindBefore = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
 
-// 'quote' is lumpsum with an empty ladder (see lib/work-kind-apply.ts), so this
+// 'manual' is lumpsum with an empty ladder (see lib/work-kind-apply.ts), so this
 // is the one shape a restatement is required to leave EXACTLY alone — a
 // 'steps' ladder is allowed to restate a between-rungs figure down to the
 // nearest rung, which is correct behaviour, not the bug under test here.
-const ladder = ladderFor('procurement', 'quote', leaf.deskripsi, BUILT_IN_KINDS);
-setWorkKindSqlite(leaf.id, 'procurement', 'lumpsum', ladder);
+const ladder = ladderFor('procurement', 'manual', leaf.deskripsi, BUILT_IN_KINDS);
+setWorkKindSqlite(leaf.id, 'procurement', 'lumpsum', { milestones: ladder });
 const kindAfter = pctAt(w1, leaf.id)?.cumProgressPct ?? 0;
 const nodeRow = db
   .select({ workKind: schema.wbsNodes.workKind })
@@ -202,7 +202,7 @@ check(
 // the starting point must be the LADDER's own figure, not whatever an
 // earlier case left this leaf reporting.
 const overrideLadder = ladderFor('construction', 'steps', leaf.deskripsi, BUILT_IN_KINDS);
-setWorkKindSqlite(leaf.id, 'construction', 'milestone', overrideLadder);
+setWorkKindSqlite(leaf.id, 'construction', 'milestone', { milestones: overrideLadder });
 const rungRows = db
   .select()
   .from(schema.milestones)

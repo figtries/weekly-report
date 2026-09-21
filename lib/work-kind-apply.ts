@@ -41,7 +41,8 @@ export function ladderFor(
   kinds: WorkKind[]
 ): Milestone[] {
   if (shape === 'gate') return gateLadder(rowName);
-  if (shape === 'quote') return [];
+  // Quantity counts a count and a typed percent is typed: neither climbs rungs.
+  if (shape !== 'steps') return [];
   const kind = kinds.find((k) => k.id === kindId);
   return kind ? kind.steps.map((s) => ({ ...s })) : [];
 }

@@ -399,7 +399,8 @@ export const leafProgress = sqliteTable('leaf_progress', {
   qtyDone: real('qty_done'),
   note: text('note'),
   /**
-   * How this week's figure was arrived at: 'gate' | 'steps' | 'quote' | 'manual'.
+   * How this week's figure was arrived at: 'gate' | 'steps' | 'qty' | 'manual',
+   * plus 'quote' which is no longer written and is kept so old weeks read back.
    *
    * Gate and steps are also readable from the method, but quote and manual are
    * both lumpsum and are not the same claim at all: one is somebody else's

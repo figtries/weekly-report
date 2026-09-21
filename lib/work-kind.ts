@@ -19,7 +19,32 @@ import type { Milestone } from './types';
  * `lib/progress.ts` remains the single origin of every figure.
  */
 
-export type Shape = 'gate' | 'steps' | 'quote';
+/**
+ * The four forms a row can be filled in with, and there are exactly four
+ * because there are exactly four forms on screen.
+ *
+ * `quote` used to sit here as a fifth. It was never a way of MEASURING
+ * anything: its form was the typed-percent box with two extra note fields for
+ * who reported the figure and when. Offered as a peer of `steps` it asked
+ * people to classify a percentage by where it came from before they were
+ * allowed to type it, and answered nothing they could not answer by typing it.
+ * So the note fields moved to `SourceNote`, which every form can show, and the
+ * choice here went back to being about measurement alone. Rows already saved
+ * as a quote keep their stored `source` and their note, and now render as
+ * `manual` with that note already filled in.
+ */
+export type Shape = 'gate' | 'steps' | 'qty' | 'manual';
+
+/**
+ * What `work_kind` holds for a row that was answered WITHOUT a ladder.
+ *
+ * The kind question exists to fill a ladder with rungs, so it is only asked
+ * for `steps`. The other three still have to record that they were answered,
+ * or the panel greets the row with the same question every week as though
+ * nobody had ever replied. A sentinel rather than a null because null already
+ * means "never asked", and those are two different states.
+ */
+export const NO_KIND = 'none';
 
 export interface WorkKind {
   id: string;

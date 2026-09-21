@@ -23,14 +23,21 @@ import type { Draft } from './ActivityPanel';
  * for something two existing ones already imply.
  */
 
-export type EntryShape = Shape | 'manual';
+/**
+ * Kept as its own name because four files import it, but it is now exactly
+ * `Shape`: the forms on screen and the answers the picker offers are the same
+ * four things, which is the whole point of the change that removed 'quote'.
+ */
+export type EntryShape = Shape;
 
-/** Reused by the Task 7 picker to preview what a chosen shape turns into. */
+/** Reused by the picker to preview what a chosen shape turns into. */
 export function deriveShape(node: Pick<MapNode, 'method' | 'milestones' | 'source'>): EntryShape {
+  if (node.method === 'qty') return 'qty';
   if (node.method === 'milestone') {
     return (node.milestones ?? []).length === 1 ? 'gate' : 'steps';
   }
-  if (node.method === 'lumpsum' && node.source === 'quote') return 'quote';
+  // Includes every row saved as a quote before that form was folded away: it
+  // was lumpsum all along, and its note comes back in `SourceNote`.
   return 'manual';
 }
 
@@ -131,8 +138,8 @@ export default function ProgressEntry({
   // showing, can be typed over by hand.
   const showQuantity = !manual && node.method === 'qty';
   // The form actually on screen is the manual percent form either because the
-  // escape hatch was pressed, or because the row has no ladder/quote and
-  // never needed one. Either way, offering to swap TO the form already
+  // escape hatch was pressed, or because the row is measured by a typed
+  // percent and never had another form to leave. Either way, offering to swap TO the form already
   // showing reads as a control that does nothing.
   const isManualForm = manual || (!showQuantity && shape === 'manual');
 
@@ -155,9 +162,12 @@ export default function ProgressEntry({
       {!showQuantity && !isManualForm && shape === 'steps' && (
         <MilestoneEntry node={node} draft={draft} setDraft={setDraft} />
       )}
-      {!showQuantity && !isManualForm && shape === 'quote' && (
-        <QuoteEntry draft={draft} setDraft={setDraft} />
-      )}
+
+      {/* Everywhere except the gate, whose one free-text field is already
+          carrying its completion date. Who said so and when is worth recording
+          on a ladder and on a count too, and it used to be reachable only by
+          declaring the whole row a quote. */}
+      {shape !== 'gate' && <SourceNote draft={draft} setDraft={setDraft} />}
 
       <PlanFacts node={node} draft={draft} manual={manual} />
 
@@ -170,7 +180,7 @@ export default function ProgressEntry({
           onClick={onManual}
           className="mt-3 min-h-11 w-full rounded-xl text-sm text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted/50 hover:text-foreground"
         >
-          Type a percent instead
+          Type this week&rsquo;s percent by hand
         </button>
       )}
       {manual && shape !== 'manual' && (
@@ -181,8 +191,8 @@ export default function ProgressEntry({
         >
           {shape === 'gate'
             ? 'Go back to Not yet / Done'
-            : shape === 'quote'
-              ? 'Go back to the vendor report'
+            : shape === 'qty'
+              ? 'Go back to the count'
               : 'Go back to the steps'}
         </button>
       )}
@@ -351,17 +361,27 @@ function MilestoneEntry({
   );
 }
 
-/* --------------------------------------------------------------- quote */
+/* ---------------------------------------------------------- source note */
 
-function QuoteEntry({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
-  // Who and when live inside the one free-text `note` field the store already
-  // has, so re-derived from it on every render rather than kept as separate
-  // draft state that could drift out of sync with what gets saved.
+/**
+ * Who said so, and when. Optional, and offered on every form that has a spare
+ * note field rather than on one form that had to be chosen in advance.
+ *
+ * This is the whole surviving body of the old Quoted shape. As a shape it made
+ * people classify a figure by its provenance before they were allowed to type
+ * it, and gave them a percent box either way; as two fields under whatever
+ * form is already on screen it records the same fact without asking anyone to
+ * decide anything first. A ladder can have a vendor behind it too.
+ *
+ * Who and when live inside the one free-text `note` field the store already
+ * has, so re-derived from it on every render rather than kept as separate
+ * draft state that could drift out of sync with what gets saved.
+ */
+function SourceNote({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
   const parsed = /^(.*) · reported (\d{4}-\d{2}-\d{2})$/.exec(draft.note ?? '');
   const who = parsed ? parsed[1] : draft.note ?? '';
   const date = parsed ? parsed[2] : '';
 
-  const setPct = (v: number) => setDraft((d) => ({ ...d, pct: clampPct(round2(v)) }));
   const setWho = (value: string) =>
     setDraft((d) => ({ ...d, note: date ? `${value} · reported ${date}` : value }));
   // Deliberately not defaulted to today: a vendor report read a week late is
@@ -371,16 +391,21 @@ function QuoteEntry({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
     setDraft((d) => ({ ...d, note: value ? `${who} · reported ${value}` : who }));
 
   return (
-    <>
-      <p className="text-[13px] text-muted-foreground">What did the latest report say?</p>
-      <input
-        type="number"
-        inputMode="decimal"
-        value={String(draft.pct)}
-        onChange={(e) => setPct(Number(e.target.value))}
-        className="mt-2 h-12 w-full rounded-xl border border-input bg-card px-3 text-center text-xl font-semibold tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-      />
-      <div className="mt-3 grid grid-cols-2 gap-2">
+    <div className="mt-4 border-t border-border/60 pt-3">
+      <p className="text-[13px] text-muted-foreground">
+        Where it came from <span className="text-[12px]">(optional)</span>
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="block text-[13px] text-muted-foreground">
+          Reported by
+          <input
+            type="text"
+            placeholder="Who said so"
+            value={who}
+            onChange={(e) => setWho(e.target.value)}
+            className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
+          />
+        </label>
         <label className="block text-[13px] text-muted-foreground">
           Report date
           <input
@@ -390,18 +415,8 @@ function QuoteEntry({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
             className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
           />
         </label>
-        <label className="block text-[13px] text-muted-foreground">
-          Reported by
-          <input
-            type="text"
-            placeholder="Who reported it"
-            value={who}
-            onChange={(e) => setWho(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-          />
-        </label>
       </div>
-    </>
+    </div>
   );
 }
 

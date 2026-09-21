@@ -9,11 +9,10 @@ import {
   markNoProgressAction,
   saveFieldProgressAction,
   saveWeekUpdatesAction,
-  setProgressMethodAction,
 } from '@/lib/actions';
 import { updateRowTextAction } from '@/lib/sheet-actions';
 import type { MapNode } from '@/lib/overall-map';
-import type { Milestone, ProgressMethod } from '@/lib/types';
+import type { Milestone } from '@/lib/types';
 import type { Shape } from '@/lib/work-kind';
 import { MOTION } from '@/lib/design';
 import { Expand } from '@/components/motion/Expand';
@@ -48,37 +47,25 @@ import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
  * holds the active id and this renders once.
  */
 
-const METHOD_LABEL: Record<ProgressMethod, string> = {
-  qty: 'Quantity',
-  milestone: 'Steps',
-  lumpsum: 'Typed percent',
-};
-
 /**
- * What the "How it is counted" disclosure calls a row, which must name the
- * FORM ABOVE IT rather than the raw stored method — `milestone` covers both a
- * single-rung gate and a real multi-step ladder, and `lumpsum` covers both a
- * quote and a hand-typed percent. `METHOD_LABEL` above answers "how is this
- * measured", which is still the right question for the three-way switcher in
- * `MethodSection` (that IS choosing a stored method); this answers "what does
- * the form on screen ask", which is a `Shape`, not a `ProgressMethod`. Reuses
- * `deriveShape` rather than a second copy of its logic — same words as
- * `WorkKindPicker`'s own shape buttons, so the disclosure never disagrees with
- * the picker that put the row here.
+ * ONE set of words for how a row is measured, used by the picker that asks and
+ * by the line that reports the answer back.
+ *
+ * There used to be three sets. The picker offered One-off / Stages / Quoted,
+ * a disclosure underneath offered Quantity / Steps / Typed percent, and
+ * `MeasurePanel` on the Weights screen offered a third spelling of the same
+ * three. So the only way back to a decision was a control that named it
+ * differently from the question that took it, could not offer Quantity at all,
+ * and offered Quantity in the one place the question never mentioned it. The
+ * disclosure is gone: the picker itself reopens now, and it is the only thing
+ * on this panel that names a measurement.
  */
-const SHAPE_METHOD_LABEL: Record<EntryShape, string> = {
+const SHAPE_LABEL: Record<EntryShape, string> = {
   gate: 'One-off',
   steps: 'Stages',
-  quote: 'Quoted',
+  qty: 'Quantity',
   manual: 'Typed percent',
 };
-
-function countedAs(node: MapNode): string {
-  // Quantity is the one method with no shape at all — `deriveShape` would
-  // otherwise read it as 'manual', which is a real label but the wrong one.
-  if ((node.method ?? 'lumpsum') === 'qty') return METHOD_LABEL.qty;
-  return SHAPE_METHOD_LABEL[deriveShape(node)];
-}
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
@@ -199,15 +186,44 @@ function PanelBody({
     kindId: string;
     shape: Shape;
     milestones: Milestone[];
+    qty?: { total: number; unit: string | null };
   } | null>(null);
-  const asking = !node.workKind && !kindOverride;
+
+  /**
+   * Whether the picker is on screen because somebody ASKED for it, as opposed
+   * to because the row has never been answered.
+   *
+   * This is the whole fix for a one-way door. `asking` used to be read off the
+   * data alone, so the first Save closed the question for good: a row measured
+   * the wrong way could only be corrected through a disclosure that spoke a
+   * different language, and a row answered by accident could not be corrected
+   * at all. Now the question is a place the panel can go back to, and Cancel
+   * returns from it having changed nothing.
+   */
+  const [picking, setPicking] = useState(false);
+  const answered = Boolean(node.workKind) || Boolean(kindOverride);
+  const asking = !answered || picking;
   const effectiveNode: MapNode = kindOverride
     ? {
         ...node,
         workKind: kindOverride.kindId,
-        method: kindOverride.shape === 'quote' ? 'lumpsum' : 'milestone',
+        method:
+          kindOverride.shape === 'qty'
+            ? 'qty'
+            : kindOverride.shape === 'manual'
+              ? 'lumpsum'
+              : 'milestone',
         milestones: kindOverride.milestones.map((m) => ({ ...m, done: false })),
-        source: kindOverride.shape === 'quote' ? 'quote' : node.source,
+        qtyTotal: kindOverride.qty ? kindOverride.qty.total : node.qtyTotal,
+        unit: kindOverride.qty ? kindOverride.qty.unit ?? undefined : node.unit,
+        // Mirrors `applyProgressMethod`'s own seeding, which re-expresses the
+        // percent the row already had as a quantity. A zero here would be the
+        // August 2026 bug back again: the draft would read 0 on a row sitting
+        // at 40, count as dirty, and Save would write the zero over it.
+        qtyDone: kindOverride.qty
+          ? (node.actualPct / 100) * kindOverride.qty.total
+          : node.qtyDone,
+        source: kindOverride.shape,
       }
     : node;
 
@@ -239,7 +255,7 @@ function PanelBody({
   const shape: EntryShape = deriveShape(effectiveNode);
   const source: EntryShape = manual ? 'manual' : shape;
 
-  const [open, setOpen] = useState<'method' | 'money' | 'schedule' | null>(null);
+  const [open, setOpen] = useState<'money' | 'schedule' | null>(null);
   const [saving, startSaving] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -257,7 +273,12 @@ function PanelBody({
   // The escape hatch reads from `draft.pct` regardless of how the row is
   // normally measured — that is the whole point of typing a percent instead.
   const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(effectiveNode, draft);
-  const dirty = Math.abs(pct - node.actualPct) > 0.004;
+  // The note counts as a change too. It did not have to before, because the
+  // only form that carried one also carried its own percent box; now a ladder
+  // row can be answered "nothing moved, but here is who told me so", and a
+  // Save button greyed out over a filled-in field reads as the app refusing.
+  const dirty =
+    Math.abs(pct - node.actualPct) > 0.004 || (draft.note ?? '') !== (node.note ?? '');
 
   // Escape closes, the scroll behind is frozen, and focus starts inside the
   // panel — the three things a hand-rolled overlay always forgets.
@@ -289,9 +310,12 @@ function PanelBody({
     setError(null);
     startSaving(async () => {
       if (!manual && effectiveNode.method === 'qty') {
-        // Quantity mode is untouched by this feature: still its own count,
-        // still no note or source attached.
-        const res = await saveFieldProgressAction(week, [{ leafId: node.id, qtyDone: draft.qtyDone }]);
+        // The count still decides the percentage. What changed is that a count
+        // can now carry the same source note as everything else, because who
+        // walked the line and when is a fact about a count too.
+        const res = await saveFieldProgressAction(week, [
+          { leafId: node.id, qtyDone: draft.qtyDone, note: draft.note || undefined, source },
+        ]);
         if (!res.ok) return setError(res.error ?? 'Could not save');
       } else if (!manual && effectiveNode.method === 'milestone') {
         const res = await saveFieldProgressAction(week, [
@@ -404,27 +428,46 @@ function PanelBody({
               <WorkKindPicker
                 node={node}
                 peers={peers}
-                onDone={(kindId, kindShape, milestones) =>
-                  setKindOverride({ kindId, shape: kindShape, milestones })
-                }
+                current={answered ? { kindId: effectiveNode.workKind ?? null, shape } : null}
+                onDone={(kindId, kindShape, milestones, qty) => {
+                  setKindOverride({ kindId, shape: kindShape, milestones, qty });
+                  setPicking(false);
+                }}
+                onCancel={answered ? () => setPicking(false) : undefined}
               />
             ) : (
-              <ProgressEntry
-                node={effectiveNode}
-                draft={draft}
-                setDraft={setDraft}
-                shape={shape}
-                manual={manual}
-                onManual={() => setManual(true)}
-                onManualOff={() => setManual(false)}
-              />
+              <>
+                {/* The way back in, named with the same word the answer was
+                    given in. It sits above the form because it is what the
+                    form IS, not an action to take on it. */}
+                <button
+                  type="button"
+                  onClick={() => setPicking(true)}
+                  className="-mt-1 mb-3 flex min-h-11 w-full items-center gap-1.5 rounded-lg text-left text-[13px] text-muted-foreground transition-colors duration-200 ease-ios hover:text-foreground"
+                >
+                  <span>Measured by</span>
+                  <span className="font-medium text-foreground">{SHAPE_LABEL[shape]}</span>
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M8 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <ProgressEntry
+                  node={effectiveNode}
+                  draft={draft}
+                  setDraft={setDraft}
+                  shape={shape}
+                  manual={manual}
+                  onManual={() => setManual(true)}
+                  onManualOff={() => setManual(false)}
+                />
+              </>
             )}
 
             {/* The anchor figure only. Its own translation into plan terms —
                 rise, plan comparison, contribution — is `PlanFacts` inside
                 `ProgressEntry` now: printing the plan sentence here too read
                 as a stutter, the same fact said twice on one screen. */}
-            <div className="mt-4 flex items-baseline gap-2 border-t border-border/60 pt-3">
+            <div className="mt-4 flex items-baseline justify-center gap-2 border-t border-border/60 pt-3">
               <span className="text-2xl font-semibold tabular-nums tracking-tight text-chart-1">
                 {fmt1(pct)}%
               </span>
@@ -432,15 +475,6 @@ function PanelBody({
           </div>
 
           <div className="mt-4 border-t border-border">
-            <Disclosure
-              label="How it is counted"
-              value={countedAs(effectiveNode)}
-              open={open === 'method'}
-              onToggle={() => setOpen(open === 'method' ? null : 'method')}
-            >
-              <MethodSection node={effectiveNode} />
-            </Disclosure>
-
             <Disclosure
               label="Price and weight"
               value={fmtMoney(node.price) ?? `${fmt2(node.weight)}%`}
@@ -534,140 +568,6 @@ function Disclosure({
       <Expand open={open}>
         <div className="pb-4 pt-1">{children}</div>
       </Expand>
-    </div>
-  );
-}
-
-/**
- * How this activity is counted — offered on EVERY project, imported or not.
- *
- * `setProgressMethodAction` forks to `applyProgressMethod` for a project on
- * db.json and to SQLite for the rest, so both stores can answer this. Only the
- * PRICE below is SQLite-only, and gating the two together would have told
- * Gundih's owner that an activity's method was fixed when it never was.
- */
-function MethodSection({ node }: { node: MapNode }) {
-  const current = node.method ?? 'lumpsum';
-  const [pending, start] = useTransition();
-  const [ask, setAsk] = useState<'qty' | 'milestone' | null>(null);
-  const [total, setTotal] = useState(String(node.qtyTotal ?? ''));
-  const [unit, setUnit] = useState(node.unit ?? '');
-  const [steps, setSteps] = useState(String((node.milestones ?? []).length || 4));
-  const [error, setError] = useState<string | null>(null);
-
-  function apply(method: ProgressMethod, opts?: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] }) {
-    setError(null);
-    start(async () => {
-      const res = await setProgressMethodAction(node.id, method, opts ?? {});
-      if (!res.ok) setError(res.error ?? 'Could not change');
-      else setAsk(null);
-    });
-  }
-
-  function choose(method: ProgressMethod) {
-    if (method === current) return;
-    if (method === 'qty') return setAsk('qty');
-    if (method === 'milestone') return setAsk('milestone');
-    apply('lumpsum');
-  }
-
-  return (
-    <div>
-      <div className="grid grid-cols-3 gap-1.5">
-        {(['qty', 'milestone', 'lumpsum'] as ProgressMethod[]).map((mth) => (
-          <m.button
-            key={mth}
-            {...pressMotion}
-            onClick={() => choose(mth)}
-            disabled={pending}
-            className={cn(
-              'min-h-11 rounded-xl border px-2 text-[13px] font-medium transition-colors duration-200 ease-ios',
-              mth === current
-                ? 'border-chart-1/40 bg-chart-1/10 text-chart-1'
-                : 'border-input bg-card text-muted-foreground hover:bg-muted/60'
-            )}
-          >
-            {METHOD_LABEL[mth]}
-          </m.button>
-        ))}
-      </div>
-
-      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-        {current === 'qty'
-          ? 'The percentage comes from the quantity, so nobody has to judge it.'
-          : current === 'milestone'
-            ? 'The percentage comes from the steps ticked off.'
-            : 'Someone types the percentage. Counting it beats judging it, where there is something to count.'}
-      </p>
-
-      <Expand open={ask === 'qty'}>
-        <div className="mt-3 rounded-xl bg-muted/40 p-3">
-          <p className="text-[13px] text-foreground">What is the total, and in what unit?</p>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={total}
-              onChange={(e) => setTotal(e.target.value)}
-              inputMode="decimal"
-              placeholder="450"
-              className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-card px-3 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-            />
-            <input
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="m"
-              className="h-11 w-20 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-            />
-          </div>
-          <m.button
-            {...pressMotion}
-            onClick={() => {
-              const v = Number(total);
-              if (!v || v <= 0) return setError('A quantity needs a total above zero');
-              apply('qty', { vol: v, satuan: unit.trim() || null });
-            }}
-            disabled={pending}
-            className="btn-primary mt-2 min-h-11 w-full rounded-lg text-sm font-medium"
-          >
-            {pending ? 'Changing…' : 'Count it by quantity'}
-          </m.button>
-        </div>
-      </Expand>
-
-      <Expand open={ask === 'milestone'}>
-        <div className="mt-3 rounded-xl bg-muted/40 p-3">
-          <p className="text-[13px] text-foreground">How many steps does it take?</p>
-          <input
-            value={steps}
-            onChange={(e) => setSteps(e.target.value)}
-            inputMode="numeric"
-            className="mt-2 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-          />
-          <p className="mt-1.5 text-[12px] text-muted-foreground">
-            Each step carries an equal share. Rename them later in the planner.
-          </p>
-          <m.button
-            {...pressMotion}
-            onClick={() => {
-              const n = Math.round(Number(steps));
-              if (!n || n < 2) return setError('Two steps or more');
-              const weight = round2(100 / n);
-              apply('milestone', {
-                milestones: Array.from({ length: n }, (_, i) => ({
-                  id: `${node.id}-s${i + 1}`,
-                  label: `Step ${i + 1}`,
-                  weight,
-                })),
-              });
-            }}
-            disabled={pending}
-            className="btn-primary mt-2 min-h-11 w-full rounded-lg text-sm font-medium"
-          >
-            {pending ? 'Changing…' : 'Count it by steps'}
-          </m.button>
-        </div>
-      </Expand>
-
-      {error && <p className="mt-2 text-[13px] text-bad">{error}</p>}
     </div>
   );
 }

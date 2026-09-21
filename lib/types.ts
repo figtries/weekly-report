@@ -55,8 +55,14 @@ export interface LeafSnapshot {
   milestonesDone?: string[];
   /** Free text the person recorded beside the figure, e.g. a vendor's report reference. */
   note?: string;
-  /** How the figure was arrived at. 'quote' and 'manual' are both lumpsum and are not the same claim. */
-  source?: 'gate' | 'steps' | 'quote' | 'manual';
+  /**
+   * How the figure was arrived at. 'quote' is history: it is no longer a form
+   * anyone can choose, and the rows carrying it read back as 'manual' with the
+   * source note they were saved with. It stays in the union because it is
+   * stored, and a report that says how much of itself was judged still has to
+   * be able to read weeks that were written before the form went away.
+   */
+  source?: 'gate' | 'steps' | 'qty' | 'quote' | 'manual';
 }
 
 export type WeeklyLeafData = Record<string, LeafSnapshot>;

@@ -176,11 +176,12 @@ export default function OverallMap({
     const out: WorkKindPeer[] = [];
     function walk(n: MapNode) {
       if (n.kind === 'leaf' && n.workKind) {
-        // `deriveShape` can also answer 'manual' — the escape hatch, for a
-        // leaf whose ladder was overridden by a typed percent. That is not a
-        // shape this feature ever offers, so it is not one to suggest either.
-        const s = deriveShape(n);
-        if (s !== 'manual') out.push({ name: n.name, kindId: n.workKind, shape: s });
+        // All four shapes are suggestable now, 'manual' included: it stopped
+        // being only the escape hatch when it became one of the four answers
+        // the picker offers. The hatch itself never reaches here, because it
+        // leaves the row's stored method alone — a ladder overridden by a
+        // typed percent still reads back as 'steps'.
+        out.push({ name: n.name, kindId: n.workKind, shape: deriveShape(n) });
       }
       n.children.forEach(walk);
     }

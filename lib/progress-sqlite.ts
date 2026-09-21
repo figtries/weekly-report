@@ -408,9 +408,9 @@ export function setWorkKindSqlite(
   nodeId: string,
   kindId: string,
   method: ProgressMethod,
-  milestones: Milestone[]
+  opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
 ): void {
-  setProgressMethodSqlite(nodeId, method, { milestones });
+  setProgressMethodSqlite(nodeId, method, opts);
   db.update(schema.wbsNodes)
     .set({ workKind: kindId })
     .where(eq(schema.wbsNodes.id, nodeId))

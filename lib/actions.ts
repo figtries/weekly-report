@@ -298,18 +298,22 @@ export async function setWorkKindAction(
   rowName: string,
   kindId: string,
   shape: Shape,
-  steps?: Milestone[]
+  opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null } = {}
 ): Promise<ActionResult> {
-  // A quote and a hand-typed percent are both lumpsum; a gate and a ladder are
-  // both milestone. The kind decides the question, the shape decides the method.
-  const method: ProgressMethod = shape === 'quote' ? 'lumpsum' : 'milestone';
-  const milestones = steps ?? ladderFor(kindId, shape, rowName, BUILT_IN_KINDS);
+  // One door for all four forms, because the panel now asks one question. A
+  // gate and a ladder are both milestone, a typed percent is lumpsum, and a
+  // count is qty carrying the total it was given.
+  const method: ProgressMethod =
+    shape === 'qty' ? 'qty' : shape === 'manual' ? 'lumpsum' : 'milestone';
+  const milestones = opts.steps ?? ladderFor(kindId, shape, rowName, BUILT_IN_KINDS);
+  const methodOpts =
+    shape === 'qty' ? { vol: opts.vol, satuan: opts.satuan } : { milestones };
 
   const projectId = await sqliteProject();
-  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, milestones));
+  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts));
   try {
     await mutateDb((db) => {
-      applyProgressMethod(db, leafId, method, { milestones });
+      applyProgressMethod(db, leafId, method, methodOpts);
       const item = db.wbsItems.find((i) => i.id === leafId);
       if (item) item.workKind = kindId;
     });
