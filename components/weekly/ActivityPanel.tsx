@@ -515,7 +515,7 @@ function PanelBody({
                 count, and then the evidence takes over again. Nothing is
                 asked, and nothing has to be pressed first. */}
             <div className="mt-4 border-t border-border/60 pt-3">
-              <div className="mx-auto flex h-12 w-full max-w-[11rem] items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
+              <div className="flex h-12 w-full items-center justify-center gap-1 rounded-xl border border-input bg-card shadow-sm transition-colors duration-200 ease-ios focus-within:ring-2 focus-within:ring-chart-1">
               <input
                 /* TEXT, NEVER `type="number"`. A number input renders its value
                    through the BROWSER's locale, so "100.0" came back on screen
