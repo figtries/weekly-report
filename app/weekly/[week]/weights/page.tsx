@@ -51,8 +51,8 @@ async function WeightsPageBody() {
               on a site can answer "what percent is this now" — the workbook
               this replaces asked them 176 times a week and got guesses. */}
           <span className="font-semibold text-foreground">
-            Set each activity up once. Type only the prices you have, and say how the work will
-            be counted. Then every week you count instead of estimating.
+            Give each activity its share of the heading it sits in, or its own price if you have
+            one. The weights add up from there.
           </span>
         </PageHeader>
 

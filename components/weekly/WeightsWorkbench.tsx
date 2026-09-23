@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
+import { CornerDownRight, Sigma } from 'lucide-react';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import { updateRowTextAction } from '@/lib/sheet-actions';
@@ -26,7 +27,6 @@ import { cn } from '@/lib/utils';
 
 // Loaded on demand: nobody opens this on the way past, and the field crew's
 // connection is what the initial bundle is measured against.
-const MeasurePanel = dynamic(() => import('./MeasurePanel'), { ssr: false });
 const DeriveWeightsDialog = dynamic(() => import('./DeriveWeightsDialog'), { ssr: false });
 
 /**
@@ -86,8 +86,6 @@ export default function WeightsWorkbench({
    */
   const [typedPct, setTypedPct] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<string | null>(null);
-  /** The row whose measurement panel is open. ONE panel, pointed at a row. */
-  const [measuring, setMeasuring] = useState<WeightsRow | null>(null);
   const [deriving, setDeriving] = useState(false);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -338,7 +336,6 @@ export default function WeightsWorkbench({
           setTypedPct={setTypedPct}
           onCommit={commitPrice}
           onCommitPercent={commitPercent}
-          onMeasure={setMeasuring}
           onBack={() => setOpenUnit(null)}
         />
       ) : (
@@ -381,7 +378,6 @@ export default function WeightsWorkbench({
               setTypedPct={setTypedPct}
               onCommit={commitPrice}
               onCommitPercent={commitPercent}
-              onMeasure={setMeasuring}
               showBoth={false}
               scopeLabel="project"
             />
@@ -401,20 +397,6 @@ export default function WeightsWorkbench({
           onClose={() => setDeriving(false)}
           onApplied={() => {
             setDeriving(false);
-            router.refresh();
-          }}
-        />
-      )}
-
-      {measuring && (
-        <MeasurePanel
-          row={measuring}
-          onClose={() => setMeasuring(null)}
-          onSaved={() => {
-            setMeasuring(null);
-            // The server owns the method, the quantity and the step list, so
-            // the page is re-read rather than patched here. Nothing typed is
-            // lost: prices commit on blur and are already saved.
             router.refresh();
           }}
         />
@@ -1189,7 +1171,6 @@ function UnitRows({
   setTypedPct,
   onCommit,
   onCommitPercent,
-  onMeasure,
   onBack,
 }: {
   unit: WeightsUnit;
@@ -1207,7 +1188,6 @@ function UnitRows({
   setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
   onCommitPercent: (rowId: string, raw: string) => void;
-  onMeasure: (row: WeightsRow) => void;
   onBack: () => void;
 }) {
   return (
@@ -1262,9 +1242,9 @@ function UnitRows({
         setTypedPct={setTypedPct}
         onCommit={onCommit}
         onCommitPercent={onCommitPercent}
-        onMeasure={onMeasure}
         showBoth
         scopeLabel={unit.code || 'this unit'}
+        rootParent={unit.code || unit.name}
       />
 
       <p className="px-1 text-[13px] text-muted-foreground">
@@ -1295,9 +1275,9 @@ function RowList({
   setTypedPct,
   onCommit,
   onCommitPercent,
-  onMeasure,
   showBoth,
   scopeLabel,
+  rootParent,
   lockRoot = false,
 }: {
   rows: WeightsRow[];
@@ -1315,10 +1295,11 @@ function RowList({
   setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
   onCommitPercent: (rowId: string, raw: string) => void;
-  onMeasure: (row: WeightsRow) => void;
   /** Whether the scope figure and the project figure are different questions. */
   showBoth: boolean;
   scopeLabel: string;
+  /** What the top rows of this list sit inside: the card that was opened. */
+  rootParent?: string;
   /**
    * Draw the top of the WBS as a heading rather than as something to price.
    *
@@ -1349,6 +1330,25 @@ function RowList({
   useEffect(() => {
     if (focusRow) focusRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [focusRow]);
+
+  // What each row sits inside, and how many rows sit directly inside each
+  // branch. The list used to say this by INDENTING, which gave every depth a
+  // different width of card and made the page read as a staircase (23 Sep
+  // 2026). It is said in words now, so every card can be the same shape.
+  const parentOf = new Map<string, string>();
+  const childrenOf = new Map<string, number>();
+  const stack: WeightsRow[] = [];
+  for (const r of rows) {
+    while (stack.length > 0 && stack[stack.length - 1].depth >= r.depth) stack.pop();
+    const up = stack[stack.length - 1];
+    if (up) {
+      parentOf.set(r.id, up.code || up.name);
+      childrenOf.set(up.id, (childrenOf.get(up.id) ?? 0) + 1);
+    } else if (rootParent) {
+      parentOf.set(r.id, rootParent);
+    }
+    stack.push(r);
+  }
 
   return (
     <>
@@ -1386,22 +1386,25 @@ function RowList({
           // At most one line, and never the same number twice. Inside an SPK
           // the project figure is a different question and earns its place;
           // on the project's own list it would be the figure above, restated.
-          const note = [
-            showBoth ? `${overall.toFixed(2)}% of project` : '',
-            row.isLeaf && !decided ? (row.share === 'factor' ? 'set fraction' : 'even share') : '',
-          ]
-            .filter(Boolean)
-            .join(' · ');
+          // Where a figure is still provisional it says so on the date line,
+          // which has the width for it: squeezed under the bar it was cut to
+          // "0.18% of project ..." once that line stopped wrapping.
+          const note = showBoth ? `${overall.toFixed(2)}% of project` : '';
+          const provisional =
+            row.isLeaf && !decided ? (row.share === 'factor' ? 'set fraction' : 'even share') : '';
 
           return (
             <div
               key={row.id}
-              // Stacked below `sm`. The name gets the full width there because
-              // it is what someone identifies a row BY: squeezed into a column
-              // beside a price box at 390px, "2 Procurement Material" and
-              // "3 Procurement Material Solar" both came out as
-              // "Procurement ..." and the list became unreadable. Same lesson
-              // the planner learned about its own name column.
+              // ONE SHAPE FOR EVERY ROW, whatever it is (23 Sep 2026). Every
+              // card is full width and carries the same four lines (code,
+              // name, one line about it, value), each at a fixed height, so a
+              // branch, a leaf and a row with a share all come out the same
+              // size. What changes between them is the words, never the box.
+              // Stacked below `sm`, and the name keeps the full width there:
+              // squeezed beside a price box at 390px, "2 Procurement
+              // Material" and "3 Procurement Material Solar" both came out as
+              // "Procurement ..." and the list became unreadable.
               ref={focused ? focusRef : undefined}
               className={cn(
                 'rounded-xl bg-card px-3.5 py-3 shadow-sm ring-1 transition-colors duration-300 ease-ios sm:flex sm:items-center sm:gap-3',
@@ -1413,52 +1416,76 @@ function RowList({
                 over && 'bg-destructive/[0.04] ring-destructive/40',
                 focused && 'ring-2 ring-destructive'
               )}
-              style={{ marginLeft: `${Math.min(row.depth, 4) * 12}px` }}
             >
               <div className="min-w-0 sm:flex-1">
-                <p className="line-clamp-2 text-[15px] font-medium">
-                  {row.code} {row.name}
-                </p>
-                {!row.isLeaf ? (
-                  over ? (
-                    // The two figures the fix is made of, on the row itself, so
-                    // arriving here from the list above needs no second reading.
-                    <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-                      Holds{' '}
-                      <strong className="tabular-nums text-foreground">
-                        {formatMoney(over.budget, currency)}
-                      </strong>
-                      , its rows take{' '}
-                      <strong className="tabular-nums text-foreground">
-                        {formatMoney(over.claimed, currency)}
-                      </strong>{' '}
-                      <strong className="tabular-nums text-destructive">
-                        · over by {formatMoney(over.over, currency)}
-                      </strong>
-                    </p>
-                  ) : (
-                    <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-                      Branch. Its figure is the rows beneath it.
-                    </p>
-                  )
-                ) : (
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {/* The schedule, read only. It sits here because in the
-                        workbook this replaces Duration / Start / Finish are the
-                        columns immediately beside Price, and the weekly plan is
-                        derived from them. Without it the screen looks like it
-                        only does money. */}
-                    {row.start && row.finish ? (
-                      <span className="text-[12.5px] tabular-nums text-muted-foreground">
-                        {fmtDay(row.start)} to {fmtDay(row.finish)}
-                        {row.durationDays ? ` · ${row.durationDays}d` : ''}
-                      </span>
+                <div className="flex h-6 items-center justify-between gap-2">
+                  <span className="truncate text-[12.5px] font-semibold tabular-nums text-muted-foreground">
+                    {row.code}
+                  </span>
+                  {/* What the row is counted INSIDE, in place of the indent
+                      that used to say it. Named rather than drawn, because the
+                      row directly above is only the parent for the first child;
+                      for every later sibling it is somebody else. */}
+                  {parentOf.has(row.id) && (
+                    <span className="inline-flex h-6 min-w-0 max-w-[70%] shrink-0 items-center gap-1 rounded-full bg-chart-1/10 px-2 text-[12px] font-semibold text-chart-1">
+                      <CornerDownRight className="size-3.5 shrink-0" aria-hidden />
+                      <span className="truncate">Part of {parentOf.get(row.id)}</span>
+                    </span>
+                  )}
+                </div>
+                {/* Name and its one line, in a block always as tall as a
+                    two-line name. 58 of the 304 names in this database run past
+                    what one line holds at 390px, and a card that is sometimes
+                    one line taller is the same staircase the indent was. The
+                    spare room sits UNDER the caption, so a short name never
+                    leaves a hole between itself and what it says about it. */}
+                <div className="mt-0.5 min-h-[68px]">
+                  <p className="line-clamp-2 text-[15px] leading-[22px] font-medium">
+                    {row.name}
+                  </p>
+                  {!row.isLeaf ? (
+                    over ? (
+                      // The two figures the fix is made of, on the row itself, so
+                      // arriving here from the list above needs no second reading.
+                      // The overrun goes FIRST: this line never wraps, so whatever
+                      // a narrow screen cuts off is the part that matters least.
+                      <p className="mt-1 h-5 truncate text-[12.5px] leading-5 text-muted-foreground">
+                        <strong className="tabular-nums text-destructive">
+                          Over by {formatMoney(over.over, currency)}
+                        </strong>
+                        {' · holds '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(over.budget, currency)}
+                        </strong>
+                        {', rows take '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(over.claimed, currency)}
+                        </strong>
+                      </p>
                     ) : (
-                      <span className="text-[12.5px] text-muted-foreground">Not scheduled yet</span>
-                    )}
-                    <MeasureChip row={row} onOpen={() => onMeasure(row)} />
-                  </div>
-                )}
+                      <p className="mt-1 flex h-5 min-w-0 items-center gap-1 text-[12.5px] leading-5 text-muted-foreground">
+                        <Sigma className="size-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">
+                          {childrenOf.get(row.id)
+                            ? `Total of the ${childrenOf.get(row.id)} ${childrenOf.get(row.id) === 1 ? 'row' : 'rows'} inside it`
+                            : 'Its figure is the rows beneath it'}
+                        </span>
+                      </p>
+                    )
+                  ) : (
+                    // The schedule, read only. It sits here because in the
+                    // workbook this replaces Duration / Start / Finish are the
+                    // columns immediately beside Price, and the weekly plan is
+                    // derived from them. Without it the screen looks like it
+                    // only does money.
+                    <p className="mt-1 h-5 truncate text-[12.5px] leading-5 tabular-nums text-muted-foreground">
+                      {row.start && row.finish
+                        ? `${fmtDay(row.start)} to ${fmtDay(row.finish)}${row.durationDays ? ` · ${row.durationDays}d` : ''}`
+                        : 'Not scheduled yet'}
+                      {provisional && ` · ${provisional}`}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-2 flex items-center gap-3 sm:mt-0 sm:shrink-0">
@@ -1514,8 +1541,10 @@ function RowList({
                       }}
                     />
                   </div>
-                  {note && (
-                    <span className="mt-1.5 block text-right text-[12px] tabular-nums text-muted-foreground">
+                  {/* On every card of a list or on none of them, so no card is a
+                      line shorter than its neighbour. */}
+                  {showBoth && (
+                    <span className="mt-1.5 block h-5 truncate text-right text-[12px] leading-5 tabular-nums text-muted-foreground">
                       {note}
                     </span>
                   )}
@@ -1589,7 +1618,7 @@ function ValueField({
       .join('') || currency;
 
   return (
-    <div className="mt-2 min-w-0 flex-1 sm:mt-0 sm:w-44 sm:flex-none">
+    <div className="min-w-0 flex-1 sm:w-44 sm:flex-none">
       <div className="flex items-stretch gap-2">
         <div className="inline-flex shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/12">
           {(['pct', 'money'] as const).map((m) => (
@@ -1639,62 +1668,23 @@ function ValueField({
       </div>
 
       {/* The other unit, said back. In money mode the weight column beside this
-          one already answers it, so it would be the same number twice. */}
-      {mode === 'pct' && (
-        <p
-          className={cn(
-            'mt-1.5 text-right tabular-nums',
-            money > 0
-              ? 'text-[13px] font-semibold text-foreground/80'
-              : 'text-[12px] text-muted-foreground'
-          )}
-        >
-          {money > 0 ? `= ${formatMoney(money, currency)}` : 'No budget above it yet'}
-        </p>
-      )}
+          one already answers it, so it would be the same number twice, but the
+          line stays, empty, so switching the unit never resizes the card. */}
+      <p
+        className={cn(
+          'mt-1.5 h-5 truncate text-right leading-5 tabular-nums',
+          money > 0
+            ? 'text-[13px] font-semibold text-foreground/80'
+            : 'text-[12px] text-muted-foreground'
+        )}
+      >
+        {mode !== 'pct'
+          ? '\u00a0'
+          : money > 0
+            ? `= ${formatMoney(money, currency)}`
+            : 'No budget above it yet'}
+      </p>
     </div>
-  );
-}
-
-/**
- * How this row will be measured, as a control rather than as a caption.
- *
- * It is a BUTTON on every row, including the rows that are fine, because the
- * thing being said is a decision someone can change and quiet text saying
- * "percent" would read as a label rather than as an offer. The estimated state
- * is the one that has to carry weight: 233 of this database's 236 leaves sit on
- * a typed percent, which is the workbook's own failure reproduced, so it is
- * drawn as something unfinished rather than as a neutral default.
- */
-function MeasureChip({ row, onOpen }: { row: WeightsRow; onOpen: () => void }) {
-  // Phrased as what the person DOES every week, not as the name of a setting.
-  // "Quantity" is a category; "450 m to count" is an instruction, and it also
-  // shows the total back so a wrong one is caught here rather than in month
-  // three when the percentage stops making sense.
-  const label =
-    row.method === 'qty'
-      ? `${row.qtyTotal ?? '?'} ${row.qtyUnit ?? 'units'} to count`
-      : row.method === 'milestone'
-        ? `${row.steps} steps to tick`
-        : row.method === 'linked'
-          ? 'From the document register'
-          : 'Percent, typed';
-
-  return (
-    <m.button
-      {...pressMotion}
-      onClick={onOpen}
-      className={cn(
-        'inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold ring-1 transition-colors duration-300 ease-ios',
-        row.estimated
-          ? 'bg-warn-soft text-warn ring-warn/30 hover:bg-warn/15'
-          : 'bg-ok-soft text-ok ring-ok/25 hover:bg-ok/15'
-      )}
-      title="Choose how this activity is measured"
-    >
-      {row.estimated && <span aria-hidden>!</span>}
-      {label}
-    </m.button>
   );
 }
 
