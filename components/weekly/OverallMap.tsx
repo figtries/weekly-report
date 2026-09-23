@@ -125,7 +125,6 @@ export default function OverallMap({
   canPrice,
   projectHref,
   checkHref,
-  weightsHref,
   initialLens = null,
 }: {
   map: MapModel;
@@ -140,8 +139,6 @@ export default function OverallMap({
   canPrice: boolean;
   projectHref: string | null;
   checkHref: string;
-  /** The bulk pricing screen, or null for a project that cannot be priced here. */
-  weightsHref: string | null;
   /** Arrived via `?lens=manual` from the Check screen. Read once, on mount. */
   initialLens?: Lens;
 }) {
@@ -351,45 +348,6 @@ export default function OverallMap({
             ? 'Nothing matches. Clear the search, or turn off the filter above, to see the whole project.'
             : 'Nothing matches. Clear the search to see the whole project.'}
         </p>
-      )}
-
-      {/* The bulk tool, said quietly. Typing two hundred prices one panel at a
-          time is an afternoon nobody should spend, so the screen that does them
-          together is still here — it just stopped being a destination in the
-          header, which is what made Data Overall three screens to remember. */}
-      {weightsHref && (
-        <div className="border-t border-border p-3">
-          <a
-            href={weightsHref}
-            className="flex min-h-12 items-center gap-2.5 rounded-xl px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-chart-1/10 text-chart-1">
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path
-                  d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            <span className="min-w-0 flex-1">Weights: what each activity is worth</span>
-            <svg
-              className="h-[18px] w-[18px] shrink-0 text-foreground/35"
-              viewBox="0 0 20 20"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M7.5 4.5l6 5.5-6 5.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </a>
-        </div>
       )}
 
       <ActivityPanel
