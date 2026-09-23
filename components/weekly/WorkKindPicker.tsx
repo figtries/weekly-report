@@ -152,13 +152,19 @@ export default function WorkKindPicker({
         ))}
       </div>
 
-      <div className="mt-3 flex gap-2">
+      {/* The SAME grid as the four answers above, so Cancel and Save sit
+          exactly under their columns. A flex row with `flex-1` on both made
+          Cancel wider than Save, because its border and padding are added on
+          top of an equal share, and the two rows visibly missed each other.
+          Same height and corner as the answers too: one block, not a form
+          with a button bar bolted on. */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
         {onCancel && (
           <m.button
             {...pressMotion}
             type="button"
             onClick={onCancel}
-            className="min-h-12 flex-1 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
+            className="min-h-14 rounded-2xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
           >
             Cancel
           </m.button>
@@ -168,7 +174,10 @@ export default function WorkKindPicker({
           type="button"
           onClick={save}
           disabled={!kindId}
-          className="btn-primary min-h-12 flex-1 rounded-xl text-sm font-medium disabled:opacity-40"
+          className={cn(
+            'btn-primary min-h-14 rounded-2xl px-3 text-sm font-medium disabled:opacity-40',
+            !onCancel && 'col-span-2'
+          )}
         >
           Save
         </m.button>

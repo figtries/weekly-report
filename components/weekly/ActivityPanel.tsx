@@ -4,6 +4,7 @@ import { AnimatePresence, m } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { ArrowLeftRight } from 'lucide-react';
 
 import {
   markNoProgressAction,
@@ -538,11 +539,11 @@ function PanelBody({
                     <span className="block text-[11px] text-muted-foreground">Kind of work</span>
                     <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-primary">
+                  {/* The exchange arrows, not a chevron: a › reads as "next",
+                      and this goes BACK to the question to swap the answer. */}
+                  <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-primary">
+                    <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     Change
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                      <path d="M8 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
                   </span>
                 </button>
                 <ProgressEntry
