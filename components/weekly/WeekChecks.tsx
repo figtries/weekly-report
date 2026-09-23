@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { Finding, ValidationResult } from '@/lib/analysis';
+import { ChevronRight } from 'lucide-react';
+import { blockingIds, type Finding, type ValidationResult } from '@/lib/analysis';
 import { Reveal } from '@/components/motion/Reveal';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +28,7 @@ const STYLE: Record<
   ok: { ring: 'ring-foreground/10', icon: 'bg-ok text-white', mark: '✓', label: 'text-ok' },
 };
 
-function CheckRow({ f }: { f: Finding }) {
+function CheckRow({ f, week }: { f: Finding; week: number }) {
   const s = STYLE[f.level];
   return (
     <li className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
@@ -50,31 +51,48 @@ function CheckRow({ f }: { f: Finding }) {
             whose evidence is three names glued into a sentence cannot be
             scanned, and the person then has to go hunting for the other three. */}
         {f.rows && f.rows.length > 0 && (
-          <ul className="mt-2.5 divide-y rounded-lg bg-muted/50">
+          <ul className="mt-2.5 divide-y overflow-hidden rounded-lg bg-muted/50">
             {/* Index in the key, not the label alone: a WBS legitimately
                 carries the same description under several parents ("RTS",
                 "Material On Site" each appear more than once on Gundih), and
                 React drops the duplicates. */}
-            {f.rows.slice(0, 6).map((r, i) => (
-              <li
-                key={`${i}-${r.label}`}
-                className="flex items-start justify-between gap-3 px-3 py-2 text-[13px]"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate">{r.label}</span>
-                  {/* The last two ancestors. Without them six rows read
-                      "RTS", "Material On Site", "RTS" — the same WBS
-                      description under different parents — and the person is
-                      sent to the Update screen with nothing to search for. */}
-                  {r.trail && (
-                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                      {r.trail}
-                    </span>
+            {f.rows.slice(0, 6).map((r, i) => {
+              const body = (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{r.label}</span>
+                    {/* The last two ancestors. Without them six rows read
+                        "RTS", "Material On Site", "RTS" — the same WBS
+                        description under different parents. */}
+                    {r.trail && (
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                        {r.trail}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">{r.value}</span>
+                </>
+              );
+              return (
+                <li key={`${i}-${r.label}`} className="text-[13px]">
+                  {/* A row is a way INTO the item, not a description of it:
+                      pressing it opens that activity's panel on Fill in, where
+                      the figure is edited. The chevron is what tells a phone,
+                      which has no hover, that the row can be pressed. */}
+                  {r.id ? (
+                    <Link
+                      href={`/weekly/${week}/overall?item=${encodeURIComponent(r.id)}`}
+                      className="flex min-h-11 items-center gap-3 px-3 py-2 transition-colors duration-200 ease-ios hover:bg-muted active:bg-muted"
+                    >
+                      {body}
+                      <ChevronRight className="h-4 w-4 shrink-0 text-foreground/40" strokeWidth={2} aria-hidden="true" />
+                    </Link>
+                  ) : (
+                    <div className="flex items-start gap-3 px-3 py-2">{body}</div>
                   )}
-                </span>
-                <span className="shrink-0 font-semibold tabular-nums">{r.value}</span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
             {f.rows.length > 6 && (
               <li className="px-3 py-2 text-[12px] text-muted-foreground">
                 and {f.rows.length - 6} more
@@ -108,6 +126,7 @@ export default function WeekChecks({
 }) {
   const { findings, errors, warnings, canIssue } = validation;
   const passed = findings.filter((f) => f.level === 'ok').length;
+  const blocking = blockingIds(validation).length > 0;
 
   // Worst first. Someone opening this screen wants the thing that stops them,
   // not a list in the order the code happened to run its checks.
@@ -149,13 +168,21 @@ export default function WeekChecks({
                 </p>
               </div>
             </div>
-            {/* Plain navigation, not "fix these": the queue on that screen
-                lists what is DUE this week, and a failing item is not
-                necessarily due — promising a jump straight to it would be a
-                promise this button cannot keep. The names are listed below so
-                they can be searched there. */}
+            {/* Straight to the items that block the week. Fill in opens showing
+                only those, with the first one's panel already up, so closing
+                it leaves the rest in front of you. The set is worked out again
+                on that page from the same `validateWeek`, so the URL carries a
+                word and not a list of ids. A failure with no item behind it
+                (the weights not closing) has nothing to open, and then this is
+                plain navigation, as it always was. */}
             <Link
-              href={`/weekly/${week}/${canIssue ? 'summary' : 'overall'}`}
+              href={
+                canIssue
+                  ? `/weekly/${week}/summary`
+                  : blocking
+                    ? `/weekly/${week}/overall?lens=blocking`
+                    : `/weekly/${week}/overall`
+              }
               className={cn(
                 'inline-flex min-h-11 shrink-0 items-center rounded-xl px-4 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]',
                 canIssue ? 'bg-ok' : 'bg-bad'
@@ -179,7 +206,7 @@ export default function WeekChecks({
           </div>
           <ul className="divide-y">
             {sorted.map((f) => (
-              <CheckRow key={f.title} f={f} />
+              <CheckRow key={f.title} f={f} week={week} />
             ))}
           </ul>
         </div>

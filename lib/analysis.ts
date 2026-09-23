@@ -176,6 +176,12 @@ export interface FindingRow {
    * identical-looking rows and no way to tell which one failed.
    */
   trail?: string;
+  /**
+   * The leaf's id, which is the map node's id too, so the Check screen can send
+   * the person straight into this item's panel on Fill in
+   * (`/weekly/[week]/overall?item=`) instead of leaving them to search for it.
+   */
+  id?: string;
 }
 
 export interface Finding {
@@ -196,6 +202,19 @@ export interface ValidationResult {
   warnings: number;
   /** False blocks issuing the report. */
   canIssue: boolean;
+}
+
+/**
+ * The items that stop the week being issued, worst check first, each once.
+ * Shared by the Check screen's button and the Fill in page that button opens,
+ * so the two cannot disagree about which items those are.
+ */
+export function blockingIds(validation: ValidationResult): string[] {
+  const ids = validation.findings
+    .filter((f) => f.level === 'error')
+    .flatMap((f) => (f.rows ?? []).map((r) => r.id))
+    .filter((id): id is string => !!id);
+  return [...new Set(ids)];
 }
 
 /**
@@ -282,6 +301,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
             label: n.deskripsi,
             value: `${round(n.prevProgressPct)}% → ${round(n.curProgressPct)}%`,
             trail: trails.get(n.id),
+            id: n.id,
           })),
         }
       : {
@@ -345,6 +365,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
                   ? `${fmtPct(e.behindPct)} behind`
                   : `week ${e.weekOfSpan} of ${e.spanWeeks}`,
               trail: trails.get(e.node.id),
+              id: e.node.id,
             })),
           }
         : worklist.done.length > 0
@@ -378,6 +399,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
             label: s.node.deskripsi,
             value: `${round(s.pct)}% · ${s.weeksLate}w late`,
             trail: trails.get(s.node.id),
+            id: s.node.id,
           })),
         }
       : {
@@ -495,6 +517,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
             label: n.deskripsi,
             value: '0%',
             trail: trails.get(n.id),
+            id: n.id,
           })),
         }
       : {

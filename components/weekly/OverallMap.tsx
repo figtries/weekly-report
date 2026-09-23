@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { memo, useMemo, useState, type ReactNode } from 'react';
+import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Clock, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
@@ -116,9 +116,10 @@ const WeightPill = ({ weight }: { weight: number }) =>
  * screen's "N of M figures were typed by hand" line links here rather than
  * inventing a second filtering concept, because `matchingIds` already keeps
  * a node's whole ancestor chain for anything it keeps, whatever the
- * predicate checks.
+ * predicate checks. `'blocking'` is the Check screen's "Back to Fill in":
+ * the items that stop the week being issued, and nothing else.
  */
-type Lens = 'due' | 'manual' | null;
+type Lens = 'due' | 'manual' | 'blocking' | null;
 
 /**
  * The reminders (23 Sep 2026): past their finish and still short, or finishing
@@ -139,6 +140,8 @@ export default function OverallMap({
   canPrice,
   projectHref,
   initialLens = null,
+  blockingIds = [],
+  initialItem = null,
 }: {
   map: MapModel;
   week: number;
@@ -151,11 +154,34 @@ export default function OverallMap({
   projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
-  /** Arrived via `?lens=manual` from the Check screen. Read once, on mount. */
+  /** Arrived via `?lens=` from the Check screen. Read once, on mount. */
   initialLens?: Lens;
+  /** What the `'blocking'` lens keeps. */
+  blockingIds?: string[];
+  /** Arrived via `?item=` (or the first blocking item): its panel opens on arrival. */
+  initialItem?: string | null;
 }) {
-  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // The path down to the item the Check screen pointed at is opened for you,
+  // so closing its panel leaves the row itself on screen, not four collapsed
+  // contracts with the row somewhere inside one of them.
+  const [openIds, setOpenIds] = useState<Set<string>>(
+    () => new Set(initialItem ? trailOf(map.units, initialItem).map((n) => n.id) : [])
+  );
+  const [activeId, setActiveId] = useState<string | null>(initialItem);
+  // The panel is a portal onto `document.body`, which does not exist on the
+  // server, so it is held back until the client is live. The same
+  // `useSyncExternalStore` Sidebar uses rather than a mounted flag set in an
+  // effect: no setState in an effect, and no extra render pass.
+  const onClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  // FROZEN AT ARRIVAL. The page works the set out again on every refresh, and
+  // an item fixed a moment ago drops out of it — reading it live would make the
+  // row you just saved vanish from under you, and the last fix would leave a
+  // map saying "Nothing matches". Kept, it stays on screen with its new figure.
+  const [blocking] = useState(() => new Set(blockingIds));
   const [reminder, setReminder] = useState<Reminder>(null);
   const [allReminders, setAllReminders] = useState(false);
   const [lens, setLens] = useState<Lens>(initialLens);
@@ -217,10 +243,11 @@ export default function OverallMap({
       // never matches this arm directly — it is pulled in as an ancestor of a
       // matching leaf instead, same as every branch above a "due" leaf.
       if (lens === 'manual' && n.source !== 'manual') return false;
+      if (lens === 'blocking' && !blocking.has(n.id)) return false;
       if (needle && !`${n.code} ${n.name}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [units, needle, lens]);
+  }, [units, needle, lens, blocking]);
 
   /**
    * A filter opens the map for you. Leaving it collapsed would show four
@@ -234,7 +261,7 @@ export default function OverallMap({
     return next;
   }, [filter, folded, openIds]);
 
-  const active = findNode(units, activeId);
+  const active = onClient ? findNode(units, activeId) : null;
   const trail = useMemo(() => (activeId ? trailOf(units, activeId) : []), [units, activeId]);
 
   /**
@@ -267,14 +294,30 @@ export default function OverallMap({
             the two lenses answer different questions and can both be true of
             the same row, so they get their own on/off rather than sharing
             one button that could only ever say one of them. */}
-        {lens === 'manual' && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-chart-1/30 bg-chart-1/10 px-3.5 py-2.5 text-[13px] font-medium text-chart-1">
-            <span>Showing the figures typed by hand</span>
+        {/* `'blocking'` wears the Check screen's red, because it is that
+            screen's verdict carried over: these are what stop the week. */}
+        {(lens === 'manual' || lens === 'blocking') && (
+          <div
+            className={cn(
+              'mb-3 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-[13px] font-medium',
+              lens === 'blocking'
+                ? 'border-bad/30 bg-bad-soft text-bad'
+                : 'border-chart-1/30 bg-chart-1/10 text-chart-1'
+            )}
+          >
+            <span>
+              {lens === 'blocking'
+                ? `Showing the ${blocking.size} ${blocking.size === 1 ? 'item' : 'items'} that stop week ${week} being issued`
+                : 'Showing the figures typed by hand'}
+            </span>
             <m.button
               {...pressMotion}
               type="button"
               onClick={() => setLens(null)}
-              className="flex min-h-11 shrink-0 items-center rounded-lg px-2.5 text-[12px] font-semibold text-chart-1 hover:bg-chart-1/10"
+              className={cn(
+                'flex min-h-11 shrink-0 items-center rounded-lg px-2.5 text-[12px] font-semibold',
+                lens === 'blocking' ? 'text-bad hover:bg-bad/10' : 'text-chart-1 hover:bg-chart-1/10'
+              )}
             >
               Show everything
             </m.button>

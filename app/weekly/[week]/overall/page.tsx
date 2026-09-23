@@ -16,6 +16,7 @@ import SetupGuideCard from '@/components/weekly/SetupGuideCard';
 import { getOpenProject } from '@/lib/legacy-bridge';
 import { loadWeightsScreen } from '@/lib/weights-screen';
 import { formatMoney } from '@/lib/currency';
+import { blockingIds, validateWeek } from '@/lib/analysis';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -35,7 +36,10 @@ type PageProps = {
   // needs under cacheComponents — and `unstable_disableValidation` above is
   // what keeps a new searchParam from failing the build the way `?only=` did
   // under this same `/weekly/[week]` layout (see app/print/weekly/[week]).
-  searchParams: Promise<{ lens?: string }>;
+  //
+  // `?item=` and `?lens=blocking` arrive the same way, from the Check screen's
+  // item rows and its "Back to Fill in" button.
+  searchParams: Promise<{ lens?: string; item?: string }>;
 };
 
 /**
@@ -52,11 +56,23 @@ export default function DataOverallPage({ params, searchParams }: PageProps) {
 }
 
 async function DataOverallPageBody({ params, searchParams }: PageProps) {
-  const [{ week: weekParam }, { lens }] = await Promise.all([params, searchParams]);
+  const [{ week: weekParam }, { lens, item }] = await Promise.all([params, searchParams]);
   const week = Number(weekParam);
-  const initialLens = lens === 'manual' ? ('manual' as const) : null;
   const [db, result] = await Promise.all([getOpenDb(), getOpenWeekRollup(week)]);
   if (!result) notFound();
+
+  // The items that stop this week, asked of the same `validateWeek` the Check
+  // screen shows, so "Back to Fill in" opens exactly the rows listed there.
+  // With none behind it (every failure is a total, not an item) the lens has
+  // nothing to show, so it falls back to the whole map.
+  const blocking = lens === 'blocking' ? blockingIds(validateWeek(db, week)) : [];
+  const initialLens =
+    lens === 'manual'
+      ? ('manual' as const)
+      : blocking.length > 0
+        ? ('blocking' as const)
+        : null;
+  const initialItem = item ?? blocking[0] ?? null;
   const { roots, grandTotal } = result;
   const period = weekPeriodShort(db.project.weekAnchorEndDate, week);
 
@@ -249,6 +265,8 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           canPrice={!!open && !open.legacyJsonId}
           projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
           initialLens={initialLens}
+          blockingIds={blocking}
+          initialItem={initialItem}
         />
       </Reveal>
     </div>
