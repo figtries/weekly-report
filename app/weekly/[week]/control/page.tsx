@@ -3,7 +3,6 @@ import { computeHealth, validateWeek } from '@/lib/analysis';
 import { computeRollup, flattenTree, promoteNestedSpkContracts } from '@/lib/rollup';
 import { getOpenDb } from '@/lib/data';
 import WeekChecks from '@/components/weekly/WeekChecks';
-import PageHeader from '@/components/layout/PageHeader';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 
@@ -79,17 +78,7 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
   return (
     <RouteTransition id="weekly-control">
       <div className="space-y-4 px-3 py-4 sm:p-6 lg:p-8 print:hidden">
-        <PageHeader
-          section="Data Overall"
-          title="Check the figures"
-          className="mb-0 animate-enter"
-        >
-          <span className="font-medium text-foreground">Week {week}</span> · Nothing to fill in
-          here. The app goes through what you entered and says what is wrong with it, before the
-          report is printed.
-        </PageHeader>
-
-        <div className="animate-enter stagger-1">
+        <div className="animate-enter">
           <WeekChecks week={week} validation={validation} handTyped={handTyped} />
         </div>
       </div>
