@@ -298,8 +298,15 @@ function PanelBody({
   // The escape hatch: a one-off swap to the manual form, not a decision about
   // what the row is. Reset whenever the row starts measuring itself
   // differently, same keyed pattern as the draft above rather than an effect.
-  const [heldManual, setHeldManual] = useState<{ seed: string; manual: boolean }>(() => ({ seed, manual: false }));
-  const manual = heldManual.seed === seed ? heldManual.manual : false;
+  //
+  // A row whose standing figure WAS typed opens with the hatch already on,
+  // because that is how the server reads it: `resolveLeafProgress` lets a
+  // `source: 'manual'` figure win over the rungs. Opening it off showed the
+  // rungs' 0.0% over a row the map called 80%, counted that as a change, and
+  // Save wrote the zero over the 80 (PHSS Samberah, 23 Sep 2026).
+  const standsTyped = node.source === 'manual';
+  const [heldManual, setHeldManual] = useState<{ seed: string; manual: boolean }>(() => ({ seed, manual: standsTyped }));
+  const manual = heldManual.seed === seed ? heldManual.manual : standsTyped;
   const setManual = (v: boolean) => setHeldManual({ seed, manual: v });
   const shape: EntryShape = deriveShape(effectiveNode);
   const source: EntryShape = manual ? 'manual' : shape;

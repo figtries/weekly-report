@@ -189,6 +189,17 @@ check(
   nodeRow?.workKind === 'procurement',
   `read back as ${nodeRow?.workKind}`
 );
+// The column holding it is not enough: the SCREEN reads through
+// `buildProjectDashboardData`, and that adapter used to drop `work_kind`, so
+// every SQLite row came back unanswered and the panel asked again forever.
+const kindOnScreen = buildProjectDashboardData(project.id)?.db.wbsItems.find(
+  (i) => i.id === leaf.id
+)?.workKind;
+check(
+  'the work kind reaches the screen through the read path',
+  kindOnScreen === 'procurement',
+  `read path says ${kindOnScreen}`
+);
 check(
   'asking what kind of work a row is does not change how much of it is done',
   kindBefore > 0 && Math.abs(kindBefore - kindAfter) < 1e-9,
