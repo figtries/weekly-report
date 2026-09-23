@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 import { pressMotion } from '@/components/motion/Press';
 import { applyWeightsAction, previewWeightsAction, type WeightPreview } from '@/lib/weights-actions';
@@ -62,7 +63,9 @@ export default function DeriveWeightsDialog({
 
   const covers = preview ? preview.covers === preview.leaves : false;
 
-  return (
+  // Portalled to body for the same reason as MeasurePanel: under the
+  // workbench's transformed ancestor, `fixed` means that box, not the screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">
       <div className="animate-enter max-h-[90vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-background p-5 shadow-xl sm:rounded-2xl">
         <h2 className="text-lg font-semibold">Lock these weights</h2>
@@ -150,6 +153,7 @@ export default function DeriveWeightsDialog({
           </m.button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

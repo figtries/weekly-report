@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 import { pressMotion } from '@/components/motion/Press';
 import { setProgressMethodAction } from '@/lib/actions';
@@ -92,9 +93,13 @@ export default function MeasurePanel({
     });
   }
 
-  return (
-    // A plain fixed overlay, not a Radix Dialog: this screen already refuses
-    // Radix per row, and one hand-rolled panel keeps the whole list free of it.
+  // A plain fixed overlay, not a Radix Dialog: this screen already refuses
+  // Radix per row, and one hand-rolled panel keeps the whole list free of it.
+  // PORTALLED to body: the workbench sits under an animated (transformed)
+  // ancestor, and a transform makes `fixed` resolve against that box instead
+  // of the screen. Rendered in place, the dim covered only the list and the
+  // sheet landed at the bottom of a page-tall box, off screen until scrolled to.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6">
       <div className="animate-enter max-h-[90vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-background p-5 shadow-xl sm:rounded-2xl">
         <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -216,7 +221,8 @@ export default function MeasurePanel({
           </m.button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
