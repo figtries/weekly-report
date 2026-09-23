@@ -23,11 +23,18 @@ import { isLegacyProject } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 import {
   markNoProgressSqlite,
+  restoreLeafWeeksSqlite,
   saveFieldProgressSqlite,
+  saveLeafWeeksSqlite,
   saveWeekUpdatesSqlite,
   setProgressMethodSqlite,
   setWorkKindSqlite,
+  signedWeeksSqlite,
+  SignedWeeksError,
+  type LeafWeekBefore,
 } from './progress-sqlite';
+import { getPrintDb } from './data';
+import { buildLeafWeekLog, type LeafWeekLog, type WeekEvidence } from './week-log';
 import { and, eq } from 'drizzle-orm';
 import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
 import type { SetupDraft } from './setup-draft';
@@ -438,6 +445,96 @@ export async function revokeApprovalAction(week: number): Promise<ActionResult> 
     updateTag('db');
     refresh();
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* ------------------------------------------------ one activity, week by week */
+
+export type LeafWeeksResult = { ok: true; log: LeafWeekLog | null } | { ok: false; error: string };
+export type SaveLeafWeeksResult =
+  | { ok: true; log: LeafWeekLog | null; undo: LeafWeekBefore[] }
+  | { ok: false; error: string; signed?: number[] };
+
+/**
+ * The imported project's history agrees with its signed PDFs, and board item
+ * 08 is where the two stores get reconciled — not a panel. Said, not hidden.
+ */
+const READ_ONLY_HISTORY =
+  "This project's past weeks match its signed reports, so they can't be changed from here.";
+
+/**
+ * One leaf's log, read off the same `Database` the reports are built from —
+ * `getPrintDb` rather than the cookie, because the panel names its project.
+ */
+async function readLeafLog(nodeId: string, forProject?: string | null): Promise<LeafWeekLog | null> {
+  const projectId = forProject ?? (await getActiveProjectId());
+  const sqliteId = await sqliteProject(projectId);
+  const db = await getPrintDb(projectId ?? null);
+  const signedWeeks = sqliteId
+    ? signedWeeksSqlite(sqliteId)
+    : new Set((db.approvals ?? []).map((a) => a.week));
+  return buildLeafWeekLog(db, nodeId, { signedWeeks, editable: Boolean(sqliteId) });
+}
+
+/** Loaded when the panel opens, for the one activity in it — never for the whole map. */
+export async function getLeafWeeksAction(
+  nodeId: string,
+  forProject?: string | null
+): Promise<LeafWeeksResult> {
+  try {
+    return { ok: true, log: await readLeafLog(nodeId, forProject) };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Several weeks of one activity in one save — a single corrected week, or a
+ * "Repeat weekly" fill. Answers with the fresh log, so the panel redraws from
+ * what was written rather than from what it hoped would be, and with the rows
+ * as they were, for Undo.
+ *
+ * A save that would touch a signed week comes back refused with the weeks
+ * named, and is sent again with `allowSigned` once the person has said yes.
+ */
+export async function saveLeafWeeksAction(
+  nodeId: string,
+  edits: { week: number; evidence: WeekEvidence }[],
+  opts: { allowSigned?: boolean },
+  forProject?: string | null
+): Promise<SaveLeafWeeksResult> {
+  const projectId = await sqliteProject(forProject);
+  if (!projectId) return { ok: false, error: READ_ONLY_HISTORY };
+  try {
+    await beforeWrite();
+    const undo = saveLeafWeeksSqlite(projectId, nodeId, edits, opts);
+    await flushDbSnapshot();
+    updateTag('db');
+    refresh();
+    return { ok: true, undo, log: await readLeafLog(nodeId, projectId) };
+  } catch (err) {
+    if (err instanceof SignedWeeksError) return { ok: false, error: err.message, signed: err.weeks };
+    return fail(err);
+  }
+}
+
+/** Undo for `saveLeafWeeksAction`: every week put back exactly as it was. */
+export async function restoreLeafWeeksAction(
+  nodeId: string,
+  before: LeafWeekBefore[],
+  forProject?: string | null
+): Promise<LeafWeeksResult> {
+  const projectId = await sqliteProject(forProject);
+  if (!projectId) return { ok: false, error: READ_ONLY_HISTORY };
+  try {
+    await beforeWrite();
+    restoreLeafWeeksSqlite(projectId, nodeId, before);
+    await flushDbSnapshot();
+    updateTag('db');
+    refresh();
+    return { ok: true, log: await readLeafLog(nodeId, projectId) };
   } catch (err) {
     return fail(err);
   }

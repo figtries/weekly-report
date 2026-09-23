@@ -4,7 +4,7 @@ import { AnimatePresence, m } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Clock, TriangleAlert } from 'lucide-react';
 
 import {
   markNoProgressAction,
@@ -24,6 +24,7 @@ import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
+import WeekLog from './WeekLog';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 
 /**
@@ -290,8 +291,20 @@ function PanelBody({
    *
    * A work-kind pick reseeds it the same way, for the same reason: `seed`
    * reads off `effectiveNode`, which changes the moment `kindOverride` lands.
+   *
+   * And so does a change to the figure itself from UNDER the panel: a save in
+   * the week log below can move this week too (a correction to an earlier week
+   * carries the weeks after it). A draft still holding the old figure would
+   * then count as dirty, and Save would write it back over the new one.
    */
-  const seed = `${effectiveNode.method}:${effectiveNode.qtyTotal}:${(effectiveNode.milestones ?? []).length}`;
+  const seed = [
+    effectiveNode.method,
+    effectiveNode.qtyTotal,
+    (effectiveNode.milestones ?? []).length,
+    node.actualPct,
+    node.qtyDone ?? '',
+    (node.milestones ?? []).filter((m) => m.done).length,
+  ].join(':');
   const [held, setHeld] = useState<{ seed: string; draft: Draft }>(() => ({ seed, draft: draftOf(effectiveNode) }));
   const draft = held.seed === seed ? held.draft : draftOf(effectiveNode);
   const setDraft = (fn: (d: Draft) => Draft) => setHeld({ seed, draft: fn(draft) });
@@ -339,6 +352,18 @@ function PanelBody({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const pctRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The week log's own row for the week on screen hands over to the figure
+   * here rather than opening a second editor for the same week.
+   */
+  function focusHeadline() {
+    const input = pctRef.current;
+    if (!input) return;
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    input.focus({ preventScroll: true });
+  }
 
   /**
    * Read once, at mount, which is safe precisely because this component never
@@ -598,6 +623,7 @@ function PanelBody({
                    as "100,0" — a decimal comma, in an app whose every other
                    figure is written with a point, and a string `Number()`
                    reads as NaN. A text box shows the string it was given. */
+                ref={pctRef}
                 type="text"
                 inputMode="decimal"
                 aria-label="Percent complete"
@@ -654,6 +680,20 @@ function PanelBody({
             </div>
           </div>
 
+          <FinishNotice node={node} />
+
+          {/* Keyed on what the SERVER says the row is measured by, not on the
+              optimistic override: the log is re-read when a new way of counting
+              has actually been written, not while the write is still in flight. */}
+          <WeekLog
+            key={`${node.id}:${node.workKind ?? ''}:${node.method ?? ''}`}
+            node={effectiveNode}
+            week={week}
+            projectId={projectId}
+            onFocusHeadline={focusHeadline}
+            onOpenWeekChanged={(p) => onSaved(node.id, p)}
+          />
+
           <div className="mt-4 border-t border-border">
             <Disclosure
               label="Price and weight"
@@ -708,6 +748,49 @@ function PanelBody({
   );
 
   return createPortal(body, document.body);
+}
+
+/**
+ * The reminder, in the panel: late, or ending within the next few weeks.
+ *
+ * Both facts come from `lib/worklist.ts` through the map (`lateBy`, `dueIn`),
+ * measured against the week on screen, so this box, the chip on the row and
+ * the count above the map can never disagree. Late is warn-coloured because it
+ * has already happened; ending soon is the blue the app uses for "due", because
+ * it is still a thing somebody can act on.
+ */
+function FinishNotice({ node }: { node: MapNode }) {
+  const toGo = fmt1(Math.max(0, 100 - node.actualPct));
+  const weeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
+  if (node.lateBy !== undefined) {
+    return (
+      <div className="mt-4 flex gap-3 rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-3">
+        <TriangleAlert className="mt-0.5 h-[18px] w-[18px] shrink-0 text-warn" strokeWidth={2} aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-warn">{weeks(node.lateBy)} late</p>
+          <p className="mt-0.5 text-[12.5px] text-warn">
+            Plan ended W{node.finishWeek}. Still {toGo}% to go.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (node.dueIn !== undefined) {
+    return (
+      <div className="mt-4 flex gap-3 rounded-xl border border-chart-1/25 bg-chart-1/8 px-3.5 py-3">
+        <Clock className="mt-0.5 h-[18px] w-[18px] shrink-0 text-chart-1" strokeWidth={2} aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-chart-1">
+            {node.dueIn === 0 ? 'Ends this week' : `Ends in ${weeks(node.dueIn)}`}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-chart-1">
+            Plan ends W{node.finishWeek}. {toGo}% to go.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
 }
 
 /**

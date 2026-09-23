@@ -79,6 +79,10 @@ export interface MapNode {
    * lie the person checking the week would have to go and disprove.
    */
   completeCount: number;
+  /** Leaves beneath it past their finish week and still short — `worklist.stuck`. */
+  lateCount: number;
+  /** Leaves beneath it finishing within `DUE_SOON_WEEKS` and still short — `worklist.soon`. */
+  soonCount: number;
   children: MapNode[];
 
   /* leaf only ------------------------------------------------------------- */
@@ -100,6 +104,10 @@ export interface MapNode {
   finishWeek?: number | null;
   /** When someone last recorded anything against it, whatever week. */
   lastTouchedAt?: string | null;
+  /** Weeks past its finish, when it is still short. Read off the worklist, never worked out here. */
+  lateBy?: number;
+  /** Weeks until its finish (0 = this week), when it is inside the due-soon window and short. */
+  dueIn?: number;
 }
 
 export interface OverallMap {
@@ -109,6 +117,8 @@ export interface OverallMap {
   filled: number;
   /** Leaves past their finish week and still short of 100%. */
   stuck: number;
+  /** Leaves finishing within `DUE_SOON_WEEKS` and still short of 100%. */
+  soon: number;
   leaves: number;
   hasSchedule: boolean;
 }
@@ -196,6 +206,12 @@ export function buildOverallMap({
     worklist.done.filter((e) => e.complete && !e.touched).map((e) => e.node.id)
   );
 
+  // Late and due-soon are the worklist's answers, carried onto the row. The
+  // map works out neither: "past its finish" and "finishing soon" have one
+  // origin, and it is the same one the Check screen and the queue read.
+  const lateBy = new Map<string, number>(worklist.stuck.map((e) => [e.node.id, e.weeksLate]));
+  const dueIn = new Map<string, number>(worklist.soon.map((e) => [e.node.id, e.weeksLeft]));
+
   const schedById = new Map<string, ScheduleItem>();
   (schedule ?? []).forEach((s) => schedById.set(s.leafId, s));
 
@@ -234,8 +250,12 @@ export function buildOverallMap({
           ? 1
           : 0
         : kids.reduce((s, k) => s + k.completeCount, 0),
+      lateCount: isLeaf ? (lateBy.has(node.id) ? 1 : 0) : kids.reduce((s, k) => s + k.lateCount, 0),
+      soonCount: isLeaf ? (dueIn.has(node.id) ? 1 : 0) : kids.reduce((s, k) => s + k.soonCount, 0),
       children: kids,
     };
+    if (isLeaf && lateBy.has(node.id)) base.lateBy = lateBy.get(node.id);
+    if (isLeaf && dueIn.has(node.id)) base.dueIn = dueIn.get(node.id);
 
     if (isLeaf) {
       leaves += 1;
@@ -272,7 +292,15 @@ export function buildOverallMap({
 
   const units = top.map((r) => walk(r, 0)).filter((u): u is MapNode => u !== null);
 
-  return { units, due, filled, stuck: worklist.stuck.length, leaves, hasSchedule: worklist.hasSchedule };
+  return {
+    units,
+    due,
+    filled,
+    stuck: worklist.stuck.length,
+    soon: worklist.soon.length,
+    leaves,
+    hasSchedule: worklist.hasSchedule,
+  };
 }
 
 /**

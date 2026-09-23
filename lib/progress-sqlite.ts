@@ -32,6 +32,7 @@ import { db, schema } from './sqlite';
 import { defaultMilestones, hasRealQuantity, syncLeafSnapshot, totalQty } from './progress';
 import type { FieldProgressUpdate } from './mutations';
 import type { LeafSnapshot, Milestone, ProgressMethod, WbsItem } from './types';
+import { cascade, type WeekEvidence } from './week-log';
 
 type Writer = Pick<typeof db, 'update' | 'insert' | 'delete'>;
 
@@ -415,4 +416,227 @@ export function setWorkKindSqlite(
     .set({ workKind: kindId })
     .where(eq(schema.wbsNodes.id, nodeId))
     .run();
+}
+
+/* ------------------------------------------------------ one leaf, many weeks */
+
+/**
+ * Weeks that carry an approval. A signature that silently follows the number
+ * it signed is worth nothing in a dispute, so the log will not write into one
+ * of these unless the person has said, for this save, that they mean to.
+ */
+export function signedWeeksSqlite(projectId: string): Set<number> {
+  const rows = db
+    .select({ weekNo: schema.weeks.weekNo })
+    .from(schema.approvals)
+    .innerJoin(schema.weeks, eq(schema.weeks.id, schema.approvals.weekId))
+    .where(eq(schema.weeks.projectId, projectId))
+    .all();
+  return new Set(rows.map((r) => r.weekNo));
+}
+
+/** Refused because the save touches signed weeks nobody agreed to change. */
+export class SignedWeeksError extends Error {
+  // A plain field, not a constructor parameter property: the verify scripts
+  // run this file through Node's type stripping, which cannot erase those.
+  weeks: number[];
+  constructor(weeks: number[]) {
+    const one = weeks.length === 1;
+    super(
+      `${weeks.map((w) => `W${w}`).join(', ')} ${one ? 'is' : 'are'} signed. Confirm the change to write ${one ? 'it' : 'them'}.`
+    );
+    this.weeks = weeks;
+  }
+}
+
+type LeafProgressRow = typeof schema.leafProgress.$inferSelect;
+type MilestoneProgressRow = typeof schema.milestoneProgress.$inferSelect;
+
+/**
+ * What a week looked like before the log wrote it, EXACTLY: the raw rows, or
+ * null where the week had none. Undo puts these back — and deleting a row
+ * that did not exist before matters as much as restoring one that did, because
+ * under carry-forward an empty week and a week holding 0% are not the same
+ * statement.
+ */
+export interface LeafWeekBefore {
+  weekId: string;
+  leaf: LeafProgressRow | null;
+  milestones: MilestoneProgressRow[];
+}
+
+/** Each recorded week's evidence for one leaf, keyed by week number. */
+function recordedEvidence(projectId: string, nodeId: string): Map<number, WeekEvidence> {
+  const rows = db
+    .select({
+      weekId: schema.leafProgress.weekId,
+      weekNo: schema.weeks.weekNo,
+      cumProgressPct: schema.leafProgress.cumProgressPct,
+      qtyDone: schema.leafProgress.qtyDone,
+      note: schema.leafProgress.note,
+      source: schema.leafProgress.source,
+    })
+    .from(schema.leafProgress)
+    .innerJoin(schema.weeks, eq(schema.weeks.id, schema.leafProgress.weekId))
+    .where(and(eq(schema.leafProgress.nodeId, nodeId), eq(schema.weeks.projectId, projectId)))
+    .all();
+  const ms = db
+    .select({ weekId: schema.milestoneProgress.weekId, milestoneId: schema.milestoneProgress.milestoneId })
+    .from(schema.milestoneProgress)
+    .innerJoin(schema.milestones, eq(schema.milestones.id, schema.milestoneProgress.milestoneId))
+    .where(and(eq(schema.milestones.nodeId, nodeId), eq(schema.milestoneProgress.achieved, true)))
+    .all();
+  const doneByWeek = new Map<string, string[]>();
+  for (const m of ms) doneByWeek.set(m.weekId, [...(doneByWeek.get(m.weekId) ?? []), m.milestoneId]);
+
+  const out = new Map<number, WeekEvidence>();
+  for (const r of rows) {
+    const done = doneByWeek.get(r.weekId);
+    out.set(r.weekNo, {
+      cumProgressPct: r.cumProgressPct ?? 0,
+      ...(r.qtyDone != null ? { qtyDone: r.qtyDone } : {}),
+      ...(done ? { milestonesDone: done } : {}),
+      ...(r.note != null ? { note: r.note } : {}),
+      ...(r.source != null ? { source: r.source as WeekEvidence['source'] } : {}),
+    });
+  }
+  return out;
+}
+
+const SOURCES = new Set(['gate', 'steps', 'qty', 'quote', 'manual']);
+
+/**
+ * Write several weeks of ONE leaf in one transaction — the log's single-week
+ * save and its "Repeat weekly" both come through here.
+ *
+ * The weeks that move with the edit (`cascade` in `lib/week-log.ts`) are
+ * worked out HERE again rather than taken from the client, with the same
+ * function the preview used, so the screen can only ever have promised what
+ * this writes. Every figure still goes through `syncLeafSnapshot`.
+ *
+ * Returns the rows as they were, for Undo.
+ */
+export function saveLeafWeeksSqlite(
+  projectId: string,
+  nodeId: string,
+  edits: { week: number; evidence: WeekEvidence }[],
+  { allowSigned = false }: { allowSigned?: boolean } = {}
+): LeafWeekBefore[] {
+  const item = itemOf(nodeId);
+  if (!item || item.projectId !== projectId) throw new Error('Item not found');
+
+  const weekRows = db
+    .select({ id: schema.weeks.id, weekNo: schema.weeks.weekNo })
+    .from(schema.weeks)
+    .where(eq(schema.weeks.projectId, projectId))
+    .all();
+  const weekIdOf = new Map(weekRows.map((w) => [w.weekNo, w.id]));
+
+  // What the client sent is a request, not a fact: clamp it to what the item
+  // can hold and drop anything it cannot.
+  const total = totalQty(item);
+  const valid = new Set((item.milestones ?? []).map((m) => m.id));
+  const clean = new Map<number, WeekEvidence>();
+  for (const e of edits) {
+    if (!weekIdOf.has(e.week)) throw new Error(`Week ${e.week} is not in this project`);
+    const ev = e.evidence;
+    clean.set(e.week, {
+      cumProgressPct: Math.max(0, Math.min(100, Number(ev.cumProgressPct) || 0)),
+      ...(ev.qtyDone !== undefined ? { qtyDone: Math.max(0, Math.min(total, Number(ev.qtyDone) || 0)) } : {}),
+      ...(ev.milestonesDone !== undefined
+        ? { milestonesDone: ev.milestonesDone.filter((id) => valid.has(id)) }
+        : {}),
+      ...(typeof ev.note === 'string' && ev.note ? { note: ev.note.slice(0, 500) } : {}),
+      ...(ev.source && SOURCES.has(ev.source) ? { source: ev.source } : {}),
+    });
+  }
+  if (!clean.size) return [];
+
+  const logItem = { progressMethod: item.progressMethod ?? 'lumpsum', vol: item.vol, milestones: item.milestones };
+  const { writes } = cascade(logItem, recordedEvidence(projectId, nodeId), clean);
+
+  const signed = signedWeeksSqlite(projectId);
+  const touchesSigned = [...writes.keys()].filter((w) => signed.has(w)).sort((a, b) => a - b);
+  if (touchesSigned.length && !allowSigned) throw new SignedWeeksError(touchesSigned);
+
+  const msIds = (item.milestones ?? []).map((m) => m.id);
+  const before: LeafWeekBefore[] = [...writes.keys()].map((w) => {
+    const weekId = weekIdOf.get(w)!;
+    const leaf =
+      db
+        .select()
+        .from(schema.leafProgress)
+        .where(and(eq(schema.leafProgress.weekId, weekId), eq(schema.leafProgress.nodeId, nodeId)))
+        .all()[0] ?? null;
+    const milestones = msIds.length
+      ? db
+          .select()
+          .from(schema.milestoneProgress)
+          .where(
+            and(
+              eq(schema.milestoneProgress.weekId, weekId),
+              inArray(schema.milestoneProgress.milestoneId, msIds)
+            )
+          )
+          .all()
+      : [];
+    return { weekId, leaf, milestones };
+  });
+
+  const at = new Date().toISOString();
+  db.transaction((tx) => {
+    for (const [w, ev] of writes) {
+      writeSnapshot(tx, weekIdOf.get(w)!, item, syncLeafSnapshot(item, { targetWF: 0, ...ev }), at);
+    }
+  });
+  return before;
+}
+
+/**
+ * Undo: put every week back exactly as `saveLeafWeeksSqlite` found it.
+ *
+ * The rows come back from the client, so each one is checked against the leaf
+ * and the project before anything is written: a row for another leaf, another
+ * project's week or another leaf's milestone is refused rather than restored.
+ */
+export function restoreLeafWeeksSqlite(projectId: string, nodeId: string, before: LeafWeekBefore[]): void {
+  const item = itemOf(nodeId);
+  if (!item || item.projectId !== projectId) throw new Error('Item not found');
+  const ownWeeks = new Set(
+    db
+      .select({ id: schema.weeks.id })
+      .from(schema.weeks)
+      .where(eq(schema.weeks.projectId, projectId))
+      .all()
+      .map((w) => w.id)
+  );
+  const msIds = (item.milestones ?? []).map((m) => m.id);
+  const ownMs = new Set(msIds);
+  for (const b of before) {
+    if (!ownWeeks.has(b.weekId)) throw new Error('That week is not in this project');
+    if (b.leaf && (b.leaf.nodeId !== nodeId || b.leaf.weekId !== b.weekId)) throw new Error('Nothing to undo');
+    if (b.milestones.some((m) => m.weekId !== b.weekId || !ownMs.has(m.milestoneId))) {
+      throw new Error('Nothing to undo');
+    }
+  }
+
+  db.transaction((tx) => {
+    for (const b of before) {
+      tx.delete(schema.leafProgress)
+        .where(and(eq(schema.leafProgress.weekId, b.weekId), eq(schema.leafProgress.nodeId, nodeId)))
+        .run();
+      if (msIds.length) {
+        tx.delete(schema.milestoneProgress)
+          .where(
+            and(
+              eq(schema.milestoneProgress.weekId, b.weekId),
+              inArray(schema.milestoneProgress.milestoneId, msIds)
+            )
+          )
+          .run();
+      }
+      if (b.leaf) tx.insert(schema.leafProgress).values(b.leaf).run();
+      for (const m of b.milestones) tx.insert(schema.milestoneProgress).values(m).run();
+    }
+  });
 }

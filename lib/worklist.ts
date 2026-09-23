@@ -58,6 +58,23 @@ export interface WorklistEntry {
   complete: boolean;
 }
 
+/**
+ * How many weeks before its finish an unfinished activity starts being called
+ * out: the finish week itself and the two before it. Asked for on 23 Sep 2026
+ * ("2-3 week sblmnya") so an activity heading for a late finish is flagged
+ * while there is still time to act, not only once it has already missed.
+ */
+export const DUE_SOON_WEEKS = 3;
+
+/** An unfinished leaf whose scheduled finish is this week or one of the next two. */
+export interface SoonEntry {
+  node: RollupNode;
+  finishWeek: number;
+  /** 0 when it finishes this week. */
+  weeksLeft: number;
+  pct: number;
+}
+
 /** A leaf whose scheduled finish has passed while it is still short of 100%. */
 export interface StuckEntry {
   node: RollupNode;
@@ -73,6 +90,12 @@ export interface Worklist {
   done: WorklistEntry[];
   /** Past its finish week and unfinished. Warned about, never queued. */
   stuck: StuckEntry[];
+  /**
+   * Finishing within `DUE_SOON_WEEKS` and unfinished — the warning BEFORE
+   * `stuck`. Every unfinished leaf in that window is on it, on track or not:
+   * the decision was that nothing about to finish should be missed.
+   */
+  soon: SoonEntry[];
   /**
    * False when the project has no schedule at all. The screen has to say so
    * rather than show an empty queue — "nothing to do this week" and "we don't
@@ -132,6 +155,7 @@ export function buildWorklist({
   const due: WorklistEntry[] = [];
   const done: WorklistEntry[] = [];
   const stuck: StuckEntry[] = [];
+  const soon: SoonEntry[] = [];
 
   // The trail is collected on the way down so a card can say which contract it
   // belongs to — without it the queue is a flat list of activity names, and
@@ -148,6 +172,11 @@ export function buildWorklist({
     if (!s) return;
 
     const pct = node.curProgressPct;
+
+    const weeksLeft = s.finishWeek - week;
+    if (weeksLeft >= 0 && weeksLeft < DUE_SOON_WEEKS && !isComplete(pct)) {
+      soon.push({ node, finishWeek: s.finishWeek, weeksLeft, pct });
+    }
 
     if (s.startWeek <= week && s.finishWeek >= week) {
       const entry: WorklistEntry = {
@@ -179,6 +208,7 @@ export function buildWorklist({
   due.sort(bySeverity);
   done.sort(bySeverity);
   stuck.sort((a, b) => b.weeksLate * b.node.bobot - a.weeksLate * a.node.bobot || a.node.order - b.node.order);
+  soon.sort((a, b) => a.weeksLeft - b.weeksLeft || a.node.order - b.node.order);
 
-  return { due, done, stuck, hasSchedule: byLeaf.size > 0 };
+  return { due, done, stuck, soon, hasSchedule: byLeaf.size > 0 };
 }

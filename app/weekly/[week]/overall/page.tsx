@@ -248,7 +248,6 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           projectId={open?.id ?? null}
           canPrice={!!open && !open.legacyJsonId}
           projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
-          checkHref={`/weekly/${week}/control`}
           initialLens={initialLens}
         />
       </Reveal>

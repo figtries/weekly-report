@@ -2,6 +2,7 @@
 
 import { m } from 'framer-motion';
 import { memo, useMemo, useState, type ReactNode } from 'react';
+import { Clock, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
@@ -115,8 +116,12 @@ const WeightPill = ({ weight }: { weight: number }) =>
  * inventing a second filtering concept, because `matchingIds` already keeps
  * a node's whole ancestor chain for anything it keeps, whatever the
  * predicate checks.
+ *
+ * `'late'` and `'soon'` are the reminders (23 Sep 2026): past their finish and
+ * still short, or finishing within the next few weeks and still short. Both
+ * are the worklist's answers, carried onto the leaf as `lateBy` / `dueIn`.
  */
-type Lens = 'due' | 'manual' | null;
+type Lens = 'due' | 'manual' | 'late' | 'soon' | null;
 
 export default function OverallMap({
   map,
@@ -124,7 +129,6 @@ export default function OverallMap({
   projectId,
   canPrice,
   projectHref,
-  checkHref,
   initialLens = null,
 }: {
   map: MapModel;
@@ -138,7 +142,6 @@ export default function OverallMap({
   projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
-  checkHref: string;
   /** Arrived via `?lens=manual` from the Check screen. Read once, on mount. */
   initialLens?: Lens;
 }) {
@@ -203,6 +206,8 @@ export default function OverallMap({
       // never matches this arm directly — it is pulled in as an ancestor of a
       // matching leaf instead, same as every branch above a "due" leaf.
       if (lens === 'manual' && n.source !== 'manual') return false;
+      if (lens === 'late' && n.lateBy === undefined) return false;
+      if (lens === 'soon' && n.dueIn === undefined) return false;
       if (needle && !`${n.code} ${n.name}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -307,14 +312,41 @@ export default function OverallMap({
           )}
         </div>
 
-        {map.stuck > 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            <span className="font-semibold text-warn">{map.stuck} activities</span> are past their
-            finish week and still short.{' '}
-            <a href={checkHref} className="font-medium text-chart-1 hover:underline">
-              See them on Check
-            </a>
-          </p>
+        {/* THE REMINDERS, as buttons. This was one sentence pointing at the
+            Check screen, which told you how many and sent you somewhere else
+            to find out which. Now the count IS the filter: press it and the
+            map shows those rows and the path to them. Tinted at rest so a
+            phone, which has no hover, still sees a button; solid when on. */}
+        {(map.stuck > 0 || map.soon > 0) && (
+          <div className="mt-3">
+            <div className="flex gap-2">
+              {map.stuck > 0 && (
+                <ReminderLens
+                  tone="warn"
+                  on={lens === 'late'}
+                  onPress={() => setLens((v) => (v === 'late' ? null : 'late'))}
+                >
+                  <TriangleAlert className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                  {map.stuck} late
+                </ReminderLens>
+              )}
+              {map.soon > 0 && (
+                <ReminderLens
+                  tone="due"
+                  on={lens === 'soon'}
+                  onPress={() => setLens((v) => (v === 'soon' ? null : 'soon'))}
+                >
+                  <Clock className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                  {map.soon} ending soon
+                </ReminderLens>
+              )}
+            </div>
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              {lens === 'late' || lens === 'soon'
+                ? 'Press it again to see everything'
+                : 'Press one to show only those on the map'}
+            </p>
+          </div>
         )}
 
         <input
@@ -366,6 +398,40 @@ export default function OverallMap({
   );
 }
 
+/** One of the two reminder counts above the map, which is also its filter. */
+function ReminderLens({
+  tone,
+  on,
+  onPress,
+  children,
+}: {
+  tone: 'warn' | 'due';
+  on: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <m.button
+      {...pressMotion}
+      type="button"
+      onClick={onPress}
+      aria-pressed={on}
+      className={cn(
+        'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-[13px] font-semibold tabular-nums transition-colors duration-200 ease-ios',
+        tone === 'warn'
+          ? on
+            ? 'border-warn bg-warn text-card'
+            : 'border-warn/30 bg-warn-soft text-warn hover:bg-warn/15'
+          : on
+            ? 'border-chart-1 bg-chart-1 text-white'
+            : 'border-chart-1/30 bg-chart-1/10 text-chart-1 hover:bg-chart-1/15'
+      )}
+    >
+      {children}
+    </m.button>
+  );
+}
+
 /* -------------------------------------------------------------------- rows */
 
 function Branch({
@@ -385,7 +451,11 @@ function Branch({
 }) {
   if (filter && !filter.has(node.id)) return null;
 
-  if (node.kind === 'leaf') {
+  // A row with nothing under it is an activity whatever its depth. A plan
+  // with no headings puts its activities at the top, where they are drawn as
+  // units — and pressing one used to "open" an empty branch instead of the
+  // panel, so on such a project no activity could be filled in from the map.
+  if (node.kind === 'leaf' || node.children.length === 0) {
     return <Row node={node} first={first} onPress={() => onOpenRow(node.id)} />;
   }
 
@@ -424,7 +494,7 @@ const Row = memo(function Row({
   open?: boolean;
   onPress: () => void;
 }) {
-  const isBranch = node.kind !== 'leaf';
+  const isBranch = node.children.length > 0;
   const { tag, name } = splitCode(node.name);
   const verdict = verdictOf(-node.behindPct, 0.5);
 
@@ -509,7 +579,7 @@ const Row = memo(function Row({
         <Bar actual={node.actualPct} plan={node.planPct} thick={node.kind === 'unit'} />
 
         <span className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          {node.dueCount > 0 && node.kind === 'leaf' && (
+          {node.dueCount > 0 && !isBranch && (
             <Pill tone={node.filledCount ? 'ok' : 'due'}>
               {node.completeCount
                 ? 'Complete'
@@ -532,9 +602,23 @@ const Row = memo(function Row({
               {node.dueCount - node.filledCount > 0 && (
                 <Pill tone="due">{node.dueCount - node.filledCount} due</Pill>
               )}
+              {/* Counted on the branch so a late activity is found with the
+                  contract still folded, not only after opening every one. */}
+              {node.lateCount > 0 && <Pill tone="warn">{node.lateCount} late</Pill>}
+              {node.soonCount > 0 && <Pill tone="due">{node.soonCount} ending soon</Pill>}
             </>
           )}
-          {node.kind === 'leaf' &&
+          {!isBranch && node.lateBy !== undefined && (
+            <Pill tone="warn">
+              Late {node.lateBy} {node.lateBy === 1 ? 'wk' : 'wks'}
+            </Pill>
+          )}
+          {!isBranch && node.dueIn !== undefined && (
+            <Pill tone="due">
+              {node.dueIn === 0 ? 'Ends this week' : `Ends in ${node.dueIn} ${node.dueIn === 1 ? 'wk' : 'wks'}`}
+            </Pill>
+          )}
+          {!isBranch &&
             (node.method === 'qty' ? (
               <Pill>
                 <Figure>{(node.qtyDone ?? 0).toLocaleString('en-GB')}</Figure> of{' '}

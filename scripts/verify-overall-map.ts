@@ -89,7 +89,8 @@ const unitB = branch('2', [b1]);
 const worklist: Worklist = {
   due: [{ node: a1 } as never, { node: a3 } as never],
   done: [{ node: a2 } as never],
-  stuck: [{ node: b1 } as never],
+  stuck: [{ node: b1, weeksLate: 2 } as never],
+  soon: [{ node: a3, weeksLeft: 1 } as never],
   hasSchedule: true,
 };
 
@@ -208,6 +209,14 @@ check('its contract rises by WEIGHT, as the real rollup would', near(oA.actualPc
 check('an untouched contract does not move', near(findNode(moved, '2')!.actualPct, 25));
 check('the original tree is left alone', near(findNode(map.units, 'a3')!.actualPct, 0));
 check('behind is re-read from the new percent', near(oA3.behindPct, (2 / 10) * 100 - 100), `${oA3.behindPct}`);
+
+// Late and ending-soon are the worklist's, carried onto the row — never
+// worked out by the map.
+check('a late leaf carries how late it is', findNode(map.units, 'b1')!.lateBy === 2);
+check('an ending-soon leaf carries how soon', findNode(map.units, 'a3')!.dueIn === 1);
+check('a leaf that is neither carries neither', findNode(map.units, 'a1')!.lateBy === undefined && findNode(map.units, 'a1')!.dueIn === undefined);
+check('the contracts count them', findNode(map.units, '2')!.lateCount === 1 && findNode(map.units, '1')!.soonCount === 1);
+check('and so does the map', map.stuck === 1 && map.soon === 1);
 
 console.log(failed ? `\n${failed} FAILED` : '\nAll checks passed');
 process.exit(failed ? 1 : 0);
