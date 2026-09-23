@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Lock } from 'lucide-react';
+import { ChevronDown, Layers, Lock } from 'lucide-react';
 
 import {
   getLeafWeeksAction,
@@ -12,7 +12,6 @@ import type { MapNode } from '@/lib/overall-map';
 import type { LeafWeekBefore } from '@/lib/progress-sqlite';
 import {
   cascade,
-  canRepeat,
   COMPLETE_PCT,
   evidenceAt,
   figureOf,
@@ -37,14 +36,19 @@ import type { Draft } from './ActivityPanel';
  * week they missed. So the panel carries the activity's own weeks — from the
  * plan's start, or earlier if work began earlier, to the plan's finish, or on
  * to this week while it is still short — and each week's figure is the button
- * that changes it.
+ * that changes that week.
  *
- * THE EDITOR OPENS IN THE ROW THAT WAS PRESSED, not in the form at the top of
- * the panel. On a phone the top of the panel has scrolled away by the time
- * somebody presses week 50, and an edit that happens somewhere the thumb is
- * not is an edit made blind. ONE editor at a time, and the open week's own row
- * does not get one at all: it hands focus to the big figure above, so a week
- * never has two places to be edited that could disagree.
+ * TWO WAYS IN, EACH WITH ONE JOB. A week's figure opens an editor IN ITS ROW
+ * for that one week: on a phone the top of the panel has scrolled away by the
+ * time somebody presses week 50, and an edit made where the thumb is not is
+ * an edit made blind. Several weeks at once is a button at the TOP of the log,
+ * always visible — it used to live inside the row editor, and on the activity
+ * it was tested on it could not be found at all ("mana itu g ada").
+ *
+ * A LOCK NEVER HIDES A FIGURE. The first cut blanked every locked week's bar
+ * and number, so a 100% recorded in week 36 read as 0% all the way down on a
+ * project pinned to week 23. A lock stops an edit; what was recorded stays on
+ * screen.
  *
  * Rows are native buttons with no animation of their own — a long activity
  * runs sixty weeks, and AGENTS.md keeps per-row cost off anything that long.
@@ -56,7 +60,7 @@ const fmt1 = (v: number) => v.toFixed(1);
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 
-/** Rows shown before "Show all", and the point past which the list folds at all. */
+/** Rows shown before "Show all", and the length past which the list folds at all. */
 const WINDOW = 8;
 const FOLD_OVER = 10;
 
@@ -73,7 +77,9 @@ function weekList(weeks: number[]) {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
 }
 
-type Editing = { week: number; mode: 'week' | 'repeat' };
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+type FillMode = 'range' | 'done';
 type Asking = { week: number; kind: 'future' | 'signed' };
 type Confirm = { message: string; yes: string; run: () => void };
 
@@ -95,23 +101,25 @@ export default function WeekLog({
   const [log, setLog] = useState<LeafWeekLog | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const [editing, setEditing] = useState<Editing | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [fill, setFill] = useState<FillMode | null>(null);
+  const [from, setFrom] = useState(1);
+  const [to, setTo] = useState(1);
+  const [amount, setAmount] = useState('5');
+  const [spread, setSpread] = useState<RepeatMode>('each');
   const [asking, setAsking] = useState<Asking | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [opened, setOpened] = useState<Set<number>>(() => new Set());
   const [signedOk, setSignedOk] = useState<Set<number>>(() => new Set());
   const [draft, setDraft] = useState<Draft>({ qtyDone: 0, milestonesDone: [], pct: 0, note: '' });
   const [typing, setTyping] = useState<string | null>(null);
-  const [amount, setAmount] = useState('8');
-  const [count, setCount] = useState('4');
-  const [mode, setMode] = useState<RepeatMode>('each');
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; undo: LeafWeekBefore[] } | null>(null);
   const [saving, startSaving] = useTransition();
   const toastTimer = useRef<number | null>(null);
 
   // Loaded when the panel opens, for this one activity: the map's own payload
-  // never carries sixty weeks of every leaf.
+  // never carries every week of every leaf.
   useEffect(() => {
     let live = true;
     getLeafWeeksAction(node.id, projectId).then((res) => {
@@ -134,11 +142,11 @@ export default function WeekLog({
     [node.method, node.qtyTotal, node.milestones]
   );
   const shape = deriveShape(node);
-  const byPercent = item.progressMethod === 'lumpsum';
+  const byQty = item.progressMethod === 'qty';
   const rows = useMemo(() => log?.rows ?? [], [log]);
   const recorded = useMemo(() => recordedOf(rows), [rows]);
-  const lastWeek = rows.length ? rows[rows.length - 1].week : week;
-  const current = log?.currentWeek ?? week;
+  const lastWeek = log?.lastWeek ?? week;
+  const today = log?.todayWeek ?? week;
 
   /* ------------------------------------------------------------- preview */
 
@@ -147,7 +155,9 @@ export default function WeekLog({
       const total = node.qtyTotal && node.qtyTotal > 0 ? node.qtyTotal : 1;
       return clampPct(round2((d.qtyDone / total) * 100));
     }
-    if (item.progressMethod === 'milestone') return round2(figureOf(item, { cumProgressPct: 0, milestonesDone: d.milestonesDone }));
+    if (item.progressMethod === 'milestone') {
+      return round2(figureOf(item, { cumProgressPct: 0, milestonesDone: d.milestonesDone }));
+    }
     return clampPct(round2(d.pct));
   };
 
@@ -162,40 +172,27 @@ export default function WeekLog({
   };
 
   const plan = useMemo(() => {
-    if (!editing) return null;
-    if (editing.mode === 'week') {
-      const edits = new Map([[editing.week, evidenceOfDraft(draft)]]);
+    if (fill) {
+      const count = fill === 'done' ? lastWeek - from + 1 : to - from + 1;
+      const r = repeatFill(item, evidenceAt(rows, from - 1), {
+        from,
+        count,
+        amount: Number(amount.replace(/,/g, '.')),
+        mode: fill === 'done' ? 'each' : spread,
+        lastWeek,
+      });
+      if (!r.ok) return { edits: new Map<number, WeekEvidence>(), fill: null, error: r.error, writes: new Map<number, WeekEvidence>(), moved: [] as { week: number; pct: number }[] };
+      return { edits: r.edits, fill: r, error: null as string | null, ...cascade(item, recorded, r.edits) };
+    }
+    if (editing !== null) {
+      const edits = new Map([[editing, evidenceOfDraft(draft)]]);
       return { edits, fill: null, error: null as string | null, ...cascade(item, recorded, edits) };
     }
-    const n = Number(count);
-    const r = repeatFill(item, evidenceAt(rows, editing.week - 1), {
-      from: editing.week,
-      count: Number.isFinite(n) ? Math.floor(n) : 0,
-      amount: Number(amount.replace(/,/g, '.')),
-      mode,
-      lastWeek: log?.lastWeek ?? lastWeek,
-    });
-    if (!r.ok) return { edits: new Map(), fill: null, error: r.error, writes: new Map(), moved: [] };
-    return { edits: r.edits, fill: r, error: null, ...cascade(item, recorded, r.edits) };
+    return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, draft, amount, count, mode, item, recorded, rows, lastWeek, log]);
+  }, [fill, from, to, amount, spread, editing, draft, item, recorded, rows, lastWeek]);
 
-  /**
-   * Whether the one-week editor holds anything new. A week that has no row of
-   * its own can always be saved as it stands — that is "checked it, nothing
-   * moved", which is itself a record — but re-saving a recorded week unchanged
-   * would only stamp a new time on it.
-   */
-  const editedRow = editing ? rows.find((r) => r.week === editing.week) : undefined;
-  const changed =
-    !editing || editing.mode === 'repeat' || !editedRow || !editedRow.recorded
-      ? true
-      : Math.abs(pctOfDraft(draft) - editedRow.pct) > 0.004 ||
-        draft.qtyDone !== (editedRow.evidence.qtyDone ?? 0) ||
-        [...draft.milestonesDone].sort().join() !== [...(editedRow.evidence.milestonesDone ?? [])].sort().join() ||
-        draft.note !== (editedRow.evidence.note ?? '');
-
-  /** What each row shows: the stored figure, or the preview's while an editor is open. */
+  /** What each row shows while something is being previewed. */
   const shown = useMemo(() => {
     if (!plan || !plan.writes.size) return null;
     const merged = new Map(recorded);
@@ -209,7 +206,30 @@ export default function WeekLog({
     return out;
   }, [plan, recorded, rows, item]);
 
+  /**
+   * Whether the one-week editor holds anything new. A week with no row of its
+   * own can always be saved as it stands — that is "checked it, nothing
+   * moved", itself a record — but re-saving a recorded week unchanged would
+   * only stamp a new time on it.
+   */
+  const editedRow = editing !== null ? rows.find((r) => r.week === editing) : undefined;
+  const changed =
+    fill || !editedRow || !editedRow.recorded
+      ? true
+      : Math.abs(pctOfDraft(draft) - editedRow.pct) > 0.004 ||
+        draft.qtyDone !== (editedRow.evidence.qtyDone ?? 0) ||
+        [...draft.milestonesDone].sort().join() !== [...(editedRow.evidence.milestonesDone ?? [])].sort().join() ||
+        draft.note !== (editedRow.evidence.note ?? '');
+
   /* ------------------------------------------------------------- actions */
+
+  function resetEditors() {
+    setEditing(null);
+    setFill(null);
+    setAsking(null);
+    setConfirm(null);
+    setError(null);
+  }
 
   function seed(row: LogRow) {
     setDraft({
@@ -221,33 +241,34 @@ export default function WeekLog({
     setTyping(null);
   }
 
-  function press(row: LogRow) {
-    if (!log?.editable || saving) return;
+  function openRow(row: LogRow) {
+    seed(row);
+    setFill(null);
     setConfirm(null);
     setError(null);
+    setEditing(row.week);
+  }
+
+  function press(row: LogRow) {
+    if (!log?.editable || saving) return;
     if (row.week === week) {
-      setEditing(null);
-      setAsking(null);
+      resetEditors();
       onFocusHeadline();
       return;
     }
-    if (row.week > current && !opened.has(row.week)) {
-      setEditing(null);
-      setAsking(asking?.week === row.week ? null : { week: row.week, kind: 'future' });
+    if (editing === row.week) {
+      resetEditors();
       return;
     }
-    if (row.signed && !signedOk.has(row.week)) {
-      setEditing(null);
-      setAsking(asking?.week === row.week ? null : { week: row.week, kind: 'signed' });
+    const ahead = row.week > today && !opened.has(row.week);
+    const signed = row.signed && !signedOk.has(row.week);
+    if (ahead || signed) {
+      resetEditors();
+      setAsking(asking?.week === row.week ? null : { week: row.week, kind: ahead ? 'future' : 'signed' });
       return;
     }
     setAsking(null);
-    if (editing?.week === row.week) {
-      setEditing(null);
-      return;
-    }
-    seed(row);
-    setEditing({ week: row.week, mode: 'week' });
+    openRow(row);
   }
 
   function answerAsk(yes: boolean) {
@@ -256,10 +277,28 @@ export default function WeekLog({
     if (yes && row) {
       if (asking.kind === 'future') setOpened((s) => new Set(s).add(row.week));
       else setSignedOk((s) => new Set(s).add(row.week));
-      seed(row);
-      setEditing({ week: row.week, mode: 'week' });
+      openRow(row);
     }
     setAsking(null);
+  }
+
+  /**
+   * "Fill several weeks" opens on the weeks nobody has filled yet: from the
+   * week after the last one recorded, to this week — the usual reason to open
+   * it is a run of weeks that were missed.
+   */
+  function toggleFill() {
+    if (fill) {
+      resetEditors();
+      return;
+    }
+    const lastRecorded = [...recorded.keys()].sort((a, b) => a - b).pop();
+    const start = log?.range?.from ?? rows[0]?.week ?? 1;
+    const first = Math.min(lastWeek, Math.max(start, lastRecorded !== undefined ? lastRecorded + 1 : start));
+    resetEditors();
+    setFrom(first);
+    setTo(Math.min(lastWeek, Math.max(first, today)));
+    setFill('range');
   }
 
   function openWeekPct(next: LeafWeekLog | null): number | null {
@@ -274,11 +313,9 @@ export default function WeekLog({
   }
 
   function send(allowSigned: boolean) {
-    if (!plan || !editing || plan.error) return;
+    if (!plan || plan.error) return;
     const edits = [...plan.edits].map(([w, evidence]) => ({ week: w, evidence }));
-    const weeks = edits.map((e) => e.week);
-    const label =
-      editing.mode === 'week' ? `Saved W${editing.week}` : `Filled ${weekList(weeks)}`;
+    const label = fill ? `Filled ${weekList(edits.map((e) => e.week))}` : `Saved W${editing}`;
     setConfirm(null);
     setError(null);
     startSaving(async () => {
@@ -298,7 +335,7 @@ export default function WeekLog({
       }
       const before = openWeekPct(log ?? null);
       setLog(res.log);
-      setEditing(null);
+      resetEditors();
       showToast(label, res.undo);
       const after = openWeekPct(res.log);
       if (after !== null && before !== after) onOpenWeekChanged(after);
@@ -306,17 +343,17 @@ export default function WeekLog({
   }
 
   function save() {
-    if (!plan || !editing || plan.error || !plan.writes.size) return;
+    if (!plan || plan.error || !plan.writes.size) return;
     const touched = [...plan.writes.keys()];
     const signed = touched.filter((w) => rows.find((r) => r.week === w)?.signed && !signedOk.has(w));
-    const ahead = [...plan.edits.keys()].filter((w) => w > current && !opened.has(w));
+    const ahead = [...plan.edits.keys()].filter((w) => w > today && !opened.has(w));
     const lines: string[] = [];
     if (ahead.length) lines.push(`${weekList(ahead)} ${ahead.length === 1 ? "hasn't" : "haven't"} started yet.`);
     if (signed.length) lines.push(`${weekList(signed)} ${signed.length === 1 ? 'is' : 'are'} signed.`);
     if (lines.length) {
       setConfirm({
-        message: `${lines.join(' ')} ${editing.mode === 'repeat' ? 'Fill' : 'Change'} ${ahead.length + signed.length === 1 ? 'it' : 'them'} anyway?`,
-        yes: editing.mode === 'repeat' ? 'Fill them too' : 'Change anyway',
+        message: `${lines.join(' ')} ${fill ? 'Fill' : 'Change'} ${ahead.length + signed.length === 1 ? 'it' : 'them'} anyway?`,
+        yes: fill ? 'Fill them too' : 'Change anyway',
         run: () => {
           setOpened((s) => new Set([...s, ...ahead]));
           setSignedOk((s) => new Set([...s, ...signed]));
@@ -359,92 +396,233 @@ export default function WeekLog({
       </div>
     );
   }
-  if (!log || rows.length === 0) return null;
+  if (!log || !log.range || rows.length === 0) return null;
 
+  const range = log.range;
   const finish = log.finishWeek;
-  const isLate = (r: LogRow) =>
-    finish !== null && r.week > finish && r.week <= current && r.pct < COMPLETE_PCT;
+  const isLate = (r: LogRow) => finish !== null && r.week > finish && r.week <= today && r.pct < COMPLETE_PCT;
+  const written = plan?.writes ?? new Map<number, WeekEvidence>();
 
-  // The window: a few weeks either side of now, every late week, and the
-  // row being edited, so folding never hides the thing somebody is working on.
-  const anchor = Math.min(Math.max(current, rows[0].week), lastWeek);
-  const folds = rows.length > FOLD_OVER;
+  // The shown range, plus any week a fill is about to write outside it; then,
+  // on a long activity, a window a few weeks either side of today and whatever
+  // is being edited — folding never hides the thing somebody is working on.
+  // Late weeks fold like any other: forcing them all open turned an activity
+  // 22 weeks late into a wall of 34 yellow rows, and the notice above the log
+  // already says how late it is.
+  const inRange = rows.filter((r) => (r.week >= range.from && r.week <= range.to) || written.has(r.week));
+  const anchor = Math.min(Math.max(today, range.from), range.to);
+  const folds = inRange.length > FOLD_OVER;
   const visible =
     !folds || showAll
-      ? rows
-      : rows.filter(
+      ? inRange
+      : inRange.filter(
           (r) =>
             (r.week > anchor - (WINDOW - 2) && r.week <= anchor + 2) ||
-            isLate(r) ||
-            r.week === editing?.week
+            r.week === editing ||
+            written.has(r.week)
         );
 
-  const unit = byPercent ? '%' : ` ${node.unit ?? 'units'}`;
+  const unit = byQty ? ` ${node.unit ?? 'units'}` : '%';
   const moved = plan?.moved ?? [];
   const nWrites = plan?.edits.size ?? 0;
+  const aheadInFill = fill ? [...(plan?.edits.keys() ?? [])].filter((w) => w > today && !opened.has(w)) : [];
+  const weekOptions = rows.map((r) => r.week);
+
+  const warning =
+    moved.length > 0 && !plan?.error
+      ? moved.every((m) => m.pct === moved[0].pct)
+        ? `${weekList(moved.map((m) => m.week))} will also move to ${fmt1(moved[0].pct)}%`
+        : `${weekList(moved.map((m) => m.week))} will also move, so the line never drops`
+      : null;
+
+  /** Save / confirm row, shared by the fill and the one-week editor. */
+  const actions = (primary: string) =>
+    confirm ? (
+      <div className="mt-3 rounded-xl border border-warn/25 bg-warn-soft p-3">
+        <p className="text-center text-[13px] font-medium text-warn">{confirm.message}</p>
+        <div className="mt-3 flex gap-2">
+          <SecondaryButton onClick={() => setConfirm(null)}>Cancel</SecondaryButton>
+          <PrimaryButton onClick={confirm.run} disabled={saving}>
+            {confirm.yes}
+          </PrimaryButton>
+        </div>
+      </div>
+    ) : (
+      <div className="mt-4 flex gap-2">
+        <SecondaryButton onClick={resetEditors}>Cancel</SecondaryButton>
+        <PrimaryButton onClick={save} disabled={saving || Boolean(plan?.error) || nWrites === 0 || !changed}>
+          {saving ? 'Saving…' : primary}
+        </PrimaryButton>
+      </div>
+    );
+
+  const notes = (
+    <>
+      {warning && <Notice>{warning}</Notice>}
+      {(plan?.error || error) && (
+        <p className="mt-3 text-center text-[13px] font-medium text-bad">{plan?.error ?? error}</p>
+      )}
+    </>
+  );
 
   return (
-    <section className="mt-5" aria-label="Week by week">
-      <div className="mb-1 flex items-baseline justify-between gap-3">
-        <h3 className="text-[13px] font-semibold text-foreground">Week by week</h3>
-        <span className="text-[11.5px] text-muted-foreground">
-          {log.editable ? 'Tap a figure to change it' : 'Read only on this project'}
-        </span>
+    <section className="mt-6" aria-label="Week by week">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold text-foreground">Week by week</h3>
+          <p className="text-[11.5px] text-muted-foreground">
+            {log.editable ? "Tap a week's figure to change it" : 'Read only on this project'}
+          </p>
+        </div>
+        {log.editable && (
+          <button
+            type="button"
+            onClick={toggleFill}
+            aria-expanded={Boolean(fill)}
+            className={cn(
+              'flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
+              fill
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-primary/6 text-primary hover:bg-primary hover:text-primary-foreground'
+            )}
+          >
+            <Layers className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            Fill several weeks
+          </button>
+        )}
       </div>
 
-      <ul>
+      <Expand open={Boolean(fill)}>
+        {fill && (
+          <div className="mt-3 rounded-2xl bg-muted/40 p-4">
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-foreground/[0.06] p-1" role="tablist">
+              {(['range', 'done'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={fill === m}
+                  onClick={() => {
+                    setConfirm(null);
+                    setFill(m);
+                  }}
+                  className={cn(
+                    'min-h-10 rounded-lg text-[13px] font-medium transition-colors duration-200 ease-ios',
+                    fill === m ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {m === 'range' ? 'Up to a week' : 'Until 100%'}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-2.5 text-[15px] text-foreground">
+              <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+                <span>Add</span>
+                <AmountInput value={amount} onChange={setAmount} unit={unit} />
+                {fill === 'range' ? (
+                  <button
+                    type="button"
+                    onClick={() => setSpread((v) => (v === 'each' ? 'total' : 'each'))}
+                    className="inline-flex min-h-9 items-center rounded-full bg-primary/6 px-3 text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
+                  >
+                    {spread === 'each' ? 'each week' : 'in total'}
+                  </button>
+                ) : (
+                  <span>each week</span>
+                )}
+              </p>
+              <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+                <span>from</span>
+                <WeekSelect
+                  label="First week"
+                  value={from}
+                  weeks={weekOptions}
+                  onChange={(w) => {
+                    setFrom(w);
+                    if (to < w) setTo(w);
+                  }}
+                />
+                {fill === 'range' ? (
+                  <>
+                    <span>to</span>
+                    <WeekSelect label="Last week" value={to} weeks={weekOptions.filter((w) => w >= from)} onChange={setTo} />
+                  </>
+                ) : (
+                  <span>until it is done</span>
+                )}
+              </p>
+            </div>
+
+            {plan?.fill && (
+              <div className="mt-4 border-t border-border/60 pt-3 text-center">
+                <p className="text-[13px] font-semibold tabular-nums text-chart-1">
+                  W{plan.fill.from} → W{plan.fill.last} · {plural(plan.fill.last - plan.fill.from + 1, 'week', 'weeks')} ·
+                  ends at {fmt1(plan.fill.endPct)}%
+                </p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  {plan.fill.reached !== null
+                    ? `Reaches 100% in W${plan.fill.reached}, and the weeks after it stay there`
+                    : fill === 'done'
+                      ? `Only reaches ${fmt1(plan.fill.endPct)}% by W${plan.fill.last}, the end of the plan`
+                      : `${byQty ? `${plan.fill.perWeek}${unit}` : `${fmt1(plan.fill.perWeek)}%`} added each week`}
+                </p>
+              </div>
+            )}
+            {aheadInFill.length > 0 && !plan?.error && (
+              <Notice>
+                {weekList(aheadInFill)} {aheadInFill.length === 1 ? "hasn't" : "haven't"} started yet. Apply will ask
+                first.
+              </Notice>
+            )}
+            {notes}
+            {actions(`Apply to ${plural(nWrites, 'week', 'weeks')}`)}
+          </div>
+        )}
+      </Expand>
+
+      <ul className="mt-2">
         {visible.map((r) => {
           const late = isLate(r);
-          const locked = r.week > current && !opened.has(r.week);
+          const locked = r.week > today && !opened.has(r.week);
           const signedLock = r.signed && !signedOk.has(r.week);
           const preview = shown?.get(r.week);
           const moves = preview !== undefined && Math.abs(preview - r.pct) > 0.004;
           // Dashed means "this week will be WRITTEN". A week after the change
           // that only carries it shows the figure it will stand on, in the
-          // carried style, and a locked one stays locked.
-          const written = Boolean(plan?.writes.has(r.week));
-          const inPreview = written && moves;
-          const pct = moves ? preview : r.pct;
-          const active = editing?.week === r.week;
-          const blank = locked && !written;
-          const fill = moves ? 'bg-chart-1/50' : r.recorded ? 'bg-chart-1' : 'bg-chart-1/30';
+          // carried style.
+          const writes = written.has(r.week);
+          const pct = moves ? preview! : r.pct;
+          const active = editing === r.week;
+          const fillColor = moves ? 'bg-chart-1/50' : r.recorded ? 'bg-chart-1' : 'bg-chart-1/30';
 
           return (
             <li key={r.week}>
-              <div
-                className={cn(
-                  'grid min-h-12 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 border-t border-border/60',
-                  late && '-mx-2 rounded-lg border-transparent bg-warn-soft px-2'
-                )}
-              >
+              {/* A late week says so in its label, in the warn colour, and
+                  nothing more: a tinted band on every late row stacked into a
+                  wall of yellow on anything more than a few weeks behind. */}
+              <div className="grid min-h-12 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 border-t border-border/60">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-[13px] font-semibold tabular-nums text-foreground">
-                    {r.week === current && (
+                    {r.week === today && (
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="This week" />
                     )}
                     W{r.week}
                   </p>
-                  <p
-                    className={cn(
-                      'text-[11px] leading-tight',
-                      late ? 'font-semibold text-warn' : 'text-muted-foreground'
-                    )}
-                  >
+                  <p className={cn('text-[11px] leading-tight', late ? 'font-semibold text-warn' : 'text-muted-foreground')}>
                     {late ? 'Late' : r.week === finish ? 'Plan ends' : fmtEnd(r.endDate)}
                   </p>
                 </div>
 
                 <span className="relative block h-1.5">
                   <span className="absolute inset-0 overflow-hidden rounded-full bg-foreground/8">
-                    {!blank && (
-                      <span
-                        className={cn(
-                          'absolute inset-y-0 left-0 block w-full origin-left rounded-full transition-transform duration-300 ease-ios',
-                          fill
-                        )}
-                        style={{ transform: `scaleX(${clampPct(pct) / 100})` }}
-                      />
-                    )}
+                    <span
+                      className={cn(
+                        'absolute inset-y-0 left-0 block w-full origin-left rounded-full transition-transform duration-300 ease-ios',
+                        fillColor
+                      )}
+                      style={{ transform: `scaleX(${clampPct(pct) / 100})` }}
+                    />
                   </span>
                   {r.planPct > 0 && (
                     <span
@@ -460,33 +638,31 @@ export default function WeekLog({
                     type="button"
                     onClick={() => press(r)}
                     aria-expanded={active}
-                    aria-label={
-                      blank
-                        ? `Week ${r.week} has not started. Open it`
-                        : `Week ${r.week}, ${fmt1(pct)} percent. Change it`
-                    }
+                    aria-label={`Week ${r.week}, ${fmt1(pct)} percent${locked ? ', not started yet' : signedLock ? ', signed' : ''}. Change it`}
                     className="group flex min-h-11 items-center justify-end"
                   >
                     <span
                       className={cn(
-                        'inline-flex h-8 min-w-[4.5rem] items-center justify-center gap-1 rounded-full px-3 text-[13px] font-medium tabular-nums transition-colors duration-200 ease-ios',
+                        'inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1 rounded-full px-3 text-[13px] font-medium tabular-nums transition-colors duration-200 ease-ios',
                         active
                           ? 'bg-primary text-primary-foreground'
-                          : inPreview
+                          : writes && moves
                             ? 'border border-dashed border-chart-1/60 bg-card text-chart-1'
-                            : blank || signedLock
+                            : locked || signedLock
                               ? 'bg-muted text-muted-foreground group-hover:bg-foreground/10'
                               : r.recorded
                                 ? 'bg-primary/6 text-primary group-hover:bg-primary group-hover:text-primary-foreground'
                                 : 'text-muted-foreground group-hover:bg-muted'
                       )}
                     >
-                      {(blank || signedLock) && <Lock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />}
-                      {!blank && `${fmt1(pct)}%`}
+                      {(locked || signedLock) && !writes && (
+                        <Lock className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden="true" />
+                      )}
+                      {fmt1(pct)}%
                     </span>
                   </button>
                 ) : (
-                  <span className="min-w-[4.5rem] text-right text-[13px] font-medium tabular-nums text-foreground">
+                  <span className="min-w-[4.75rem] text-right text-[13px] font-medium tabular-nums text-foreground">
                     {fmt1(pct)}%
                   </span>
                 )}
@@ -500,215 +676,98 @@ export default function WeekLog({
                       : `W${r.week} hasn't started yet. Open it anyway?`}
                   </p>
                   <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => answerAsk(false)}
-                      className="min-h-11 flex-1 rounded-xl border border-input bg-card text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
-                    >
+                    <SecondaryButton onClick={() => answerAsk(false)}>
                       {asking?.kind === 'signed' ? 'Keep it' : 'Keep locked'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => answerAsk(true)}
-                      className="btn-primary min-h-11 flex-1 rounded-xl text-sm font-medium"
-                    >
+                    </SecondaryButton>
+                    <PrimaryButton onClick={() => answerAsk(true)}>
                       {asking?.kind === 'signed' ? `Change W${r.week}` : `Open W${r.week}`}
-                    </button>
+                    </PrimaryButton>
                   </div>
                 </div>
               </Expand>
 
               <Expand open={active}>
-                {active && editing && (
-                  <div className="mb-2 mt-1 rounded-2xl bg-muted/50 p-3">
-                    {canRepeat(item) && (
-                      <div className="flex rounded-full bg-foreground/[0.06] p-1" role="tablist">
-                        {(['week', 'repeat'] as const).map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            role="tab"
-                            aria-selected={editing.mode === m}
-                            onClick={() => {
-                              setError(null);
-                              setConfirm(null);
-                              setEditing({ week: editing.week, mode: m });
-                            }}
-                            className={cn(
-                              'min-h-10 flex-1 rounded-full text-[13px] font-medium transition-colors duration-200 ease-ios',
-                              editing.mode === m ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                            )}
-                          >
-                            {m === 'week' ? 'This week' : 'Repeat weekly'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {editing.mode === 'week' ? (
-                      <div className="mt-3">
-                        {byPercent ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <StepPct label="Less" onClick={() => { setTyping(null); setDraft((d) => ({ ...d, pct: clampPct(round2(d.pct - 1)) })); }}>−</StepPct>
-                            <div className="group min-w-0">
-                              <div className="flex items-baseline justify-center">
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  aria-label={`Percent complete in week ${editing.week}`}
-                                  value={typing ?? fmt1(draft.pct)}
-                                  // The headline's own measure: a digit is 1ch under
-                                  // tabular-nums, a dot about half of one.
-                                  style={{
-                                    width: `${Math.max(
-                                      (typing ?? fmt1(draft.pct)).length -
-                                        ((typing ?? fmt1(draft.pct)).split('.').length - 1) * 0.55,
-                                      1
-                                    )}ch`,
-                                  }}
-                                  onFocus={(e) => e.currentTarget.select()}
-                                  onBlur={() => setTyping(null)}
-                                  onChange={(e) => {
-                                    const cleaned = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
-                                    const parts = cleaned.split('.');
-                                    const raw = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
-                                    setTyping(raw);
-                                    const n = Number(raw);
-                                    if (raw !== '' && Number.isFinite(n)) setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
-                                  }}
-                                  className="appearance-none border-0 bg-transparent p-0 text-center text-[30px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1 outline-none"
-                                />
-                                <span className="text-[30px] font-semibold leading-tight tracking-tight text-chart-1">%</span>
-                              </div>
-                              <div className="mt-1 h-[2px] w-full rounded-full bg-border transition-colors duration-200 ease-ios group-focus-within:bg-chart-1" />
-                            </div>
-                            <StepPct label="More" onClick={() => { setTyping(null); setDraft((d) => ({ ...d, pct: clampPct(round2(d.pct + 1)) })); }}>+</StepPct>
-                          </div>
-                        ) : (
-                          <>
-                            <ProgressEntry
-                              node={{
-                                ...node,
-                                qtyDone: draft.qtyDone,
-                                milestones: (node.milestones ?? []).map((m) => ({ ...m, done: draft.milestonesDone.includes(m.id) })),
-                              }}
-                              draft={draft}
-                              setDraft={(fn) => setDraft((d) => fn(d))}
-                              shape={shape}
-                              onManualOff={() => {}}
-                            />
-                            <p className="mt-2 text-center text-[13px] font-semibold tabular-nums text-chart-1">
-                              {fmt1(pctOfDraft(draft))}%
-                            </p>
-                          </>
-                        )}
-                        <p className="mt-1.5 text-center text-[12px] tabular-nums text-muted-foreground">
-                          Plan W{editing.week} · {fmt1(r.planPct)}%
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="mt-3 text-center">
-                        <p className="text-[15px] leading-[2.6] text-foreground">
-                          Add{' '}
-                          <SentenceInput
-                            label="Amount each time"
-                            value={amount}
-                            onChange={setAmount}
-                            decimal
-                          />
-                          {unit}{' '}
-                          <button
-                            type="button"
-                            onClick={() => setMode((v) => (v === 'each' ? 'total' : 'each'))}
-                            className="inline-flex min-h-9 items-center rounded-full bg-primary/6 px-3 align-middle text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
-                          >
-                            {mode === 'each' ? 'each week' : 'in total'}
-                          </button>
-                          <br />
-                          for{' '}
-                          <SentenceInput label="Number of weeks" value={count} onChange={setCount} />{' '}
-                          {Number(count) === 1 ? 'week' : 'weeks'} from W{editing.week}
-                        </p>
-                        {plan?.fill && (
-                          <p className="text-[13px] font-medium tabular-nums text-chart-1">
-                            W{plan.fill.from} → W{plan.fill.last} · ends at {fmt1(plan.fill.endPct)}%
-                            {plan.fill.reached !== null && plan.fill.reached < plan.fill.from + Number(count) - 1 && (
-                              <span className="block font-normal text-muted-foreground">
-                                Reaches 100% in W{plan.fill.reached}
-                              </span>
-                            )}
-                          </p>
-                        )}
-                        {plan?.fill && [...plan.edits.keys()].some((w) => w > current && !opened.has(w)) && (
-                          <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] font-medium text-warn">
-                            {weekList([...plan.edits.keys()].filter((w) => w > current && !opened.has(w)))}{' '}
-                            {[...plan.edits.keys()].filter((w) => w > current && !opened.has(w)).length === 1
-                              ? "hasn't"
-                              : "haven't"}{' '}
-                            started yet. Apply will ask to open {[...plan.edits.keys()].filter((w) => w > current && !opened.has(w)).length === 1 ? 'it' : 'them'}.
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {moved.length > 0 && !plan?.error && (
-                      <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-center text-[12.5px] font-medium text-warn">
-                        {moved.every((m) => m.pct === moved[0].pct)
-                          ? `${weekList(moved.map((m) => m.week))} will also move to ${fmt1(moved[0].pct)}%`
-                          : `${weekList(moved.map((m) => m.week))} will also move to keep the line from dropping`}
-                      </p>
-                    )}
-                    {(plan?.error || error) && (
-                      <p className="mt-2 text-center text-[13px] font-medium text-bad">{plan?.error ?? error}</p>
-                    )}
-
-                    {confirm ? (
-                      <div className="mt-3 rounded-xl border border-warn/25 bg-warn-soft p-3">
-                        <p className="text-center text-[13px] font-medium text-warn">{confirm.message}</p>
-                        <div className="mt-3 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setConfirm(null)}
-                            className="min-h-11 flex-1 rounded-xl border border-input bg-card text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={confirm.run}
-                            disabled={saving}
-                            className="btn-primary min-h-11 flex-1 rounded-xl text-sm font-medium disabled:opacity-40"
-                          >
-                            {confirm.yes}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
+                {active && (
+                  <div className="mb-2 mt-1 rounded-2xl bg-muted/40 p-4">
+                    {item.progressMethod === 'lumpsum' ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <StepPct
+                          label="Less"
                           onClick={() => {
-                            setEditing(null);
-                            setError(null);
+                            setTyping(null);
+                            setDraft((d) => ({ ...d, pct: clampPct(round2(d.pct - 1)) }));
                           }}
-                          className="min-h-11 flex-1 rounded-xl border border-input bg-card text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
                         >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={save}
-                          disabled={saving || Boolean(plan?.error) || nWrites === 0 || !changed}
-                          className="btn-primary min-h-11 flex-1 rounded-xl text-sm font-medium disabled:opacity-40"
+                          −
+                        </StepPct>
+                        <div className="group min-w-0">
+                          <div className="flex items-baseline justify-center">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              aria-label={`Percent complete in week ${r.week}`}
+                              value={typing ?? fmt1(draft.pct)}
+                              // The headline's own measure: a digit is 1ch under
+                              // tabular-nums, a dot about half of one.
+                              style={{
+                                width: `${Math.max(
+                                  (typing ?? fmt1(draft.pct)).length -
+                                    ((typing ?? fmt1(draft.pct)).split('.').length - 1) * 0.55,
+                                  1
+                                )}ch`,
+                              }}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onBlur={() => setTyping(null)}
+                              onChange={(e) => {
+                                const cleaned = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                                const parts = cleaned.split('.');
+                                const raw = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+                                setTyping(raw);
+                                const n = Number(raw);
+                                if (raw !== '' && Number.isFinite(n)) setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
+                              }}
+                              className="appearance-none border-0 bg-transparent p-0 text-center text-[30px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1 outline-none"
+                            />
+                            <span className="text-[30px] font-semibold leading-tight tracking-tight text-chart-1">%</span>
+                          </div>
+                          <div className="mt-1 h-[2px] w-full rounded-full bg-border transition-colors duration-200 ease-ios group-focus-within:bg-chart-1" />
+                        </div>
+                        <StepPct
+                          label="More"
+                          onClick={() => {
+                            setTyping(null);
+                            setDraft((d) => ({ ...d, pct: clampPct(round2(d.pct + 1)) }));
+                          }}
                         >
-                          {saving
-                            ? 'Saving…'
-                            : editing.mode === 'week'
-                              ? `Save W${editing.week}`
-                              : `Apply to ${nWrites} ${nWrites === 1 ? 'week' : 'weeks'}`}
-                        </button>
+                          +
+                        </StepPct>
                       </div>
+                    ) : (
+                      <>
+                        <ProgressEntry
+                          node={{
+                            ...node,
+                            qtyDone: draft.qtyDone,
+                            milestones: (node.milestones ?? []).map((m) => ({
+                              ...m,
+                              done: draft.milestonesDone.includes(m.id),
+                            })),
+                          }}
+                          draft={draft}
+                          setDraft={(fn) => setDraft((d) => fn(d))}
+                          shape={shape}
+                          onManualOff={() => {}}
+                        />
+                        <p className="mt-2 text-center text-[13px] font-semibold tabular-nums text-chart-1">
+                          {fmt1(pctOfDraft(draft))}%
+                        </p>
+                      </>
                     )}
+                    <p className="mt-1.5 text-center text-[12px] tabular-nums text-muted-foreground">
+                      Plan W{r.week} · {fmt1(r.planPct)}%
+                    </p>
+                    {notes}
+                    {actions(`Save W${r.week}`)}
                   </div>
                 )}
               </Expand>
@@ -723,11 +782,13 @@ export default function WeekLog({
           onClick={() => setShowAll((v) => !v)}
           className="mt-1 flex min-h-11 w-full items-center justify-center rounded-xl text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary/6"
         >
-          {showAll ? 'Show fewer weeks' : `Show all ${rows.length} weeks`}
+          {showAll ? 'Show fewer weeks' : `Show all ${inRange.length} weeks`}
         </button>
       )}
 
-      {!editing && error && <p className="mt-2 text-center text-[13px] font-medium text-bad">{error}</p>}
+      {editing === null && !fill && error && (
+        <p className="mt-2 text-center text-[13px] font-medium text-bad">{error}</p>
+      )}
 
       {toast && (
         <div
@@ -748,6 +809,40 @@ export default function WeekLog({
   );
 }
 
+/* ------------------------------------------------------------------ parts */
+
+function PrimaryButton({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn-primary min-h-11 flex-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-11 flex-1 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A warn-coloured line: something else will happen too, said before it does. */
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-center text-[12.5px] font-medium text-warn">{children}</p>
+  );
+}
+
 /** The −/+ beside the week's figure: no box, like the panel's own pair. 44px. */
 function StepPct({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
@@ -762,31 +857,63 @@ function StepPct({ children, onClick, label }: { children: React.ReactNode; onCl
   );
 }
 
-/** A number inside a sentence: an underline rather than a box, sized to its digits. */
-function SentenceInput({
+/**
+ * The amount inside the sentence: an underline rather than a box, sized to its
+ * digits, with its unit sitting against it so "8 %" never wraps apart.
+ */
+function AmountInput({ value, onChange, unit }: { value: string; onChange: (v: string) => void; unit: string }) {
+  return (
+    <span className="inline-flex items-baseline">
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label="Amount each week"
+        value={value}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => onChange(e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '').slice(0, 6))}
+        style={{ width: `${Math.max(value.length, 1) + 0.9}ch` }}
+        className="h-9 border-0 border-b-2 border-border bg-transparent px-1 text-center text-[17px] font-semibold tabular-nums text-primary outline-none transition-colors duration-200 ease-ios focus:border-chart-1"
+      />
+      <span className="text-[15px] font-medium text-primary">{unit.trim()}</span>
+    </span>
+  );
+}
+
+/**
+ * A week, chosen from the project's own weeks. Native, so a phone gets its own
+ * wheel rather than a popover nobody can hit, and dressed as the pill every
+ * other choice in this sentence is.
+ */
+function WeekSelect({
   value,
+  weeks,
   onChange,
   label,
-  decimal,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  value: number;
+  weeks: number[];
+  onChange: (w: number) => void;
   label: string;
-  decimal?: boolean;
 }) {
   return (
-    <input
-      type="text"
-      inputMode={decimal ? 'decimal' : 'numeric'}
-      aria-label={label}
-      value={value}
-      onFocus={(e) => e.currentTarget.select()}
-      onChange={(e) => {
-        const cleaned = e.target.value.replace(/,/g, '.').replace(decimal ? /[^0-9.]/g : /[^0-9]/g, '');
-        onChange(cleaned.slice(0, 6));
-      }}
-      style={{ width: `${Math.max(value.length, 1) + 1.5}ch` }}
-      className="h-9 border-0 border-b-2 border-border bg-transparent px-1 text-center align-middle text-[16px] font-semibold tabular-nums text-primary outline-none transition-colors duration-200 ease-ios focus:border-chart-1"
-    />
+    <span className="relative inline-flex">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="min-h-9 cursor-pointer appearance-none rounded-full bg-primary/6 py-1 pl-3.5 pr-8 text-[14px] font-medium tabular-nums text-primary outline-none transition-colors duration-200 ease-ios hover:bg-primary/12 focus-visible:ring-2 focus-visible:ring-chart-1"
+      >
+        {weeks.map((w) => (
+          <option key={w} value={w}>
+            W{w}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-primary"
+        strokeWidth={2.25}
+        aria-hidden="true"
+      />
+    </span>
   );
 }

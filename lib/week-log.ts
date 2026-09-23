@@ -1,5 +1,5 @@
-import { currentWeekOf } from './current-week';
 import { methodOf, resolveLeafProgress, totalQty } from './progress';
+import { toISODate } from './weeks';
 import type { Database, LeafSnapshot, Milestone, ProgressMethod } from './types';
 
 /**
@@ -55,12 +55,29 @@ export interface LogRow {
 
 export interface LeafWeekLog {
   nodeId: string;
-  /** `currentWeekOf` — the project's week, not the one the page is showing. */
-  currentWeek: number;
+  /**
+   * The week TODAY'S DATE falls in, clamped to the plan — 0 before the plan
+   * starts. Weeks after it have not started yet, and those are the only weeks
+   * the log locks.
+   *
+   * Deliberately NOT `currentWeekOf`. That is the week the owner PINNED for
+   * reporting, and a project can sit pinned on week 23 while the site is in
+   * week 39: locking everything after the pin hid a 100% recorded in week 36
+   * behind padlocks and made the activity read 0% all the way down
+   * (23 Sep 2026). A pin says which week is being reported, not which weeks
+   * have happened.
+   */
+  todayWeek: number;
   startWeek: number | null;
   finishWeek: number | null;
-  /** The project's last week — how far "Repeat weekly" may run. */
+  /** The project's last week — how far "Fill several weeks" may run. */
   lastWeek: number;
+  /**
+   * The weeks the log SHOWS (see `logRange`), or null when nothing anchors it.
+   * `rows` carries every week of the project, so a fill that runs past the
+   * shown range can still be previewed on the weeks it will write.
+   */
+  range: { from: number; to: number } | null;
   /**
    * Whether this log can be written from the panel. False for the imported
    * project, whose history agrees with its signed PDFs until board item 08
@@ -244,23 +261,26 @@ export type RepeatResult =
     }
   | { ok: false; error: string };
 
-/** Whether "Repeat weekly" is offered at all. Stages are ticked, never spread. */
-export function canRepeat(item: LogItem): boolean {
-  return item.progressMethod === 'lumpsum' || item.progressMethod === 'qty';
-}
-
 /**
- * "Add 8% each week for 10 weeks", or "20% in total over 4 weeks".
+ * "Add 8% each week from W24 to W36", "20% in total over 4 weeks", or "8% each
+ * week until it is done" (a `count` running to the end of the plan — the fill
+ * stops itself on the week it reaches 100%).
  *
  * It starts from where the activity stood the week BEFORE `from` — the figure
  * the person is looking at in the row above — and never writes past 100%: it
  * stops on the week that gets there and says which week that was, so the
- * weeks after it simply carry 100%.
+ * weeks after it simply carry 100%, and the last week takes only what is left.
  *
  * A quantity item is filled in its own unit ("Add 5 m each week"), and what is
- * stored is the quantity, because the quantity is the evidence. A typed-percent
- * item stores a percent declared as typed (`source: 'manual'`), which is what
- * the panel's own box writes.
+ * stored is the quantity, because the quantity is the evidence.
+ *
+ * EVERY OTHER ITEM, stages included, stores a percent declared as typed
+ * (`source: 'manual'`) — the same override the panel's own figure writes, and
+ * the one the Check screen counts as "typed by hand". It was stages-excluded at
+ * first, and the one activity the brief was tested on (PO Material Solar, four
+ * stages) then had no way to fill several weeks at all (23 Sep 2026). The
+ * stages already ticked ride along untouched, so the ladder is still there the
+ * moment somebody ticks a stage again and the evidence takes back over.
  */
 export function repeatFill(
   item: LogItem,
@@ -273,10 +293,12 @@ export function repeatFill(
     lastWeek,
   }: { from: number; count: number; amount: number; mode: RepeatMode; lastWeek: number }
 ): RepeatResult {
-  if (!canRepeat(item)) return { ok: false, error: 'Stages are ticked week by week, not spread' };
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: 'Enter an amount above 0' };
-  if (!Number.isInteger(count) || count < 1) return { ok: false, error: 'Enter at least 1 week' };
+  if (!Number.isInteger(count) || count < 1) return { ok: false, error: 'Pick a last week on or after the first' };
   if (from > lastWeek) return { ok: false, error: `W${from} is past the end of the plan` };
+  if (figureOf(item, base) >= COMPLETE_PCT) {
+    return { ok: false, error: `It is already at 100% before W${from}` };
+  }
 
   const perWeek = mode === 'each' ? amount : amount / count;
   const edits = new Map<number, WeekEvidence>();
@@ -299,11 +321,12 @@ export function repeatFill(
     }
   } else {
     const start = figureOf(item, base);
+    const ticked = base?.milestonesDone ? { milestonesDone: base.milestonesDone } : {};
     for (let i = 0; i < count; i++) {
       const week = from + i;
       if (week > lastWeek) break;
       const v = Math.min(100, round2(start + perWeek * (i + 1)));
-      edits.set(week, { cumProgressPct: v, source: 'manual' });
+      edits.set(week, { cumProgressPct: v, source: 'manual', ...ticked });
       last = week;
       if (v >= COMPLETE_PCT) {
         reached = week;
@@ -372,7 +395,10 @@ export function buildLeafWeekLog(
   };
   const sched = (db.schedule ?? []).find((s) => s.leafId === nodeId) ?? null;
   const weeks = [...db.weeks].sort((a, b) => a.week - b.week);
-  const currentWeek = currentWeekOf(db, today);
+  // The last week that has STARTED by today's date. Weeks after it are the
+  // future; before the plan starts nothing has, and it is 0.
+  const todayISO = toISODate(today);
+  const todayWeek = weeks.filter((w) => w.periodStart <= todayISO).pop()?.week ?? 0;
   const logged = new Set((db.changeLog ?? []).filter((c) => c.leafId === nodeId).map((c) => c.week));
 
   const all = weeks.map((w, i) => {
@@ -406,23 +432,24 @@ export function buildLeafWeekLog(
     } satisfies LogRow;
   });
 
-  const nowPct = all.filter((r) => r.week <= currentWeek).pop()?.pct ?? 0;
+  const nowPct = all.filter((r) => r.week <= todayWeek).pop()?.pct ?? 0;
   const range = logRange({
     weeks: weeks.map((w) => w.week),
     startWeek: sched?.startWeek ?? null,
     finishWeek: sched?.finishWeek ?? null,
     recordedWeeks: all.filter((r) => r.recorded).map((r) => r.week),
-    currentWeek,
+    currentWeek: todayWeek,
     complete: nowPct >= COMPLETE_PCT,
   });
 
   return {
     nodeId,
-    currentWeek,
+    todayWeek,
     startWeek: sched?.startWeek ?? null,
     finishWeek: sched?.finishWeek ?? null,
     lastWeek: weeks.length ? weeks[weeks.length - 1].week : 0,
+    range,
     editable,
-    rows: range ? all.filter((r) => r.week >= range.from && r.week <= range.to) : [],
+    rows: all,
   };
 }

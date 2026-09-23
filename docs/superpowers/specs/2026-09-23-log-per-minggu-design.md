@@ -230,3 +230,28 @@ Batasan dari AGENTS.md yang berlaku di sini:
 - Menulis riwayat Gundih — menunggu papan 08.
 - Mengubah halaman Check.
 - Grafik kurva per aktivitas di panel (varian D) — tidak dipilih.
+
+## Revisi setelah dicoba di production (23 Sep 2026, sore)
+
+Dicoba pada RTC, "PO Material Solar" (stages, plan W1–W1, proyek di-pin W23,
+diisi di W36). Empat hal dikoreksi, masing-masing ditanyakan satu per satu:
+
+1. **Gembok mengikuti TANGGAL hari ini, bukan pin "Current".** `LeafWeekLog`
+   membawa `todayWeek` (minggu terakhir yang sudah mulai menurut tanggal).
+   Versi pertama memakai `currentWeekOf`, sehingga semua minggu setelah pin W23
+   dianggap belum datang, dan 100% yang diisi di W36 tersembunyi.
+2. **Gembok tidak pernah menyembunyikan angka.** Gembok hanya mencegah edit; bar
+   dan persen setiap minggu selalu tampil.
+3. **"Fill several weeks" jadi tombol yang selalu terlihat di atas log**, dengan
+   dua mode: *Up to a week* (from W.. to W.., each week / in total) dan
+   *Until 100%* (minggu terakhir hanya dapat sisanya). Isi cepat di dalam baris
+   dihapus: satu jalan saja. Berlaku juga untuk aktivitas stages, sebagai persen
+   ketik (`source: 'manual'`), dengan centang stage yang sudah ada dibawa serta.
+4. **Tombol "N late" / "N ending soon" membuka DAFTAR**, bukan menyaring map:
+   nama, *"Plan ended W1 · 0.0% done · 22 weeks late"*, dan *Open* langsung ke
+   panelnya. Baris late di log tidak lagi berlatar kuning dan ikut lipatan
+   biasa, karena 22 minggu terlambat menjadi dinding 34 baris kuning.
+
+`rows` di `LeafWeekLog` kini berisi SEMUA minggu proyek, dengan `range` sebagai
+rentang yang ditampilkan, supaya pratinjau isi cepat juga tergambar di minggu
+di luar rentang.

@@ -8,6 +8,7 @@ import ActivityPanel from '@/components/weekly/ActivityPanel';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
 import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
+import { Expand } from '@/components/motion/Expand';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { pressMotion } from '@/components/motion/Press';
 import { MOTION, verdictFill, verdictOf } from '@/lib/design';
@@ -116,12 +117,20 @@ const WeightPill = ({ weight }: { weight: number }) =>
  * inventing a second filtering concept, because `matchingIds` already keeps
  * a node's whole ancestor chain for anything it keeps, whatever the
  * predicate checks.
- *
- * `'late'` and `'soon'` are the reminders (23 Sep 2026): past their finish and
- * still short, or finishing within the next few weeks and still short. Both
- * are the worklist's answers, carried onto the leaf as `lateBy` / `dueIn`.
  */
-type Lens = 'due' | 'manual' | 'late' | 'soon' | null;
+type Lens = 'due' | 'manual' | null;
+
+/**
+ * The reminders (23 Sep 2026): past their finish and still short, or finishing
+ * within the next few weeks and still short — the worklist's answers, carried
+ * onto the row as `lateBy` / `dueIn`. They open a LIST, not a filter: the
+ * first cut filtered the map, and "3 late" pressed read as a button that did
+ * nothing, because a filtered map says which rows and never why.
+ */
+type Reminder = 'late' | 'soon' | null;
+
+/** How many reminder rows show before "Show all". */
+const REMINDER_ROWS = 6;
 
 export default function OverallMap({
   map,
@@ -147,6 +156,8 @@ export default function OverallMap({
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [reminder, setReminder] = useState<Reminder>(null);
+  const [allReminders, setAllReminders] = useState(false);
   const [lens, setLens] = useState<Lens>(initialLens);
   const [query, setQuery] = useState('');
   /** Branches folded BACK while a filter is showing. */
@@ -206,8 +217,6 @@ export default function OverallMap({
       // never matches this arm directly — it is pulled in as an ancestor of a
       // matching leaf instead, same as every branch above a "due" leaf.
       if (lens === 'manual' && n.source !== 'manual') return false;
-      if (lens === 'late' && n.lateBy === undefined) return false;
-      if (lens === 'soon' && n.dueIn === undefined) return false;
       if (needle && !`${n.code} ${n.name}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -314,17 +323,21 @@ export default function OverallMap({
 
         {/* THE REMINDERS, as buttons. This was one sentence pointing at the
             Check screen, which told you how many and sent you somewhere else
-            to find out which. Now the count IS the filter: press it and the
-            map shows those rows and the path to them. Tinted at rest so a
-            phone, which has no hover, still sees a button; solid when on. */}
+            to find out which. Pressing one now lists them right here, each
+            with the reason and a way straight into its panel. Tinted at rest
+            so a phone, which has no hover, still sees a button; solid when
+            its list is open. */}
         {(map.stuck > 0 || map.soon > 0) && (
           <div className="mt-3">
             <div className="flex gap-2">
               {map.stuck > 0 && (
                 <ReminderLens
                   tone="warn"
-                  on={lens === 'late'}
-                  onPress={() => setLens((v) => (v === 'late' ? null : 'late'))}
+                  on={reminder === 'late'}
+                  onPress={() => {
+                    setAllReminders(false);
+                    setReminder((v) => (v === 'late' ? null : 'late'));
+                  }}
                 >
                   <TriangleAlert className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
                   {map.stuck} late
@@ -333,18 +346,30 @@ export default function OverallMap({
               {map.soon > 0 && (
                 <ReminderLens
                   tone="due"
-                  on={lens === 'soon'}
-                  onPress={() => setLens((v) => (v === 'soon' ? null : 'soon'))}
+                  on={reminder === 'soon'}
+                  onPress={() => {
+                    setAllReminders(false);
+                    setReminder((v) => (v === 'soon' ? null : 'soon'));
+                  }}
                 >
                   <Clock className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
                   {map.soon} ending soon
                 </ReminderLens>
               )}
             </div>
+            <Expand open={reminder !== null}>
+              {reminder && (
+                <ReminderList
+                  kind={reminder}
+                  units={units}
+                  all={allReminders}
+                  onShowAll={() => setAllReminders(true)}
+                  onOpen={setActiveId}
+                />
+              )}
+            </Expand>
             <p className="mt-1.5 text-[12px] text-muted-foreground">
-              {lens === 'late' || lens === 'soon'
-                ? 'Press it again to see everything'
-                : 'Press one to show only those on the map'}
+              {reminder ? 'Press it again to close the list' : 'Press one to see which, and why'}
             </p>
           </div>
         )}
@@ -398,7 +423,107 @@ export default function OverallMap({
   );
 }
 
-/** One of the two reminder counts above the map, which is also its filter. */
+/**
+ * Which activities, and WHY — the list a reminder button opens.
+ *
+ * Each line says what the plan said, where the activity actually is, and by
+ * how much the two are apart, in words, so nobody has to open three panels to
+ * find out what "late" was measured against. "Open" goes straight to the
+ * activity's panel, where its week-by-week log is the thing to fix it in.
+ * Native buttons, like the map's own rows: this can run to forty lines.
+ */
+function ReminderList({
+  kind,
+  units,
+  all,
+  onShowAll,
+  onOpen,
+}: {
+  kind: 'late' | 'soon';
+  units: MapNode[];
+  all: boolean;
+  onShowAll: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const entries = useMemo(() => {
+    const out: MapNode[] = [];
+    const walk = (n: MapNode) => {
+      if (kind === 'late' ? n.lateBy !== undefined : n.dueIn !== undefined) out.push(n);
+      n.children.forEach(walk);
+    };
+    units.forEach(walk);
+    return kind === 'late'
+      ? out.sort((a, b) => (b.lateBy ?? 0) - (a.lateBy ?? 0) || b.weight - a.weight)
+      : out.sort((a, b) => (a.dueIn ?? 0) - (b.dueIn ?? 0) || b.weight - a.weight);
+  }, [kind, units]);
+
+  const weeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
+  const late = kind === 'late';
+  const shown = all ? entries : entries.slice(0, REMINDER_ROWS);
+
+  return (
+    <div
+      className={cn(
+        'mt-3 overflow-hidden rounded-xl border',
+        late ? 'border-warn/30 bg-warn-soft' : 'border-chart-1/25 bg-chart-1/8'
+      )}
+    >
+      <p className={cn('px-3.5 pb-2 pt-3 text-[13px] font-semibold', late ? 'text-warn' : 'text-chart-1')}>
+        {late
+          ? `${entries.length} ${entries.length === 1 ? 'activity has' : 'activities have'} passed the plan and ${entries.length === 1 ? 'is' : 'are'} not finished`
+          : `${entries.length} ${entries.length === 1 ? 'activity ends' : 'activities end'} within 3 weeks and ${entries.length === 1 ? 'is' : 'are'} not finished`}
+      </p>
+      <ul>
+        {shown.map((n) => {
+          const { tag, name } = splitCode(n.name);
+          return (
+            <li key={n.id}>
+              <button
+                type="button"
+                onClick={() => onOpen(n.id)}
+                className={cn(
+                  'flex min-h-12 w-full items-center gap-3 border-t px-3.5 py-2.5 text-left transition-colors duration-200 ease-ios',
+                  late ? 'border-warn/20 hover:bg-warn/10' : 'border-chart-1/15 hover:bg-chart-1/10'
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    {tag && <CodeChip>{tag}</CodeChip>}
+                    <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{name}</span>
+                  </span>
+                  <span className={cn('mt-0.5 block text-[12px] tabular-nums', late ? 'text-warn' : 'text-chart-1')}>
+                    {late
+                      ? `Plan ended W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${weeks(n.lateBy ?? 0)} late`
+                      : `Plan ends W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${
+                          n.dueIn === 0 ? 'ends this week' : `ends in ${weeks(n.dueIn ?? 0)}`
+                        }`}
+                  </span>
+                </span>
+                <span className={cn('shrink-0 text-[13px] font-semibold', late ? 'text-warn' : 'text-chart-1')}>
+                  Open ›
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!all && entries.length > REMINDER_ROWS && (
+        <button
+          type="button"
+          onClick={onShowAll}
+          className={cn(
+            'flex min-h-11 w-full items-center justify-center border-t text-[13px] font-semibold transition-colors duration-200 ease-ios',
+            late ? 'border-warn/20 text-warn hover:bg-warn/10' : 'border-chart-1/15 text-chart-1 hover:bg-chart-1/10'
+          )}
+        >
+          Show all {entries.length}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One of the two reminder counts above the map; it opens the list of them. */
 function ReminderLens({
   tone,
   on,

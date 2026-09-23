@@ -135,8 +135,24 @@ check('never past the last week', () => {
   assert.ok(r.ok);
   assert.equal(r.edits.size, 3);
 });
-check('stages are not spread', () => {
-  const r = repeatFill({ progressMethod: 'milestone', vol: null, milestones: [] }, null, { from: 1, count: 2, amount: 5, mode: 'each', lastWeek: 9 });
+check('stages fill as a typed percent, keeping the stages already ticked', () => {
+  const ms = { progressMethod: 'milestone' as const, vol: null, milestones: [
+    { id: 'a', label: 'A', weight: 50 }, { id: 'b', label: 'B', weight: 50 },
+  ] };
+  const r = repeatFill(ms, { cumProgressPct: 50, milestonesDone: ['a'], source: 'steps' }, { from: 3, count: 2, amount: 10, mode: 'each', lastWeek: 9 });
+  assert.ok(r.ok);
+  assert.deepEqual([...r.edits.values()].map((e) => [e.cumProgressPct, e.source, e.milestonesDone?.join()]), [[60, 'manual', 'a'], [70, 'manual', 'a']]);
+});
+check('until 100%: the last week takes only what is left', () => {
+  const r = repeatFill(lump, null, { from: 24, count: 72 - 24 + 1, amount: 8, mode: 'each', lastWeek: 72 });
+  assert.ok(r.ok);
+  assert.equal(r.last, 36);
+  assert.equal(r.reached, 36);
+  assert.equal(r.edits.get(35)?.cumProgressPct, 96);
+  assert.equal(r.edits.get(36)?.cumProgressPct, 100);
+});
+check('nothing to fill on an activity already at 100%', () => {
+  const r = repeatFill(lump, typed(100), { from: 5, count: 3, amount: 5, mode: 'each', lastWeek: 9 });
   assert.equal(r.ok, false);
 });
 
@@ -157,9 +173,17 @@ const rawRows = () =>
 
 check('an empty log still spans the plan', () => {
   const log = logOf();
-  assert.equal(log.rows[0].week, S);
-  assert.ok(log.rows.at(-1)!.week >= sched.finishWeek);
+  assert.equal(log.range!.from, S);
+  assert.ok(log.range!.to >= sched.finishWeek);
   assert.ok(log.rows.every((r) => !r.recorded && r.pct === 0));
+});
+check("this week is today's date, not the reporting pin", () => {
+  const d = load();
+  const w10 = d.weeks.find((w) => w.week === 10)!;
+  const log = buildLeafWeekLog(d, leaf, { signedWeeks: new Set(), editable: true, today: new Date(w10.periodStart + 'T12:00:00Z') });
+  assert.equal(log!.todayWeek, 10);
+  const before = buildLeafWeekLog(d, leaf, { signedWeeks: new Set(), editable: true, today: new Date('2000-01-01T00:00:00Z') });
+  assert.equal(before!.todayWeek, 0, 'nothing has started before the plan');
 });
 
 check('one week written, the next one carries it', () => {
