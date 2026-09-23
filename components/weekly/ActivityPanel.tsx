@@ -529,30 +529,34 @@ function PanelBody({
                     change the kind of work, because nothing on it said it
                     could (23 Sep 2026). Now it is a bordered row, the same
                     surface as the picker's own Cancel, naming what it holds
-                    and carrying the word "Change". */}
-                <button
-                  type="button"
-                  onClick={() => setPicking(true)}
-                  className="group -mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card px-3.5 py-2 text-left transition-colors duration-200 ease-ios hover:border-primary/40"
-                >
+                    and carrying the word "Change".
+
+                    ONLY "CHANGE" IS THE BUTTON. The row used to be the button
+                    and light up as a whole, first grey (the same hover as every
+                    rung under it) and then a blue border, and both read as
+                    "all of this is lit" rather than "this is the action". Now
+                    the row is a plain label and the pill is the one thing that
+                    answers the pointer: faintly tinted at rest so a phone,
+                    which has no hover, still sees a button, and SOLID blue under
+                    the pointer (a deeper tint was measured and read as the same
+                    pill). 44px tall, so a thumb still finds it. */}
+                <div className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
                   <span className="min-w-0 flex-1">
                     <span className="block text-[11px] text-muted-foreground">Kind of work</span>
                     <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
                   </span>
                   {/* The exchange arrows, not a chevron: a › reads as "next",
-                      and this goes BACK to the question to swap the answer.
-
-                      THE HOVER LANDS ON "CHANGE", NOT ON THE ROW. Greying the
-                      whole row was the same hover as every rung under it, so
-                      it read as "all of this is lit" rather than "this is the
-                      action". The row keeps the whole tap target (a thumb
-                      does not aim at a word) but only its border tints; the
-                      word becomes a blue pill. */}
-                  <span className="-mr-1.5 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios group-hover:bg-primary/10 group-active:bg-primary/15">
+                      and this goes BACK to the question to swap the answer. */}
+                  <m.button
+                    {...pressMotion}
+                    type="button"
+                    onClick={() => setPicking(true)}
+                    className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                  >
                     <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     Change
-                  </span>
-                </button>
+                  </m.button>
+                </div>
                 <ProgressEntry
                   node={effectiveNode}
                   draft={draft}
