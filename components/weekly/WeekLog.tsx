@@ -3,11 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ChevronDown, Layers, Lock } from 'lucide-react';
 
-import {
-  getLeafWeeksAction,
-  restoreLeafWeeksAction,
-  saveLeafWeeksAction,
-} from '@/lib/actions';
+import { restoreLeafWeeksAction, saveLeafWeeksAction } from '@/lib/actions';
 import type { MapNode } from '@/lib/overall-map';
 import type { LeafWeekBefore } from '@/lib/progress-sqlite';
 import {
@@ -79,6 +75,53 @@ function weekList(weeks: number[]) {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+/* ---------------------------------------------------------------- loading */
+
+/**
+ * Logs this tab has already read, keyed by project and activity, so opening
+ * an activity again draws its weeks at once. The fetch still runs behind it
+ * and replaces what is shown, so a week saved elsewhere arrives a moment later
+ * rather than never.
+ */
+const logCache = new Map<string, LeafWeekLog | null>();
+const cacheKey = (projectId: string | null, nodeId: string) => `${projectId ?? ''}:${nodeId}`;
+
+/** Drop one activity's cached log — its figures just changed outside the log. */
+export function forgetLeafLog(projectId: string | null, nodeId: string) {
+  logCache.delete(cacheKey(projectId, nodeId));
+}
+
+/**
+ * The log, over a plain GET — see `lib/week-log-read.ts` for why it is not a
+ * server action any more. Three tries, each with its own time limit, because
+ * the failure this replaces was a request that simply never answered.
+ */
+async function loadLog(projectId: string | null, nodeId: string, outer: AbortSignal) {
+  const qs = new URLSearchParams({ node: nodeId });
+  if (projectId) qs.set('project', projectId);
+  let last: unknown = null;
+  for (const wait of [0, 700, 1800]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    if (outer.aborted) throw new DOMException('Aborted', 'AbortError');
+    const ctl = new AbortController();
+    const timer = window.setTimeout(() => ctl.abort(), 10_000);
+    const stop = () => ctl.abort();
+    outer.addEventListener('abort', stop);
+    try {
+      const res = await fetch(`/api/leaf-weeks?${qs}`, { cache: 'no-store', signal: ctl.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as { log: LeafWeekLog | null };
+      return body.log ?? null;
+    } catch (err) {
+      last = err;
+    } finally {
+      window.clearTimeout(timer);
+      outer.removeEventListener('abort', stop);
+    }
+  }
+  throw last;
+}
+
 type FillMode = 'range' | 'done';
 type Asking = { week: number; kind: 'future' | 'signed' };
 type Confirm = { message: string; yes: string; run: () => void };
@@ -98,8 +141,16 @@ export default function WeekLog({
   /** The open week's figure moved as a side effect of a save here. */
   onOpenWeekChanged: (pct: number) => void;
 }) {
-  const [log, setLog] = useState<LeafWeekLog | null | undefined>(undefined);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const key = cacheKey(projectId, node.id);
+  const [log, setLogState] = useState<LeafWeekLog | null | undefined>(() =>
+    logCache.has(key) ? logCache.get(key) : undefined
+  );
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const setLog = (next: LeafWeekLog | null) => {
+    logCache.set(key, next);
+    setLogState(next);
+  };
   const [showAll, setShowAll] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [fill, setFill] = useState<FillMode | null>(null);
@@ -119,19 +170,29 @@ export default function WeekLog({
   const toastTimer = useRef<number | null>(null);
 
   // Loaded when the panel opens, for this one activity: the map's own payload
-  // never carries every week of every leaf.
+  // never carries every week of every leaf. A cached log is already on screen
+  // by now; this refreshes it, and a refresh that fails leaves it standing.
   useEffect(() => {
-    let live = true;
-    getLeafWeeksAction(node.id, projectId).then((res) => {
-      if (!live) return;
-      if (res.ok) setLog(res.log);
-      else setLoadError(res.error);
-    });
-    return () => {
-      live = false;
+    const ctl = new AbortController();
+    loadLog(projectId, node.id, ctl.signal).then(
+      (fresh) => {
+        logCache.set(key, fresh);
+        setLogState(fresh);
+        setLoadFailed(false);
+      },
+      () => {
+        if (!ctl.signal.aborted) setLoadFailed(true);
+      }
+    );
+    return () => ctl.abort();
+  }, [key, projectId, node.id, attempt]);
+
+  useEffect(
+    () => () => {
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    };
-  }, [node.id, projectId]);
+    },
+    []
+  );
 
   const item: LogItem = useMemo(
     () => ({
@@ -385,8 +446,22 @@ export default function WeekLog({
   /* -------------------------------------------------------------- render */
 
   if (log === undefined) {
-    return loadError ? (
-      <p className="mt-4 rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">{loadError}</p>
+    // NEVER A SILENT BLANK. The failure this replaces left grey bars on screen
+    // forever; now a failed load says so and offers the way back.
+    return loadFailed ? (
+      <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-bad-soft px-3.5 py-2.5">
+        <p className="text-[13px] font-medium text-bad">Couldn&apos;t load the weeks.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadFailed(false);
+            setAttempt((n) => n + 1);
+          }}
+          className="min-h-11 shrink-0 rounded-full border border-bad/25 bg-card px-4 text-[13px] font-semibold text-bad transition-colors duration-200 ease-ios hover:bg-bad/10"
+        >
+          Try again
+        </button>
+      </div>
     ) : (
       <div className="mt-5 space-y-2" aria-hidden="true">
         <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />

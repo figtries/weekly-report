@@ -29,12 +29,11 @@ import {
   saveWeekUpdatesSqlite,
   setProgressMethodSqlite,
   setWorkKindSqlite,
-  signedWeeksSqlite,
   SignedWeeksError,
   type LeafWeekBefore,
 } from './progress-sqlite';
-import { getPrintDb } from './data';
-import { buildLeafWeekLog, type LeafWeekLog, type WeekEvidence } from './week-log';
+import type { LeafWeekLog, WeekEvidence } from './week-log';
+import { readLeafLog } from './week-log-read';
 import { and, eq } from 'drizzle-orm';
 import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
 import type { SetupDraft } from './setup-draft';
@@ -465,32 +464,6 @@ const READ_ONLY_HISTORY =
   "This project's past weeks match its signed reports, so they can't be changed from here.";
 
 /**
- * One leaf's log, read off the same `Database` the reports are built from —
- * `getPrintDb` rather than the cookie, because the panel names its project.
- */
-async function readLeafLog(nodeId: string, forProject?: string | null): Promise<LeafWeekLog | null> {
-  const projectId = forProject ?? (await getActiveProjectId());
-  const sqliteId = await sqliteProject(projectId);
-  const db = await getPrintDb(projectId ?? null);
-  const signedWeeks = sqliteId
-    ? signedWeeksSqlite(sqliteId)
-    : new Set((db.approvals ?? []).map((a) => a.week));
-  return buildLeafWeekLog(db, nodeId, { signedWeeks, editable: Boolean(sqliteId) });
-}
-
-/** Loaded when the panel opens, for the one activity in it — never for the whole map. */
-export async function getLeafWeeksAction(
-  nodeId: string,
-  forProject?: string | null
-): Promise<LeafWeeksResult> {
-  try {
-    return { ok: true, log: await readLeafLog(nodeId, forProject) };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-/**
  * Several weeks of one activity in one save — a single corrected week, or a
  * "Repeat weekly" fill. Answers with the fresh log, so the panel redraws from
  * what was written rather than from what it hoped would be, and with the rows
@@ -513,7 +486,7 @@ export async function saveLeafWeeksAction(
     await flushDbSnapshot();
     updateTag('db');
     refresh();
-    return { ok: true, undo, log: await readLeafLog(nodeId, projectId) };
+    return { ok: true, undo, log: await readLeafLog(nodeId, projectId, { fresh: false }) };
   } catch (err) {
     if (err instanceof SignedWeeksError) return { ok: false, error: err.message, signed: err.weeks };
     return fail(err);
@@ -534,7 +507,7 @@ export async function restoreLeafWeeksAction(
     await flushDbSnapshot();
     updateTag('db');
     refresh();
-    return { ok: true, log: await readLeafLog(nodeId, projectId) };
+    return { ok: true, log: await readLeafLog(nodeId, projectId, { fresh: false }) };
   } catch (err) {
     return fail(err);
   }

@@ -24,7 +24,7 @@ import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
-import WeekLog from './WeekLog';
+import WeekLog, { forgetLeafLog } from './WeekLog';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 
 /**
@@ -408,6 +408,9 @@ function PanelBody({
   }, [onClose]);
 
   function finish(nextPct: number) {
+    // The week just saved is one of the log's weeks; the log cached for this
+    // activity no longer says what the database says.
+    forgetLeafLog(projectId, node.id);
     onSaved(node.id, nextPct);
     setSaved(true);
     // Short enough that the tick is a confirmation rather than a wait. It used
