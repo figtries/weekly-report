@@ -521,16 +521,29 @@ function PanelBody({
               <>
                 {/* The way back in, named with the same word the answer was
                     given in. It sits above the form because it is what the
-                    form IS, not an action to take on it. */}
+                    form IS, not an action to take on it.
+
+                    A BUTTON THAT SAYS SO. It was the answer and a chevron in
+                    plain text, which read as a heading: nobody pressed it to
+                    change the kind of work, because nothing on it said it
+                    could (23 Sep 2026). Now it is a bordered row, the same
+                    surface as the picker's own Cancel, naming what it holds
+                    and carrying the word "Change". */}
                 <button
                   type="button"
                   onClick={() => setPicking(true)}
-                  className="-mt-1 mb-3 flex min-h-11 w-full items-center gap-1.5 rounded-lg text-left text-[13px] text-muted-foreground transition-colors duration-200 ease-ios hover:text-foreground"
+                  className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card px-3.5 py-2 text-left transition-colors duration-200 ease-ios hover:bg-muted/60"
                 >
-                  <span className="font-medium text-foreground">{kindLabel}</span>
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <path d="M8 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] text-muted-foreground">Kind of work</span>
+                    <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-primary">
+                    Change
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="M8 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
                 </button>
                 <ProgressEntry
                   node={effectiveNode}
