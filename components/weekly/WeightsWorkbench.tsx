@@ -1440,7 +1440,7 @@ function RowList({
         <span>Activity</span>
         <span className="flex">
           <span className="flex-1 text-right">Budget</span>
-          <span className="w-[5.5rem] text-right">Share</span>
+          <span className="w-[5.5rem] text-right">Weight</span>
         </span>
       </div>
 
@@ -1731,7 +1731,7 @@ function ShareBox({
         ref={input}
         type="text"
         inputMode="decimal"
-        aria-label="Share, in percent"
+        aria-label="Weight, in percent"
         disabled={disabled}
         value={draft ?? share.toFixed(2)}
         onFocus={() => {
