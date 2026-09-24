@@ -1,8 +1,7 @@
 /**
  * Keeping weight in step with price, on the projects where that cannot hurt.
  *
- * `lib/weights-actions.ts` explains why recompute is normally an explicit act:
- * Gundih's 81 construction weights came from a workbook rather than from its
+ * Recompute is never run over a locked project (`weight_basis = 'boq'`): Gundih's 81 construction weights came from a workbook rather than from its
  * prices, and running the derivation over them replaces correct figures with
  * wrong ones. That rule protects weights nobody can re-derive. It was never
  * meant to protect weights that do not exist.

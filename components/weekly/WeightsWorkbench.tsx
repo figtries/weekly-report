@@ -1,7 +1,5 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { m } from 'framer-motion';
@@ -29,10 +27,6 @@ import Spinner from '@/components/ui/Spinner';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-
-// Loaded on demand: nobody opens this on the way past, and the field crew's
-// connection is what the initial bundle is measured against.
-const DeriveWeightsDialog = dynamic(() => import('./DeriveWeightsDialog'), { ssr: false });
 
 /**
  * Where a project says what its work is worth.
@@ -92,8 +86,6 @@ export default function WeightsWorkbench({
   /** A refusal belongs on the row it refused, not at the top of a long list. */
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const [deriving, setDeriving] = useState(false);
-  const router = useRouter();
 
   const signed = screen.summary.contractValue > 0 ? screen.summary.contractValue : undefined;
 
@@ -389,7 +381,6 @@ export default function WeightsWorkbench({
         total={leafCount}
         unbudgeted={unbudgeted}
         projectId={projectId}
-        onLock={() => setDeriving(true)}
       />
 
       {unit ? (
@@ -438,17 +429,6 @@ export default function WeightsWorkbench({
           )}
         </>
       )}
-
-      {deriving && (
-        <DeriveWeightsDialog
-          projectId={projectId}
-          onClose={() => setDeriving(false)}
-          onApplied={() => {
-            setDeriving(false);
-            router.refresh();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -480,7 +460,6 @@ function PricingHero({
   total,
   unbudgeted,
   projectId,
-  onLock,
 }: {
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
@@ -492,7 +471,6 @@ function PricingHero({
   /** Activities no budget reaches, in plan order. */
   unbudgeted: string[];
   projectId: string;
-  onLock: () => void;
 }) {
   const currency = screen.summary.currency;
   const locked = screen.locked;
@@ -654,22 +632,14 @@ function PricingHero({
             )}
           </p>
 
-          {/* The LOCK. Recalculating needs no button: an unlocked project's
-              weights follow its budgets on every edit. What needs one is
-              DECLARING them authoritative. */}
-          {locked ? (
+          {/* No button to lock (removed 24 Sep 2026: it only confused people).
+              An unlocked project's weights follow its budgets on every edit;
+              an imported one arrives locked, and that is still said here. */}
+          {locked && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
               <span className="h-1.5 w-1.5 rounded-full bg-ok" />
               Value based, locked
             </span>
-          ) : (
-            <m.button
-              {...pressMotion}
-              onClick={onLock}
-              className="inline-flex min-h-11 items-center rounded-lg bg-background px-4 text-sm font-medium ring-1 ring-foreground/12 transition-colors duration-300 ease-ios hover:bg-accent"
-            >
-              Lock these weights
-            </m.button>
           )}
         </div>
       </CardContent>

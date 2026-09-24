@@ -22,8 +22,8 @@ import CurrencyPicker from './CurrencyPicker';
  * project was created, not derived from prices — deriving it forced signed and
  * allocated to be equal and deleted the gap between them.
  *
- * `lib/weights-actions.ts` and the summary this component still reads are
- * untouched, and are what Data Overall will pick up.
+ * The summary this component still reads is untouched, and is what Data
+ * Overall picked up.
  *
  * No `'use client'`: with the panel gone there is no state here, and the only
  * interactive thing on the line is `CurrencyPicker`, which is its own client

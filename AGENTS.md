@@ -573,8 +573,10 @@ in a child component with `connection()` and a `null` fallback — an uncached r
 in the page body fails the build.
 
 **Weight follows price, unless the weights are authoritative.** `weight_basis =
-'boq'` is the LOCK: an imported project carries it, and so does one whose owner
-has applied a derivation covering the whole plan. Everything else re-derives on
+'boq'` is the LOCK, and only an imported project carries it. The "Lock these
+weights" button and its dialog were REMOVED on 24 Sep 2026 because they only
+confused people (the dialog said "Apply anyway" when nothing would change);
+nothing in the app can set the lock any more. Everything else re-derives on
 every price edit, every structural change (`renumber()` is the funnel) and every
 pasted BOQ — see `lib/weights-auto.ts`. A leaf no budget reaches weighs 0 and
 is stored as 0 (24 Sep 2026: the even share of what was left is gone, see "A
