@@ -206,7 +206,7 @@ export const PRESETS: {
   {
     key: 'package',
     label: 'By package',
-    help: 'Each SPK gets its own colour, so a long plan reads as a few streams.',
+    help: 'Each work package gets its own colour, so a long plan reads as a few streams.',
     styles: PACKAGE_PRESET,
   },
 ];
@@ -270,7 +270,7 @@ export const CONDITIONS: {
   { key: 'task', label: 'Work', help: 'A row with no rows under it' },
   { key: 'summary', label: 'Summary', help: 'A row that has rows under it' },
   { key: 'milestone', label: 'Milestone', help: 'A point in time rather than a span' },
-  { key: 'in_unit', label: 'Inside a package', help: 'Everything under one SPK or lot', takes: 'unit' },
+  { key: 'in_unit', label: 'Inside a package', help: 'Everything under one work package', takes: 'unit' },
   { key: 'past_target', label: 'Past its target date', help: 'Finishes after the date it was promised for' },
   { key: 'in_progress', label: 'Running today', help: 'Today falls between its start and its finish' },
   {

@@ -329,7 +329,7 @@ export default function WeightsWorkbench({
   const unit = openUnit ? (screen.units.find((u) => u.id === openUnit) ?? null) : null;
 
   /** What a card calls its own figure: an SPK's budget, or a top-level heading's. */
-  const budgetLabel = screen.hasUnits ? 'SPK budget' : 'Budget';
+  const budgetLabel = screen.hasUnits ? 'Work package budget' : 'Budget';
 
   /** What every list of rows needs, whichever list it is. */
   const listProps = {
@@ -388,8 +388,8 @@ export default function WeightsWorkbench({
         <>
           {!screen.hasUnits && screen.units.length > 0 && (
             <p className="px-1 text-[13px] text-muted-foreground">
-              No SPK marked yet, so the top level of the WBS stands in. Mark one in the planner to
-              give it its own section in the report.
+              No work package marked yet, so the top level of the WBS stands in. Mark one in the
+              planner to give it its own section in the report.
             </p>
           )}
 
@@ -657,7 +657,7 @@ function PricingHero({
                         <strong className="tabular-nums text-foreground">
                           {formatMoney(gap, currency)}
                         </strong>{' '}
-                        of the contract is not in any SPK or activity yet.
+                        of the contract is not in any work package or activity yet.
                       </>
                     )}
                   </p>
@@ -936,12 +936,12 @@ function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
   return (
     <div className="mt-2 px-1">
       <p className="text-[13px] font-semibold">
-        {hasUnits ? 'Outside every SPK' : 'The plan'}
+        {hasUnits ? 'Outside every work package' : 'The plan'}
       </p>
       <p className="mt-0.5 text-[12.5px] text-muted-foreground">
         {hasUnits
-          ? 'Rows that no SPK card above holds.'
-          : 'No SPK is marked, so every row is priced here.'}
+          ? 'Rows that no work package above holds.'
+          : 'No work package is marked, so every row is budgeted here.'}
       </p>
     </div>
   );
@@ -1222,7 +1222,7 @@ function UnitRows({
               strokeLinejoin="round"
             />
           </svg>
-          Back to all SPK
+          Back to all work packages
         </m.button>
       </div>
 

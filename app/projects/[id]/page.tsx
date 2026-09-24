@@ -113,7 +113,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const facts = [
     `${contents.wbsRows} rows`,
     `${contents.leaves} measurable`,
-    contents.reportingUnits ? `${contents.reportingUnits} reporting units` : null,
+    contents.reportingUnits ? `${contents.reportingUnits} work packages` : null,
     `${contents.weeks} weeks`,
     contents.documents ? `${contents.documents} documents` : null,
     // The priced-rows count stood here. It went with the Price column: this

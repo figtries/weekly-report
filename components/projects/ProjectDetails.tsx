@@ -76,7 +76,7 @@ const FIELDS: {
   },
   { key: 'clientName', label: 'Client', hint: 'Who the work is for' },
   { key: 'contractorName', label: 'Contractor', hint: 'Who signs for the work' },
-  { key: 'contractNo', label: 'Contract number', hint: 'Several SPK numbers can share one line' },
+  { key: 'contractNo', label: 'Contract number', hint: 'Several work package numbers can share one line' },
   { key: 'workLocation', label: 'Work location' },
   {
     key: 'docNoPrefix',

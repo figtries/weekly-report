@@ -111,5 +111,5 @@ export function contractRefusal(projectId: string, next: number | null): string 
   const claimed = allocationOf(deriveWeights(loadWeightNodes(projectId), next)).get(CONTRACT_POOL)?.claimed ?? 0;
   if (claimed - next <= 0.5) return null;
   const say = (a: number) => formatMoney(a, project.currency);
-  return `The SPK and activities already take ${say(claimed)} of the contract. Lower them first, or keep the contract at ${say(claimed)} or more.`;
+  return `The work packages and activities already take ${say(claimed)} of the contract. Lower them first, or keep the contract at ${say(claimed)} or more.`;
 }

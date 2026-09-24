@@ -354,7 +354,7 @@ export default function RowMenu({
                 }
                 disabled={pending}
               >
-                {row.isReportingUnit ? `Stop being ${row.unitLabel || 'a unit'}` : 'Make it a reporting unit'}
+                {row.isReportingUnit ? `Stop being ${row.unitLabel || 'a work package'}` : 'Make it a work package'}
               </Item>
             }
 
@@ -386,10 +386,10 @@ export default function RowMenu({
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              A reporting unit gets its own section in the report, and it is its own contract, even
-              when it sits inside another one. SPK-007 lives inside SPK-004 and its value is not
-              part of SPK-004&apos;s. The app keeps the units adding up to the contract, and says so
-              when they do not.
+              A work package gets its own section in the report, and it is its own contract, even
+              when it sits inside another one: a package nested in another keeps its own value,
+              apart from the one around it. The app keeps the packages adding up to the contract,
+              and says so when they do not.
             </p>
             <label className="block text-[11px] font-medium text-muted-foreground">
               Label
@@ -397,7 +397,7 @@ export default function RowMenu({
                 autoFocus
                 value={unitLabel}
                 onChange={(e) => setUnitLabel(e.target.value)}
-                placeholder="SPK-002, Package A, Lot 3…"
+                placeholder="Package A, Lot 3, WP-02…"
                 className="mt-1 h-11 w-full rounded-lg border px-3 text-sm text-foreground outline-none focus:border-foreground"
               />
             </label>
