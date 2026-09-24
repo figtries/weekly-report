@@ -545,9 +545,9 @@ export default function WeekLog({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[13px] font-semibold text-foreground">Week by week</h3>
-          <p className="text-[11.5px] text-muted-foreground">
-            {log.editable ? "Tap a week's figure to change it" : 'Read only on this project'}
-          </p>
+          {!log.editable && (
+            <p className="text-[11.5px] text-muted-foreground">Read only on this project</p>
+          )}
         </div>
         {log.editable && (
           <button

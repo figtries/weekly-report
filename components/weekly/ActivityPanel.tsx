@@ -878,10 +878,10 @@ function MoneySection({ node, canEdit }: { node: MapNode; canEdit: boolean }) {
 
   if (!canEdit) {
     return (
-      <p className="text-[13px] leading-relaxed text-muted-foreground">
-        This row carries {fmt2(node.weight)}% of the project. Weights on the imported project come
-        from the file it was imported from.
-      </p>
+      <div className="flex justify-between py-1 text-[13px] text-muted-foreground">
+        <span>Weight</span>
+        <span className="tabular-nums text-foreground">{fmt2(node.weight)}%</span>
+      </div>
     );
   }
 
@@ -930,10 +930,6 @@ function ScheduleSection({ node, projectHref }: { node: MapNode; projectHref: st
         <span>Finishes</span>
         <span className="text-foreground">{finish ?? (node.finishWeek ? `Week ${node.finishWeek}` : '—')}</span>
       </div>
-      <p className="mt-2 leading-relaxed">
-        Dates come from the plan, and moving one moves the curve — so they are changed in the
-        planner, where the whole schedule is in view.
-      </p>
       {projectHref && (
         <Link
           href={projectHref}
