@@ -93,14 +93,14 @@ check(
   `${branches.length} branches, ${branches.filter((b) => b.bobot != null).length} still weighted`
 );
 check(
-  'and the plan totals what that budget reaches, not 100',
-  Math.abs(total - 25) < 1e-6,
+  'and the plan closes at 100: weights are measured against the project budget',
+  Math.abs(total - 100) < 1e-6,
   `total ${total.toFixed(6)} across ${after.length} leaves`
 );
 check(
-  'the priced leaf gets what its price is worth against the contract',
-  Math.abs((after.find((l) => l.id === leaves[0].id)?.bobot ?? 0) - 25) < 1e-6,
-  `1,000 of a 4,000 contract = ${(after.find((l) => l.id === leaves[0].id)?.bobot ?? 0).toFixed(2)}%`
+  'the only budget is the whole project budget, whatever the contract value says',
+  Math.abs((after.find((l) => l.id === leaves[0].id)?.bobot ?? 0) - 100) < 1e-6,
+  `1,000 of a 1,000 project budget (contract 4,000) = ${(after.find((l) => l.id === leaves[0].id)?.bobot ?? 0).toFixed(2)}%`
 );
 
 // The whole point of the lock: an imported project is never touched.

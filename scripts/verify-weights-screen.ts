@@ -220,7 +220,7 @@ check('a flat plan makes no empty cards', flatScreen.units.length === 0, `${flat
 check(
   'its rows are reachable on the first screen, the unbudgeted ones at 0',
   flatScreen.looseRows.length === 3 &&
-    flatScreen.looseRows.find((r) => r.id === 'F3')?.bobotOverall === 50 &&
+    flatScreen.looseRows.find((r) => r.id === 'F3')?.bobotOverall === 100 &&
     flatScreen.looseRows.filter((r) => r.bobotOverall === 0).length === 2,
   flatScreen.looseRows.map((r) => `${r.id}=${r.bobotOverall.toFixed(2)}`).join(' ')
 );

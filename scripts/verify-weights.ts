@@ -104,7 +104,7 @@ const s = deriveWeights(synthetic);
 check(
   'a fully priced plan closes at 100 by construction',
   Math.abs(s.total - 100) < 1e-9 && s.basis === 'boq',
-  `total ${s.total.toFixed(9)}, basis ${s.basis}, contract ${s.contractValue}`
+  `total ${s.total.toFixed(9)}, basis ${s.basis}, project budget ${s.projectBudget}`
 );
 check(
   'workstep splits its parent, not the contract',
@@ -151,11 +151,12 @@ check(
 // A leaf no budget reaches weighs 0. Nothing is invented for it (24 Sep 2026).
 const noShare = deriveWeights(partlyPriced, 1000000);
 check(
-  'a leaf no budget reaches weighs 0, and the plan says it is partial',
+  'a leaf no budget reaches weighs 0, measured against the PROJECT budget, not the contract',
   noShare.basis === 'partial' &&
-    Math.abs(noShare.total - 40) < 1e-9 &&
+    Math.abs(noShare.total - 100) < 1e-9 &&
     noShare.bobotOf.get('b') === 0 &&
-    Math.abs((noShare.bobotOf.get('a') ?? 0) - 40) < 1e-9,
+    Math.abs((noShare.bobotOf.get('a') ?? 0) - 100) < 1e-9 &&
+    noShare.projectBudget === 400000,
   `budgeted leaf ${(noShare.bobotOf.get('a') ?? 0).toFixed(2)}, the other ${(noShare.bobotOf.get('b') ?? 0).toFixed(2)}, total ${noShare.total.toFixed(2)}, basis ${noShare.basis}`
 );
 
@@ -187,8 +188,8 @@ check(
   String(tryBudget(capped, 'H', 150))
 );
 check(
-  'a row under a heading with no budget is capped by the contract',
-  tryBudget(capped, 'K1', 600) === 'This row can take at most 500 of the contract.',
+  'the project is not capped: a row with no heading above grows the project budget',
+  tryBudget(capped, 'K1', 600) === null,
   String(tryBudget(capped, 'K1', 600))
 );
 check('clearing a budget is always allowed', tryBudget(capped, 'H', null) === null, String(tryBudget(capped, 'H', null)));

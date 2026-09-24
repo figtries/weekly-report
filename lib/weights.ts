@@ -1,7 +1,7 @@
 /**
  * Money, and the weights that come out of it.
  *
- * `bobot = line value ÷ contract value × 100`. That is the rule the whole app
+ * `bobot = line value ÷ project budget × 100`. That is the rule the whole app
  * rests on: earned value, the S-curve, every reported percentage. It is written
  * here once, as pure functions over plain rows, so it can be tested without a
  * database and can never be half-implemented at a call site.
@@ -22,8 +22,12 @@
  * imported figure moves; nothing writes one any more.
  *
  * **Every budget is carved out of a POOL**: the nearest heading above it with a
- * budget of its own, or the contract. What draws on a pool may not exceed it —
- * see `checkBudgetEdit`, which the write path and the screen both call.
+ * budget of its own, or the project. What draws on a heading may not exceed it —
+ * see `checkBudgetEdit`, which the write path and the screen both call. The
+ * PROJECT is the one pool that does not cap: its budget IS its work packages
+ * added up, so raising one raises the project (24 Sep 2026). The contract value
+ * typed on the project is what that total is compared with, and the screen
+ * says so when they differ; it never refuses a keystroke over it.
  *
  * **A total row restates the whole contract.** Gundih's `1.5 Finish` carries
  * 5,920,000 — the entire project — as its price. Counted as a line it doubles
@@ -58,7 +62,14 @@ export interface WeightNode {
 }
 
 export interface WeightResult {
-  contractValue: number;
+  /**
+   * The PROJECT BUDGET: what the budgets drawing straight on the project add
+   * up to (work packages, and rows outside every package). Every weight is
+   * measured against it, so it moves when a work package's budget does.
+   */
+  projectBudget: number;
+  /** The contract value typed on the project, 0 when none. Compared with, never a cap. */
+  signedContract: number;
   /**
    * Money per node. A row with a budget of its own is that budget, a heading
    * without one is its rows added up, and a leaf with neither is 0.
@@ -71,7 +82,7 @@ export interface WeightResult {
    * it, except a total row whose price restates the contract and is thrown away.
    */
   bobotOf: Map<string, number>;
-  /** What the leaf weights add up to. 100 means the budgets reach every part of the contract. */
+  /** What the leaf weights add up to. 100 means every budget has reached an activity. */
   total: number;
   /** Leaves a budget reaches. */
   covered: number;
@@ -154,7 +165,7 @@ function isTotalRow(n: WeightNode, priced: WeightNode[], largest: number): boole
  * still carrying a stored fraction, that fraction of its parent's own budget
  * (a root's parent is the contract). **Up** decides what each row is worth: its
  * own budget where it has one, otherwise its rows added up, and a leaf with
- * neither is worth nothing. A leaf's weight is its money over the contract.
+ * neither is worth nothing. A leaf's weight is its money over the project budget.
  *
  * NO EVEN SHARE, ANYWHERE (24 Sep 2026). A row nobody budgeted used to take an
  * even share of what its heading had left, and one project read "= IDR 11 253"
@@ -163,8 +174,11 @@ function isTotalRow(n: WeightNode, priced: WeightNode[], largest: number): boole
  * and on that screen it could not. So a row without a budget weighs 0 until
  * somebody gives it one, and the screen says so and lists it.
  */
-export function deriveWeights(nodes: WeightNode[], contractValue?: number): WeightResult {
-  const contract = contractValue ?? computeContractValue(nodes);
+export function deriveWeights(nodes: WeightNode[], signedContract?: number): WeightResult {
+  const signed = signedContract != null && signedContract > 0 ? signedContract : 0;
+  // What a ROOT's stored fraction is a fraction of. Nothing in this database
+  // has one; it is kept so an imported plan that did means what it meant.
+  const rootBase = signed > 0 ? signed : computeContractValue(nodes);
 
   const kids = new Map<string | null, WeightNode[]>();
   for (const n of [...nodes].sort((a, b) => a.order - b.order)) {
@@ -195,7 +209,21 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
     }
     for (const c of kids.get(node.id) ?? []) down(c, own);
   };
-  for (const r of kids.get(null) ?? []) down(r, contract > 0 ? contract : null);
+  for (const r of kids.get(null) ?? []) down(r, rootBase > 0 ? rootBase : null);
+
+  // The project budget: every budget with nothing budgeted above it, plus
+  // every work package that is its own contract wherever it sits.
+  const onProject = (id: string) => {
+    if (ownContract.has(id)) return true;
+    let p = parentOf.get(id) ?? null;
+    for (let guard = 0; p != null && guard <= parentOf.size; guard += 1) {
+      if (budgetOf.has(p)) return false;
+      p = parentOf.get(p) ?? null;
+    }
+    return true;
+  };
+  let projectBudget = 0;
+  for (const [id, b] of budgetOf) if (onProject(id)) projectBudget += b;
 
   const valueOf = new Map<string, number>();
   const up = (node: WeightNode): number => {
@@ -216,7 +244,7 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
     // double every figure; given a 0 it would be listed as work with no budget.
     if (discarded.has(leaf.id)) continue;
     const v = valueOf.get(leaf.id) ?? 0;
-    const b = contract > 0 ? (v / contract) * 100 : 0;
+    const b = projectBudget > 0 ? (v / projectBudget) * 100 : 0;
     bobotOf.set(leaf.id, b);
     total += b;
     if (v > 0) covered += 1;
@@ -230,7 +258,8 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
         : 'partial';
 
   return {
-    contractValue: contract,
+    projectBudget,
+    signedContract: signed,
     valueOf,
     budgetOf,
     bobotOf,
@@ -265,9 +294,9 @@ export function poolOf(nodeId: string, result: WeightResult): string | null {
   return null;
 }
 
-/** What a pool holds: that heading's own budget, or the contract. */
+/** What a pool holds: that heading's own budget, or the project's. */
 export function poolAmount(pool: string | null, result: WeightResult): number {
-  return pool == null ? result.contractValue : (result.budgetOf.get(pool) ?? 0);
+  return pool == null ? result.projectBudget : (result.budgetOf.get(pool) ?? 0);
 }
 
 /**
@@ -318,6 +347,8 @@ export function checkBudgetEdit(
   say: (amount: number) => string
 ): string | null {
   const contract = signedContract != null && signedContract > 0 ? signedContract : undefined;
+  // THE PROJECT IS NOT CAPPED: its budget is its work packages added up, so a
+  // package may grow and the project with it. Only headings refuse.
   const clean = next != null && next > 0 ? next : null;
   // Setting or clearing the budget clears a stored fraction either way, exactly
   // as `updateRowTextAction` writes it.
@@ -329,13 +360,13 @@ export function checkBudgetEdit(
   const afterAlloc = allocationOf(after);
 
   for (const [key, a] of afterAlloc) {
-    if (a.left >= -HALF_UNIT) continue;
+    if (key === CONTRACT_POOL || a.left >= -HALF_UNIT) continue;
     const was = beforeAlloc.get(key);
     if (was && a.left >= was.left - HALF_UNIT) continue;
     if (key === nodeId) {
       return `The rows inside ${nameOf(nodeId)} already take ${say(a.claimed)}. Lower them first, or keep it at ${say(a.claimed)} or more.`;
     }
-    const where = key === CONTRACT_POOL ? 'the contract' : nameOf(key);
+    const where = nameOf(key);
     if (clean == null) return `That would put ${where} over by ${say(-a.left)}.`;
     const available = Math.max(0, a.budget - (a.claimed - (after.valueOf.get(nodeId) ?? 0)));
     return `This row can take at most ${say(available)} of ${where}.`;
@@ -560,7 +591,10 @@ export function allocationOf(result: WeightResult): Map<string, Allocation> {
     return a;
   };
 
-  if (result.contractValue > 0) at(CONTRACT_POOL, result.contractValue);
+  // The project's entry compares its budget with the contract value typed on
+  // it: `left` below zero is the packages running past the contract, which the
+  // screen reminds about rather than refuses.
+  if (result.signedContract > 0) at(CONTRACT_POOL, result.signedContract);
   for (const [id, own] of result.budgetOf) at(id, own);
 
   for (const [id, own] of result.budgetOf) {
@@ -629,7 +663,7 @@ export function overrunOf(result: WeightResult): Overrun {
   return {
     headings,
     branches: headings.length,
-    amount: points > EPSILON ? (points / 100) * result.contractValue : 0,
+    amount: points > EPSILON ? (points / 100) * result.projectBudget : 0,
     points,
   };
 }

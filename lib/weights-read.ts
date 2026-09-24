@@ -9,10 +9,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from './sqlite';
 import { formatMoney } from './currency';
 import {
-  allocationOf,
   checkBudgetEdit,
-  CONTRACT_POOL,
-  deriveWeights,
   summariseWeights,
   type WeightNode,
   type WeightSummary,
@@ -92,24 +89,4 @@ export function budgetRefusal(projectId: string, nodeId: string, next: number | 
     (id) => (id == null ? 'the contract' : (names.get(id) ?? 'this heading')),
     (amount) => formatMoney(amount, project.currency)
   );
-}
-
-/**
- * Why the contract value may not become `next`: the SPK and activities
- * drawing on it already take more. Only LOWERING is refused, so a contract
- * that was already short can still be raised towards what it has to hold.
- */
-export function contractRefusal(projectId: string, next: number | null): string | null {
-  if (next == null || next <= 0) return null;
-  const project = db
-    .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
-  if (!project) return null;
-  if (project.contractValue != null && next >= project.contractValue) return null;
-  const claimed = allocationOf(deriveWeights(loadWeightNodes(projectId), next)).get(CONTRACT_POOL)?.claimed ?? 0;
-  if (claimed - next <= 0.5) return null;
-  const say = (a: number) => formatMoney(a, project.currency);
-  return `The work packages and activities already take ${say(claimed)} of the contract. Lower them first, or keep the contract at ${say(claimed)} or more.`;
 }

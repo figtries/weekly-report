@@ -90,7 +90,7 @@ export async function previewWeightsAction(
 
     return {
       ok: true,
-      contractValue: result.contractValue,
+      contractValue: result.projectBudget,
       basis: result.basis,
       storedTotal,
       derivedTotal: result.total,
@@ -112,7 +112,7 @@ export async function applyWeightsAction(
     const nodes = loadWeightNodes(projectId);
     const signed = signedValueOf(projectId);
     const { result } = previewWeights(nodes, signed);
-    if (result.contractValue <= 0) throw new Error('Give the plan some prices first');
+    if (result.projectBudget <= 0) throw new Error('Give the plan some budgets first');
 
     let changed = 0;
     db.transaction((tx) => {
@@ -128,7 +128,7 @@ export async function applyWeightsAction(
           // in a project that never had one typed. Overwriting it deleted the
           // one check this app can make for free — signed minus allocated, the
           // work still carrying no price — by forcing the two to be equal.
-          contractValue: signed != null && signed > 0 ? signed : result.contractValue,
+          contractValue: signed != null && signed > 0 ? signed : result.projectBudget,
           // `boq` only when the prices actually cover the plan. A partial BOQ
           // labelled `boq` is a report claiming a whole it does not have.
           weightBasis: result.basis === 'boq' ? 'boq' : 'even',

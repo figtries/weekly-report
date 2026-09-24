@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { m } from 'framer-motion';
 import { Pencil, Sigma } from 'lucide-react';
@@ -17,14 +17,15 @@ import {
   overrunOf,
   poolAmount,
   poolOf,
-  topLevelPricedTotal,
   type Allocation,
   type OverGiving,
   type Overrun,
   type WeightNode,
 } from '@/lib/weights';
 import type { WeightsRow, WeightsScreen, WeightsUnit } from '@/lib/weights-screen';
-import { formatMoney } from '@/lib/currency';
+import { formatMoney, groupAmount } from '@/lib/currency';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Spinner from '@/components/ui/Spinner';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -92,7 +93,6 @@ export default function WeightsWorkbench({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [deriving, setDeriving] = useState(false);
-  const [, startTransition] = useTransition();
   const router = useRouter();
 
   const signed = screen.summary.contractValue > 0 ? screen.summary.contractValue : undefined;
@@ -108,18 +108,6 @@ export default function WeightsWorkbench({
 
   const live = useMemo(() => deriveWeights(patched, signed), [patched, signed]);
 
-  /**
-   * What is still unpriced, recomputed as well.
-   *
-   * Read off the server's summary it went stale the moment anyone typed: two
-   * billion entered on the first row and the line above it still read "IDR
-   * 4 500 000 000 has no price on it yet". A figure that contradicts the box
-   * you just typed into is worse than no figure.
-   */
-  const gap = useMemo(
-    () => (signed ? signed - topLevelPricedTotal(patched) : 0),
-    [patched, signed]
-  );
 
 
   /** Every row and card by its code and name, for a refusal to say where. */
@@ -169,24 +157,50 @@ export default function WeightsWorkbench({
     setReseed((r) => ({ ...r, [rowId]: (r[rowId] ?? 0) + 1 }));
   }
 
-  function commitPrice(rowId: string, raw: string) {
+  /**
+   * The one row whose budget is open. PRESS FIRST, THEN CHANGE (24 Sep 2026):
+   * nothing about a budget moves until somebody opens it, and nothing is saved
+   * until they press Save. The boxes used to save on blur, so a stray tap and a
+   * scroll could rewrite a figure every row beneath it is carved out of.
+   */
+  const [editing, setEditing] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  function openEdit(rowId: string) {
+    if (editing && editing !== rowId) putBack(editing);
+    setRowError(null);
+    setEditing(rowId);
+  }
+
+  function cancelEdit(rowId: string) {
+    putBack(rowId);
+    setRowError((e) => (e?.id === rowId ? null : e));
+    setEditing((e) => (e === rowId ? null : e));
+  }
+
+  async function saveEdit(rowId: string) {
+    const raw = typed[rowId];
+    // Opened and closed without a change: nothing to write.
+    if (raw === undefined || raw === (saved.current[rowId] ?? storedBudget(rowId))) {
+      cancelEdit(rowId);
+      return;
+    }
     setFailed(null);
     const refusal = refusalFor(rowId, raw);
     if (refusal) {
-      setRowError({ id: rowId, message: `${refusal} Not saved.` });
-      putBack(rowId);
+      setRowError({ id: rowId, message: refusal });
       return;
     }
+    setSaving(rowId);
+    const res = await updateRowTextAction(rowId, 'price', raw);
+    setSaving(null);
+    if (!res.ok) {
+      setRowError({ id: rowId, message: res.error });
+      return;
+    }
+    saved.current[rowId] = raw;
     setRowError((e) => (e?.id === rowId ? null : e));
-    startTransition(async () => {
-      const res = await updateRowTextAction(rowId, 'price', raw);
-      if (res.ok) {
-        saved.current[rowId] = raw;
-      } else {
-        setRowError({ id: rowId, message: `${res.error} Not saved.` });
-        putBack(rowId);
-      }
-    });
+    setEditing((e) => (e === rowId ? null : e));
   }
 
   /** A share typed on the right, turned into money and put in the money box. */
@@ -349,7 +363,11 @@ export default function WeightsWorkbench({
         ? null
         : refusalFor(rowId, typed[rowId]),
     storedBudget,
-    onCommit: commitPrice,
+    editing,
+    saving,
+    onEdit: openEdit,
+    onCancel: cancelEdit,
+    onSave: (rowId: string) => void saveEdit(rowId),
     onTypeMoney: typeMoney,
   };
 
@@ -364,7 +382,6 @@ export default function WeightsWorkbench({
       <PricingHero
         screen={screen}
         live={live}
-        gap={gap}
         overrun={overrun}
         labelOf={labelOf}
         onGoToRow={goToRow}
@@ -437,31 +454,25 @@ export default function WeightsWorkbench({
 }
 
 /**
- * How far the pricing has got, as a thing with a shape rather than a sentence.
+ * The project's budget, what reached the activities, and how it compares with
+ * the contract.
  *
- * The first version of this was one thin line of grey text, and it was the
- * wrong shape for what it says. This screen is a job someone works THROUGH, so
- * the top of it has to answer "how far am I" at a glance and move while they
- * work. A bar does that; a sentence makes you read three numbers and subtract.
+ * **The project budget IS its work packages added up** (24 Sep 2026). Raising
+ * a package raises the project; nothing at this level refuses. The contract
+ * value typed on the project is what that total is compared with, and when the
+ * packages run past it the strip says by how much and sends you to Project
+ * details to change it, because a budget that really grew has to be changed
+ * where the project keeps it, by somebody deciding to.
  *
- * **The 100.00% is the one figure here that is not negotiable**, and the screen
- * used to state it as though it could not be anything else. It can: Gundih
- * reads 154.58%, and the strip still printed "Every activity has a price" in
- * green over the top of it, because `done` only ever asked whether the contract
- * had been spent and never asked what the weights came to. One flag was telling
- * two different facts. They are separate now — the WEIGHTS are the must,
- * because a plan whose leaves do not add up to 100 measures every percentage in
- * every report against the wrong total, and the BUDGET is the flexible one,
- * where a gap is usually just a project half set up.
- *
- * **Reported, never corrected.** `deriveWeights` is untouched and every figure
- * stands exactly as it did; what changed is that the screen says so. The two
- * things that actually push Gundih past 100 are in `overrunOf`.
+ * **Weights total is the one figure that must reach 100**: a leaf's weight is
+ * its budget over the project budget, so anything short of 100 is budget still
+ * sitting in a heading that has not handed it to its activities. Under 100 is a
+ * reminder, and over 100 (inherited data only, since new edits are refused
+ * past a heading) is red with every heading that caused it listed.
  */
 function PricingHero({
   screen,
   live,
-  gap,
   overrun,
   labelOf,
   onGoToRow,
@@ -473,8 +484,6 @@ function PricingHero({
 }: {
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
-  /** SIGNED: positive is work with no price yet, negative is past the contract. */
-  gap: number;
   overrun: Overrun;
   labelOf: Map<string, string>;
   onGoToRow: (rowId: string) => void;
@@ -485,44 +494,21 @@ function PricingHero({
   projectId: string;
   onLock: () => void;
 }) {
-  const { summary } = screen;
-  const signed = summary.contractValue > 0;
-  const currency = summary.currency;
-  /** What the prices actually add up to, typed boxes included. */
-  const allocated = summary.contractValue - gap;
+  const currency = screen.summary.currency;
   const locked = screen.locked;
+  const budget = live.projectBudget;
+  const contract = live.signedContract;
 
-  /**
-   * The total the REPORT is built on, which is not always the derived one.
-   *
-   * A locked project's stored weights are authoritative and the prices stop
-   * pushing them around — that is what the lock IS. Gundih stores 176 leaves
-   * closing at exactly 100.000000 while deriving from its prices gives
-   * 154.58, and this strip printed the 154.58 under a label reading "Weights
-   * total". It was answering a question nobody asked: not what this project
-   * weighs, but what recalculating would do to it. Both facts matter and
-   * they are told separately now.
-   */
-  const governing = locked ? summary.storedTotal : live.total;
+  // A locked project's stored weights are what its report uses, so its total
+  // is the stored one; the derived one is told separately as drift.
+  const governing = locked ? screen.summary.storedTotal : live.total;
   const over = governing > 100.5;
-  const under = governing < 99.5;
-  /** Locked, and the prices no longer reproduce the weights they are locked at. */
+  const under = budget > 0 && governing < 99.5;
   const priceDrift = locked && Math.abs(live.total - 100) > 0.5;
-  /** The prices themselves run past the signed figure — a contract question. */
-  const overContract = gap < -0.5;
-  const shortOfContract = gap > 0.5;
-  const settled = !over && !under && !shortOfContract && !priceDrift;
 
-  // The bar stops being a progress bar the moment the claims run past the
-  // contract, because full-and-tidy is the one thing it must not look like
-  // then. Blue is the contract, red is what was claimed beyond it, and the two
-  // are drawn against everything claimed so together they fill the bar exactly.
-  const bluePct = !signed
-    ? 0
-    : over
-      ? (100 / governing) * 100
-      : Math.min(100, (Math.max(0, allocated) / summary.contractValue) * 100);
-  const redPct = over ? Math.max(0, ((governing - 100) / governing) * 100) : 0;
+  const diff = contract > 0 ? budget - contract : 0;
+  const pastContract = diff > 0.5;
+  const shortOfContract = diff < -0.5;
 
   return (
     <Card className="gap-3 rounded-2xl bg-gradient-to-br from-chart-1/10 to-transparent shadow-sm ring-chart-1/20">
@@ -530,24 +516,23 @@ function PricingHero({
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
           <div className="min-w-0">
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Contract value
+              Project budget
             </p>
             <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
-              {signed ? formatMoney(summary.contractValue, currency) : 'No contract value yet'}
+              {budget > 0 ? formatMoney(budget, currency) : 'No budget yet'}
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+              {screen.hasUnits ? 'The work packages added up' : 'The headings added up'}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Weights total
             </p>
-            {/* The numeral carries the verdict, because it is the figure people
-                look at and it wore chart-1 blue at 154.58% — the same colour it
-                wears when it is right, which made a broken total read as a
-                normal one. */}
             <p
               className={cn(
                 'mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl',
-                over ? 'text-destructive' : under ? 'text-warn' : 'text-ok'
+                over ? 'text-destructive' : under ? 'text-warn' : budget > 0 ? 'text-ok' : 'text-muted-foreground'
               )}
             >
               {governing.toFixed(2)}%
@@ -555,236 +540,138 @@ function PricingHero({
           </div>
         </div>
 
-        {signed && (
-          <>
-            {/* Priced against the contract. It fills as prices are typed, which
-                is the only moving thing on the screen that says "progress". */}
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-foreground/8">
-              <div
-                className="animate-bar-grow h-full rounded-full bg-chart-1 transition-[width] duration-500 ease-out-expo"
-                style={{ width: `${bluePct}%` }}
-              />
-              {redPct > 0 && (
-                <div
-                  className="animate-bar-grow h-full rounded-r-full bg-destructive transition-[width] duration-500 ease-out-expo"
-                  style={{ width: `${redPct}%` }}
-                />
-              )}
+        {/* How much of the budget has reached an activity: the weights total
+            as a length, one colour, full when every budget is handed down. */}
+        <div className="h-3 w-full overflow-hidden rounded-full bg-foreground/8">
+          <div
+            className="animate-bar-grow h-full rounded-full bg-chart-1 transition-[width] duration-500 ease-out-expo"
+            style={{ width: `${Math.max(0, Math.min(100, governing))}%` }}
+          />
+        </div>
+
+        {/* THE CONTRACT, compared, never capping. Past it is the one case with
+            somewhere to send you: a budget that really grew is changed on the
+            project, by somebody deciding to. */}
+        {contract > 0 &&
+          (pastContract ? (
+            <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-warn">
+                  The budget is {formatMoney(diff, currency)} over the contract value
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  The {screen.hasUnits ? 'work packages' : 'headings'} add up to{' '}
+                  <strong className="tabular-nums text-foreground">{formatMoney(budget, currency)}</strong>
+                  ; the contract value is{' '}
+                  <strong className="tabular-nums text-foreground">{formatMoney(contract, currency)}</strong>. If
+                  the budget really changed, update the contract value on the project.
+                </p>
+              </div>
+              <PressLink
+                {...pressMotion}
+                href={`/projects/${projectId}`}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background px-4 py-2 text-sm font-medium ring-1 ring-foreground/12"
+              >
+                Update the contract value
+              </PressLink>
             </div>
-
-            {/* A WHOLE BLOCK, not a grey line. Muted content is invisible to
-                the people who use this app — it has been reported twice in
-                those words, about two different screens — and this is the
-                block that decides whether a figure in the report can be
-                trusted. */}
-            {over ? (
-              <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-destructive">
-                      The weights add up to {governing.toFixed(2)}%, and they have to be 100%
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {overContract ? (
-                        <>
-                          The prices come to{' '}
-                          <strong className="tabular-nums text-foreground">
-                            {formatMoney(allocated, currency)}
-                          </strong>
-                          , which is{' '}
-                          <strong className="tabular-nums text-foreground">
-                            {formatMoney(-gap, currency)}
-                          </strong>{' '}
-                          more than the contract value. Raise the contract value, or lower a price.
-                        </>
-                      ) : (
-                        <>
-                          {overrun.branches} headings hand out more than they hold,{' '}
-                          <strong className="tabular-nums text-foreground">
-                            {formatMoney(overrun.amount, currency)}
-                          </strong>{' '}
-                          over between them. Every one of them is listed below — tap one to go
-                          straight to it.
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  {overContract && (
-                    <PressLink
-                      {...pressMotion}
-                      href={`/projects/${projectId}`}
-                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white"
-                    >
-                      Open project details
-                    </PressLink>
-                  )}
-                </div>
-                <OverList
-                  headings={overrun.headings}
-                  labelOf={labelOf}
-                  currency={currency}
-                  onGo={onGoToRow}
-                />
-              </div>
-            ) : under && !locked ? (
-              // A REMINDER, NOT AN ALARM. Under 100 is what a plan looks like
-              // while its budgets are still going in; the rows that are missing
-              // are the whole message, so they are named and one tap away.
-              <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-warn">
-                    {(100 - governing).toFixed(2)}% of the contract has not reached an activity yet
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {unbudgeted.length > 0 ? (
-                      <>
-                        <strong className="text-foreground">
-                          {unbudgeted.length} {unbudgeted.length === 1 ? 'activity has' : 'activities have'}{' '}
-                          no budget
-                        </strong>
-                        , so {unbudgeted.length === 1 ? 'it weighs' : 'they weigh'} nothing in the
-                        report. Give each one a budget, or its share of the heading.
-                      </>
-                    ) : (
-                      <>
-                        Every activity has a budget, and some headings still hold money their rows
-                        have not taken. Their cards say how much is left.
-                      </>
-                    )}
-                    {shortOfContract && (
-                      <>
-                        {' '}
-                        <strong className="tabular-nums text-foreground">
-                          {formatMoney(gap, currency)}
-                        </strong>{' '}
-                        of the contract is not in any work package or activity yet.
-                      </>
-                    )}
-                  </p>
-                </div>
-                <RowButtons ids={unbudgeted} labelOf={labelOf} onGo={onGoToRow} />
-              </div>
-            ) : priceDrift ? (
-              // Locked, so the report is safe and this is not an alarm — but
-              // the prices and the weights are telling different stories and
-              // the person pricing rows is the only one who can see it.
-              <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-warn">
-                    The prices no longer add up to these weights
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    The weights are locked at{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {governing.toFixed(2)}%
-                    </strong>{' '}
-                    and the report uses them. Deriving from the prices would give{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {live.total.toFixed(2)}%
-                    </strong>
-                    , because {overrun.branches} headings hand out more than they hold,{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {formatMoney(overrun.amount, currency)}
-                    </strong>{' '}
-                    over between them. Every one of them is listed below — tap one to go straight
-                    to it.
-                  </p>
-                </div>
-                <OverList
-                  headings={overrun.headings}
-                  labelOf={labelOf}
-                  currency={currency}
-                  onGo={onGoToRow}
-                />
-              </div>
-            ) : shortOfContract && total > 0 && priced >= total ? (
-              // Every row is in and the contract is still not spent. The report
-              // is not wrong here — the leftover is shared out and the total
-              // closes at 100 — so this is a reminder, not an alarm.
-              <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-warn">
-                    Every activity has a price, and they do not reach the contract value
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    They come to{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {formatMoney(allocated, currency)}
-                    </strong>
-                    , leaving{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {formatMoney(gap, currency)}
-                    </strong>{' '}
-                    that no activity carries. Lower the contract value, or a budget is missing.
-                  </p>
-                </div>
-                <PressLink
-                  {...pressMotion}
-                  href={`/projects/${projectId}`}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background px-4 py-2 text-sm font-medium ring-1 ring-foreground/12"
-                >
-                  Open project details
-                </PressLink>
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <p className="text-sm text-muted-foreground">
-                {settled ? (
-                  <span className="font-medium text-ok">
-                    Every activity has a budget. These weights come from the money.
-                  </span>
-                ) : !shortOfContract ? (
-                  // Nothing is open, so "US$0 still open" beside a full bar is a
-                  // sentence that answers nothing. What is worth saying instead is
-                  // how much of the plan was priced by hand, since the block above
-                  // has already said what that did to the weights.
-                  <>
-                    The contract is fully given out ·{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {priced} of {total}
-                    </strong>{' '}
-                    activities have a budget
-                  </>
-                ) : (
-                  <>
-                    <strong className="tabular-nums text-foreground">
-                      {formatMoney(Math.max(0, allocated), currency)}
-                    </strong>{' '}
-                    given out,{' '}
-                    <strong className="tabular-nums text-foreground">
-                      {formatMoney(Math.max(0, gap), currency)}
-                    </strong>{' '}
-                    still open · {priced} of {total} activities have a budget
-                  </>
-                )}
-              </p>
-
-              {/* The LOCK, and it belongs here rather than in the planner's
-                  money strip, which is where it was stranded when the price
-                  column left the planner on 12 Sep. Recalculating needs no
-                  button: `syncDerivedWeights` already keeps an unlocked
-                  project's weights in step with its prices on every edit. What
-                  needs one is DECLARING them authoritative, after which the
-                  prices stop pushing them around — and on Gundih that is the
-                  difference between 81 correct weights and 81 wrong ones. */}
-              {locked ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
-                  <span className="h-1.5 w-1.5 rounded-full bg-ok" />
-                  Value based, locked
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Contract value{' '}
+              <strong className="tabular-nums text-foreground">{formatMoney(contract, currency)}</strong>
+              {' · '}
+              {shortOfContract ? (
+                <span className="font-semibold text-warn">
+                  {formatMoney(-diff, currency)} not in any {screen.hasUnits ? 'work package' : 'heading'} yet
                 </span>
               ) : (
-                <m.button
-                  {...pressMotion}
-                  onClick={onLock}
-                  className="inline-flex min-h-11 items-center rounded-lg bg-background px-4 text-sm font-medium ring-1 ring-foreground/12 transition-colors duration-300 ease-ios hover:bg-accent"
-                >
-                  Lock these weights
-                </m.button>
+                <span className="font-semibold text-ok">matches the budget</span>
               )}
+            </p>
+          ))}
+
+        {over ? (
+          <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">
+                The weights add up to {governing.toFixed(2)}%, and they have to be 100%
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {overrun.branches} headings hand out more than they hold,{' '}
+                <strong className="tabular-nums text-foreground">
+                  {formatMoney(overrun.amount, currency)}
+                </strong>{' '}
+                over between them. Every one of them is listed below — tap one to go straight to it.
+              </p>
             </div>
-          </>
+            <OverList headings={overrun.headings} labelOf={labelOf} currency={currency} onGo={onGoToRow} />
+          </div>
+        ) : priceDrift ? (
+          // Locked, so the report is safe and this is not an alarm — but the
+          // prices and the weights are telling different stories.
+          <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-warn">The budgets no longer add up to these weights</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                The weights are locked at{' '}
+                <strong className="tabular-nums text-foreground">{governing.toFixed(2)}%</strong> and the report
+                uses them. Deriving from the budgets would give{' '}
+                <strong className="tabular-nums text-foreground">{live.total.toFixed(2)}%</strong>.
+              </p>
+            </div>
+            <OverList headings={overrun.headings} labelOf={labelOf} currency={currency} onGo={onGoToRow} />
+          </div>
+        ) : null}
+
+        {/* A REMINDER, NOT AN ALARM. The activities with no budget are the whole
+            message, so they are named and one tap away. */}
+        {unbudgeted.length > 0 && (
+          <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-warn">
+                {unbudgeted.length} {unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget
+              </strong>
+              , so {unbudgeted.length === 1 ? 'it weighs' : 'they weigh'} nothing in the report. Give each one a
+              budget, or its share of the heading.
+            </p>
+            <RowButtons ids={unbudgeted} labelOf={labelOf} onGo={onGoToRow} />
+          </div>
         )}
+
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="text-sm text-muted-foreground">
+            <strong className="tabular-nums text-foreground">
+              {priced} of {total}
+            </strong>{' '}
+            activities have a budget
+            {under && (
+              <>
+                {' · '}
+                <span className="font-semibold text-warn">
+                  {(100 - governing).toFixed(2)}% still in headings, not yet handed to activities
+                </span>
+              </>
+            )}
+          </p>
+
+          {/* The LOCK. Recalculating needs no button: an unlocked project's
+              weights follow its budgets on every edit. What needs one is
+              DECLARING them authoritative. */}
+          {locked ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
+              <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+              Value based, locked
+            </span>
+          ) : (
+            <m.button
+              {...pressMotion}
+              onClick={onLock}
+              className="inline-flex min-h-11 items-center rounded-lg bg-background px-4 text-sm font-medium ring-1 ring-foreground/12 transition-colors duration-300 ease-ios hover:bg-accent"
+            >
+              Lock these weights
+            </m.button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1063,7 +950,7 @@ function UnitFace({
         <p className="min-w-0 flex-1 pt-0.5 text-[15px] leading-snug font-semibold">{name}</p>
         <div className="shrink-0 text-right">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            Of contract
+            Of project
           </p>
           <p className="text-lg leading-tight font-semibold tabular-nums text-chart-1">
             {ofContract.toFixed(2)}%
@@ -1119,16 +1006,18 @@ function UnitFace({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {/* Given and left say something only against a budget of its own.
-            Taken from the rows, the headline already IS what they hold. */}
-        {hasBudget && (
-          <Pill tone="info">Given to rows {formatMoney(given, currency)}</Pill>
-        )}
+        {/* SHORT OR OVER, as a figure against the budget it is measured by.
+            "Left" read as money to spare; what it is, is budget the rows have
+            not been given yet. Taken from the rows, the headline already IS
+            what they hold, so there is nothing to compare. */}
+        {hasBudget && <Pill tone="info">Rows hold {formatMoney(given, currency)}</Pill>}
         {hasBudget &&
           (over ? (
             <Pill tone="bad">Over by {formatMoney(-(left ?? 0), currency)}</Pill>
+          ) : (left ?? 0) > 0.5 ? (
+            <Pill tone="warn">Short by {formatMoney(left ?? 0, currency)}</Pill>
           ) : (
-            <Pill tone="quiet">Left {formatMoney(Math.max(0, left ?? 0), currency)}</Pill>
+            <Pill tone="ok">Balanced</Pill>
           ))}
         {empty > 0 ? (
           <Pill tone="warn">
@@ -1189,7 +1078,7 @@ function UnitCard({
         value={live.valueOf.get(unit.id) ?? 0}
         budget={live.budgetOf.get(unit.id) ?? 0}
         alloc={alloc}
-        contract={live.contractValue}
+        contract={live.projectBudget}
         currency={currency}
         priced={unit.budgetedLeaves}
         total={unit.leafCount}
@@ -1250,73 +1139,168 @@ function UnitRows({
           value={live.valueOf.get(unit.id) ?? 0}
           budget={live.budgetOf.get(unit.id) ?? 0}
           alloc={alloc}
-          contract={live.contractValue}
+          contract={live.projectBudget}
           currency={currency}
           priced={unit.budgetedLeaves}
           total={unit.leafCount}
-          editor={<BudgetEditor rowId={unit.id} list={list} />}
+          editor={<BudgetHeader unitId={unit.id} name={`${unit.code} ${unit.name}`.trim()} list={list} />}
         />
       </div>
 
       <RowList rows={unit.rows.filter((r) => !hidden.has(r.id))} {...list} />
 
       <p className="px-1 text-[13px] text-muted-foreground">
-        Type a row&apos;s budget, or its share and the budget follows. A row with no budget weighs
-        nothing in the report, and no row can take more than its heading has left.
+        Press a row to change its budget, or its share and the budget follows. A row with no
+        budget weighs nothing in the report, and no row can take more than its heading has left.
       </p>
     </div>
   );
 }
 
 /**
- * A heading's own budget, as the big box on its header.
+ * A heading's budget on its header: shown, and changed only on purpose.
  *
- * The same door as every row's box: the same live check, the same refusal on
- * the spot, the same action. The heading is its own pool's ceiling, so this
- * is also where lowering a budget below what the rows already take is refused.
+ * PRESS FIRST, THEN CHANGE (24 Sep 2026). The box used to be live, so a stray
+ * tap and a few digits rewrote the budget every row beneath it is carved out
+ * of. Now the figure is read-only and "Change budget" opens a dialog that says
+ * what the new figure does before anything is saved: what its rows hold and
+ * whether it would be short or over, what the project budget becomes, and
+ * whether that passes the contract value.
  */
-function BudgetEditor({ rowId, list }: { rowId: string; list: ListProps }) {
-  const { typed, setTyped, reseed, rowError, liveRefusal, onCommit, onTypeMoney, currency, storedBudget, live } =
+function BudgetHeader({
+  unitId,
+  name,
+  list,
+}: {
+  unitId: string;
+  name: string;
+  list: ListProps;
+}) {
+  const { live, currency, typed, setTyped, reseed, editing, saving, rowError, liveRefusal, onEdit, onCancel, onSave, storedBudget, allocs } =
     list;
-  const error = rowError?.id === rowId ? rowError.message : liveRefusal(rowId);
-  const stored = storedBudget(rowId);
-  // Without a budget of its own the box holds what the rows add up to, so it
-  // never reads as empty above rows that carry money. Typing a figure makes it
-  // the heading's own budget, and from then on it caps them.
-  const rows = live.budgetOf.has(rowId) ? '' : String(Math.round(live.valueOf.get(rowId) ?? 0));
-  const seed = (typed[rowId] ?? stored) || (rows !== '0' ? rows : '');
+  const open = editing === unitId;
+  const own = live.budgetOf.get(unitId) ?? 0;
+  const value = live.valueOf.get(unitId) ?? 0;
+  const shown = own > 0 ? own : value;
+
+  // The figures as they stood when the dialog opened, so the dialog can say
+  // what changes as someone types.
+  const [before, setBefore] = useState<{ project: number; value: number } | null>(null);
+  const start = () => {
+    setBefore({ project: live.projectBudget, value });
+    onEdit(unitId);
+  };
+
+  const stored = storedBudget(unitId);
+  const seed = (typed[unitId] ?? stored) || (value > 0 ? String(Math.round(value)) : '');
+  const pooled = allocs.get(unitId);
+  const rowsHold = pooled ? pooled.claimed : value;
+  const left = pooled ? pooled.left : 0;
+  const error = rowError?.id === unitId ? rowError.message : liveRefusal(unitId);
+  const contract = live.signedContract;
+  const projectNow = live.projectBudget;
+  const pastContract = contract > 0 ? projectNow - contract : 0;
+
   return (
     <>
-      <label
-        className={cn(
-          'mt-1.5 flex h-12 items-center gap-2.5 rounded-xl bg-background px-3.5 ring-[1.5px] transition-shadow duration-300 ease-ios focus-within:ring-2',
-          error
-            ? 'ring-destructive/60 focus-within:ring-destructive'
-            : 'ring-chart-1/30 focus-within:ring-chart-1'
-        )}
-      >
-        <span className="shrink-0 text-[13px] font-semibold text-muted-foreground">
-          {symbolOf(currency)}
-        </span>
-        <MoneyInput
-          defaultValue={seed}
-          resetKey={reseed[rowId] ?? 0}
-          placeholder="Set a budget"
-          className="w-full min-w-0 bg-transparent text-2xl font-semibold tabular-nums outline-none placeholder:text-base placeholder:font-medium placeholder:text-muted-foreground"
-          onValueChange={(raw) => setTyped((t) => ({ ...t, [rowId]: raw }))}
-          onCommit={(raw) =>
-            // Emptied, with nothing of its own to clear: put the rows' figure
-            // back rather than write a null over a null.
-            raw === '' && stored === '' ? onTypeMoney(rowId, '') : onCommit(rowId, raw)
-          }
-        />
-        <Pencil className="size-[18px] shrink-0 text-chart-1" aria-hidden />
-      </label>
-      {error && (
-        <p role="alert" className="animate-fade-in-up mt-1.5 text-[12.5px] font-semibold text-destructive">
-          {error}
+      {/* The button wraps under the figure rather than cutting it: at 390px
+          'IDR 400 000 000' beside 'Change budget' came out 'IDR 400 000...'. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p
+          className={cn(
+            'shrink-0 text-2xl font-semibold whitespace-nowrap tabular-nums',
+            shown > 0 ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        >
+          {shown > 0 ? formatMoney(shown, currency) : 'No budget yet'}
         </p>
-      )}
+        <m.button
+          {...pressMotion}
+          onClick={start}
+          className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-background px-3.5 text-sm font-semibold text-chart-1 ring-1 ring-chart-1/30 transition-colors duration-300 ease-ios hover:bg-chart-1/8"
+        >
+          <Pencil className="size-4" aria-hidden />
+          {shown > 0 ? 'Change budget' : 'Set a budget'}
+        </m.button>
+      </div>
+
+      <ConfirmDialog
+        open={open}
+        title={`Budget of ${name}`}
+        confirmLabel="Save budget"
+        busyLabel="Saving…"
+        busy={saving === unitId}
+        destructive={false}
+        onConfirm={() => onSave(unitId)}
+        onCancel={() => onCancel(unitId)}
+        message={
+          <div
+            className="mt-2 flex flex-col gap-3"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSave(unitId);
+            }}
+          >
+            <label
+              className={cn(
+                'flex h-12 items-center gap-2.5 rounded-xl bg-background px-3.5 ring-[1.5px] focus-within:ring-2',
+                error ? 'ring-destructive/60 focus-within:ring-destructive' : 'ring-chart-1/30 focus-within:ring-chart-1'
+              )}
+            >
+              <span className="shrink-0 text-[13px] font-semibold text-muted-foreground">{symbolOf(currency)}</span>
+              <MoneyInput
+                autoFocus
+                defaultValue={seed}
+                resetKey={reseed[unitId] ?? 0}
+                placeholder="Set a budget"
+                className="w-full min-w-0 bg-transparent text-xl font-semibold text-foreground tabular-nums outline-none placeholder:text-base placeholder:font-medium placeholder:text-muted-foreground"
+                onValueChange={(raw) => setTyped((t) => ({ ...t, [unitId]: raw }))}
+              />
+            </label>
+
+            {error ? (
+              <p role="alert" className="text-[13px] font-semibold text-destructive">
+                {error}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1.5 text-[13px]">
+                <li className="flex justify-between gap-3">
+                  <span>Its rows hold</span>
+                  <strong className="tabular-nums text-foreground">{formatMoney(rowsHold, currency)}</strong>
+                </li>
+                <li className="flex justify-between gap-3">
+                  <span>Against this budget</span>
+                  <strong
+                    className={cn(
+                      'tabular-nums',
+                      left > 0.5 ? 'text-warn' : left < -0.5 ? 'text-destructive' : 'text-ok'
+                    )}
+                  >
+                    {left > 0.5
+                      ? `Short by ${formatMoney(left, currency)}`
+                      : left < -0.5
+                        ? `Over by ${formatMoney(-left, currency)}`
+                        : 'Balanced'}
+                  </strong>
+                </li>
+                <li className="flex flex-col gap-0.5">
+                  <span>Project budget</span>
+                  <strong className="tabular-nums text-foreground">
+                    {before && Math.abs(before.project - projectNow) > 0.5
+                      ? `${formatMoney(before.project, currency)} → ${formatMoney(projectNow, currency)}`
+                      : formatMoney(projectNow, currency)}
+                  </strong>
+                </li>
+                {pastContract > 0.5 && (
+                  <li className="rounded-lg bg-warn-soft px-2.5 py-2 font-medium text-warn">
+                    {formatMoney(pastContract, currency)} over the contract value ({formatMoney(contract, currency)}).
+                    If the budget really changed, update the contract value on the project after saving.
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        }
+      />
     </>
   );
 }
@@ -1355,7 +1339,12 @@ interface ListProps {
   liveRefusal: (rowId: string) => string | null;
   /** A row's budget as the server last sent it. */
   storedBudget: (rowId: string) => string;
-  onCommit: (rowId: string, raw: string) => void;
+  /** The row whose budget is open, and the one being saved. */
+  editing: string | null;
+  saving: string | null;
+  onEdit: (rowId: string) => void;
+  onCancel: (rowId: string) => void;
+  onSave: (rowId: string) => void;
   onTypeMoney: (rowId: string, raw: string) => void;
 }
 
@@ -1407,7 +1396,11 @@ function RowList({
   reseed,
   rowError,
   liveRefusal,
-  onCommit,
+  editing,
+  saving,
+  onEdit,
+  onCancel,
+  onSave,
   onTypeMoney,
   lockRoot = false,
 }: ListProps & {
@@ -1464,6 +1457,8 @@ function RowList({
           const over = overOf.get(row.id);
           const focused = focusRow === row.id;
           const error = rowError?.id === row.id ? rowError.message : liveRefusal(row.id);
+          const isEditing = editing === row.id;
+          const branchAlloc = !row.isLeaf && decided ? allocs.get(row.id) : undefined;
 
           // What this row may take at most: what its pool has left, plus what
           // it already holds there.
@@ -1527,6 +1522,10 @@ function RowList({
                             ? `${inside} ${inside === 1 ? 'row' : 'rows'} inside`
                             : 'Its figure is the rows beneath it'}
                           {!decided && ` · rows take ${formatMoney(value, currency)}`}
+                          {branchAlloc &&
+                            (branchAlloc.left > 0.5
+                              ? ` · short by ${formatMoney(branchAlloc.left, currency)}`
+                              : ' · balanced')}
                         </span>
                       </p>
                     )
@@ -1548,40 +1547,85 @@ function RowList({
                   </p>
                 ) : (
                   <div className="mt-2.5 sm:mt-0">
-                    <div
-                      className={cn(
-                        'flex h-10 overflow-hidden rounded-[10px] bg-background ring-1 transition-shadow duration-300 ease-ios focus-within:ring-2',
-                        error
-                          ? 'ring-destructive/60 focus-within:ring-destructive'
-                          : 'ring-foreground/15 focus-within:ring-chart-1'
-                      )}
-                    >
-                      <label className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
-                        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
-                          {symbol}
+                    {isEditing ? (
+                      <div
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            onSave(row.id);
+                          }
+                          if (e.key === 'Escape') onCancel(row.id);
+                        }}
+                      >
+                        <div
+                          className={cn(
+                            'flex h-10 overflow-hidden rounded-[10px] bg-background ring-2',
+                            error ? 'ring-destructive/60' : 'ring-chart-1'
+                          )}
+                        >
+                          <label className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+                            <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+                              {symbol}
+                            </span>
+                            <MoneyInput
+                              autoFocus
+                              defaultValue={typed[row.id] ?? stored}
+                              resetKey={reseed[row.id] ?? 0}
+                              placeholder="Budget"
+                              className="w-full min-w-0 bg-transparent text-right text-sm tabular-nums outline-none placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground"
+                              onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
+                            />
+                          </label>
+                          <ShareBox
+                            share={share}
+                            disabled={!canShare}
+                            onType={(raw) => {
+                              const money = shareToMoney(raw);
+                              if (money != null) onTypeMoney(row.id, money);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      // LOCKED UNTIL PRESSED. The figures are shown in the same
+                      // joined shape, so nothing moves when a row opens; only a
+                      // press makes them editable.
+                      <m.button
+                        {...pressMotion}
+                        type="button"
+                        onClick={() => onEdit(row.id)}
+                        aria-label={`Change the budget of ${row.code} ${row.name}`}
+                        className="group/ctl flex h-10 w-full overflow-hidden rounded-[10px] bg-background text-left ring-1 ring-foreground/15 transition-shadow duration-300 ease-ios hover:ring-chart-1/50"
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+                          <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+                            {symbol}
+                          </span>
+                          <span
+                            className={cn(
+                              'ml-auto truncate tabular-nums',
+                              decided ? 'text-sm text-foreground' : 'text-xs text-muted-foreground'
+                            )}
+                          >
+                            {decided ? groupAmount(String(Math.round(own))) : 'Add budget'}
+                          </span>
+                          <Pencil
+                            className="size-3.5 shrink-0 text-muted-foreground transition-colors duration-300 ease-ios group-hover/ctl:text-chart-1"
+                            aria-hidden
+                          />
                         </span>
-                        <MoneyInput
-                          defaultValue={typed[row.id] ?? stored}
-                          resetKey={reseed[row.id] ?? 0}
-                          placeholder="Budget"
-                          className="w-full min-w-0 bg-transparent text-right text-sm tabular-nums outline-none placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground"
-                          onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
-                          onCommit={(raw) => onCommit(row.id, raw)}
-                        />
-                      </label>
-                      <ShareBox
-                        share={share}
-                        disabled={!canShare}
-                        onType={(raw) => {
-                          const money = shareToMoney(raw);
-                          if (money != null) onTypeMoney(row.id, money);
-                        }}
-                        onDone={(raw) => {
-                          const money = shareToMoney(raw);
-                          if (money != null) onCommit(row.id, money);
-                        }}
-                      />
-                    </div>
+                        <span
+                          className={cn(
+                            'flex w-[5.5rem] shrink-0 items-center justify-end border-l px-2.5 text-sm font-semibold tabular-nums',
+                            share > 0
+                              ? 'border-chart-1/15 bg-chart-1/[0.08] text-primary'
+                              : 'border-foreground/8 bg-foreground/[0.03] text-muted-foreground'
+                          )}
+                        >
+                          {share.toFixed(2)}%
+                        </span>
+                      </m.button>
+                    )}
                     {/* The share as a length, under the control it belongs to.
                         One colour whatever the figure: severity is said on the
                         row's ground and in words, never by recolouring a scale. */}
@@ -1593,9 +1637,31 @@ function RowList({
                         />
                       </div>
                       <span className="shrink-0 text-[11.5px] text-muted-foreground">
-                        {canShare ? `of ${poolName}` : 'no contract value'}
+                        {canShare ? `of ${poolName}` : 'no budget above'}
                       </span>
                     </div>
+                    {isEditing && (
+                      <div className="mt-2 flex justify-end gap-2">
+                        <m.button
+                          {...pressMotion}
+                          type="button"
+                          onClick={() => onCancel(row.id)}
+                          className="inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
+                        >
+                          Cancel
+                        </m.button>
+                        <m.button
+                          {...pressMotion}
+                          type="button"
+                          onClick={() => onSave(row.id)}
+                          disabled={saving === row.id}
+                          className="btn-primary inline-flex min-h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium disabled:opacity-60"
+                        >
+                          {saving === row.id && <Spinner />}
+                          {saving === row.id ? 'Saving…' : 'Save'}
+                        </m.button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1634,7 +1700,8 @@ function ShareBox({
   share: number;
   disabled: boolean;
   onType: (raw: string) => void;
-  onDone: (raw: string) => void;
+  /** Called on blur with what was typed. Unused where Save does the saving. */
+  onDone?: (raw: string) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const touched = useRef(false);
@@ -1676,7 +1743,7 @@ function ShareBox({
           onType(raw);
         }}
         onBlur={() => {
-          if (touched.current && draft !== null) onDone(draft);
+          if (touched.current && draft !== null) onDone?.(draft);
           touched.current = false;
           setDraft(null);
         }}

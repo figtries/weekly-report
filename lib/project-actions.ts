@@ -7,7 +7,6 @@ import { eq, sql } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
-import { contractRefusal } from './weights-read';
 import { isKnownCurrency } from './currency';
 import { deriveInitial, INITIAL_LENGTH } from './initial';
 import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
@@ -370,10 +369,6 @@ export async function updateProjectFieldAction(
     if (field === 'contractValue') {
       const n = raw === '' ? null : Number(raw.replace(/[^0-9.]/g, ''));
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a contract value');
-      // The contract is the top pool: it may not drop below what the SPK and
-      // activities already take out of it (24 Sep 2026, see lib/weights.ts).
-      const refusal = contractRefusal(projectId, n);
-      if (refusal) throw new Error(refusal);
       next = n;
     }
 

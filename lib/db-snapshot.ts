@@ -249,8 +249,11 @@ export function ensureSchema(dbPath: string): string[] {
  * unbudgeted leaf weighs, and the reports read the STORED figure, so without
  * this a deployment would draw the new rule on the Weights screen and the old
  * one on every S-curve until somebody happened to edit a price.
+ *
+ * 2 — weights over the PROJECT budget (the work packages added up), not over
+ * the contract value (24 Sep 2026, same day).
  */
-const WEIGHT_RULE = 1;
+const WEIGHT_RULE = 2;
 
 /**
  * Bring the stored weights of every UNLOCKED project in line with the current

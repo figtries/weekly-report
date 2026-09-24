@@ -160,16 +160,21 @@ toggle went because one row carried two percents that never agreed (the box's
 was a share of the parent, the figure beside it a share of the whole SPK).
 
 Four rules there are correctness. **A pool is the nearest heading above with a
-budget of its own, or the contract** (`poolOf`); a reporting unit with a budget
-is its own contract and draws on the contract, which is how SPK-007 inside 1.4
-stays out of 1.4's sum. **A row nobody budgeted weighs 0** — no even share of a
+budget of its own, or the project** (`poolOf`); a work package with a budget
+is its own contract and draws on the project, which is how SPK-007 inside 1.4
+stays out of 1.4's sum. **The project budget IS its work packages added up**
+(`WeightResult.projectBudget`) and every weight is measured against it, so
+raising a package raises the project; the contract value typed on the project
+is only COMPARED with it, and the Weights strip says "over the contract value
+by X" with a link to Project details instead of refusing anything. **A row nobody budgeted weighs 0** — no even share of a
 remainder, anywhere, including a plan with no budgets at all. It was read as a
 figure somebody had typed ("= IDR 11 253" under five empty boxes), and the
 consequence is the user's by decision: the total reads what the budgets reach,
 and the strip at the top NAMES every activity with no budget, one press away.
-**The cap is refused, in both directions**, by `checkBudgetEdit`: a budget may
-not take more than its pool has left, and a pool (the contract included, in
-`updateProjectFieldAction`) may not be lowered below what already draws on it.
+**The cap is refused, in both directions, inside a heading**, by
+`checkBudgetEdit`: a budget may not take more than its heading has left, and a
+heading may not be lowered below what already draws on it. The project level
+never refuses (see above).
 It runs on the client while typing and again in the action before writing, and
 it refuses only what makes a pool WORSE, so Gundih's inherited 140% headings
 stay editable. Paste and indent are bulk and are not blocked; the card reports
@@ -177,7 +182,11 @@ stay editable. Paste and indent are bulk and are not blocked; the card reports
 the parent's own budget — so Gundih's IFR / IFA / AFC and every percent typed
 before 24 Sep keep their figures; nothing writes one any more, and setting or
 clearing a row's budget clears it. Zero in the money box is empty, never a
-stored 0.
+stored 0. **Nothing changes a budget without being pressed first**: a row's
+figures are a button until pressed, then Save or Cancel (blur saves nothing),
+and a work package's budget opens a dialog that says what the new figure does
+(short or over against its rows, the project budget before and after, and
+whether that passes the contract value) before Save.
 
 Stored `bobot` follows: `syncDerivedWeights` writes 0 on an unbudgeted leaf
 (a real zero, not a missing figure), a contract value edit re-syncs, and
