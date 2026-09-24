@@ -50,10 +50,10 @@ check(
   `${leaves.length} leaves, ${leaves.filter((l) => l.bobot != null).length} weighted`
 );
 
-// A price on the FIRST leaf AND NOTHING ELSE PRICED — cleared explicitly,
-// because a leftover price anywhere in the tree changes what the remainder is
-// and this test is about the remainder. Everything unpriced must still come out
-// with a weight, or it is invisible to every report.
+// A price on the FIRST leaf AND NOTHING ELSE PRICED — cleared explicitly, so
+// the figures below are this one budget and nothing left over from the copy.
+// Since 24 Sep 2026 a leaf nobody budgeted weighs 0: stored as 0, not left
+// null, so the report reads a real zero rather than a missing figure.
 db.update(schema.wbsNodes)
   .set({ price: null })
   .where(eq(schema.wbsNodes.projectId, unlocked.id))
@@ -71,9 +71,11 @@ const after = db
 const total = after.reduce((s, n) => s + (n.bobot ?? 0), 0);
 
 check(
-  'typing one price gives every leaf a weight',
-  moved >= leaves.length && after.every((l) => l.bobot != null && l.bobot > 0),
-  `${moved} rows moved, ${after.length} leaves and none left null`
+  'typing one budget writes a weight on every leaf, 0 where no budget reaches',
+  moved >= leaves.length &&
+    after.every((l) => l.bobot != null) &&
+    after.filter((l) => l.bobot === 0).length === after.length - 1,
+  `${moved} rows moved, ${after.length} leaves, ${after.filter((l) => l.bobot === 0).length} at 0`
 );
 
 // A branch's figure is its children added up. One left holding a weight of its
@@ -91,8 +93,8 @@ check(
   `${branches.length} branches, ${branches.filter((b) => b.bobot != null).length} still weighted`
 );
 check(
-  'and the plan closes at 100',
-  Math.abs(total - 100) < 1e-6,
+  'and the plan totals what that budget reaches, not 100',
+  Math.abs(total - 25) < 1e-6,
   `total ${total.toFixed(6)} across ${after.length} leaves`
 );
 check(

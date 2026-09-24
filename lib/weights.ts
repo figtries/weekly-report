@@ -13,11 +13,17 @@
  * 37 priced nodes are branches. Summing every price gives 16,917,276 against a
  * contract of 5,920,000 — it counts the same money three times over.
  *
- * **Value flows DOWN, and a priced child sits INSIDE its parent's figure.** A
- * node without a price takes a share of what is left of its parent after the
- * parent's priced children have taken theirs. With a `workstepFactor` the share
- * is that fraction (Gundih's 0.5 / 0.3 / 0.2 for IFR / IFA / AFC); without one
- * the unpriced siblings split the remainder evenly.
+ * **A budget is the only thing that gives a row weight** (24 Sep 2026). A row
+ * with a price holds that money; a heading without one is its rows added up; a
+ * leaf with neither weighs NOTHING. There used to be an even share of whatever
+ * was left for rows nobody had priced, and people read it as a figure somebody
+ * had typed. A stored `workstepFactor` (Gundih's 0.5 / 0.3 / 0.2 for IFR / IFA
+ * / AFC) is still read, as that fraction of its parent's own budget, so no
+ * imported figure moves; nothing writes one any more.
+ *
+ * **Every budget is carved out of a POOL**: the nearest heading above it with a
+ * budget of its own, or the contract. What draws on a pool may not exceed it —
+ * see `checkBudgetEdit`, which the write path and the screen both call.
  *
  * **A total row restates the whole contract.** Gundih's `1.5 Finish` carries
  * 5,920,000 — the entire project — as its price. Counted as a line it doubles
@@ -53,31 +59,39 @@ export interface WeightNode {
 
 export interface WeightResult {
   contractValue: number;
-  /** Derived money per node — the share of the contract this row represents. */
+  /**
+   * Money per node. A row with a budget of its own is that budget, a heading
+   * without one is its rows added up, and a leaf with neither is 0.
+   */
   valueOf: Map<string, number>;
-  /** Derived percentage per LEAF, 0..100. */
+  /** Budgets a row holds OF ITS OWN: its price, or a stored fraction of its parent's. */
+  budgetOf: Map<string, number>;
+  /**
+   * Percentage per LEAF, 0..100. Every leaf has one, 0 where no budget reaches
+   * it, except a total row whose price restates the contract and is thrown away.
+   */
   bobotOf: Map<string, number>;
-  /** What the derived leaf weights add up to. 100 means the prices cover the plan. */
+  /** What the leaf weights add up to. 100 means the budgets reach every part of the contract. */
   total: number;
-  /** Leaves the prices reach at all. */
+  /** Leaves a budget reaches. */
   covered: number;
   leaves: number;
   /**
-   * `boq` — every leaf is reached by a price and the total closes at 100.
-   * `partial` — prices exist but do not cover the plan; a figure from these is
-   *   real for what it covers and silent about the rest, and the report must
-   *   say so rather than implying a whole.
-   * `even` — no prices at all; every leaf counts the same. A rough number shown
-   *   honestly beats a project that never gets set up.
+   * `boq` — every leaf has a budget and the total closes at 100.
+   * `partial` — budgets exist but do not reach the whole contract yet.
+   * `even` — nothing is budgeted at all, so every leaf weighs 0. The literal is
+   *   older than the rule (it once meant "spread evenly") and stays because it
+   *   is stored in `projects.weight_basis`.
    */
   basis: 'boq' | 'partial' | 'even';
+  /** Each row's parent, for walking up to the pool a budget is carved out of. */
+  parentOf: Map<string, string | null>;
   /**
-   * How many leaves were weighted by splitting the unpriced remainder of the
-   * contract rather than by a price of their own. Above zero, the figure is
-   * real for what it covers and an even guess for the rest — and the screen
-   * has to say so.
+   * Reporting units holding a budget of their own. Each is its own contract and
+   * draws on the contract, not on the heading it sits inside: SPK-007 lives at
+   * 1.4.4 inside SPK-004's 1.4, and 1.4's price does not include it.
    */
-  fromGap: number;
+  ownContract: Set<string>;
 }
 
 const EPSILON = 0.01;
@@ -132,172 +146,205 @@ function isTotalRow(n: WeightNode, priced: WeightNode[], largest: number): boole
 }
 
 /**
- * Value down the tree, then weight out of it.
+ * Budgets down the tree, money back up it, then weight out of the leaves.
  *
  * Nothing here writes; the caller decides whether the result is worth applying.
+ *
+ * **Down** decides what each row holds OF ITS OWN: its price, or, for a row
+ * still carrying a stored fraction, that fraction of its parent's own budget
+ * (a root's parent is the contract). **Up** decides what each row is worth: its
+ * own budget where it has one, otherwise its rows added up, and a leaf with
+ * neither is worth nothing. A leaf's weight is its money over the contract.
+ *
+ * NO EVEN SHARE, ANYWHERE (24 Sep 2026). A row nobody budgeted used to take an
+ * even share of what its heading had left, and one project read "= IDR 11 253"
+ * under five boxes nobody had touched; the person looking at it asked who had
+ * filled them in. A rough figure only helps if it can be told from a real one,
+ * and on that screen it could not. So a row without a budget weighs 0 until
+ * somebody gives it one, and the screen says so and lists it.
  */
 export function deriveWeights(nodes: WeightNode[], contractValue?: number): WeightResult {
   const contract = contractValue ?? computeContractValue(nodes);
-  const valueOf = new Map<string, number>();
-  const bobotOf = new Map<string, number>();
 
   const kids = new Map<string | null, WeightNode[]>();
   for (const n of [...nodes].sort((a, b) => a.order - b.order)) {
     const key = n.parentId ?? null;
     kids.set(key, [...(kids.get(key) ?? []), n]);
   }
+  const parentOf = new Map(nodes.map((n) => [n.id, n.parentId ?? null]));
 
   const priced = nodes.filter((n) => (n.price ?? 0) > 0);
   const largest = priced.length ? Math.max(...priced.map((n) => n.price ?? 0)) : 0;
+  const discarded = new Set(priced.filter((n) => isTotalRow(n, priced, largest)).map((n) => n.id));
 
-  const walk = (node: WeightNode, parentValue: number | null) => {
-    let value: number | null = null;
-
-    if ((node.price ?? 0) > 0 && !isTotalRow(node, priced, largest)) {
-      value = node.price ?? 0;
-    } else if (parentValue != null) {
-      const siblings = kids.get(node.parentId ?? null) ?? [];
-      // A reporting-unit sibling is NOT taking money out of this parent — it
-      // carries its own contract. Subtracting it here under-allocated the
-      // parent by exactly that unit's value.
-      const takenByPricedSiblings = siblings
-        .filter((s) => (s.price ?? 0) > 0 && !s.isReportingUnit && !isTotalRow(s, priced, largest))
-        .reduce((s, o) => s + (o.price ?? 0), 0);
-      const remainder = Math.max(0, parentValue - takenByPricedSiblings);
-      if (node.workstepFactor != null) {
-        // A STATED PERCENT IS A PERCENT OF THE PARENT'S BUDGET, not of what is
-        // left of it. "30% of Engineering" has to mean the same thing whoever
-        // else has been priced, or the box someone typed into changes meaning
-        // behind their back when a sibling gets a price: measured against the
-        // remainder, three rows reading 50 / 30 / 20 stop adding up to their
-        // heading the moment a fourth row is given one.
-        //
-        // NOT A CHANGE OF FIGURES ON GUNDIH, and that is checked rather than
-        // assumed. No factor row there has a genuinely priced sibling: 1.4's
-        // priced child is the nested reporting unit 1.4.4, already excluded
-        // above because it carries its own contract, and 1.4.2.2 and 1.4.3.1
-        // hold a price AND a factor, where the price wins before this branch
-        // is reached. `remainder` equalled `parentValue` everywhere it was
-        // actually used, so both readings give the same number.
-        value = parentValue * node.workstepFactor;
-      } else {
-        const unpriced = siblings.filter((s) => !((s.price ?? 0) > 0));
-        value = unpriced.length ? remainder / unpriced.length : null;
-      }
+  const budgetOf = new Map<string, number>();
+  const ownContract = new Set<string>();
+  const down = (node: WeightNode, parentBudget: number | null) => {
+    let own: number | null = null;
+    if ((node.price ?? 0) > 0 && !discarded.has(node.id)) {
+      own = node.price ?? 0;
+    } else if ((node.workstepFactor ?? 0) > 0 && parentBudget != null && parentBudget > 0) {
+      // A STORED PERCENT IS A PERCENT OF THE PARENT'S WHOLE BUDGET, the reading
+      // it has always had. Nothing writes one any more; this keeps the ones
+      // already stored (Gundih's IFR / IFA / AFC) meaning what they meant.
+      own = parentBudget * (node.workstepFactor ?? 0);
     }
-
-    if (value != null) valueOf.set(node.id, value);
-    for (const c of kids.get(node.id) ?? []) walk(c, value);
+    if (own != null) {
+      budgetOf.set(node.id, own);
+      if (node.isReportingUnit) ownContract.add(node.id);
+    }
+    for (const c of kids.get(node.id) ?? []) down(c, own);
   };
+  for (const r of kids.get(null) ?? []) down(r, contract > 0 ? contract : null);
 
-  // Roots start from the contract when nothing above them is priced, so a plan
-  // with no prices at all still spreads evenly instead of coming back empty.
-  //
-  // A ROOT THAT STATES A PERCENT ALSO STARTS FROM THE CONTRACT, whatever else
-  // is priced, because there is nothing above a root but the project and a
-  // percent has to be a percent OF something. Without this, typing "Engineering
-  // is 21.47%" on a top-level heading did nothing at all as soon as one price
-  // existed anywhere in the plan — the row fell through to the unpriced branch
-  // with no parent value to take a fraction of, and the box read as broken.
-  // Roots with no stated percent are untouched: they still start from null once
-  // prices exist, so their leaves reach the contract's leftover the way they
-  // always have. No project in this database has a root carrying a factor, so
-  // nothing that exists today moves.
-  const roots = kids.get(null) ?? [];
-  const anyPrice = priced.length > 0;
-  for (const r of roots) {
-    walk(r, anyPrice ? (r.workstepFactor != null ? contract : null) : contract);
-  }
+  const valueOf = new Map<string, number>();
+  const up = (node: WeightNode): number => {
+    let rows = 0;
+    for (const c of kids.get(node.id) ?? []) rows += up(c);
+    const v = budgetOf.get(node.id) ?? rows;
+    valueOf.set(node.id, v);
+    return v;
+  };
+  for (const r of kids.get(null) ?? []) up(r);
 
+  const bobotOf = new Map<string, number>();
   const leaves = nodes.filter((n) => n.isLeaf);
-  let covered = 0;
   let total = 0;
+  let covered = 0;
   for (const leaf of leaves) {
-    const v = valueOf.get(leaf.id);
-    if (v == null || contract <= 0) continue;
-    const b = (v / contract) * 100;
+    // A total row restates the whole contract on one line. Counted, it would
+    // double every figure; given a 0 it would be listed as work with no budget.
+    if (discarded.has(leaf.id)) continue;
+    const v = valueOf.get(leaf.id) ?? 0;
+    const b = contract > 0 ? (v / contract) * 100 : 0;
     bobotOf.set(leaf.id, b);
     total += b;
-    covered += 1;
+    if (v > 0) covered += 1;
   }
 
-  // Leaves no price reaches take an even share of what is LEFT of the contract.
-  //
-  // Without this a half-priced plan leaves rows weighing nothing at all, and a
-  // row with no weight is invisible: it never reaches the S-curve, it can never
-  // be reported against, and the project total closes at whatever the prices
-  // happened to cover. On screen that reads as work that does not exist rather
-  // than as work nobody has priced yet. Splitting the remainder is the same
-  // rule this function already applies at every other level of the tree —
-  // unpriced siblings share what their parent has left — reached one level
-  // higher, at the contract itself.
-  //
-  // ONLY EVER A POSITIVE REMAINDER. Gundih's prices nest, and derived over its
-  // own tree they already reach 154.58 with two leaves uncovered; there is
-  // nothing left to hand out, and inventing some would make a bad figure worse.
-  const uncovered = leaves.filter((l) => !bobotOf.has(l.id));
-  let fromGap = 0;
-  if (anyPrice && uncovered.length > 0 && contract > 0) {
-    const remaining = 100 - total;
-    if (remaining > EPSILON) {
-      const each = remaining / uncovered.length;
-      for (const leaf of uncovered) {
-        bobotOf.set(leaf.id, each);
-        valueOf.set(leaf.id, (each / 100) * contract);
-      }
-      total += remaining;
-      covered += uncovered.length;
-      fromGap = uncovered.length;
-    }
-  }
-
-  // No prices anywhere: every leaf counts the same, and the caller must label
-  // the project as not value-based.
-  let basis: WeightResult['basis'] = 'boq';
-  if (!anyPrice) {
-    basis = 'even';
-    bobotOf.clear();
-    total = 0;
-    covered = 0;
-    if (leaves.length > 0) {
-      const each = 100 / leaves.length;
-      for (const leaf of leaves) bobotOf.set(leaf.id, each);
-      total = 100;
-      covered = leaves.length;
-    }
-  } else if (fromGap > 0 || covered < leaves.length || Math.abs(total - 100) > 0.5) {
-    // `fromGap` is what keeps a plan honest about itself. Sharing the remainder
-    // makes the total close at 100 with every leaf carrying a figure, which is
-    // exactly what `boq` claims — so without this clause a plan with a single
-    // price on it would be labelled value-based off the back of a division.
-    basis = 'partial';
-  }
+  const basis: WeightResult['basis'] =
+    budgetOf.size === 0
+      ? 'even'
+      : covered === bobotOf.size && Math.abs(total - 100) <= 0.5
+        ? 'boq'
+        : 'partial';
 
   return {
     contractValue: contract,
     valueOf,
+    budgetOf,
     bobotOf,
     total,
     covered,
     leaves: leaves.length,
     basis,
-    fromGap,
+    parentOf,
+    ownContract,
   };
 }
 
+/** The contract's key wherever pools are keyed by row id. */
+export const CONTRACT_POOL = '#contract';
+
 /**
- * What a stated percent on a row under `parentId` would be a percent OF.
+ * The budget a row's money is carved out of: the nearest heading above it that
+ * holds a budget of its own, or the contract (`null`). A reporting unit with a
+ * budget is its own contract and always draws on the contract.
  *
- * `deriveWeights` only honours a percent where its parent was handed a value:
- * a root takes it from the contract, anything else from its parent's derived
- * money. Under a heading that nobody has priced there is nothing to take a
- * share of, and the percent is ignored while the row falls back to an even
- * share. Zero here means exactly that, so a screen can say so instead of
- * showing a typed percent beside a figure it had no part in.
+ * This is also what the percent beside a row is a percent OF, so "50%" on
+ * 5.2.1 means half of 5.2 when 5.2 has a budget, and half of 5 when it does not.
  */
-export function budgetAbove(parentId: string | null, result: WeightResult): number {
-  return parentId == null ? result.contractValue : (result.valueOf.get(parentId) ?? 0);
+export function poolOf(nodeId: string, result: WeightResult): string | null {
+  if (result.ownContract.has(nodeId)) return null;
+  let p = result.parentOf.get(nodeId) ?? null;
+  // Guarded against a parent chain that loops, which a bad import could leave.
+  for (let guard = 0; p != null && guard <= result.parentOf.size; guard += 1) {
+    if (result.budgetOf.has(p)) return p;
+    p = result.parentOf.get(p) ?? null;
+  }
+  return null;
 }
+
+/** What a pool holds: that heading's own budget, or the contract. */
+export function poolAmount(pool: string | null, result: WeightResult): number {
+  return pool == null ? result.contractValue : (result.budgetOf.get(pool) ?? 0);
+}
+
+/**
+ * The weight each row should store, for every row whose stored figure differs.
+ *
+ * A BRANCH CARRIES NO WEIGHT OF ITS OWN: its figure is its children, added up
+ * when the report is built. The flag that says which is which is set while a
+ * row is still a leaf and goes stale the moment something is indented under
+ * it, and the weight it was holding stays behind, so a branch is written null.
+ */
+export function bobotWrites(
+  nodes: WeightNode[],
+  result: WeightResult
+): Array<{ id: string; bobot: number | null }> {
+  const out: Array<{ id: string; bobot: number | null }> = [];
+  for (const n of nodes) {
+    const next = n.isLeaf ? (result.bobotOf.get(n.id) ?? null) : null;
+    const same =
+      (n.bobot == null && next == null) ||
+      (n.bobot != null && next != null && Math.abs(n.bobot - next) < 1e-9);
+    if (!same) out.push({ id: n.id, bobot: next });
+  }
+  return out;
+}
+
+/**
+ * Whether giving `nodeId` a budget of `next` (null clears it) keeps every pool
+ * within what it holds. Null when it does; otherwise the refusal, in words.
+ *
+ * Both directions in one test, because they are one rule: a row may not take
+ * more than its pool has left, and a heading may not be lowered below what its
+ * rows already take. Run over the plan before and after the edit, every pool is
+ * compared, and the edit is refused only where it makes one WORSE. That last
+ * clause is what keeps Gundih editable: it inherited headings handed out at
+ * 140%, and refusing every keystroke inside them until somebody fixed a
+ * workbook from 2025 would make the screen useless there instead of honest.
+ *
+ * The screen calls this while someone types, and `updateRowTextAction` calls it
+ * again before writing, so the rule cannot be walked around from the planner or
+ * from Data Overall's panel.
+ */
+export function checkBudgetEdit(
+  nodes: WeightNode[],
+  signedContract: number | null | undefined,
+  nodeId: string,
+  next: number | null,
+  nameOf: (id: string | null) => string,
+  say: (amount: number) => string
+): string | null {
+  const contract = signedContract != null && signedContract > 0 ? signedContract : undefined;
+  const clean = next != null && next > 0 ? next : null;
+  // Setting or clearing the budget clears a stored fraction either way, exactly
+  // as `updateRowTextAction` writes it.
+  const afterNodes = nodes.map((n) =>
+    n.id === nodeId ? { ...n, price: clean, workstepFactor: null } : n
+  );
+  const beforeAlloc = allocationOf(deriveWeights(nodes, contract));
+  const after = deriveWeights(afterNodes, contract);
+  const afterAlloc = allocationOf(after);
+
+  for (const [key, a] of afterAlloc) {
+    if (a.left >= -HALF_UNIT) continue;
+    const was = beforeAlloc.get(key);
+    if (was && a.left >= was.left - HALF_UNIT) continue;
+    if (key === nodeId) {
+      return `The rows inside ${nameOf(nodeId)} already take ${say(a.claimed)}. Lower them first, or keep it at ${say(a.claimed)} or more.`;
+    }
+    const where = key === CONTRACT_POOL ? 'the contract' : nameOf(key);
+    if (clean == null) return `That would put ${where} over by ${say(-a.left)}.`;
+    const available = Math.max(0, a.budget - (a.claimed - (after.valueOf.get(nodeId) ?? 0)));
+    return `This row can take at most ${say(available)} of ${where}.`;
+  }
+  return null;
+}
+
+/** Money compares to half a unit: nothing on screen shows less than a whole one. */
+const HALF_UNIT = 0.5;
 
 export interface WeightChange {
   id: string;
@@ -420,7 +467,7 @@ export function summariseWeights(
     derivedCovers: result.covered,
     wouldChange: changes.length,
     pricedRows: priced.length,
-    overrun: overrunOf(nodes, result),
+    overrun: overrunOf(result),
   };
 }
 
@@ -466,129 +513,76 @@ export function topLevelPricedTotal(nodes: WeightNode[]): number {
 }
 
 /**
- * What a heading has to give out, and what its rows have already claimed.
+ * What each pool holds, and what the budgets carved out of it take.
  *
- * The screen's question, not the derivation's. `deriveWeights` hands every row
- * a figure whatever the arithmetic looks like, because a report that refuses to
- * render is worse than one that is wrong by a stated amount. This is how the
- * screen finds out the arithmetic looked wrong, so it can say so on the card
- * instead of leaving someone to add six numbers by hand.
+ * A POOL is a heading with a budget of its own, or the contract
+ * (`CONTRACT_POOL`). Every budget draws on exactly one pool, the one `poolOf`
+ * names, so a row priced inside a heading nobody budgeted counts against the
+ * heading above that, and the contract at the top. That is what makes the cap
+ * one rule instead of one per level.
  *
  * **It computes nothing the derivation does not already know**, and that is
  * deliberate in the same way `buildOverallMap` computes nothing: a second
  * opinion about money living in a second file is how a card ends up disagreeing
  * with the bar underneath it.
  *
- * **Over-allocation is REPORTED, never corrected.** Gundih has headings whose
- * rows state 0.3 + 0.4 + 0.3 and still carry two more rows with nothing on
- * them, so the heading is handed out at 140%. Scaling the percentages back to
- * fit would move figures nobody asked to move; zeroing the two empty rows would
- * drop two real pieces of work to no weight at all, and a leaf with no weight
- * is invisible to every report. So the number stands and the card says it is
- * over.
+ * **What a pool is over by is REPORTED here, and refused at the door.**
+ * `checkBudgetEdit` refuses any edit that makes a pool worse, so a new overrun
+ * cannot be typed. What can still be over is inherited (Gundih's headings
+ * handed out at 140%) or arrived in bulk (a paste, an indent), and the card
+ * says so instead of scaling anybody's figures back.
  */
 export interface Allocation {
-  /** The money this heading has to give out. */
+  /** The money this pool has to give out. */
   budget: number;
-  /** What its rows have claimed: their own prices, and their stated percents. */
+  /** What the budgets drawing on it add up to. */
   claimed: number;
-  /** Budget minus claimed. NEGATIVE means the rows claimed more than there is. */
+  /** Budget minus claimed. NEGATIVE means more was taken than there is. */
   left: number;
-  /** Rows that claimed nothing, and will split whatever is left between them. */
-  openChildren: number;
-  /** The stated percents added up, as a fraction. 1 means fully spoken for. */
-  statedFraction: number;
+  /** Activities inside this pool that no budget reaches yet. */
+  emptyLeaves: number;
 }
 
 /**
- * One entry per row that has rows beneath it and a budget to give out.
- *
- * A heading no price reaches has no budget to divide and gets no entry: on
- * screen that is the card whose figure is simply its rows added up, which is a
- * different sentence from "it is over by 40%".
+ * One entry per pool: every row holding a budget of its own, and the contract
+ * when there is one. A heading with no budget of its own is not a pool; its
+ * figure is simply its rows added up, which is a different sentence on screen
+ * from "it is over by 40%".
  */
-export function allocationOf(nodes: WeightNode[], result: WeightResult): Map<string, Allocation> {
-  const kids = new Map<string, WeightNode[]>();
-  for (const n of nodes) {
-    if (n.parentId == null) continue;
-    kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
-  }
-
-  const priced = nodes.filter((n) => (n.price ?? 0) > 0);
-  const largest = priced.length ? Math.max(...priced.map((n) => n.price ?? 0)) : 0;
-
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+export function allocationOf(result: WeightResult): Map<string, Allocation> {
   const out = new Map<string, Allocation>();
-  for (const [parentId, children] of kids) {
-    // A reporting unit's own contract figure first, because that is the number
-    // its SPK was signed for and the derivation only ever sees it as a price.
-    // Then whatever the derivation handed the row from above.
-    const parent = byId.get(parentId);
-    const budget = parent?.unitContractValue ?? result.valueOf.get(parentId);
-    if (budget == null || budget <= 0) continue;
-
-    let claimed = 0;
-    let openChildren = 0;
-    let statedFraction = 0;
-    for (const c of children) {
-      // A nested reporting unit is not spending its parent's money — it
-      // carries its own contract, exactly as the derivation treats it.
-      if (c.isReportingUnit && (c.unitContractValue ?? c.price ?? 0) > 0) continue;
-      if ((c.price ?? 0) > 0) {
-        if (!isTotalRow(c, priced, largest)) claimed += c.price ?? 0;
-        continue;
-      }
-      if (c.workstepFactor != null) {
-        statedFraction += c.workstepFactor;
-        claimed += budget * c.workstepFactor;
-        continue;
-      }
-      openChildren += 1;
+  const at = (key: string, budget: number) => {
+    let a = out.get(key);
+    if (!a) {
+      a = { budget, claimed: 0, left: budget, emptyLeaves: 0 };
+      out.set(key, a);
     }
+    return a;
+  };
 
-    out.set(parentId, { budget, claimed, left: budget - claimed, openChildren, statedFraction });
+  if (result.contractValue > 0) at(CONTRACT_POOL, result.contractValue);
+  for (const [id, own] of result.budgetOf) at(id, own);
+
+  for (const [id, own] of result.budgetOf) {
+    const pool = poolOf(id, result) ?? CONTRACT_POOL;
+    const a = out.get(pool);
+    if (a) a.claimed += own;
   }
+  for (const [leafId] of result.bobotOf) {
+    if ((result.valueOf.get(leafId) ?? 0) > 0) continue;
+    const a = out.get(poolOf(leafId, result) ?? CONTRACT_POOL);
+    if (a) a.emptyLeaves += 1;
+  }
+  for (const a of out.values()) a.left = a.budget - a.claimed;
   return out;
 }
 
-/**
- * What the weights are over by, and how many headings caused it.
- *
- * `deriveWeights` hands money DOWN, but every level decides its own claim
- * independently and nothing ever checks that what a heading gives out equals
- * what it holds. On Gundih that reaches 154.58%: the leaves add up to 9,150,942
- * against a contract of 5,920,000, with the money closing exactly at the top
- * level. Two causes, both real in that data and both deliberate on their own
- * terms, which is why this REPORTS and never corrects:
- *
- * - **Stated percents plus rows with nothing.** `1.3.1.1.1` holds 167,600 and
- *   its five rows read — / 30% / — / 40% / 30%. The three percents take the
- *   whole budget, and the two blank rows still count as 2 of 5 in the even
- *   split, so the heading hands out 140%. A percent is deliberately read
- *   against the WHOLE budget, and the blank rows are deliberately not zeroed —
- *   a leaf with no weight is invisible to every report.
- * - **Real prices deeper than the share handed down.** `1.3.1.2.1 Electrical`
- *   was given 124,851 by even split because nothing above it carries a price,
- *   while its five rows carry the SPK's own figures totalling 849,542. The
- *   724,691 difference is subtracted nowhere.
- *
- * **`amount` is read off the total, not off the branches.** The branch scan
- * double-counts wherever an over-giving heading sits inside another one, so its
- * sum does not reconcile with the percentage on screen — and a screen printing
- * "154.58%" beside a figure that is not (154.58 − 100)% of the contract is one
- * card making two statements. The count answers "where", the money answers
- * "how much", and each comes from the measure that can answer it.
- *
- * **A nested reporting unit is not its parent spending twice.** SPK-007 carries
- * its own contract inside SPK-004's `1.4`, exactly as `deriveWeights` and
- * `allocationOf` already treat it, so it is left out of its parent's sum.
- */
-/** One heading that hands out more than it was given. */
+/** One heading that hands out more than it holds. */
 export interface OverGiving {
   id: string;
-  /** What the derivation handed this heading. */
+  /** What this heading holds. */
   budget: number;
-  /** What its rows took between them. */
+  /** What the budgets drawing on it took between them. */
   claimed: number;
   /** claimed - budget. Always positive; that is what puts it in the list. */
   over: number;
@@ -608,31 +602,26 @@ export interface Overrun {
   headings: OverGiving[];
   /** `headings.length`, kept because two call sites only want the count. */
   branches: number;
-  /** Money the derived leaves exceed the contract by. Zero when they do not. */
+  /** Money the leaves exceed the contract by. Zero when they do not. */
   amount: number;
   /** Percentage points over 100. Zero when the weights close. */
   points: number;
 }
 
-export function overrunOf(nodes: WeightNode[], result: WeightResult): Overrun {
-  const kids = new Map<string, WeightNode[]>();
-  for (const n of nodes) {
-    if (n.parentId == null) continue;
-    kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
-  }
-
+/**
+ * What the weights are over by, and which headings did it.
+ *
+ * **`amount` is read off the total, not off the headings.** An over-giving
+ * heading inside another one would be counted twice, and a screen printing
+ * "154.58%" beside a figure that is not (154.58 - 100)% of the contract is one
+ * card making two statements. The list answers "where", the money answers "how
+ * much", and each comes from the measure that can answer it.
+ */
+export function overrunOf(result: WeightResult): Overrun {
   const headings: OverGiving[] = [];
-  for (const [parentId, children] of kids) {
-    const own = result.valueOf.get(parentId);
-    if (own == null || own <= 0) continue;
-    let claimed = 0;
-    for (const c of children) {
-      if (c.isReportingUnit && (c.unitContractValue ?? c.price ?? 0) > 0) continue;
-      claimed += result.valueOf.get(c.id) ?? 0;
-    }
-    if (claimed - own > EPSILON) {
-      headings.push({ id: parentId, budget: own, claimed, over: claimed - own });
-    }
+  for (const [id, a] of allocationOf(result)) {
+    if (id === CONTRACT_POOL || -a.left <= EPSILON) continue;
+    headings.push({ id, budget: a.budget, claimed: a.claimed, over: -a.left });
   }
   headings.sort((a, b) => b.over - a.over);
 

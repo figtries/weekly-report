@@ -8,6 +8,7 @@ import { inclusiveDays } from './plan-curve';
 import { boxAbove, coverChildren, getActiveBaselineId, rowSpan } from './sheet';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
 import { projectOfNode, syncDerivedWeights } from './weights-auto';
+import { budgetRefusal } from './weights-read';
 
 /**
  * The schedule sheet — the writes.
@@ -129,19 +130,18 @@ function checkFits(nodeId: string, baselineId: string, start: string, finish: st
 }
 
 /**
- * Renaming, pricing and sharing out a heading: the writes that touch no dates.
+ * Renaming and budgeting a row: the writes that touch no dates.
  *
- * `percent` is the other half of `price`, and it writes the column the Gundih
- * importer has been filling since day one while no screen could: a row states
- * a fraction of its parent's budget instead of an amount of its own. The two
- * are the same fact in different units, which is why they share an action and
- * the same `syncDerivedWeights` tail — a project whose weights follow its
- * money has to follow them here too, or a typed percent would show on this
- * screen and nowhere else in the app.
+ * A BUDGET IS THE ONLY WAY A ROW GETS WEIGHT (24 Sep 2026). The Weights screen
+ * used to take a percent here as well, written to `workstep_factor`, and the
+ * row carried two different percents at once: the one typed (a share of its
+ * parent) and the one beside it (a share of the SPK). The screen still lets a
+ * percent be TYPED, but it turns it into money before it gets here, so this
+ * door takes money and nothing else.
  */
 export async function updateRowTextAction(
   nodeId: string,
-  field: 'name' | 'price' | 'percent',
+  field: 'name' | 'price',
   value: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await beforeWrite();
@@ -150,33 +150,6 @@ export async function updateRowTextAction(
       const clean = value.trim();
       if (!clean) throw new Error('A row needs a name');
       db.update(schema.wbsNodes).set({ deskripsi: clean }).where(eq(schema.wbsNodes.id, nodeId)).run();
-    } else if (field === 'percent') {
-      const raw = value.replace(/[^0-9.]/g, '');
-      const n = raw === '' ? null : Number(raw);
-      if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a percent');
-      // OVER A HUNDRED IS ALLOWED THROUGH, and that is the decision rather than
-      // an omission. Rows claiming more than their heading holds is a real
-      // state of a real plan — Gundih has headings handed out at 140% — and the
-      // screen's job is to SAY SO, not to refuse the keystroke that reveals it.
-      // Refusing here would only push the person into typing 99 and calling it
-      // done. The absurd is still stopped, because a percent in the thousands
-      // is a slipped decimal rather than an opinion.
-      if (n !== null && n > 1000) throw new Error('A percent that large is a typo');
-      // ZERO IS EMPTY. A row taking 0% of its heading weighs nothing and drops
-      // out of every report, and a stored 0 read back as "set" on this screen:
-      // the box showed "0", the card counted the row as decided, and the figure
-      // beside it was still the even share nobody had chosen (24 Sep 2026).
-      const factor = n === null || n === 0 ? null : n / 100;
-      // A stated percent CLEARS the price, the same as the client's live patch
-      // does. A price wins inside the derivation, so a row keeping both would
-      // show the percent on screen and take its old price in every report.
-      db
-        .update(schema.wbsNodes)
-        .set(factor === null ? { workstepFactor: null } : { workstepFactor: factor, price: null })
-        .where(eq(schema.wbsNodes.id, nodeId))
-        .run();
-      const projectId = projectOfNode(nodeId);
-      if (projectId) syncDerivedWeights(projectId);
     } else {
       // A BRANCH MAY BE PRICED, and forbidding it was a contradiction this app
       // held against itself: `lib/weights.ts` is built on a branch price being
@@ -186,11 +159,19 @@ export async function updateRowTextAction(
       const raw = value.replace(/[^0-9.-]/g, '');
       const n = raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a price');
-      // Zero is empty here too, and a price clears a stated percent: see above.
+      // ZERO IS EMPTY: a stored 0 read back as a row somebody had decided.
       const price = n === 0 ? null : n;
+      const projectId = projectOfNode(nodeId);
+      // THE CAP, checked here as well as on screen, because three screens reach
+      // this action and only one of them draws the pools.
+      const refusal = projectId ? budgetRefusal(projectId, nodeId, price) : null;
+      if (refusal) throw new Error(refusal);
+      // A price CLEARS a stored percent: a row holding both would show one
+      // figure and report another. So does clearing the box, because the box
+      // was showing that percent as money and emptying it means no budget.
       db
         .update(schema.wbsNodes)
-        .set(price === null ? { price: null } : { price, workstepFactor: null })
+        .set({ price, workstepFactor: null })
         .where(eq(schema.wbsNodes.id, nodeId))
         .run();
       // Weight follows the price — BUT ONLY WHERE THERE IS NOTHING TO LOSE.
@@ -210,7 +191,6 @@ export async function updateRowTextAction(
       // weights in step with what its prices now say. Weight is still derived,
       // never typed; on a locked project it is derived only when someone asks,
       // after being shown what would change (`previewWeights` in lib/weights.ts).
-      const projectId = projectOfNode(nodeId);
       if (projectId) syncDerivedWeights(projectId);
     }
     revalidatePath('/projects', 'layout');

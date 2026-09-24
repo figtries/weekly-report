@@ -147,35 +147,44 @@ document people already have, the weights close at 100 by construction instead
 of by luck, and `contractValue` (and therefore earned value) falls out for free
 rather than needing its own field. Never accept a weight from a client payload:
 `applySetup` in `lib/mutations.ts` is the only door into the database, and it
-recomputes. Projects without a priced BOQ get `evenWeights()` and must be
-labelled as not value-based — a rough number shown honestly beats a project that
-never gets set up.
+recomputes. (The db.json setup wizard still gives a project without a priced
+BOQ `evenWeights()`; a SQLite project with no budgets weighs nothing — see below.)
 
-**A row is set by its PRICE or by its SHARE, and they are the same fact.** A
-heading has a budget; what people decide about the rows inside it is how much of
-that budget each one takes, and asking for rupiah there makes someone do the
-multiplication by hand and type the answer. So Weights gives every row one
-box with two units: money lands in `price`, a percent lands in
-`workstep_factor` — a column the Gundih importer had been writing since day one
-while no screen could. Weight is still DERIVED from whichever was given; a share
-is an input to `deriveWeights`, never a stored `bobot`.
+**A BUDGET IS THE ONLY THING THAT GIVES A ROW WEIGHT** (24 Sep 2026, replacing
+the 14 Sep "price or share" rule; spec in
+`docs/superpowers/specs/2026-09-24-weights-budget-only-design.md`). Weights
+gives every row ONE money box, and beside it the row's share of its POOL, which
+can be typed too: a typed share is turned into money on the client and the MONEY
+is saved, so `updateRowTextAction` takes a price and nothing else. The % / IDR
+toggle went because one row carried two percents that never agreed (the box's
+was a share of the parent, the figure beside it a share of the whole SPK).
 
-Three rules there are correctness. **A stated percent is a percent of the
-parent's WHOLE budget**, not of what is left of it after priced siblings — read
-against the remainder, three rows saying 50 / 30 / 20 stop adding up to their
-heading the moment a fourth is priced. (Changing this moved nothing on Gundih,
-and that was checked rather than assumed: no factor row there has a genuinely
-priced sibling, because 1.4's priced child is the nested unit 1.4.4 and 1.4.2.2
-and 1.4.3.1 hold a price AND a factor, where the price wins first.) **The two
-clear each other on write**, in `updateRowTextAction` and in the client's live
-patch, because a price beats a stated percent inside the derivation and a row
-holding both would keep taking its old price while the percent box appeared
-broken. And **over-allocation is REPORTED, never corrected**: `allocationOf` in
-`lib/weights.ts` tells the screen what a heading has left, the card says "over
-by X" and turns, and the figures stand. Gundih has headings handed out at 140%
-(0.3 + 0.4 + 0.3 with two more rows still taking an even share); scaling them
-back would move figures nobody asked to move, and zeroing the empty rows would
-drop real work to no weight at all, which makes it invisible to every report.
+Four rules there are correctness. **A pool is the nearest heading above with a
+budget of its own, or the contract** (`poolOf`); a reporting unit with a budget
+is its own contract and draws on the contract, which is how SPK-007 inside 1.4
+stays out of 1.4's sum. **A row nobody budgeted weighs 0** — no even share of a
+remainder, anywhere, including a plan with no budgets at all. It was read as a
+figure somebody had typed ("= IDR 11 253" under five empty boxes), and the
+consequence is the user's by decision: the total reads what the budgets reach,
+and the strip at the top NAMES every activity with no budget, one press away.
+**The cap is refused, in both directions**, by `checkBudgetEdit`: a budget may
+not take more than its pool has left, and a pool (the contract included, in
+`updateProjectFieldAction`) may not be lowered below what already draws on it.
+It runs on the client while typing and again in the action before writing, and
+it refuses only what makes a pool WORSE, so Gundih's inherited 140% headings
+stay editable. Paste and indent are bulk and are not blocked; the card reports
+"over by X". **A stored `workstep_factor` is still READ** — as that fraction of
+the parent's own budget — so Gundih's IFR / IFA / AFC and every percent typed
+before 24 Sep keep their figures; nothing writes one any more, and setting or
+clearing a row's budget clears it. Zero in the money box is empty, never a
+stored 0.
+
+Stored `bobot` follows: `syncDerivedWeights` writes 0 on an unbudgeted leaf
+(a real zero, not a missing figure), a contract value edit re-syncs, and
+`resyncWeights` in `lib/db-snapshot.ts` brings a restored snapshot's unlocked
+projects in line once, keyed on `pragma user_version`, so the reports follow the
+rule without waiting for somebody to edit a price. Locked projects
+(`weight_basis = 'boq'`) never move.
 
 **A DOT IN A MONEY BOX IS A THOUSANDS SEPARATOR.** `stripAmount` reads every
 dot as one when every dot in the string is followed by exactly three digits, so
@@ -558,10 +567,10 @@ in the page body fails the build.
 'boq'` is the LOCK: an imported project carries it, and so does one whose owner
 has applied a derivation covering the whole plan. Everything else re-derives on
 every price edit, every structural change (`renumber()` is the funnel) and every
-pasted BOQ — see `lib/weights-auto.ts`. A leaf no price reaches takes an even
-share of what is LEFT of the contract, because a leaf with no weight is
-invisible to every report; `fromGap` then keeps the plan from calling itself
-value-based off the back of that division. And a row that stops being a leaf
+pasted BOQ — see `lib/weights-auto.ts`. A leaf no budget reaches weighs 0 and
+is stored as 0 (24 Sep 2026: the even share of what was left is gone, see "A
+BUDGET IS THE ONLY THING" above); the Weights strip names every such leaf so
+the gap is reminded rather than guessed. And a row that stops being a leaf
 stops carrying a weight, the same stale-flag family as `isMilestone`.
 
 # The v2 rebuild — read this before starting new work

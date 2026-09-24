@@ -25,7 +25,7 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { deriveWeights } from './weights';
+import { bobotWrites, deriveWeights } from './weights';
 import { loadWeightNodes } from './weights-read';
 
 /** Anything that can write a row: the connection itself, or a transaction. */
@@ -52,26 +52,17 @@ export function syncDerivedWeights(projectId: string, tx: Writer = db): number {
   // Measured against the SIGNED contract when there is one, exactly as the
   // Money panel measures it. Against the sum of the prices typed so far it
   // would close at 100 by definition and never show unpriced work.
-  const result = deriveWeights(nodes, project.contractValue ?? undefined);
+  const signed = (project.contractValue ?? 0) > 0 ? (project.contractValue ?? undefined) : undefined;
+  const result = deriveWeights(nodes, signed);
 
-  let changed = 0;
-  for (const n of nodes) {
-    // A BRANCH CARRIES NO WEIGHT OF ITS OWN — its figure is its children, added
-    // up when the report is built. The flag that says which is which is set
-    // while a row is still a leaf and goes stale the moment something is
-    // indented under it, and the weight it was holding stays behind: one of
-    // these projects had a branch sitting on 100 with four leaves under it
-    // adding up to another 100. Same stale-flag family as `isMilestone` in
-    // `renumber()`, and cleared for the same reason.
-    const next = n.isLeaf ? (result.bobotOf.get(n.id) ?? null) : null;
-    const same =
-      (n.bobot == null && next == null) ||
-      (n.bobot != null && next != null && Math.abs(n.bobot - next) < 1e-9);
-    if (same) continue;
-    tx.update(schema.wbsNodes).set({ bobot: next }).where(eq(schema.wbsNodes.id, n.id)).run();
-    changed += 1;
+  // Branches are written null: one of these projects had a branch sitting on
+  // 100 with four leaves under it adding up to another 100. Same stale-flag
+  // family as `isMilestone` in `renumber()`, and cleared for the same reason.
+  const writes = bobotWrites(nodes, result);
+  for (const w of writes) {
+    tx.update(schema.wbsNodes).set({ bobot: w.bobot }).where(eq(schema.wbsNodes.id, w.id)).run();
   }
-  return changed;
+  return writes.length;
 }
 
 /** The project a row belongs to — every structural action is handed a row id. */

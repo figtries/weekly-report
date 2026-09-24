@@ -7,7 +7,16 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { summariseWeights, type WeightNode, type WeightSummary } from './weights';
+import { formatMoney } from './currency';
+import {
+  allocationOf,
+  checkBudgetEdit,
+  CONTRACT_POOL,
+  deriveWeights,
+  summariseWeights,
+  type WeightNode,
+  type WeightSummary,
+} from './weights';
 
 export function loadWeightNodes(projectId: string): WeightNode[] {
   return db
@@ -53,4 +62,54 @@ export function getWeightSummary(projectId: string): WeightSummary | null {
   // One source, read here and nowhere else, so the list card and the project
   // page can never show two different numbers for the same project again.
   return summariseWeights(nodes, project.currency, project.contractValue);
+}
+
+/**
+ * Why giving `nodeId` a budget of `next` would break the cap, or null when it
+ * would not. The pure rule is `checkBudgetEdit`; this only gathers what it
+ * needs from the database and says the figures in the project's own currency.
+ */
+export function budgetRefusal(projectId: string, nodeId: string, next: number | null): string | null {
+  const project = db
+    .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  if (!project) return null;
+  const names = new Map(
+    db
+      .select({ id: schema.wbsNodes.id, code: schema.wbsNodes.wbsCode, name: schema.wbsNodes.deskripsi })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, projectId))
+      .all()
+      .map((r) => [r.id, `${r.code ?? ''} ${r.name ?? ''}`.trim()])
+  );
+  return checkBudgetEdit(
+    loadWeightNodes(projectId),
+    project.contractValue,
+    nodeId,
+    next,
+    (id) => (id == null ? 'the contract' : (names.get(id) ?? 'this heading')),
+    (amount) => formatMoney(amount, project.currency)
+  );
+}
+
+/**
+ * Why the contract value may not become `next`: the SPK and activities
+ * drawing on it already take more. Only LOWERING is refused, so a contract
+ * that was already short can still be raised towards what it has to hold.
+ */
+export function contractRefusal(projectId: string, next: number | null): string | null {
+  if (next == null || next <= 0) return null;
+  const project = db
+    .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  if (!project) return null;
+  if (project.contractValue != null && next >= project.contractValue) return null;
+  const claimed = allocationOf(deriveWeights(loadWeightNodes(projectId), next)).get(CONTRACT_POOL)?.claimed ?? 0;
+  if (claimed - next <= 0.5) return null;
+  const say = (a: number) => formatMoney(a, project.currency);
+  return `The SPK and activities already take ${say(claimed)} of the contract. Lower them first, or keep the contract at ${say(claimed)} or more.`;
 }

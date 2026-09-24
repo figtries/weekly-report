@@ -21,6 +21,7 @@
 import Database from 'better-sqlite3';
 
 import {
+  checkBudgetEdit,
   computeContractValue,
   deriveWeights,
   previewWeights,
@@ -111,12 +112,12 @@ check(
   `b1 = ${(s.bobotOf.get('b1') ?? 0).toFixed(6)} (700000 × 0.5 ÷ 1000000 × 100 = 35)`
 );
 
-// No prices at all: even weights, labelled as such rather than pretending.
+// No budgets at all: nothing weighs anything, and the plan says so.
 const unpriced = synthetic.map((n) => ({ ...n, price: null, workstepFactor: null }));
 const e = deriveWeights(unpriced);
 check(
-  'a plan with no prices spreads evenly and says so',
-  e.basis === 'even' && Math.abs(e.total - 100) < 1e-9,
+  'a plan with no budgets weighs nothing and says so',
+  e.basis === 'even' && e.total === 0,
   `basis ${e.basis}, total ${e.total.toFixed(6)} across ${e.leaves} leaves`
 );
 
@@ -147,25 +148,63 @@ check(
   `signed 1,000,000 with only 400,000 allocated → gap ${partial.gap.toFixed(0)}`
 );
 
-// A leaf no price reaches still has to carry a figure, or it is invisible to
-// every report — but the plan must not then call itself value-based.
-const gapFilled = deriveWeights(partlyPriced, 1000000);
+// A leaf no budget reaches weighs 0. Nothing is invented for it (24 Sep 2026).
+const noShare = deriveWeights(partlyPriced, 1000000);
 check(
-  'a leaf no price reaches still gets a weight, and the plan admits it guessed',
-  gapFilled.basis === 'partial' &&
-    Math.abs(gapFilled.total - 100) < 1e-9 &&
-    gapFilled.fromGap === 1 &&
-    Math.abs((gapFilled.bobotOf.get('a') ?? 0) - 40) < 1e-9 &&
-    Math.abs((gapFilled.bobotOf.get('b') ?? 0) - 60) < 1e-9,
-  `priced leaf 40.00, unpriced leaf ${(gapFilled.bobotOf.get('b') ?? 0).toFixed(2)} out of the 600,000 gap, basis ${gapFilled.basis}`
+  'a leaf no budget reaches weighs 0, and the plan says it is partial',
+  noShare.basis === 'partial' &&
+    Math.abs(noShare.total - 40) < 1e-9 &&
+    noShare.bobotOf.get('b') === 0 &&
+    Math.abs((noShare.bobotOf.get('a') ?? 0) - 40) < 1e-9,
+  `budgeted leaf ${(noShare.bobotOf.get('a') ?? 0).toFixed(2)}, the other ${(noShare.bobotOf.get('b') ?? 0).toFixed(2)}, total ${noShare.total.toFixed(2)}, basis ${noShare.basis}`
 );
 
-// And the guard that protects an imported project: Gundih’s nested prices
-// already derive past 100, so there is no remainder and nothing is invented.
+/* --------------------------------------------------------------- the cap */
+
+// Contract 1000. H holds 500 with H1 at 200 and H2 empty; K has no budget of
+// its own and K1 draws straight on the contract.
+const capped: WeightNode[] = [
+  { id: 'H', parentId: null, order: 0, price: 500, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: false },
+  { id: 'H1', parentId: 'H', order: 1, price: 200, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: true },
+  { id: 'H2', parentId: 'H', order: 2, price: null, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: true },
+  { id: 'K', parentId: null, order: 3, price: null, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: false },
+  { id: 'K1', parentId: 'K', order: 4, price: 100, workstepFactor: null, isReportingUnit: false, unitContractValue: null, bobot: null, isLeaf: true },
+];
+const nameOf = (id: string | null) => (id == null ? 'the contract' : id);
+const say = (n: number) => String(Math.round(n));
+const tryBudget = (rows: WeightNode[], id: string, next: number | null) =>
+  checkBudgetEdit(rows, 1000, id, next, nameOf, say);
+
+check('a budget that fits its heading is allowed', tryBudget(capped, 'H2', 300) === null, String(tryBudget(capped, 'H2', 300)));
 check(
-  'no remainder means nothing is invented',
-  result.fromGap === 0,
-  `Gundih derives to ${result.total.toFixed(4)} with ${result.leaves - result.covered} leaves uncovered and 0 filled from a gap`
+  'one unit more than the heading has room for is refused, with the figure',
+  tryBudget(capped, 'H2', 301) === 'This row can take at most 300 of H.',
+  String(tryBudget(capped, 'H2', 301))
+);
+check(
+  'a heading cannot be lowered below what its rows take',
+  (tryBudget(capped, 'H', 150) ?? '').startsWith('The rows inside H already take 200.'),
+  String(tryBudget(capped, 'H', 150))
+);
+check(
+  'a row under a heading with no budget is capped by the contract',
+  tryBudget(capped, 'K1', 600) === 'This row can take at most 500 of the contract.',
+  String(tryBudget(capped, 'K1', 600))
+);
+check('clearing a budget is always allowed', tryBudget(capped, 'H', null) === null, String(tryBudget(capped, 'H', null)));
+
+// Inherited overrun: H already hands out 700 of its 500. An edit that makes it
+// no worse goes through; one that makes it worse does not.
+const inherited = capped.map((n) => (n.id === 'H1' ? { ...n, price: 400 } : n.id === 'H2' ? { ...n, price: 300 } : n));
+check(
+  'inside a heading that was already over, an edit that eases it is allowed',
+  tryBudget(inherited, 'H2', 250) === null,
+  String(tryBudget(inherited, 'H2', 250))
+);
+check(
+  'and one that makes it worse is refused',
+  tryBudget(inherited, 'H2', 350) != null,
+  String(tryBudget(inherited, 'H2', 350))
 );
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

@@ -44,6 +44,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from './db-path';
+import { bobotWrites, deriveWeights, type WeightNode } from './weights';
 
 /**
  * How this process proves it may use the store — and there are now two ways.
@@ -240,6 +241,67 @@ export function ensureSchema(dbPath: string): string[] {
   return added;
 }
 
+/**
+ * Which weight rule the stored `bobot` on this file was written under, kept in
+ * `pragma user_version` (nothing else here uses it; drizzle keeps its own table).
+ *
+ * 1 — budget only, no even share (24 Sep 2026). The rule changed what every
+ * unbudgeted leaf weighs, and the reports read the STORED figure, so without
+ * this a deployment would draw the new rule on the Weights screen and the old
+ * one on every S-curve until somebody happened to edit a price.
+ */
+const WEIGHT_RULE = 1;
+
+/**
+ * Bring the stored weights of every UNLOCKED project in line with the current
+ * rule, once per file. Locked projects (`weight_basis = 'boq'`) are never
+ * touched: their weights are authoritative, which is what the lock means.
+ *
+ * Same scope as `ensureSchema`: only bytes that arrived from the store. It is
+ * repeated on each cold start until the next write pushes a file that already
+ * carries the version, and it writes the same figures every time.
+ */
+export function resyncWeights(dbPath: string): number {
+  const file = new Database(dbPath);
+  try {
+    if ((file.pragma('user_version', { simple: true }) as number) >= WEIGHT_RULE) return 0;
+    const projects = file
+      .prepare(`select id, contract_value from projects where weight_basis <> 'boq'`)
+      .all() as Array<{ id: string; contract_value: number | null }>;
+    const rows = file.prepare(
+      `select id, parent_id, sort_order, price, workstep_factor, is_reporting_unit,
+              unit_contract_value, bobot, is_leaf
+       from wbs_nodes where project_id = ? order by sort_order`
+    );
+    const write = file.prepare('update wbs_nodes set bobot = ? where id = ?');
+    let moved = 0;
+    file.transaction(() => {
+      for (const p of projects) {
+        const nodes: WeightNode[] = (rows.all(p.id) as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id as string,
+          parentId: (r.parent_id as string | null) ?? null,
+          order: r.sort_order as number,
+          price: (r.price as number | null) ?? null,
+          workstepFactor: (r.workstep_factor as number | null) ?? null,
+          isReportingUnit: !!r.is_reporting_unit,
+          unitContractValue: (r.unit_contract_value as number | null) ?? null,
+          bobot: (r.bobot as number | null) ?? null,
+          isLeaf: !!r.is_leaf,
+        }));
+        const signed = (p.contract_value ?? 0) > 0 ? (p.contract_value as number) : undefined;
+        for (const w of bobotWrites(nodes, deriveWeights(nodes, signed))) {
+          write.run(w.bobot, w.id);
+          moved += 1;
+        }
+      }
+      file.pragma(`user_version = ${WEIGHT_RULE}`);
+    })();
+    return moved;
+  } finally {
+    file.close();
+  }
+}
+
 function writeDbFile(bytes: Buffer): void {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const incoming = `${DB_PATH}.incoming`;
@@ -263,6 +325,12 @@ function writeDbFile(bytes: Buffer): void {
     // will fail loudly on the missing column if it needs it, which is more
     // useful than refusing to start.
     note('schema repair', err);
+  }
+  try {
+    const moved = resyncWeights(DB_PATH);
+    if (moved) console.log(`[db-snapshot] weights re-derived after restore: ${moved} rows`);
+  } catch (err) {
+    note('weight resync', err);
   }
 }
 

@@ -94,8 +94,9 @@ export default function DeriveWeightsDialog({
 
             {!covers && (
               <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-                Not every activity has a price yet, so this plan cannot be called value based. The
-                weights still follow the prices you have entered; the rest keep an even share.
+                Not every activity has a budget yet, so this plan cannot be called value based. The
+                weights follow the budgets you have entered; the rest weigh nothing until they have
+                one.
               </p>
             )}
 

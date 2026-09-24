@@ -13,15 +13,11 @@
  * Showing only the overall figure is what makes people think the reports
  * disagree.
  *
- * **Where did this row's weight come from.** Not a boolean, because there are
- * three answers and calling them two would put a false label on screen.
- * `WeightResult.fromGap` cannot be used for this: it is a COUNT, and it counts
- * only the leaves reached by splitting the CONTRACT's leftover — not the far
- * more common case of a leaf under a priced SPK that simply has no price of
- * its own. And a leaf carrying a `workstepFactor` (Gundih's 0.5 / 0.3 / 0.2 on
- * IFR / IFA / AFC) takes a STATED fraction of its parent, not an even share;
- * labelling that "even share" would tell someone their figure was a guess when
- * it was the one thing on the row that was decided deliberately.
+ * **Where did this row's weight come from.** Its own price, a fraction stored
+ * against its parent (Gundih's 0.5 / 0.3 / 0.2 on IFR / IFA / AFC, read as
+ * money and never written any more), or nothing at all, in which case it
+ * weighs 0 and the screen lists it. There is no fourth answer since the even
+ * share went (24 Sep 2026).
  *
  * Pure over plain rows, like `lib/weights.ts`, so `scripts/verify-weights-
  * screen.ts` can exercise every one of those states without a database.
@@ -32,7 +28,6 @@ import { db, schema } from './sqlite';
 import type { ProgressMethod } from './schema';
 import {
   allocationOf,
-  budgetAbove,
   deriveWeights,
   summariseWeights,
   type Allocation,
@@ -46,10 +41,10 @@ import { loadWeightNodes } from './weights-read';
 export type WeightShare =
   /** Priced. The figure is this row's own money. */
   | 'price'
-  /** No price, but a stated fraction of its parent. Deliberate, not a guess. */
+  /** No price, but a fraction of its parent stored before budgets were money only. */
   | 'factor'
-  /** No price and no fraction: an even share of what was left. */
-  | 'even';
+  /** Nothing gives it a budget, so it weighs 0. */
+  | 'none';
 
 export interface WeightsRow {
   id: string;
@@ -62,12 +57,11 @@ export interface WeightsRow {
   isLeaf: boolean;
   price: number | null;
   /**
-   * The percent of its parent's budget this row STATES, or null where it
-   * states none. Not the same question as `bobotOverall`: that one is always
-   * answered, because the derivation hands every row a figure. This one is
-   * what somebody typed, and it is null on a row nobody has decided yet.
+   * The budget this row holds OF ITS OWN: its price, or a stored fraction of
+   * its parent read as money. Null where it holds none; a heading without one
+   * is still worth what its rows add up to, which is `value`.
    */
-  percentOfParent: number | null;
+  budget: number | null;
   /** What this row is worth once the derivation has run, in project currency. */
   value: number;
   /** Percent of the whole project. */
@@ -129,17 +123,15 @@ export interface WeightsUnit {
    */
   derivedValue: number;
   bobotOverall: number;
-  pricedRows: number;
   /**
-   * Rows somebody has actually decided: priced, or given a stated share.
+   * Activities in this card that a budget reaches, out of all of them.
    *
-   * `pricedRows` counts money only, and once a share is a way of setting a row
-   * that count reads as nothing done on a heading whose rows are all set. It is
-   * kept because the hero above still speaks in prices, and the two counts are
-   * different questions.
+   * Counted over LEAVES, not rows: a heading is set when its activities are,
+   * and "2 of 2 rows set" on a card whose two headings held nothing beneath
+   * them said the job was done when none of it was.
    */
-  decidedRows: number;
-  totalRows: number;
+  budgetedLeaves: number;
+  leafCount: number;
   rows: WeightsRow[];
 }
 
@@ -244,14 +236,9 @@ export function buildWeightsScreen(
 
   const rootOf = (n: WeightNode): WeightNode => ancestors(n).at(-1) ?? n;
 
-  // A percent only counts where there is a budget above it to take a share of.
-  // Anywhere else the derivation ignores it and the row is an even share, and
-  // calling it "factor" or "set" there would credit the figure to a box that
-  // had no part in it.
   const shareOf = (n: WeightNode): WeightShare => {
-    if ((n.price ?? 0) > 0) return 'price';
-    if (n.workstepFactor != null && budgetAbove(n.parentId ?? null, result) > 0) return 'factor';
-    return 'even';
+    if (!result.budgetOf.has(n.id)) return 'none';
+    return (n.price ?? 0) > 0 ? 'price' : 'factor';
   };
 
   const unitNodes = nodes.filter((n) => n.isReportingUnit);
@@ -304,7 +291,7 @@ export function buildWeightsScreen(
           parentId: n.parentId ?? null,
           isLeaf: n.isLeaf,
           price: n.price,
-          percentOfParent: n.workstepFactor != null ? n.workstepFactor * 100 : null,
+          budget: result.budgetOf.get(n.id) ?? null,
           value: result.valueOf.get(n.id) ?? 0,
           bobotOverall: overall,
           // Guarded: a card whose leaves all weigh zero must show 0, not NaN.
@@ -323,7 +310,7 @@ export function buildWeightsScreen(
         };
       });
 
-  const alloc = allocationOf(nodes, result);
+  const alloc = allocationOf(result);
 
   const units: WeightsUnit[] = anchors.map((anchor) => {
     const members = nodes.filter((n) => cardOf(n) === anchor.id);
@@ -350,9 +337,8 @@ export function buildWeightsScreen(
       allocation: alloc.get(anchor.id) ?? null,
       derivedValue,
       bobotOverall: leafTotal,
-      pricedRows: members.filter((n) => (n.price ?? 0) > 0).length,
-      decidedRows: members.filter((n) => shareOf(n) !== 'even').length,
-      totalRows: members.length,
+      budgetedLeaves: members.filter((n) => n.isLeaf && (result.valueOf.get(n.id) ?? 0) > 0).length,
+      leafCount: members.filter((n) => n.isLeaf && result.bobotOf.has(n.id)).length,
       rows: toRows(members, depthOf(anchor) + 1, leafTotal),
     };
   });
