@@ -1640,13 +1640,16 @@ function RowList({
                         {canShare ? `of ${poolName}` : 'no budget above'}
                       </span>
                     </div>
+                    {/* Two halves of the box's own width, so both outer edges
+                        line up with it. They used to sit loose at the right, a
+                        44px Save beside a 40px box with no edge in common. */}
                     {isEditing && (
-                      <div className="mt-2 flex justify-end gap-2">
+                      <div className="mt-2.5 grid grid-cols-2 gap-2">
                         <m.button
                           {...pressMotion}
                           type="button"
                           onClick={() => onCancel(row.id)}
-                          className="inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
+                          className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-background text-sm font-medium text-muted-foreground ring-1 ring-foreground/15 transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
                         >
                           Cancel
                         </m.button>
@@ -1655,7 +1658,7 @@ function RowList({
                           type="button"
                           onClick={() => onSave(row.id)}
                           disabled={saving === row.id}
-                          className="btn-primary inline-flex min-h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium disabled:opacity-60"
+                          className="btn-primary inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] text-sm font-medium disabled:opacity-60"
                         >
                           {saving === row.id && <Spinner />}
                           {saving === row.id ? 'Saving…' : 'Save'}

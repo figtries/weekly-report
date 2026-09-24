@@ -31,7 +31,7 @@ export const unstable_instant = {
  */
 export default function WeightsPage() {
   return (
-    <LegacyGate what="prices and weights" planned>
+    <LegacyGate what="prices and weights" planned="schedule">
       <WeightsPageBody />
     </LegacyGate>
   );

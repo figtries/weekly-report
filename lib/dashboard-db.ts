@@ -58,6 +58,13 @@ export interface ProjectDashboardData {
   /** True once the project has a WBS with weight and a calendar to spread it over. */
   hasPlan: boolean;
   /**
+   * A WBS and a calendar, weighed or not. Since 24 Sep 2026 a row weighs 0
+   * until somebody budgets it, so a project can have its whole schedule and
+   * no weight at all, and the Weights screen is where it gets one. Gating that
+   * screen on `hasPlan` locked it the moment the last budget was cleared.
+   */
+  hasSchedule: boolean;
+  /**
    * The project's own currency. `ProjectInfo` has never carried one — the whole
    * app was one Rupiah project — so it rides alongside rather than inside, and
    * the dashboard formats money with it instead of stamping "Rp" on a contract
@@ -368,6 +375,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     weeks: weekRows.map((w) => w.weekNo),
     currentWeek,
     hasPlan: totalBobot > 0 && weekRows.length > 0,
+    hasSchedule: nodes.length > 0 && weekRows.length > 0,
     currency: project.currency,
   };
 }

@@ -29,8 +29,27 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  * is `EmptyState`, shared with the dashboard so the app has ONE way of saying
  * there is nothing here yet.
  */
-export default async function NoLegacyData({ what }: { what: string }) {
+export default async function NoLegacyData({
+  what,
+  noBudgets = false,
+}: {
+  what: string;
+  /** The project has its schedule and no budget anywhere, so nothing weighs anything. */
+  noBudgets?: boolean;
+}) {
   const open = await getOpenProject();
+
+  if (open && noBudgets) {
+    return (
+      <EmptyState
+        icon={FolderKanban}
+        title={`“${open.name}” has no budgets yet`}
+        body="A weekly report adds progress up by weight, and a row only weighs something once it has a budget. Give the work its budgets on the Weights screen and this page fills in."
+        primary={{ href: '/weekly/1/weights', label: 'Go to Weights' }}
+        secondary={{ href: '/projects', label: 'Open another project' }}
+      />
+    );
+  }
 
   return (
     <EmptyState

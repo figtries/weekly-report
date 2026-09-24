@@ -13,8 +13,29 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  * a plan to report against at all. Daily, Reports and Klaim have no SQLite path
  * yet (board item 14) and pass `planned={false}`, which is the old behaviour.
  */
-function hasPlan(projectId: string): boolean {
-  return buildProjectDashboardData(projectId)?.hasPlan ?? false;
+function planOf(projectId: string) {
+  const d = buildProjectDashboardData(projectId);
+  return { weighed: d?.hasPlan ?? false, scheduled: d?.hasSchedule ?? false };
+}
+
+/**
+ * What a page needs of a SQLite project before it can draw anything.
+ * `true` is a weighed plan, which a weekly report cannot do without.
+ * `'schedule'` is a WBS and weeks with or without weight: the Weights screen,
+ * which is where weight comes from, and the week bar that leads to it.
+ */
+type Planned = boolean | 'schedule';
+
+/** Null when the page may render; otherwise the card to show instead. */
+async function gateFor(planned: Planned, what: string): Promise<ReactNode | null> {
+  const open = await getOpenProject();
+  if (!open || open.hasLegacyData) return null;
+  if (!planned) return <NoLegacyData what={what} />;
+  const plan = planOf(open.id);
+  if (plan.weighed || (planned === 'schedule' && plan.scheduled)) return null;
+  // Scheduled but nobody budgeted it: say what is missing and where it goes,
+  // instead of a "Go to Data Overall" that lands on this same card.
+  return <NoLegacyData what={what} noBudgets={plan.scheduled} />;
 }
 
 /**
@@ -52,15 +73,12 @@ async function Decide({
   children,
 }: {
   what: string;
-  planned: boolean;
+  planned: Planned;
   children: ReactNode;
 }) {
   await connection();
-  const open = await getOpenProject();
-  if (open && !open.hasLegacyData && !(planned && hasPlan(open.id))) {
-    return <NoLegacyData what={what} />;
-  }
-  return <>{children}</>;
+  const card = await gateFor(planned, what);
+  return <>{card ?? children}</>;
 }
 
 export default function LegacyGate({
@@ -72,7 +90,7 @@ export default function LegacyGate({
   /** Plural, lowercase, as it reads in the sentence: "has no weekly reports yet". */
   what: string;
   /** True where the page can render a SQLite project with a plan. */
-  planned?: boolean;
+  planned?: Planned;
   fallback?: ReactNode;
   children: ReactNode;
 }) {
@@ -90,10 +108,9 @@ export default function LegacyGate({
  * data, and NOTHING when it does not — a week picker and a stepper belonging to
  * another project are worse than no chrome at all.
  */
-async function DecideChrome({ planned, children }: { planned: boolean; children: ReactNode }) {
+async function DecideChrome({ planned, children }: { planned: Planned; children: ReactNode }) {
   await connection();
-  const open = await getOpenProject();
-  if (open && !open.hasLegacyData && !(planned && hasPlan(open.id))) return null;
+  if (await gateFor(planned, '')) return null;
   return <>{children}</>;
 }
 
@@ -102,7 +119,7 @@ export function LegacyChromeGate({
   fallback,
   children,
 }: {
-  planned?: boolean;
+  planned?: Planned;
   fallback?: ReactNode;
   children: ReactNode;
 }) {

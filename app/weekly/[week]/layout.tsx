@@ -101,7 +101,7 @@ export default async function WeeklyWeekLayout({
           never renders comes back as "the target segment was prevented from
           rendering for an unknown reason". So only the chrome is gated, and
           the page below says the rest. */}
-      <LegacyChromeGate planned fallback={<WeekTabsFallback />}>
+      <LegacyChromeGate planned="schedule" fallback={<WeekTabsFallback />}>
         <WeeklyTabsFor week={weekNo} />
       </LegacyChromeGate>
 
