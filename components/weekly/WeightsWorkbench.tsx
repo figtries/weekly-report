@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { m } from 'framer-motion';
-import { CornerDownRight, Sigma } from 'lucide-react';
+import { Pencil, Sigma } from 'lucide-react';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import { updateRowTextAction } from '@/lib/sheet-actions';
@@ -121,17 +121,6 @@ export default function WeightsWorkbench({
     [patched, signed]
   );
 
-  /** What each unit's leaves add up to now, so in-unit percentages move too. */
-  const unitTotals = useMemo(() => {
-    const out = new Map<string, number>();
-    for (const u of screen.units) {
-      out.set(
-        u.id,
-        u.rows.filter((r) => r.isLeaf).reduce((s, r) => s + (live.bobotOf.get(r.id) ?? 0), 0)
-      );
-    }
-    return out;
-  }, [screen.units, live]);
 
   /** Every row and card by its code and name, for a refusal to say where. */
   const nameOf = useMemo(() => {
@@ -339,6 +328,9 @@ export default function WeightsWorkbench({
 
   const unit = openUnit ? (screen.units.find((u) => u.id === openUnit) ?? null) : null;
 
+  /** What a card calls its own figure: an SPK's budget, or a top-level heading's. */
+  const budgetLabel = screen.hasUnits ? 'SPK budget' : 'Budget';
+
   /** What every list of rows needs, whichever list it is. */
   const listProps = {
     live,
@@ -356,6 +348,7 @@ export default function WeightsWorkbench({
       typed[rowId] === undefined || typed[rowId] === (saved.current[rowId] ?? storedBudget(rowId))
         ? null
         : refusalFor(rowId, typed[rowId]),
+    storedBudget,
     onCommit: commitPrice,
     onTypeMoney: typeMoney,
   };
@@ -385,9 +378,9 @@ export default function WeightsWorkbench({
       {unit ? (
         <UnitRows
           unit={unit}
+          label={budgetLabel}
           hidden={hidden}
           alloc={liveAlloc.get(unit.id) ?? null}
-          unitTotal={unitTotals.get(unit.id) ?? 0}
           list={listProps}
           onBack={() => setOpenUnit(null)}
         />
@@ -404,11 +397,11 @@ export default function WeightsWorkbench({
             <UnitCard
               key={u.id}
               unit={u}
+              label={budgetLabel}
+              live={live}
               currency={screen.summary.currency}
-              bobot={unitTotals.get(u.id) ?? 0}
               alloc={liveAlloc.get(u.id) ?? null}
               overInside={overInUnit.get(u.id) ?? 0}
-              value={liveValueOf(u, live)}
               onOpen={() => setOpenUnit(u.id)}
             />
           ))}
@@ -418,7 +411,7 @@ export default function WeightsWorkbench({
           {looseShown.length > 0 && <LooseHeading hasUnits={screen.units.length > 0} />}
 
           {looseShown.length > 0 && (
-            <RowList rows={looseShown} {...listProps} showBoth={false} />
+            <RowList rows={looseShown} {...listProps} />
           )}
 
           {screen.units.length === 0 && looseShown.length === 0 && (
@@ -961,12 +954,6 @@ function omit<T>(map: Record<string, T>, key: string): Record<string, T> {
   return next;
 }
 
-/** What a card's rows are worth RIGHT NOW, typed boxes included. */
-function liveValueOf(unit: WeightsUnit, live: ReturnType<typeof deriveWeights>): number {
-  return unit.rows
-    .filter((r) => r.isLeaf)
-    .reduce((s, r) => s + (live.valueOf.get(r.id) ?? 0), 0);
-}
 
 /**
  * One thing a card says about itself, loud enough to be read.
@@ -1003,87 +990,81 @@ function Pill({
 }
 
 /**
- * The face of a heading: the same four things, in the same places, on every
- * card and on the header you land on after tapping one.
+ * The face of a heading, on the list and on the header you land on after
+ * tapping one: the same zones, in the same places, every time.
  *
- * THE CARDS USED TO DISAGREE ABOUT THEIR OWN SHAPE. A bar was drawn only where
- * the heading carried a budget of its own, so a list of five read as two cards
- * with a bar and three without — and the eye has to stop and work out whether
- * that difference is saying something about the money or about the screen. It
- * was saying something about the screen. Reported 14 Sep 2026, in one sentence
- * with the other half of the same complaint: the money sat in the same muted
- * grey, at the same size, as the row count beside it, which is how the one
- * figure a pricing screen exists to show ends up being the figure nobody sees.
+ * **Its budget is the headline, and on the header it is the box you type
+ * in** (24 Sep 2026). A heading's budget is what every row beneath it is carved
+ * out of, so it is the one figure this screen is organised around. It used to
+ * sit read-only, labelled "From its rows", with no way on this screen to set
+ * it; the question it drew was "where is the budget of the work itself?".
  *
- * So every heading draws a bar and it is ALWAYS THE SAME BAR — this heading's
- * share of the contract, which is the number printed right beside it. A bar
- * that means one thing on one card and another thing on the next is not a bar,
- * it is a puzzle. The money is a headline under its own label, the way the
- * contract figure is in the hero above, because those two are the same kind of
- * fact one level apart.
- *
- * What a heading has LEFT to hand out did not get quieter, it moved: it is a
- * coloured pill now, said in words and in full. Over-allocation is still
- * REPORTED and never corrected — `allocationOf` decides, this only draws it.
+ * ONE BAR, ONE MEANING: how much of this heading's budget its rows have taken.
+ * Drawn on every card; hatched where there is no budget to take from, because
+ * a bar missing from some cards reads as a defect. The share of the contract
+ * is a number beside the name, never a second length. Severity goes on pills
+ * and the card ground, never on the bar's colour.
  */
 function UnitFace({
   code,
   name,
-  bobot,
-  alloc,
+  label,
   value,
+  budget,
+  alloc,
+  contract,
   currency,
   priced,
   total,
   overInside = 0,
-  big,
   pressable,
+  editor,
 }: {
   code: string;
   name: string;
-  /** Share of the contract: the bar and the number beside it, one fact. */
-  bobot: number;
-  alloc: Allocation | null;
+  /** "SPK budget" where SPK are marked, "Budget" where the WBS roots stand in. */
+  label: string;
+  /** What the heading is worth: its own budget, or its rows added up. */
   value: number;
+  /** Its own budget, 0 where it has none. */
+  budget: number;
+  alloc: Allocation | null;
+  contract: number;
   currency: string;
   priced: number;
   total: number;
   /** Over-giving headings somewhere beneath this one. */
   overInside?: number;
-  /** The drilled-in header says it one size louder than a card in a list. */
-  big?: boolean;
   pressable?: boolean;
+  /** The budget box, on the header you type into. The list shows the figure. */
+  editor?: React.ReactNode;
 }) {
-  const over = alloc != null && alloc.left < -0.5;
-  const spare = alloc != null && alloc.left > 0.5;
-  // A heading's own budget where it has one, otherwise what its rows add up
-  // to. The card used to print `unitContractValue ?? price` and say "No value
-  // yet" beside a figure of 69.72%; this is where the missing line lands.
-  const money = alloc ? alloc.budget : value;
-  const share = Math.max(0, Math.min(100, bobot));
+  const hasBudget = budget > 0;
+  const given = alloc ? alloc.claimed : value;
+  const left = alloc ? alloc.left : null;
+  const over = left != null && left < -0.5;
+  const taken = hasBudget ? Math.max(0, Math.min(100, (given / budget) * 100)) : 0;
+  const ofContract = contract > 0 ? (value / contract) * 100 : 0;
+  const empty = Math.max(0, total - priced);
 
   return (
     <>
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            'inline-flex shrink-0 items-center justify-center rounded-lg bg-chart-1/10 font-semibold tabular-nums text-chart-1',
-            big ? 'min-w-9 px-2 py-1 text-sm' : 'min-w-8 px-2 py-1 text-[13px]'
-          )}
-        >
+      <div className="flex items-start gap-2.5">
+        <span className="inline-flex h-7 min-w-8 shrink-0 items-center justify-center rounded-lg bg-chart-1/10 px-2 text-[13px] font-semibold tabular-nums text-chart-1">
           {code || '—'}
         </span>
-        <p
-          className={cn(
-            'min-w-0 flex-1 leading-snug font-semibold',
-            big ? 'text-base sm:text-lg' : 'text-[15px]'
-          )}
-        >
-          {name}
-        </p>
+        <p className="min-w-0 flex-1 pt-0.5 text-[15px] leading-snug font-semibold">{name}</p>
+        <div className="shrink-0 text-right">
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            Of contract
+          </p>
+          <p className="text-lg leading-tight font-semibold tabular-nums text-chart-1">
+            {ofContract.toFixed(2)}%
+          </p>
+        </div>
         {pressable && (
           <svg
-            className="h-5 w-5 shrink-0 text-foreground/30 transition-transform duration-300 ease-ios group-hover:translate-x-0.5"
+            className="mt-1 h-5 w-5 shrink-0 text-foreground/30 transition-transform duration-300 ease-ios group-hover:translate-x-0.5"
             viewBox="0 0 20 20"
             fill="none"
             aria-hidden="true"
@@ -1099,78 +1080,55 @@ function UnitFace({
         )}
       </div>
 
-      {/* Two figures under two labels, exactly the shape of the hero above.
-          The money is a HEADLINE here rather than a caption — it is what the
-          whole screen is for, and it was grey. */}
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            {alloc ? 'Budget' : money > 0 ? 'From its rows' : 'Budget'}
-          </p>
-          <p
-            className={cn(
-              'mt-0.5 truncate font-semibold tabular-nums',
-              big ? 'text-xl sm:text-2xl' : 'text-lg sm:text-xl',
-              money > 0 ? 'text-foreground' : 'text-muted-foreground'
-            )}
-          >
-            {money > 0 ? formatMoney(money, currency) : 'No budget yet'}
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            Of contract
-          </p>
-          <p
-            className={cn(
-              'mt-0.5 font-semibold tabular-nums text-chart-1',
-              big ? 'text-xl sm:text-2xl' : 'text-lg sm:text-xl'
-            )}
-          >
-            {bobot.toFixed(2)}%
-          </p>
-        </div>
-      </div>
+      <p className="mt-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      {editor ?? (
+        <p
+          className={cn(
+            'mt-1 truncate text-2xl font-semibold tabular-nums',
+            hasBudget ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        >
+          {hasBudget ? formatMoney(budget, currency) : 'No budget yet'}
+        </p>
+      )}
 
       <div
-        className={cn(
-          'mt-2.5 w-full overflow-hidden rounded-full bg-foreground/8 text-foreground/25',
-          big ? 'h-2.5' : 'h-2'
-        )}
+        className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-foreground/8 text-foreground/25"
         style={
-          share > 0.005
+          hasBudget
             ? undefined
-            : {
-                backgroundImage:
-                  'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 6px)',
-              }
+            : { backgroundImage: 'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 6px)' }
         }
       >
         <div
           className="animate-bar-grow h-full rounded-full bg-chart-1 transition-[width] duration-500 ease-out-expo"
-          style={{ width: `${share}%` }}
+          style={{ width: `${taken}%` }}
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <Pill tone={total > 0 && priced >= total ? 'ok' : priced > 0 ? 'info' : 'quiet'}>
-          {priced} of {total} {total === 1 ? 'activity' : 'activities'} budgeted
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <Pill tone="info">
+          {hasBudget ? 'Given to rows' : 'Rows hold'} {formatMoney(given, currency)}
         </Pill>
+        {hasBudget &&
+          (over ? (
+            <Pill tone="bad">Over by {formatMoney(-(left ?? 0), currency)}</Pill>
+          ) : (
+            <Pill tone="quiet">Left {formatMoney(Math.max(0, left ?? 0), currency)}</Pill>
+          ))}
+        {empty > 0 ? (
+          <Pill tone="warn">
+            {empty} {empty === 1 ? 'activity' : 'activities'} without a budget
+          </Pill>
+        ) : (
+          total > 0 && <Pill tone="ok">Every activity has a budget</Pill>
+        )}
         {overInside > 0 && (
           <Pill tone="bad">
             {overInside} {overInside === 1 ? 'heading' : 'headings'} over inside
           </Pill>
-        )}
-        {alloc ? (
-          over ? (
-            <Pill tone="bad">Over by {formatMoney(-alloc.left, currency)}</Pill>
-          ) : spare ? (
-            <Pill tone="info">{formatMoney(alloc.left, currency)} left to give out</Pill>
-          ) : (
-            <Pill tone="ok">Fully shared out</Pill>
-          )
-        ) : money > 0 ? null : (
-          <Pill tone="warn">Needs a budget</Pill>
         )}
       </div>
     </>
@@ -1179,20 +1137,20 @@ function UnitFace({
 
 function UnitCard({
   unit,
+  label,
+  live,
   currency,
-  bobot,
   alloc,
   overInside,
-  value,
   onOpen,
 }: {
   unit: WeightsUnit;
+  label: string;
+  live: ReturnType<typeof deriveWeights>;
   currency: string;
-  bobot: number;
   alloc: Allocation | null;
   /** Headings INSIDE this card that hand out more than they hold. */
   overInside: number;
-  value: number;
   onOpen: () => void;
 }) {
   // A card can be perfectly in balance at its own level and still hold three
@@ -1215,9 +1173,11 @@ function UnitCard({
       <UnitFace
         code={unit.code}
         name={unit.name}
-        bobot={bobot}
+        label={label}
+        value={live.valueOf.get(unit.id) ?? 0}
+        budget={live.budgetOf.get(unit.id) ?? 0}
         alloc={alloc}
-        value={value}
+        contract={live.contractValue}
         currency={currency}
         priced={unit.budgetedLeaves}
         total={unit.leafCount}
@@ -1230,17 +1190,17 @@ function UnitCard({
 
 function UnitRows({
   unit,
+  label,
   hidden,
   alloc,
-  unitTotal,
   list,
   onBack,
 }: {
   unit: WeightsUnit;
+  label: string;
   /** Rows this screen does not offer. See the rule where it is built. */
   hidden: Set<string>;
   alloc: Allocation | null;
-  unitTotal: number;
   list: ListProps;
   onBack: () => void;
 }) {
@@ -1266,36 +1226,87 @@ function UnitRows({
         </m.button>
       </div>
 
-      {/* The same three figures the card carried, kept in front of you while
-          you spend them. Walking into a heading and losing the budget you are
-          dividing is how someone ends up typing until the rows look plausible
-          rather than until they add up. */}
+      {/* The budget being divided stays in front of you while you divide it,
+          and it is typed right here: walking into a heading and losing the
+          figure you are spending is how rows get typed until they look
+          plausible rather than until they add up. */}
       <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
         <UnitFace
           code={unit.code}
           name={unit.name}
-          bobot={unitTotal}
+          label={label}
+          value={live.valueOf.get(unit.id) ?? 0}
+          budget={live.budgetOf.get(unit.id) ?? 0}
           alloc={alloc}
-          value={liveValueOf(unit, live)}
+          contract={live.contractValue}
           currency={currency}
           priced={unit.budgetedLeaves}
           total={unit.leafCount}
-          big
+          editor={<BudgetEditor rowId={unit.id} list={list} />}
         />
       </div>
 
-      <RowList
-        rows={unit.rows.filter((r) => !hidden.has(r.id))}
-        {...list}
-        showBoth
-        rootParent={unit.code || unit.name}
-      />
+      <RowList rows={unit.rows.filter((r) => !hidden.has(r.id))} {...list} />
 
       <p className="px-1 text-[13px] text-muted-foreground">
-        Type a row&apos;s budget, or its share of the heading and the budget follows. A row with no
-        budget weighs nothing in the report. No row can take more than its heading has left.
+        Type a row&apos;s budget, or its share and the budget follows. A row with no budget weighs
+        nothing in the report, and no row can take more than its heading has left.
       </p>
     </div>
+  );
+}
+
+/**
+ * A heading's own budget, as the big box on its header.
+ *
+ * The same door as every row's box: the same live check, the same refusal on
+ * the spot, the same action. The heading is its own pool's ceiling, so this
+ * is also where lowering a budget below what the rows already take is refused.
+ */
+function BudgetEditor({ rowId, list }: { rowId: string; list: ListProps }) {
+  const { typed, setTyped, reseed, rowError, liveRefusal, onCommit, currency, storedBudget } = list;
+  const error = rowError?.id === rowId ? rowError.message : liveRefusal(rowId);
+  return (
+    <>
+      <label
+        className={cn(
+          'mt-1.5 flex h-12 items-center gap-2.5 rounded-xl bg-background px-3.5 ring-[1.5px] transition-shadow duration-300 ease-ios focus-within:ring-2',
+          error
+            ? 'ring-destructive/60 focus-within:ring-destructive'
+            : 'ring-chart-1/30 focus-within:ring-chart-1'
+        )}
+      >
+        <span className="shrink-0 text-[13px] font-semibold text-muted-foreground">
+          {symbolOf(currency)}
+        </span>
+        <MoneyInput
+          defaultValue={typed[rowId] ?? storedBudget(rowId)}
+          resetKey={reseed[rowId] ?? 0}
+          placeholder="Set a budget"
+          className="w-full min-w-0 bg-transparent text-2xl font-semibold tabular-nums outline-none placeholder:text-base placeholder:font-medium placeholder:text-muted-foreground"
+          onValueChange={(raw) => setTyped((t) => ({ ...t, [rowId]: raw }))}
+          onCommit={(raw) => onCommit(rowId, raw)}
+        />
+        <Pencil className="size-[18px] shrink-0 text-chart-1" aria-hidden />
+      </label>
+      {error && (
+        <p role="alert" className="animate-fade-in-up mt-1.5 text-[12.5px] font-semibold text-destructive">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The currency's symbol, OUT of the formatter rather than from a second table
+ * of currencies beside it — the same reason `formatMoney` exists at all.
+ */
+function symbolOf(currency: string): string {
+  return (
+    [...formatMoney(0, currency)]
+      .filter((ch) => !/[0-9]/.test(ch) && ch.trim() !== '' && ch !== '.' && ch !== ',')
+      .join('') || currency
   );
 }
 
@@ -1319,6 +1330,8 @@ interface ListProps {
   rowError: { id: string; message: string } | null;
   /** Why the budget being typed on this row would be refused, before it is saved. */
   liveRefusal: (rowId: string) => string | null;
+  /** A row's budget as the server last sent it. */
+  storedBudget: (rowId: string) => string;
   onCommit: (rowId: string, raw: string) => void;
   onTypeMoney: (rowId: string, raw: string) => void;
 }
@@ -1338,19 +1351,24 @@ function withBudget(n: WeightNode, raw: string | undefined): WeightNode {
 }
 
 /**
- * The rows, their budget boxes, and their share of the heading.
+ * The rows, as one ledger: a single card, one line per row, the money and its
+ * share in one joined control at the right.
  *
  * Shared between a card's contents and the rows no card holds, because a flat
  * plan needs exactly the same list on its first screen that a nested one gets
  * after a tap. Writing it twice is how the two would drift.
  *
- * **One money box and one share, and they are the same fact.** The box is the
- * budget. The share beside it is that budget over the POOL it is carved out of
- * (`poolOf`): the nearest heading above with a budget of its own, or the
- * contract. Typing the share types the money for you, and the money is what is
- * saved. The earlier version had a % / IDR toggle whose percent was a share of
- * the parent while the figure beside it was a share of the whole SPK, so one
- * row carried two percents that never agreed.
+ * **One control, two readings of the same fact** (chosen from three rendered
+ * variants, 24 Sep 2026). The left half is the budget; the right half is that
+ * budget over the POOL it is carved out of (`poolOf`), and typing there types
+ * the money. They were two separate boxes with a caption under them, and the
+ * caption ("of 5 · 2.00% of project") was the part called ugly: it said the
+ * pool twice and a project share nobody was deciding here. The pool is now a
+ * two-word label beside the one bar, and the project share lives on the card.
+ *
+ * Nesting is said by a small indent on the NAME only. The controls stay in one
+ * column, so the list does not become the staircase of card widths that made
+ * the 23 Sep version drop indentation altogether.
  */
 function RowList({
   rows,
@@ -1368,15 +1386,9 @@ function RowList({
   liveRefusal,
   onCommit,
   onTypeMoney,
-  showBoth,
-  rootParent,
   lockRoot = false,
 }: ListProps & {
   rows: WeightsRow[];
-  /** Whether the project figure is a different question from the share (inside an SPK). */
-  showBoth: boolean;
-  /** What the top rows of this list sit inside: the card that was opened. */
-  rootParent?: string;
   /**
    * Draw the top of the WBS as a heading rather than as something to price.
    *
@@ -1388,52 +1400,35 @@ function RowList({
 }) {
   // The screen does not scroll the document — `<main>` does, and inside a
   // drilled-in SPK there is a second scroller in there. `scrollIntoView`
-  // walks up to whichever one it finds, which is why the browser is left to
-  // do it rather than computing against a container this component would
-  // otherwise have to know about.
+  // walks up to whichever one it finds.
   const focusRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (focusRow) focusRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [focusRow]);
 
-  // What each row sits inside, and how many rows sit directly inside each
-  // branch. Said in words rather than by indenting, so every card can be the
-  // same shape (23 Sep 2026).
-  const parentOf = new Map<string, string>();
+  // How many rows sit directly inside each branch, for its caption.
   const childrenOf = new Map<string, number>();
   const stack: WeightsRow[] = [];
   for (const r of rows) {
     while (stack.length > 0 && stack[stack.length - 1].depth >= r.depth) stack.pop();
     const up = stack[stack.length - 1];
-    if (up) {
-      parentOf.set(r.id, up.code || up.name);
-      childrenOf.set(up.id, (childrenOf.get(up.id) ?? 0) + 1);
-    } else if (rootParent) {
-      parentOf.set(r.id, rootParent);
-    }
+    if (up) childrenOf.set(up.id, (childrenOf.get(up.id) ?? 0) + 1);
     stack.push(r);
   }
 
-  // The symbol comes OUT of the formatter rather than from a second table of
-  // currencies beside it — the same reason `formatMoney` exists at all.
-  const symbol =
-    [...formatMoney(0, currency)]
-      .filter((ch) => !/[0-9]/.test(ch) && ch.trim() !== '' && ch !== '.' && ch !== ',')
-      .join('') || currency;
+  const symbol = symbolOf(currency);
 
   return (
     <>
-      {/* Column captions, and only from `sm` up, because below that the row is
-          stacked and there are no columns for them to sit over. */}
-      <div className="mt-1 hidden items-center gap-3 px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:flex">
-        <span className="flex-1">Activity</span>
-        <span className="flex w-[20rem] gap-2">
+      <div className="mt-1 hidden items-center gap-4 px-4 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:grid sm:grid-cols-[minmax(0,1fr)_15rem]">
+        <span>Activity</span>
+        <span className="flex">
           <span className="flex-1 text-right">Budget</span>
-          <span className="w-24 text-right">Share</span>
+          <span className="w-[5.5rem] text-right">Share</span>
         </span>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="divide-y divide-foreground/[0.07] overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/10">
         {rows.map((row) => {
           const value = live.valueOf.get(row.id) ?? 0;
           const own = live.budgetOf.get(row.id) ?? 0;
@@ -1441,7 +1436,6 @@ function RowList({
           const pool = poolOf(row.id, live);
           const base = poolAmount(pool, live);
           const share = base > 0 ? (value / base) * 100 : 0;
-          const ofProject = live.contractValue > 0 ? (value / live.contractValue) * 100 : 0;
           const canShare = base > 0 && (pool != null || signed);
           const poolName = pool == null ? 'contract' : (codeOf.get(pool) ?? 'its heading');
           const over = overOf.get(row.id);
@@ -1469,106 +1463,78 @@ function RowList({
           };
 
           const stored = row.budget != null && row.budget > 0 ? String(Math.round(row.budget)) : '';
-          const caption = !canShare
-            ? 'No contract value yet'
-            : [
-                !row.isLeaf && !decided && value > 0 ? `Rows take ${formatMoney(value, currency)}` : null,
-                `of ${poolName}`,
-                showBoth && pool != null ? `${ofProject.toFixed(2)}% of project` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ');
+          const inside = childrenOf.get(row.id) ?? 0;
 
           return (
             <div
               key={row.id}
-              // ONE SHAPE FOR EVERY ROW, whatever it is (23 Sep 2026). Every
-              // card is full width and carries the same lines at fixed heights,
-              // so a branch and a leaf come out the same size. What changes
-              // between them is the words, never the box. The one exception is
-              // a refusal, which is allowed to add a line: it is the thing on
-              // the row that most needs reading.
               ref={focused ? focusRef : undefined}
               className={cn(
-                'rounded-xl bg-card px-3.5 py-3 shadow-sm ring-1 transition-colors duration-300 ease-ios',
-                decided ? 'ring-chart-1/35' : 'ring-foreground/10',
-                (over || error) && 'bg-destructive/[0.04] ring-destructive/40',
-                focused && (over ? 'ring-2 ring-destructive' : 'ring-2 ring-chart-1')
+                'px-4 py-3 transition-colors duration-300 ease-ios',
+                (over || error) && 'bg-destructive/[0.04]',
+                focused && !over && !error && 'bg-chart-1/[0.06]'
               )}
             >
-              <div className="sm:flex sm:items-center sm:gap-3">
-                <div className="min-w-0 sm:flex-1">
-                  <div className="flex h-6 items-center justify-between gap-2">
-                    <span className="truncate text-[12.5px] font-semibold tabular-nums text-muted-foreground">
-                      {row.code}
-                    </span>
-                    {/* What the row is counted INSIDE, in place of the indent
-                        that used to say it. */}
-                    {parentOf.has(row.id) && (
-                      <span className="inline-flex h-6 min-w-0 max-w-[70%] shrink-0 items-center gap-1 rounded-full bg-chart-1/10 px-2 text-[12px] font-semibold text-chart-1">
-                        <CornerDownRight className="size-3.5 shrink-0" aria-hidden />
-                        <span className="truncate">Part of {parentOf.get(row.id)}</span>
-                      </span>
-                    )}
-                  </div>
-                  {/* Name and its one line, in a block always as tall as a
-                      two-line name, so a short name never makes a shorter card. */}
-                  <div className="mt-0.5 min-h-[68px]">
-                    <p className="line-clamp-2 text-[15px] leading-[22px] font-medium">{row.name}</p>
-                    {!row.isLeaf ? (
-                      over ? (
-                        <p className="mt-1 h-5 truncate text-[12.5px] leading-5 text-muted-foreground">
-                          <strong className="tabular-nums text-destructive">
-                            Over by {formatMoney(over.over, currency)}
-                          </strong>
-                          {' · holds '}
-                          <strong className="tabular-nums text-foreground">
-                            {formatMoney(over.budget, currency)}
-                          </strong>
-                          {', rows take '}
-                          <strong className="tabular-nums text-foreground">
-                            {formatMoney(over.claimed, currency)}
-                          </strong>
-                        </p>
-                      ) : (
-                        <p className="mt-1 flex h-5 min-w-0 items-center gap-1 text-[12.5px] leading-5 text-muted-foreground">
-                          <Sigma className="size-3.5 shrink-0" aria-hidden />
-                          <span className="truncate">
-                            {childrenOf.get(row.id)
-                              ? `Total of the ${childrenOf.get(row.id)} ${childrenOf.get(row.id) === 1 ? 'row' : 'rows'} inside it`
-                              : 'Its figure is the rows beneath it'}
-                          </span>
-                        </p>
-                      )
-                    ) : (
-                      // The schedule, read only: price decides how much a row
-                      // counts, the dates decide WHEN.
-                      <p className="mt-1 h-5 truncate text-[12.5px] leading-5 tabular-nums text-muted-foreground">
-                        {row.start && row.finish
-                          ? `${fmtDay(row.start)} to ${fmtDay(row.finish)}${row.durationDays ? ` · ${row.durationDays}d` : ''}`
-                          : 'Not scheduled yet'}
-                        {!decided && <span className="font-semibold text-warn"> · no budget</span>}
+              <div className="sm:grid sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center sm:gap-4">
+                <div className="min-w-0" style={{ paddingLeft: `${Math.min(row.depth, 3) * 14}px` }}>
+                  <p className="text-[12px] font-semibold tabular-nums text-muted-foreground">
+                    {row.code}
+                  </p>
+                  <p className="line-clamp-2 text-[14.5px] leading-[21px] font-medium">{row.name}</p>
+                  {!row.isLeaf ? (
+                    over ? (
+                      <p className="mt-0.5 truncate text-[12px] leading-5 text-muted-foreground">
+                        <strong className="tabular-nums text-destructive">
+                          Over by {formatMoney(over.over, currency)}
+                        </strong>
+                        {' · holds '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(over.budget, currency)}
+                        </strong>
+                        {', rows take '}
+                        <strong className="tabular-nums text-foreground">
+                          {formatMoney(over.claimed, currency)}
+                        </strong>
                       </p>
-                    )}
-                  </div>
+                    ) : (
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-5 text-muted-foreground">
+                        <Sigma className="size-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">
+                          {inside
+                            ? `${inside} ${inside === 1 ? 'row' : 'rows'} inside`
+                            : 'Its figure is the rows beneath it'}
+                          {!decided && ` · rows take ${formatMoney(value, currency)}`}
+                        </span>
+                      </p>
+                    )
+                  ) : (
+                    // The schedule, read only: the budget decides how much a
+                    // row counts, the dates decide WHEN.
+                    <p className="mt-0.5 truncate text-[12px] leading-5 tabular-nums text-muted-foreground">
+                      {row.start && row.finish
+                        ? `${fmtDay(row.start)} to ${fmtDay(row.finish)}${row.durationDays ? ` · ${row.durationDays}d` : ''}`
+                        : 'Not scheduled yet'}
+                      {!decided && <span className="font-semibold text-warn"> · no budget</span>}
+                    </p>
+                  )}
                 </div>
 
                 {lockRoot && !row.isLeaf && row.depth === 0 ? (
-                  <p className="mt-2 w-full text-right text-[12.5px] text-muted-foreground sm:mt-0 sm:w-[20rem]">
+                  <p className="mt-2 text-right text-[12.5px] text-muted-foreground sm:mt-0">
                     The whole project. Its value is the contract above.
                   </p>
                 ) : (
-                  <div className="mt-2 sm:mt-0 sm:w-[20rem] sm:shrink-0">
-                    <div className="flex items-stretch gap-2">
-                      <label
-                        className={cn(
-                          'flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg bg-background px-3 ring-1 transition-shadow duration-300 ease-ios focus-within:ring-2',
-                          error
-                            ? 'ring-destructive/60 focus-within:ring-destructive'
-                            : 'ring-foreground/12 focus-within:ring-chart-1'
-                        )}
-                      >
-                        <span className="shrink-0 text-[12px] font-semibold text-muted-foreground">
+                  <div className="mt-2.5 sm:mt-0">
+                    <div
+                      className={cn(
+                        'flex h-10 overflow-hidden rounded-[10px] bg-background ring-1 transition-shadow duration-300 ease-ios focus-within:ring-2',
+                        error
+                          ? 'ring-destructive/60 focus-within:ring-destructive'
+                          : 'ring-foreground/15 focus-within:ring-chart-1'
+                      )}
+                    >
+                      <label className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+                        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
                           {symbol}
                         </span>
                         <MoneyInput
@@ -1593,23 +1559,20 @@ function RowList({
                         }}
                       />
                     </div>
-                    {/* The share as a shape, under the box it belongs to. On a
-                        0-100 scale, because shares of one heading add up to 100
-                        and the bar can say so without a second scale. */}
-                    <div className="mt-1.5 flex justify-end">
-                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/8">
+                    {/* The share as a length, under the control it belongs to.
+                        One colour whatever the figure: severity is said on the
+                        row's ground and in words, never by recolouring a scale. */}
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-foreground/8">
                         <div
-                          className={cn(
-                            'h-full rounded-full transition-[width] duration-500 ease-out-expo',
-                            share > 100.05 ? 'bg-destructive' : 'bg-chart-1'
-                          )}
+                          className="h-full rounded-full bg-chart-1 transition-[width] duration-500 ease-out-expo"
                           style={{ width: `${Math.min(100, share)}%` }}
                         />
                       </div>
+                      <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                        {canShare ? `of ${poolName}` : 'no contract value'}
+                      </span>
                     </div>
-                    <p className="mt-1 h-5 truncate text-right text-[12px] leading-5 tabular-nums text-muted-foreground">
-                      {caption}
-                    </p>
                   </div>
                 )}
               </div>
@@ -1631,13 +1594,13 @@ function RowList({
 }
 
 /**
- * The share of the heading, as a box you can type into.
+ * The share half of a row's control: typed, it becomes money.
  *
  * Shows the live figure to two places whenever it is not being edited, so
- * typing a budget in the money box moves it. While focused it holds what is
- * being typed, and every keystroke is handed up as a share for the parent to
- * turn into money. Native `<input>`, no Radix: this list runs to hundreds of
- * rows and Radix costs are per mounted instance.
+ * typing a budget in the money half moves it. While focused it holds what is
+ * being typed, and every keystroke is handed up for the parent to turn into
+ * money. Native `<input>`, no Radix: this list runs to hundreds of rows and
+ * Radix costs are per mounted instance.
  */
 function ShareBox({
   share,
@@ -1662,10 +1625,12 @@ function ShareBox({
   useLayoutEffect(() => {
     if (focusTick > 0) input.current?.select();
   }, [focusTick]);
+  const lit = share > 0 || draft !== null;
   return (
     <label
       className={cn(
-        'flex min-h-11 w-24 shrink-0 items-center gap-1 rounded-lg bg-background px-2.5 ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios focus-within:ring-2 focus-within:ring-chart-1',
+        'flex w-[5.5rem] shrink-0 items-center justify-end gap-0.5 border-l px-2.5 transition-colors duration-300 ease-ios',
+        lit ? 'border-chart-1/15 bg-chart-1/[0.08]' : 'border-foreground/8 bg-foreground/[0.03]',
         disabled && 'opacity-60'
       )}
     >
@@ -1673,7 +1638,7 @@ function ShareBox({
         ref={input}
         type="text"
         inputMode="decimal"
-        aria-label="Share of the heading, in percent"
+        aria-label="Share, in percent"
         disabled={disabled}
         value={draft ?? share.toFixed(2)}
         onFocus={() => {
@@ -1694,10 +1659,12 @@ function ShareBox({
         }}
         className={cn(
           'w-full min-w-0 bg-transparent text-right text-sm font-semibold tabular-nums outline-none',
-          share > 0 || draft !== null ? 'text-foreground' : 'text-muted-foreground'
+          lit ? 'text-primary' : 'text-muted-foreground'
         )}
       />
-      <span className="shrink-0 text-[12px] font-semibold text-muted-foreground">%</span>
+      <span className={cn('shrink-0 text-sm font-semibold', lit ? 'text-primary' : 'text-muted-foreground')}>
+        %
+      </span>
     </label>
   );
 }

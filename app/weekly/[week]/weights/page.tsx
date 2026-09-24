@@ -51,8 +51,8 @@ async function WeightsPageBody() {
               on a site can answer "what percent is this now" — the workbook
               this replaces asked them 176 times a week and got guesses. */}
           <span className="font-semibold text-foreground">
-            Give each activity its share of the heading it sits in, or its own price if you have
-            one. The weights add up from there.
+            Give each SPK its budget, then each activity its budget or its share of the heading.
+            The weights add up from there.
           </span>
         </PageHeader>
 
