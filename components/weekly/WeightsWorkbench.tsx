@@ -11,6 +11,7 @@ import { PressLink, pressMotion } from '@/components/motion/Press';
 import { updateRowTextAction } from '@/lib/sheet-actions';
 import {
   allocationOf,
+  budgetAbove,
   deriveWeights,
   overrunOf,
   topLevelPricedTotal,
@@ -1368,14 +1369,21 @@ function RowList({
           const over = overOf.get(row.id);
           const focused = focusRow === row.id;
           const inScope = against > 0 ? (overall / against) * 100 : 0;
-          const priced = (typed[row.id] ?? String(row.price ?? '')) !== '';
+          // Read as NUMBERS, not as "is the box non-empty". A box holding "0"
+          // is nobody's decision, and reading it as one is how an untouched row
+          // came out "2 of 2 rows set" with a solid bar (24 Sep 2026).
+          const priced = Number(typed[row.id] ?? row.price ?? 0) > 0;
+          const stated = Number(typedPct[row.id] ?? row.percentOfParent ?? 0) > 0;
+          // What a percent here would be a percent of. Zero under a heading
+          // nobody has priced, where the derivation ignores the percent.
+          const above = budgetAbove(row.parentId, live);
           // DECIDED, not priced. A stated share is somebody's decision just as
           // much as a price is — the comments below draw an undecided row as a
           // placeholder, and drawing a row set to 30% that way would call the
-          // one deliberate thing on it a guess.
-          const decided =
-            priced ||
-            (typedPct[row.id] ?? (row.percentOfParent != null ? String(row.percentOfParent) : '')) !== '';
+          // one deliberate thing on it a guess. But only a share that TAKES
+          // EFFECT: one with no budget above it changes nothing, and the row is
+          // still the even share it was.
+          const decided = priced || (stated && above > 0);
           // Scaled against the BIGGEST row here, not against 100. Thirteen rows
           // of 7.69% drawn on a 0-100 scale are thirteen identical slivers, and
           // a bar that cannot tell two rows apart is worse than no bar. Against
@@ -1390,8 +1398,9 @@ function RowList({
           // which has the width for it: squeezed under the bar it was cut to
           // "0.18% of project ..." once that line stopped wrapping.
           const note = showBoth ? `${overall.toFixed(2)}% of project` : '';
-          const provisional =
-            row.isLeaf && !decided ? (row.share === 'factor' ? 'set fraction' : 'even share') : '';
+          // An undecided leaf is always an even share: a stated fraction that
+          // takes effect makes the row decided, and one that does not is ignored.
+          const provisional = row.isLeaf && !decided ? 'even share' : '';
 
           return (
             <div
@@ -1498,6 +1507,9 @@ function RowList({
                   row={row}
                   currency={currency}
                   money={live.valueOf.get(row.id) ?? 0}
+                  priced={priced}
+                  stated={stated}
+                  above={above}
                   setTyped={setTyped}
                   setTypedPct={setTypedPct}
                   onCommit={onCommit}
@@ -1588,6 +1600,9 @@ function ValueField({
   row,
   currency,
   money,
+  priced,
+  stated,
+  above,
   setTyped,
   setTypedPct,
   onCommit,
@@ -1597,6 +1612,12 @@ function ValueField({
   currency: string;
   /** What this row is worth right now, typed boxes included. */
   money: number;
+  /** A price above zero, typed or stored. */
+  priced: boolean;
+  /** A percent above zero, typed or stored. */
+  stated: boolean;
+  /** What a percent here is a percent of. Zero where nothing above is budgeted. */
+  above: number;
   setTyped: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setTypedPct: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onCommit: (rowId: string, raw: string) => void;
@@ -1604,8 +1625,17 @@ function ValueField({
 }) {
   // Percent first where nothing has been decided. It is the unit this screen is
   // for, and the one that stays true when the heading above it is repriced.
+  // EXCEPT under a heading with no budget, where a percent is a percent of
+  // nothing and the box would take a keystroke and change no figure. There the
+  // box that works comes first.
   const [mode, setMode] = useState<ValueMode>(
-    row.percentOfParent != null ? 'pct' : row.price != null ? 'money' : 'pct'
+    row.percentOfParent != null
+      ? 'pct'
+      : (row.price ?? 0) > 0
+        ? 'money'
+        : above > 0
+          ? 'pct'
+          : 'money'
   );
 
   const seededPct = row.percentOfParent != null ? String(+row.percentOfParent.toFixed(4)) : '';
@@ -1658,7 +1688,7 @@ function ValueField({
           />
         ) : (
           <MoneyInput
-            defaultValue={row.price != null ? String(row.price) : ''}
+            defaultValue={(row.price ?? 0) > 0 ? String(row.price) : ''}
             placeholder="Price"
             className="min-h-11 w-full min-w-0 rounded-lg bg-background px-3 text-right text-sm tabular-nums ring-1 ring-foreground/12 transition-shadow duration-300 ease-ios placeholder:text-xs placeholder:font-normal placeholder:text-muted-foreground focus:ring-2 focus:ring-chart-1 focus:outline-none"
             onValueChange={(raw) => setTyped((t) => ({ ...t, [row.id]: raw }))}
@@ -1669,20 +1699,31 @@ function ValueField({
 
       {/* The other unit, said back. In money mode the weight column beside this
           one already answers it, so it would be the same number twice, but the
-          line stays, empty, so switching the unit never resizes the card. */}
+          line stays, empty, so switching the unit never resizes the card.
+
+          "= IDR ..." ONLY FOR A PERCENT SOMEBODY TYPED. It used to print the
+          row's money whatever put it there, so an empty box sat over a bold
+          "= IDR 11 253" that was really an even share of the leftover, and the
+          row read as filled in (24 Sep 2026). A row nobody has decided says so. */}
       <p
         className={cn(
           'mt-1.5 h-5 truncate text-right leading-5 tabular-nums',
-          money > 0
+          mode === 'pct' && above > 0 && stated
             ? 'text-[13px] font-semibold text-foreground/80'
-            : 'text-[12px] text-muted-foreground'
+            : mode === 'pct' && above <= 0 && stated
+              ? 'text-[12px] font-semibold text-warn'
+              : 'text-[12px] text-muted-foreground'
         )}
       >
         {mode !== 'pct'
           ? '\u00a0'
-          : money > 0
-            ? `= ${formatMoney(money, currency)}`
-            : 'No budget above it yet'}
+          : above <= 0
+            ? 'No budget above it yet'
+            : stated
+              ? `= ${formatMoney(money, currency)}`
+              : priced
+                ? `Priced at ${formatMoney(money, currency)}`
+                : 'Not set yet'}
       </p>
     </div>
   );

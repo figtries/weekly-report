@@ -285,6 +285,20 @@ export function deriveWeights(nodes: WeightNode[], contractValue?: number): Weig
   };
 }
 
+/**
+ * What a stated percent on a row under `parentId` would be a percent OF.
+ *
+ * `deriveWeights` only honours a percent where its parent was handed a value:
+ * a root takes it from the contract, anything else from its parent's derived
+ * money. Under a heading that nobody has priced there is nothing to take a
+ * share of, and the percent is ignored while the row falls back to an even
+ * share. Zero here means exactly that, so a screen can say so instead of
+ * showing a typed percent beside a figure it had no part in.
+ */
+export function budgetAbove(parentId: string | null, result: WeightResult): number {
+  return parentId == null ? result.contractValue : (result.valueOf.get(parentId) ?? 0);
+}
+
 export interface WeightChange {
   id: string;
   before: number | null;

@@ -130,6 +130,48 @@ check(
   `C1 ${frows.find((r) => r.id === 'C1')?.bobotOverall.toFixed(2)}`
 );
 
+/**
+ * A percent under a heading nobody has priced is a percent of nothing.
+ *
+ * The derivation ignores it and the row takes an even share of the leftover,
+ * so the screen must not count it as set. PHSS Samberah showed exactly this:
+ * a heading with no budget, two rows holding a stored 0, "2 of 2 rows set",
+ * and both figures the even share nobody chose (24 Sep 2026).
+ */
+const noBudget: WeightNode[] = [
+  node({ id: 'P', order: 1, isReportingUnit: true }),
+  node({ id: 'P1', order: 2, parentId: 'P', isLeaf: true, price: 600 }),
+  node({ id: 'Q', order: 3, isReportingUnit: true }),
+  node({ id: 'Q1', order: 4, parentId: 'Q', isLeaf: true, workstepFactor: 0.5 }),
+  node({ id: 'Q2', order: 5, parentId: 'Q', isLeaf: true }),
+];
+const nb = buildWeightsScreen(
+  noBudget,
+  new Map(noBudget.map((n) => [n.id, { code: n.id, name: n.id }])),
+  'IDR',
+  1000
+);
+const qCard = nb.units.find((u) => u.id === 'Q');
+const qRows = qCard?.rows.filter((r) => r.isLeaf) ?? [];
+
+check(
+  'a percent with no budget above it is not a stated share',
+  qRows.length === 2 && qRows.every((r) => r.share === 'even'),
+  qRows.map((r) => `${r.id}=${r.share}`).join(' ')
+);
+
+check(
+  'and the card does not count it as set',
+  qCard?.decidedRows === 0,
+  `decidedRows=${qCard?.decidedRows}`
+);
+
+check(
+  'both rows take the even share of the leftover, 200 each',
+  qRows.every((r) => Math.abs(r.value - 200) < 0.01),
+  qRows.map((r) => `${r.id}=${r.value.toFixed(2)}`).join(' ')
+);
+
 /** No prices at all: every leaf counts the same, and the total still closes. */
 const bare: WeightNode[] = [
   node({ id: 'D', order: 1 }),

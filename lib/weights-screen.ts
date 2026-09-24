@@ -32,6 +32,7 @@ import { db, schema } from './sqlite';
 import type { ProgressMethod } from './schema';
 import {
   allocationOf,
+  budgetAbove,
   deriveWeights,
   summariseWeights,
   type Allocation,
@@ -56,6 +57,8 @@ export interface WeightsRow {
   name: string;
   /** Depth relative to the card it sits under, so indentation starts at zero. */
   depth: number;
+  /** The row this one sits inside, for asking what a percent here is a percent of. */
+  parentId: string | null;
   isLeaf: boolean;
   price: number | null;
   /**
@@ -241,9 +244,13 @@ export function buildWeightsScreen(
 
   const rootOf = (n: WeightNode): WeightNode => ancestors(n).at(-1) ?? n;
 
+  // A percent only counts where there is a budget above it to take a share of.
+  // Anywhere else the derivation ignores it and the row is an even share, and
+  // calling it "factor" or "set" there would credit the figure to a box that
+  // had no part in it.
   const shareOf = (n: WeightNode): WeightShare => {
     if ((n.price ?? 0) > 0) return 'price';
-    if (n.workstepFactor != null) return 'factor';
+    if (n.workstepFactor != null && budgetAbove(n.parentId ?? null, result) > 0) return 'factor';
     return 'even';
   };
 
@@ -294,6 +301,7 @@ export function buildWeightsScreen(
           code: f?.code ?? '',
           name: f?.name ?? '',
           depth: Math.max(0, depthOf(n) - baseDepth),
+          parentId: n.parentId ?? null,
           isLeaf: n.isLeaf,
           price: n.price,
           percentOfParent: n.workstepFactor != null ? n.workstepFactor * 100 : null,
@@ -343,7 +351,7 @@ export function buildWeightsScreen(
       derivedValue,
       bobotOverall: leafTotal,
       pricedRows: members.filter((n) => (n.price ?? 0) > 0).length,
-      decidedRows: members.filter((n) => (n.price ?? 0) > 0 || n.workstepFactor != null).length,
+      decidedRows: members.filter((n) => shareOf(n) !== 'even').length,
       totalRows: members.length,
       rows: toRows(members, depthOf(anchor) + 1, leafTotal),
     };

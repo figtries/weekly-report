@@ -162,9 +162,17 @@ export async function updateRowTextAction(
       // done. The absurd is still stopped, because a percent in the thousands
       // is a slipped decimal rather than an opinion.
       if (n !== null && n > 1000) throw new Error('A percent that large is a typo');
+      // ZERO IS EMPTY. A row taking 0% of its heading weighs nothing and drops
+      // out of every report, and a stored 0 read back as "set" on this screen:
+      // the box showed "0", the card counted the row as decided, and the figure
+      // beside it was still the even share nobody had chosen (24 Sep 2026).
+      const factor = n === null || n === 0 ? null : n / 100;
+      // A stated percent CLEARS the price, the same as the client's live patch
+      // does. A price wins inside the derivation, so a row keeping both would
+      // show the percent on screen and take its old price in every report.
       db
         .update(schema.wbsNodes)
-        .set({ workstepFactor: n === null ? null : n / 100 })
+        .set(factor === null ? { workstepFactor: null } : { workstepFactor: factor, price: null })
         .where(eq(schema.wbsNodes.id, nodeId))
         .run();
       const projectId = projectOfNode(nodeId);
@@ -178,7 +186,13 @@ export async function updateRowTextAction(
       const raw = value.replace(/[^0-9.-]/g, '');
       const n = raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a price');
-      db.update(schema.wbsNodes).set({ price: n }).where(eq(schema.wbsNodes.id, nodeId)).run();
+      // Zero is empty here too, and a price clears a stated percent: see above.
+      const price = n === 0 ? null : n;
+      db
+        .update(schema.wbsNodes)
+        .set(price === null ? { price: null } : { price, workstepFactor: null })
+        .where(eq(schema.wbsNodes.id, nodeId))
+        .run();
       // Weight follows the price — BUT ONLY WHERE THERE IS NOTHING TO LOSE.
       //
       // This once rewrote every weight in the project from the sum of all

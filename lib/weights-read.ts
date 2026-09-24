@@ -26,7 +26,14 @@ export function loadWeightNodes(projectId: string): WeightNode[] {
     .where(eq(schema.wbsNodes.projectId, projectId))
     .orderBy(schema.wbsNodes.order)
     .all()
-    .map((n) => ({ ...n, parentId: n.parentId ?? null }));
+    .map((n) => ({
+      ...n,
+      parentId: n.parentId ?? null,
+      // A stored 0% is nobody's decision: the percent box wrote one when
+      // someone typed 0, and it read back as a row that had been set. The
+      // action writes null for it now; this covers what is already stored.
+      workstepFactor: n.workstepFactor != null && n.workstepFactor > 0 ? n.workstepFactor : null,
+    }));
 }
 
 export function getWeightSummary(projectId: string): WeightSummary | null {
