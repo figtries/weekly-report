@@ -887,9 +887,6 @@ function MoneySection({ node, canEdit }: { node: MapNode; canEdit: boolean }) {
 
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">
-        Its price, from the BOQ. Weight is worked out from it — never typed.
-      </p>
       <MoneyInput
         defaultValue={value}
         placeholder="0"
@@ -898,11 +895,8 @@ function MoneySection({ node, canEdit }: { node: MapNode; canEdit: boolean }) {
           setValue(v);
           setDone(false);
         }}
-        className="mt-2 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
+        className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
       />
-      <p className="mt-1.5 text-[12px] text-muted-foreground">
-        Currently {fmt2(node.weight)}% of the project.
-      </p>
       <m.button
         {...pressMotion}
         onClick={() => {
