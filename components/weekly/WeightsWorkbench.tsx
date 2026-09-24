@@ -1040,10 +1040,17 @@ function UnitFace({
   editor?: React.ReactNode;
 }) {
   const hasBudget = budget > 0;
+  // A HEADING WITHOUT A BUDGET OF ITS OWN IS STILL WORTH ITS ROWS, and that
+  // figure is its budget until somebody types one. Showing an empty box above
+  // five priced rows read as "the work package's budget has gone" (24 Sep
+  // 2026): nothing had been deleted, the headline had simply stopped saying
+  // what the rows add up to, which the card before this one always did.
+  const fromRows = !hasBudget && value > 0;
+  const shown = hasBudget ? budget : value;
   const given = alloc ? alloc.claimed : value;
   const left = alloc ? alloc.left : null;
   const over = left != null && left < -0.5;
-  const taken = hasBudget ? Math.max(0, Math.min(100, (given / budget) * 100)) : 0;
+  const taken = shown > 0 ? Math.max(0, Math.min(100, (given / shown) * 100)) : 0;
   const ofContract = contract > 0 ? (value / contract) * 100 : 0;
   const empty = Math.max(0, total - priced);
 
@@ -1080,24 +1087,27 @@ function UnitFace({
         )}
       </div>
 
-      <p className="mt-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </p>
+      <div className="mt-3.5 flex items-center gap-2">
+        <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {label}
+        </p>
+        {fromRows && <Pill tone="quiet">From its rows</Pill>}
+      </div>
       {editor ?? (
         <p
           className={cn(
             'mt-1 truncate text-2xl font-semibold tabular-nums',
-            hasBudget ? 'text-foreground' : 'text-muted-foreground'
+            shown > 0 ? 'text-foreground' : 'text-muted-foreground'
           )}
         >
-          {hasBudget ? formatMoney(budget, currency) : 'No budget yet'}
+          {shown > 0 ? formatMoney(shown, currency) : 'No budget yet'}
         </p>
       )}
 
       <div
         className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-foreground/8 text-foreground/25"
         style={
-          hasBudget
+          shown > 0
             ? undefined
             : { backgroundImage: 'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 6px)' }
         }
@@ -1109,9 +1119,11 @@ function UnitFace({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        <Pill tone="info">
-          {hasBudget ? 'Given to rows' : 'Rows hold'} {formatMoney(given, currency)}
-        </Pill>
+        {/* Given and left say something only against a budget of its own.
+            Taken from the rows, the headline already IS what they hold. */}
+        {hasBudget && (
+          <Pill tone="info">Given to rows {formatMoney(given, currency)}</Pill>
+        )}
         {hasBudget &&
           (over ? (
             <Pill tone="bad">Over by {formatMoney(-(left ?? 0), currency)}</Pill>
@@ -1264,8 +1276,15 @@ function UnitRows({
  * is also where lowering a budget below what the rows already take is refused.
  */
 function BudgetEditor({ rowId, list }: { rowId: string; list: ListProps }) {
-  const { typed, setTyped, reseed, rowError, liveRefusal, onCommit, currency, storedBudget } = list;
+  const { typed, setTyped, reseed, rowError, liveRefusal, onCommit, onTypeMoney, currency, storedBudget, live } =
+    list;
   const error = rowError?.id === rowId ? rowError.message : liveRefusal(rowId);
+  const stored = storedBudget(rowId);
+  // Without a budget of its own the box holds what the rows add up to, so it
+  // never reads as empty above rows that carry money. Typing a figure makes it
+  // the heading's own budget, and from then on it caps them.
+  const rows = live.budgetOf.has(rowId) ? '' : String(Math.round(live.valueOf.get(rowId) ?? 0));
+  const seed = (typed[rowId] ?? stored) || (rows !== '0' ? rows : '');
   return (
     <>
       <label
@@ -1280,12 +1299,16 @@ function BudgetEditor({ rowId, list }: { rowId: string; list: ListProps }) {
           {symbolOf(currency)}
         </span>
         <MoneyInput
-          defaultValue={typed[rowId] ?? storedBudget(rowId)}
+          defaultValue={seed}
           resetKey={reseed[rowId] ?? 0}
           placeholder="Set a budget"
           className="w-full min-w-0 bg-transparent text-2xl font-semibold tabular-nums outline-none placeholder:text-base placeholder:font-medium placeholder:text-muted-foreground"
           onValueChange={(raw) => setTyped((t) => ({ ...t, [rowId]: raw }))}
-          onCommit={(raw) => onCommit(rowId, raw)}
+          onCommit={(raw) =>
+            // Emptied, with nothing of its own to clear: put the rows' figure
+            // back rather than write a null over a null.
+            raw === '' && stored === '' ? onTypeMoney(rowId, '') : onCommit(rowId, raw)
+          }
         />
         <Pencil className="size-[18px] shrink-0 text-chart-1" aria-hidden />
       </label>
