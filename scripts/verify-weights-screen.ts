@@ -200,8 +200,9 @@ check(
  *
  * This is what a project made in the app looks like before anyone indents a
  * row, and the first version of this screen showed thirteen cards all reading
- * 0.00% on exactly such a project, because a card built from a leaf has no
- * rows. A card is a BRANCH. A top-level leaf belongs in `looseRows`.
+ * 0.00% on exactly such a project, because a card built from a leaf's
+ * DESCENDANTS has no rows. Since 25 Sep 2026 every top-level row is a card,
+ * and a leaf card holds the leaf itself.
  */
 const flat: WeightNode[] = [
   node({ id: 'F1', order: 1, isLeaf: true }),
@@ -215,14 +216,61 @@ const flatScreen = buildWeightsScreen(
   1000
 );
 
-check('a flat plan makes no empty cards', flatScreen.units.length === 0, `${flatScreen.units.length} cards`);
+check(
+  'a flat plan makes one card per row, none of them empty',
+  flatScreen.units.length === 3 &&
+    flatScreen.looseRows.length === 0 &&
+    flatScreen.units.every((u) => u.isLeaf && u.rows.length === 1 && u.rows[0].id === u.id),
+  flatScreen.units.map((u) => `${u.id}:${u.rows.map((r) => r.id).join('+')}`).join(' ')
+);
 
 check(
-  'its rows are reachable on the first screen, the unbudgeted ones at 0',
-  flatScreen.looseRows.length === 3 &&
-    flatScreen.looseRows.find((r) => r.id === 'F3')?.bobotOverall === 100 &&
-    flatScreen.looseRows.filter((r) => r.bobotOverall === 0).length === 2,
-  flatScreen.looseRows.map((r) => `${r.id}=${r.bobotOverall.toFixed(2)}`).join(' ')
+  'each leaf card carries its row, the unbudgeted ones at 0',
+  flatScreen.units.find((u) => u.id === 'F3')?.bobotOverall === 100 &&
+    flatScreen.units.find((u) => u.id === 'F3')?.leafCount === 1 &&
+    flatScreen.units.filter((u) => u.bobotOverall === 0).length === 2,
+  flatScreen.units.map((u) => `${u.id}=${u.bobotOverall.toFixed(2)}`).join(' ')
+);
+
+/**
+ * Work packages, then two one-day rows below them that nobody indented: the
+ * screen the card rule was changed for. The rows are cards of their own, in
+ * plan order after the packages, and their budget still draws on the project.
+ */
+const mixed: WeightNode[] = [
+  ...nodes,
+  node({ id: 'M6', order: 7, isLeaf: true, price: 250 }),
+  node({ id: 'M7', order: 8, isLeaf: true }),
+];
+const mixedScreen = buildWeightsScreen(
+  mixed,
+  new Map(mixed.map((n) => [n.id, { code: n.id, name: n.id }])),
+  'IDR',
+  1000
+);
+const m6 = mixedScreen.units.find((u) => u.id === 'M6');
+
+check(
+  'a top-level row outside every package is a card, after the packages',
+  mixedScreen.units.map((u) => u.id).join(',') === 'A,B,M6,M7' && mixedScreen.looseRows.length === 0,
+  mixedScreen.units.map((u) => u.id).join(',')
+);
+
+check(
+  'it is not a work package, and its budget draws on the project',
+  m6 != null && !m6.isUnit && m6.isLeaf && Math.abs(m6.bobotOverall - 20) < 0.01,
+  `M6 ${m6?.bobotOverall.toFixed(2)} of a project budget of 1250`
+);
+
+check(
+  'every leaf reaches exactly one place on the mixed screen',
+  (() => {
+    const seen = [...mixedScreen.units.flatMap((u) => u.rows), ...mixedScreen.looseRows]
+      .filter((r) => r.isLeaf)
+      .map((r) => r.id);
+    const leaves = mixed.filter((n) => n.isLeaf).map((n) => n.id);
+    return seen.length === leaves.length && leaves.every((id) => seen.filter((s) => s === id).length === 1);
+  })()
 );
 
 check(

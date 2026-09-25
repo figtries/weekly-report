@@ -132,26 +132,35 @@ export interface WeightsUnit {
    */
   budgetedLeaves: number;
   leafCount: number;
+  /** A marked work package, as against a top-level row standing in as a card. */
+  isUnit: boolean;
+  /**
+   * A card for ONE activity. Its only row is itself, so it has no rows to hand
+   * a budget to and no heading budget to change on its header: the row's own
+   * money box inside is where its budget is typed.
+   */
+  isLeaf: boolean;
   rows: WeightsRow[];
 }
 
 export interface WeightsScreen {
   summary: WeightSummary;
   /**
-   * The cards. A card is always a BRANCH, or a reporting unit.
+   * The cards: every reporting unit, and every top-level row that no unit
+   * sits inside of, leaves included (25 Sep 2026: two one-day rows below the
+   * packages read as an afterthought in a list headed "Outside every work
+   * package", and he asked for every top row to be its own card).
    *
-   * Never a leaf. Building cards out of the top-level rows and then filling
-   * each with its descendants gave a flat plan thirteen cards reading 0.00% and
-   * "0 of 0 rows priced", because a leaf has no descendants and so every card
-   * excluded the only row it was about. It is the same trap `assignColorGroups`
-   * fell into when it took the top rows as packages without checking they were
-   * branches.
+   * A LEAF CARD HOLDS ITSELF. The first version of this screen built cards out
+   * of the top-level rows and filled each with its DESCENDANTS, which gave a
+   * flat plan thirteen cards reading 0.00% and "0 of 0 rows priced": a leaf
+   * has no descendants, so every card excluded the only row it was about.
    */
   units: WeightsUnit[];
   /**
-   * Rows that no card contains: top-level leaves, and anything outside every
-   * reporting unit. They are shown and priced on the first screen. Without
-   * them a flat plan has nowhere at all to type a price.
+   * Rows that no card contains: whatever sits outside every unit under a
+   * top-level branch that holds a unit, that branch itself, and top-level
+   * total rows, which carry no weight to show.
    */
   looseRows: WeightsRow[];
   /**
@@ -243,17 +252,27 @@ export function buildWeightsScreen(
 
   const unitNodes = nodes.filter((n) => n.isReportingUnit);
   const hasUnits = unitNodes.length > 0;
-  // A CARD IS A BRANCH. Where SPK are marked they are the cards, because a
-  // unit earns its own section in the report whatever its shape. Where none
-  // are, the top-level BRANCHES stand in and top-level leaves fall through to
-  // `looseRows` instead of becoming cards about nothing.
-  const anchors = hasUnits ? unitNodes : nodes.filter((n) => n.parentId == null && !n.isLeaf);
+
+  // Every row a unit sits beneath. A top-level branch holding units is not a
+  // card of its own: its units are.
+  const holdsUnit = new Set<string>();
+  for (const u of unitNodes) for (const a of ancestors(u)) holdsUnit.add(a.id);
+
+  // Where SPK are marked they are cards, because a unit earns its own section
+  // in the report whatever its shape. Every other top-level row is a card too,
+  // unless a unit sits inside it. A top-level leaf the derivation gave no
+  // weight at all is a total row (`isTotalRow`), and stays out.
+  const anchors = nodes.filter(
+    (n) =>
+      n.isReportingUnit ||
+      (n.parentId == null && !holdsUnit.has(n.id) && (!n.isLeaf || result.bobotOf.has(n.id)))
+  );
   const anchorIds = new Set(anchors.map((a) => a.id));
 
   /** Which card holds this row, or null when no card does. */
   const cardOf = (n: WeightNode): string | null => {
-    const owner = hasUnits ? unitOf(n) : rootOf(n);
-    return owner && owner.id !== n.id && anchorIds.has(owner.id) ? owner.id : null;
+    const owner = unitOf(n) ?? rootOf(n);
+    return owner.id !== n.id && anchorIds.has(owner.id) ? owner.id : null;
   };
 
   // A leaf's weight is read straight off the derivation. A branch carries no
@@ -313,7 +332,8 @@ export function buildWeightsScreen(
   const alloc = allocationOf(result);
 
   const units: WeightsUnit[] = anchors.map((anchor) => {
-    const members = nodes.filter((n) => cardOf(n) === anchor.id);
+    // A leaf has no descendants, so a leaf card's only row is the leaf itself.
+    const members = anchor.isLeaf ? [anchor] : nodes.filter((n) => cardOf(n) === anchor.id);
 
     // The unit's own figure EXCLUDES any unit nested inside it. SPK-007 sits at
     // 1.4.4 inside SPK-004's 1.4 and is still its own contract; counting it in
@@ -339,12 +359,14 @@ export function buildWeightsScreen(
       bobotOverall: leafTotal,
       budgetedLeaves: members.filter((n) => n.isLeaf && (result.valueOf.get(n.id) ?? 0) > 0).length,
       leafCount: members.filter((n) => n.isLeaf && result.bobotOf.has(n.id)).length,
+      isUnit: anchor.isReportingUnit,
+      isLeaf: anchor.isLeaf,
       rows: toRows(members, depthOf(anchor) + 1, leafTotal),
     };
   });
 
-  // Everything no card holds. On a flat plan this is the whole project, and it
-  // is the only place a price can be typed; on Gundih it is empty.
+  // Everything no card holds: rows outside every unit beneath a branch that
+  // holds one, and top-level total rows.
   const loose = nodes.filter((n) => !anchorIds.has(n.id) && cardOf(n) === null);
   const looseTotal = loose
     .filter((n) => n.isLeaf)

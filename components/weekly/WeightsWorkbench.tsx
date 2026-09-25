@@ -334,8 +334,8 @@ export default function WeightsWorkbench({
 
   const unit = openUnit ? (screen.units.find((u) => u.id === openUnit) ?? null) : null;
 
-  /** What a card calls its own figure: an SPK's budget, or a top-level heading's. */
-  const budgetLabel = screen.hasUnits ? 'Work package budget' : 'Budget';
+  /** What a card calls its own figure: an SPK's budget, or a top-level row's. */
+  const budgetLabel = (u: WeightsUnit) => (u.isUnit ? 'Work package budget' : 'Budget');
 
   /** What every list of rows needs, whichever list it is. */
   const listProps = {
@@ -386,9 +386,9 @@ export default function WeightsWorkbench({
       {unit ? (
         <UnitRows
           unit={unit}
-          label={budgetLabel}
+          label={budgetLabel(unit)}
           hidden={hidden}
-          alloc={liveAlloc.get(unit.id) ?? null}
+          alloc={unit.isLeaf ? null : (liveAlloc.get(unit.id) ?? null)}
           list={listProps}
           onBack={() => setOpenUnit(null)}
         />
@@ -405,17 +405,17 @@ export default function WeightsWorkbench({
             <UnitCard
               key={u.id}
               unit={u}
-              label={budgetLabel}
+              label={budgetLabel(u)}
               live={live}
               currency={screen.summary.currency}
-              alloc={liveAlloc.get(u.id) ?? null}
+              alloc={u.isLeaf ? null : (liveAlloc.get(u.id) ?? null)}
               overInside={overInUnit.get(u.id) ?? 0}
               onOpen={() => setOpenUnit(u.id)}
             />
           ))}
 
-          {/* Rows no card holds. On a flat plan this IS the plan, and it is the
-              only place a price can be typed. */}
+          {/* Rows no card holds. Every top-level row is a card now, so this is
+              only what sits outside every unit under a branch holding one. */}
           {looseShown.length > 0 && <LooseHeading hasUnits={screen.units.length > 0} />}
 
           {looseShown.length > 0 && (
@@ -876,6 +876,7 @@ function UnitFace({
   overInside = 0,
   pressable,
   editor,
+  leaf,
 }: {
   code: string;
   name: string;
@@ -895,6 +896,12 @@ function UnitFace({
   pressable?: boolean;
   /** The budget box, on the header you type into. The list shows the figure. */
   editor?: React.ReactNode;
+  /**
+   * A card for one activity. It has no rows to hand its budget to, so "rows
+   * hold", short, over and the activity count have nothing to say that the
+   * headline has not already said.
+   */
+  leaf?: boolean;
 }) {
   const hasBudget = budget > 0;
   // A HEADING WITHOUT A BUDGET OF ITS OWN IS STILL WORTH ITS ROWS, and that
@@ -975,33 +982,35 @@ function UnitFace({
         />
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {/* SHORT OR OVER, as a figure against the budget it is measured by.
-            "Left" read as money to spare; what it is, is budget the rows have
-            not been given yet. Taken from the rows, the headline already IS
-            what they hold, so there is nothing to compare. */}
-        {hasBudget && <Pill tone="info">Rows hold {formatMoney(given, currency)}</Pill>}
-        {hasBudget &&
-          (over ? (
-            <Pill tone="bad">Over by {formatMoney(-(left ?? 0), currency)}</Pill>
-          ) : (left ?? 0) > 0.5 ? (
-            <Pill tone="warn">Short by {formatMoney(left ?? 0, currency)}</Pill>
+      {!leaf && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {/* SHORT OR OVER, as a figure against the budget it is measured by.
+              "Left" read as money to spare; what it is, is budget the rows have
+              not been given yet. Taken from the rows, the headline already IS
+              what they hold, so there is nothing to compare. */}
+          {hasBudget && <Pill tone="info">Rows hold {formatMoney(given, currency)}</Pill>}
+          {hasBudget &&
+            (over ? (
+              <Pill tone="bad">Over by {formatMoney(-(left ?? 0), currency)}</Pill>
+            ) : (left ?? 0) > 0.5 ? (
+              <Pill tone="warn">Short by {formatMoney(left ?? 0, currency)}</Pill>
+            ) : (
+              <Pill tone="ok">Balanced</Pill>
+            ))}
+          {empty > 0 ? (
+            <Pill tone="warn">
+              {empty} {empty === 1 ? 'activity' : 'activities'} without a budget
+            </Pill>
           ) : (
-            <Pill tone="ok">Balanced</Pill>
-          ))}
-        {empty > 0 ? (
-          <Pill tone="warn">
-            {empty} {empty === 1 ? 'activity' : 'activities'} without a budget
-          </Pill>
-        ) : (
-          total > 0 && <Pill tone="ok">Every activity has a budget</Pill>
-        )}
-        {overInside > 0 && (
-          <Pill tone="bad">
-            {overInside} {overInside === 1 ? 'heading' : 'headings'} over inside
-          </Pill>
-        )}
-      </div>
+            total > 0 && <Pill tone="ok">Every activity has a budget</Pill>
+          )}
+          {overInside > 0 && (
+            <Pill tone="bad">
+              {overInside} {overInside === 1 ? 'heading' : 'headings'} over inside
+            </Pill>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -1054,6 +1063,7 @@ function UnitCard({
         total={unit.leafCount}
         overInside={overInside}
         pressable
+        leaf={unit.isLeaf}
       />
     </m.button>
   );
@@ -1113,15 +1123,24 @@ function UnitRows({
           currency={currency}
           priced={unit.budgetedLeaves}
           total={unit.leafCount}
-          editor={<BudgetHeader unitId={unit.id} name={`${unit.code} ${unit.name}`.trim()} list={list} />}
+          leaf={unit.isLeaf}
+          // A one-activity card's budget is its row's, typed in the row's own
+          // box below. A second box on the header would be two doors to one
+          // figure.
+          editor={
+            unit.isLeaf ? undefined : (
+              <BudgetHeader unitId={unit.id} name={`${unit.code} ${unit.name}`.trim()} list={list} />
+            )
+          }
         />
       </div>
 
       <RowList rows={unit.rows.filter((r) => !hidden.has(r.id))} {...list} />
 
       <p className="px-1 text-[13px] text-muted-foreground">
-        Press a row to change its budget, or its share and the budget follows. A row with no
-        budget weighs nothing in the report, and no row can take more than its heading has left.
+        {unit.isLeaf
+          ? 'Press the row to change its budget. With no budget it weighs nothing in the report.'
+          : 'Press a row to change its budget, or its share and the budget follows. A row with no budget weighs nothing in the report, and no row can take more than its heading has left.'}
       </p>
     </div>
   );
