@@ -198,20 +198,19 @@ function Links({ dests, pathname }: { dests: Destination[]; pathname: string | n
  * them. A card inside the swapping subtree is remounted on every page load:
  * its streamed content is thrown away and redrawn a frame later.
  *
- * The card sits at the FOOT, above Settings (25 Sep 2026): on a phone that is
- * under the thumb, and it leaves the destinations as the first thing under the
- * name. The rule above it runs edge to edge (-mx-3), which is what separates
- * "where to go" from "what you are looking at".
+ * Settings sits RIGHT UNDER the destinations, behind an edge-to-edge rule
+ * (-mx-3), and the project card stands alone in its own box at the foot (25
+ * Sep 2026). Settings used to be the last row, below the card, which on a
+ * phone put it at the very bottom edge: hard to spot and under the thumb.
  */
 function NavList({ links, settings, card }: { links: ReactNode; settings: ReactNode; card: ReactNode }) {
   return (
-    <nav className="flex flex-1 flex-col px-3 pb-3 pt-2">
+    <nav className="flex flex-1 flex-col px-3 pb-4 pt-2">
       <div className="space-y-1">{links}</div>
 
-      <div className="-mx-3 mt-auto border-t px-3 pt-3">
-        {card}
-        <div className="mt-2">{settings}</div>
-      </div>
+      <div className="-mx-3 mt-2 border-t px-3 pt-2">{settings}</div>
+
+      <div className="mt-auto pt-4">{card}</div>
     </nav>
   );
 }
