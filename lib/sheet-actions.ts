@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { and, eq } from 'drizzle-orm';
 
-import { beforeWrite, db, schema } from './sqlite';
+import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
 import { boxAbove, coverChildren, getActiveBaselineId, rowSpan } from './sheet';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
@@ -71,6 +71,28 @@ function addDays(iso: string, days: number): string {
 
 function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
+}
+
+/**
+ * Every write here ends in this, and it WAITS for the upload before answering.
+ *
+ * These five used to answer first and upload the snapshot afterwards, from
+ * `after()`. The planner sends its next change the moment the previous one
+ * answers, and on the deployment that next change can land on another instance
+ * whose pre-write pull (`beforeWrite`) finds the store still holding the bytes
+ * from BEFORE the rename. It writes on top of those, pushes the whole file, and
+ * whichever push lands last wins. Measured live on the Retrofit project,
+ * 25 Sep 2026: two rows added and named one after the other, both renames
+ * answered `ok`, and both rows were "New task" in the database afterwards;
+ * the name on screen flipped back when the second add's sheet arrived. The
+ * same race runs the other way and takes a just-added row with it, which is
+ * the row that "hilang". The structural actions have awaited this all along
+ * (`settle` in lib/sheet-structure.ts); the cost is the same second of upload,
+ * spent behind a screen that has already moved.
+ */
+async function landed(): Promise<void> {
+  revalidatePath('/projects', 'layout');
+  await flushDbSnapshot();
 }
 
 function hasChildren(nodeId: string): boolean {
@@ -193,7 +215,7 @@ export async function updateRowTextAction(
       // after being shown what would change (`previewWeights` in lib/weights.ts).
       if (projectId) syncDerivedWeights(projectId);
     }
-    revalidatePath('/projects', 'layout');
+    await landed();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -223,7 +245,7 @@ export async function updateRowTargetAction(
       .set({ targetDate: raw || null })
       .where(eq(schema.wbsNodes.id, nodeId))
       .run();
-    revalidatePath('/projects', 'layout');
+    await landed();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -345,7 +367,7 @@ export async function updateRowDatesAction(
       .where(eq(schema.projects.id, node.projectId))
       .run();
 
-    revalidatePath('/projects', 'layout');
+    await landed();
     return { ok: true, startDate: start, finishDate: finish, durationDays: duration };
   } catch (e) {
     return fail(e);
@@ -385,11 +407,11 @@ export async function setMilestoneAction(nodeId: string, on: boolean): Promise<S
         .set({ finishDate: current.startDate, durationDays: 0 })
         .where(eq(schema.nodeSchedules.id, current.id))
         .run();
-      revalidatePath('/projects', 'layout');
+      await landed();
       return { ok: true, startDate: current.startDate, finishDate: current.startDate, durationDays: 0 };
     }
 
-    revalidatePath('/projects', 'layout');
+    await landed();
     return {
       ok: true,
       startDate: current?.startDate ?? null,
@@ -501,7 +523,7 @@ export async function shiftFollowersAction(
       }
     });
 
-    revalidatePath('/projects', 'layout');
+    await landed();
     return { ok: true, moved };
   } catch (e) {
     return fail(e);

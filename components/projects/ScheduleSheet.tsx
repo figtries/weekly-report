@@ -1495,7 +1495,15 @@ export default function ScheduleSheet({
     window.addEventListener('pointerup', up);
   };
 
-  const anchor = selectedId ?? rows.at(-1)?.id ?? null;
+  // Nothing selected means the END OF THE PLAN, at the top level: after the
+  // last top-level row, which puts the new one past that row's whole subtree
+  // and starts it the day after that row finishes. It used to mean "after the
+  // last row", which in any plan whose last row sits inside a branch put every
+  // new line inside that branch: on the Retrofit project each Add row became
+  // 5.2.3, 5.2.4… inside "row bar" when the next line of the plan, 6, was what
+  // was asked for (25 Sep 2026). A row that belongs inside a branch is one
+  // selection away.
+  const anchor = selectedId ?? rows.findLast((r) => r.depth === 0)?.id ?? null;
   const pasteAnchor = selectedId && !isPending(selectedId) ? selectedId : null;
 
   return (
