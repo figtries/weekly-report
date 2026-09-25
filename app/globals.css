@@ -123,6 +123,13 @@
   --meta: #4338ca;        /* indigo-700 — the word */
   --meta-strong: #312e81; /* indigo-900 — the figure, which is what is read */
   --meta-soft: #eef2ff;   /* indigo-50  — its ground */
+  /* The weekly bar's active tab, from the reference chosen 25 Sep 2026: a warm
+     peach pill with terracotta text. The reference's own pair, #d1845f on
+     #f2e3dc, is 2.3:1; this keeps the hue at 4.6:1, because the app is read by
+     people up to 60. It says WHERE YOU ARE, never a verdict — --warn is the
+     amber that means "needs attention". */
+  --nav-active: #ad4a1c;
+  --nav-active-soft: #fae6da;
   /* IDENTITY, NOT VERDICT. The weekly stat row colours its four figures so they
      are told apart at a glance instead of read one label at a time; Plan and
      Actual reuse --chart-2/--chart-1 so that row teaches the same pair as the
@@ -182,6 +189,8 @@
   --color-meta: var(--meta);
   --color-meta-strong: var(--meta-strong);
   --color-meta-soft: var(--meta-soft);
+  --color-nav-active: var(--nav-active);
+  --color-nav-active-soft: var(--nav-active-soft);
   --color-deviation: var(--deviation);
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -1449,6 +1458,8 @@ a:active {
   --meta: #a5b4fc;
   --meta-strong: #e0e7ff;
   --meta-soft: color-mix(in oklab, #818cf8 18%, transparent);
+  --nav-active: #fdba8c;
+  --nav-active-soft: color-mix(in oklab, #fb923c 18%, transparent);
   /* Free to be the bright yellow here: on the dark card this is 9.5:1, where
      the same hue on white was 1.5:1. */
   --deviation: #facc15;

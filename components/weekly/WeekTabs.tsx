@@ -40,10 +40,8 @@ const GROUPS = {
   progress: [
     { key: 'overall', label: 'Fill in', short: 'Fill in', printable: false },
     { key: 'control', label: 'Check', short: 'Check', printable: false },
-    // Not a step, and deliberately not in `steps` below: the stepper is the
-    // order a WEEK is worked through, and prices belong to the project. Being
-    // listed here is what makes the tab detect as active and get prefetched;
-    // its visible entry is the pill in the action group.
+    // Listed here so the tab detects as active and gets prefetched; its
+    // visible entry is the last one in `steps` below.
     { key: 'weights', label: 'Weights', short: 'Weights', printable: false },
   ],
   laporan: [
@@ -96,7 +94,6 @@ export default function WeekTabs({
   const steps: WeekStep[] = [
     {
       key: 'overall',
-      n: '1',
       label: 'Fill in',
       href: `/weekly/${selectedWeek}/overall`,
       // No badge at zero rather than a "0": an empty week should read as
@@ -106,20 +103,16 @@ export default function WeekTabs({
     },
     {
       key: 'control',
-      n: '2',
       label: 'Check',
       href: `/weekly/${selectedWeek}/control`,
       badge: checkCount > 0 ? String(checkCount) : undefined,
       badgeTone: 'warn',
     },
     // Lands on Summary, and the four sheets appear as a tab row beneath.
-    { key: 'report', n: '3', label: 'Report', href: `/weekly/${selectedWeek}/summary` },
-    // NO NUMBER, because it is not a stage of the week: what an activity is
-    // worth belongs to the project and is as true in week 4 as in week 40.
-    // It is here all the same. It was left out of this bar on 13 Sep 2026,
-    // reachable only from the setup card and a quiet link under the map, and
-    // that reasoning was about not making it a fourth STEP. It skipped the
-    // question of whether people could find it at all, and they could not.
+    { key: 'report', label: 'Report', href: `/weekly/${selectedWeek}/summary` },
+    // Not a stage of the week (what an activity is worth is as true in week 4
+    // as in week 40), but it is here all the same: left out on 13 Sep 2026,
+    // nobody could find it.
     { key: 'weights', label: 'Weights', href: `/weekly/${selectedWeek}/weights` },
   ];
   const activeStep = onReport ? 'report' : activeTab;
@@ -153,96 +146,65 @@ export default function WeekTabs({
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
-      {/* ONE grid holds all four controls, and the stepper changes seat in it
-          rather than being rendered twice — a second `WeekSteps` would mean two
-          elements claiming the same shared-layout id and the sliding pill would
-          jump between them.
-
-          On a phone: week picker and actions share the top row, stepper spans
-          beneath. From `md` up the stepper moves INTO that row, between the two,
-          which is what closes the half-screen of white the actions used to be
-          pushed across. Every control on the row stands 44px tall, so they read
-          as one bar instead of three things that happen to be near each other. */}
-      <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[auto_1fr_auto] md:gap-x-4">
-        <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
+      {/* THE WEEK AND WHETHER IT IS CURRENT SIT TOGETHER, on their own row
+          above the bar. On 25 Sep 2026 the stepper ran between the week picker
+          and the "Set Week N as Current" button, so the button was half a
+          screen from the week it acted on and he could not tell where
+          "current" lived. Now the badge and the button take the SAME seat,
+          right of the picker: one replaces the other, and the row reads
+          "Week 31 · Current" or "Week 31 · Set as current". Save as PDF owns
+          the far end and never moves. */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <WeekSelect
             weeks={weeks}
             selectedWeek={selectedWeek}
             projectCurrentWeek={optimisticCurrent}
             activeTab={activeTab}
           />
-          {isCurrent && (
-            <span className="inline-flex shrink-0 animate-pop-in items-center gap-1.5 whitespace-nowrap rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
-              <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+          {isCurrent ? (
+            <span className="inline-flex shrink-0 animate-pop-in items-center gap-1.5 whitespace-nowrap rounded-full bg-ok-soft px-3 py-1.5 text-[13px] font-semibold text-ok">
+              <span className="h-2 w-2 rounded-full bg-ok" />
               Current
             </span>
-          )}
-        </div>
-
-        <WeekSteps
-          // min-w-0: a grid item defaults to min-width:auto, which would let
-          // the stepper push the row wider instead of scrolling inside it.
-          className="col-span-2 col-start-1 row-start-2 -mx-3 min-w-0 px-3 sm:mx-0 sm:px-0 md:col-span-1 md:col-start-2 md:row-start-1"
-          steps={steps}
-          activeKey={activeStep}
-          stretch
-        />
-
-        {/* The "set as current" button unmounts once the week is current; the
-            group is justify-end, so the print button at the right edge never
-            moves. */}
-        <div className="col-start-2 row-start-1 flex shrink-0 flex-wrap items-center justify-end gap-2 md:col-start-3">
-          {/* ACTIVITIES IS BACK IN THIS HEADER, as an unnumbered entry in the
-              step row rather than as a fourth step. What an activity is worth
-              and how it is counted moved into the row's own panel on Fill in on
-              13 Sep 2026, and that is still where you change ONE of them; this
-              is the screen for the afternoon when two hundred are set at once,
-              and for seeing a heading's budget against what its rows have
-              claimed, which no per-row panel can show. Taking it out of here
-              answered "should it be a step" — it should not — but it also made
-              it unfindable, which was never the intention. */}
-          {!isCurrent && (
+          ) : (
+            // The badge's own outline, before it is filled in: a hollow dot in
+            // the same green, so the two read as one control in two states.
             <m.button {...pressMotion}
               onClick={setAsCurrent}
               disabled={isPending}
-              className="inline-flex min-h-11 animate-scale-in items-center justify-center gap-1.5 rounded-lg bg-ok px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:brightness-110 disabled:opacity-70"
+              className="inline-flex min-h-11 shrink-0 animate-scale-in items-center gap-2 whitespace-nowrap rounded-lg border border-ok/40 bg-card px-3.5 text-sm font-semibold text-ok shadow-sm transition-colors duration-300 ease-ios hover:bg-ok-soft disabled:opacity-70"
               title="Pin this as the week the project is in. It is where the app opens, until you move it or clear it."
             >
-              <span className="hidden sm:inline">Set Week {selectedWeek} as Current</span>
-              <span className="sm:hidden">Set as Current</span>
+              <span aria-hidden className="h-2 w-2 rounded-full border-2 border-ok" />
+              Set as current
             </m.button>
           )}
-          {active.printable && (
-            <SavePdfButton
-              url={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}
-              filename={`Week ${selectedWeek} - ${active.label}.pdf`}
-              ariaLabel={`Save ${active.label} as PDF`}
-            />
-          )}
         </div>
-        {/* The four sheets are siblings, not stages, so they stay a plain tab
-            row — and only while step 3 is where you are. Showing them
-            permanently put six destinations on a 390px screen and made
-            "Report" look like a heading rather than somewhere to go.
-
-            It lives INSIDE this grid, on the stepper's own column, and that is
-            the whole fix for the "g rapih" of 10 September 2026. Rendered below
-            the grid it ran the full width of the header while the stepper above
-            it stopped short of the week picker and the Save PDF button, so the
-            two bands were different widths and neither edge lined up with
-            anything. Sharing the column makes them exactly one width, at every
-            breakpoint, without either of them measuring the other. */}
-        {onReport && (
-          <SectionTabs
-            className="col-span-2 col-start-1 row-start-3 -mx-3 min-w-0 px-3 sm:mx-0 sm:px-0 md:col-span-1 md:col-start-2 md:row-start-2"
-            stretch
-            tabs={GROUPS.laporan.map((t) => ({
-              href: `/weekly/${selectedWeek}/${t.key}`,
-              label: t.short,
-            }))}
+        {active.printable && (
+          <SavePdfButton
+            url={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}
+            filename={`Week ${selectedWeek} - ${active.label}.pdf`}
+            ariaLabel={`Save ${active.label} as PDF`}
           />
         )}
       </div>
+
+      <WeekSteps className="mt-3" steps={steps} activeKey={activeStep} />
+
+      {/* The four sheets are siblings, not stages, so they stay a plain tab
+          row — and only while Report is where you are. Showing them
+          permanently put eight destinations on a 390px screen and made
+          "Report" look like a heading rather than somewhere to go. */}
+      {onReport && (
+        <SectionTabs
+          className="mt-2"
+          tabs={GROUPS.laporan.map((t) => ({
+            href: `/weekly/${selectedWeek}/${t.key}`,
+            label: t.short,
+          }))}
+        />
+      )}
     </div>
   );
 }

@@ -6,43 +6,37 @@ import { SlideTab } from '@/components/motion/SlideTab';
 import { cn } from '@/lib/utils';
 
 /**
- * The three things a week actually asks of a person, in the order it asks them.
+ * The weekly section's one navigation bar: Fill in, Check, Report, Weights.
  *
  * The tab row this replaces was two SEPARATE groups — [Update, Review] and
  * [Summary, Detail, S-Curve, Photos] — and which one you saw depended on which
  * page you were already on. From the Update screen there was therefore no route
- * to the report at all; the only bridge was a sidebar entry called "Reports",
- * pointing at the same `/weekly/[week]/` URLs. Someone who had just finished
- * filling in a week had no way of knowing they were two taps from printing it.
+ * to the report at all. Someone who had just finished filling in a week had no
+ * way of knowing they were two taps from printing it. One bar, always the same
+ * four entries, fixed that.
  *
- * A stepper instead of tabs because the three are ORDERED: you cannot sensibly
- * check figures you have not entered, or print a report you have not checked.
- * The counts are the point — an intern who does not yet know what "deviation"
- * means can still read "6 left" and "2 to check" and know where they stand.
+ * DRAWN AS THE REFERENCE HE CHOSE ON 25 SEP 2026: plain labels on a white bar,
+ * the active one in a warm pill. It was a stepper before, with a numeral on
+ * each stage, chevrons between them and a rule before Weights; the order still
+ * reads left to right, and the bar stopped looking like a form to be completed
+ * in sequence. Steps were never gated anyway — a wrong count must never be able
+ * to lock someone out of their own report.
  *
- * THAT ORDER IS ALSO WHY THIS IS NOT `SectionTabs`. Radix's Tabs models a set
- * of peers with one selected; a stepper has a direction, a chevron between each
- * pair and a number on every step. Wrapping it in Tabs would mean fighting the
- * primitive to hide what it is for. Everything else here — the ground, the
- * surface, the counts — comes from the same shadcn tokens and the same `Badge`
- * the tab row beside it uses.
+ * The counts stay, and they are the point: an intern who does not yet know
+ * what "deviation" means can still read "6" beside Fill in and know where they
+ * stand. No badge at zero, so a finished week reads as finished.
  *
- * Steps stay reachable in any order. This numbers the work, it does not gate
- * it: a wrong count must never be able to lock someone out of their own report.
+ * NOT `SectionTabs`, because that is one Radix Tabs root and the report's four
+ * sheets already use it right beneath this bar on step 3 — and AGENTS.md
+ * allows one per screen.
  *
- * AN ENTRY WITHOUT A NUMBER IS NOT A STEP, and the row can carry one. Weights
- * belongs to the PROJECT rather than to the week — prices and shares are true
- * in week 4 and week 40 alike — so it takes no place in "first, then, then". It
- * still belongs in this bar, because this bar is where someone looks to change
- * screen, and a destination reachable only from a link under another page's map
- * is a destination most people never find. It is drawn without a numeral and
- * without a chevron, and a divider separates it from the sequence: the order is
- * a claim about three things, and a fourth would make that claim false.
+ * Weights is in this bar although it belongs to the PROJECT rather than to the
+ * week: this is where someone looks to change screen, and a destination
+ * reachable only from a link under another page's map is one most people never
+ * find (13 Sep 2026).
  */
 export interface WeekStep {
   key: string;
-  /** Its place in the order. Absent on an entry that is a destination, not a stage. */
-  n?: string;
   label: string;
   href: string;
   /** Rendered as a pill after the label. Omitted when there is nothing to say. */
@@ -61,103 +55,54 @@ export default function WeekSteps({
   steps,
   activeKey,
   className,
-  stretch = false,
 }: {
   steps: WeekStep[];
   activeKey: string;
   className?: string;
-  /**
-   * Fill the width it is given, from `sm` up.
-   *
-   * Sized to its own text this band stopped two-thirds of the way across the
-   * screen and left a ragged edge beside the tab row under it, which is the
-   * "berantakan, gak sejajar" reported on 10 September 2026. Stretched, the
-   * two bands are the same width and the row has no dead right-hand side.
-   * Below `sm` it stays content-sized: three full labels do not fit a 360px
-   * screen, and this is a scroller there.
-   */
-  stretch?: boolean;
 }) {
   return (
     <nav
       aria-label="Weekly steps"
-      className={cn(
-        'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden print:hidden',
-        className
-      )}
+      className={cn('rounded-2xl bg-card p-1 shadow-sm sm:p-1.5 ring-1 ring-foreground/5 print:hidden', className)}
     >
-      <ol
-        className={cn(
-          'inline-flex items-center gap-0.5 rounded-lg bg-track p-0.5 sm:gap-1 sm:p-1',
-          stretch && 'sm:flex sm:w-full'
-        )}
-      >
-        {steps.map((s, i) => {
+      {/* The bar is the white ground and never moves; the LIST scrolls inside
+          it when a narrow phone runs out of width, so the rounded edge stays
+          put instead of sliding off with the labels. */}
+      <ol className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1 [&::-webkit-scrollbar]:hidden">
+        {steps.map((s) => {
           const active = s.key === activeKey;
           return (
-            <li key={s.key} className={cn('flex items-center', stretch && 'sm:flex-1')}>
-              {/* Hidden below `sm`. Three steps at their real labels overflow a
-                  360px screen, and this scroller hides its scrollbar, so what
-                  a phone actually showed was "3 Rep" — and at 320px just "3".
-                  A label cut mid-word reads as a broken page, not as something
-                  you can swipe. The chevrons are the only thing here carrying
-                  no information the numerals don't already carry, so they are
-                  what goes: 1, 2, 3 states the order on its own. */}
-              {i > 0 && s.n != null && steps[i - 1].n != null && (
-                <svg
-                  aria-hidden
-                  className="mx-0.5 hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-              {/* Where the sequence ends. A chevron here would say the row
-                  continues counting; a rule says it stopped. */}
-              {i > 0 && s.n == null && steps[i - 1].n != null && (
-                <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-foreground/15" />
-              )}
+            <li key={s.key} className="shrink-0">
               <PressLink
                 href={s.href}
                 aria-current={active ? 'page' : undefined}
                 {...pressMotion}
                 className={cn(
-                  // min-h-11: these are the primary navigation of the whole
-                  // section and have to clear the 44px touch target. The
-                  // horizontal padding tightens on phones instead — width is
-                  // what runs out there, never height.
-                  'relative isolate flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium sm:gap-1.5 sm:px-3',
-                  stretch && 'sm:w-full sm:justify-center',
+                  // min-h-11: the section's primary navigation clears the 44px
+                  // touch target. Padding and type tighten below `sm` instead,
+                  // because all four must fit a 360px screen: this list hides
+                  // its scrollbar, and a label cut mid-word reads as broken.
+                  'relative isolate flex min-h-11 items-center gap-1 whitespace-nowrap rounded-full px-2 text-sm sm:gap-1.5 sm:px-5 sm:text-[15px]',
                   // `transition-colors`, not `transition-all`: the press is
-                  // framer-motion's now, and two writers on one transform is a
+                  // framer-motion's, and two writers on one transform is a
                   // press that stutters halfway down.
                   'transition-colors duration-300 ease-ios',
-                  // `bg-background` and `shadow-sm` moved to SlideTab, which
-                  // draws them while travelling between steps.
-                  active ? 'font-semibold text-foreground' : 'text-foreground/70 hover:text-foreground'
+                  active
+                    ? 'font-semibold text-nav-active'
+                    : 'font-medium text-foreground/80 hover:text-foreground'
                 )}
               >
-                {active && <SlideTab id="week-step" className="rounded-md" />}
-                {s.n != null && (
-                  <span
-                    className={cn(
-                      'flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold sm:size-5',
-                      active
-                        ? 'bg-foreground text-background'
-                        : 'bg-foreground/15 text-muted-foreground'
-                    )}
-                  >
-                    {s.n}
-                  </span>
+                {active && (
+                  <SlideTab
+                    id="week-step"
+                    className="rounded-full bg-nav-active-soft shadow-none ring-0 dark:ring-0"
+                  />
                 )}
                 {s.label}
                 {s.badge && (
                   <Badge
                     className={cn(
-                      'min-w-5 px-1 text-[11px] font-bold tabular-nums sm:ml-0.5 sm:px-1.5',
+                      'min-w-5 px-1.5 text-[11px] font-bold tabular-nums',
                       TONE[s.badgeTone ?? 'todo']
                     )}
                   >
