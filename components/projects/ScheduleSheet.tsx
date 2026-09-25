@@ -1878,7 +1878,6 @@ export default function ScheduleSheet({
           // delete step did nothing at all until the key made it a new panel.
           key={`${menuRow.id}:${menuMode}`}
           row={menuRow}
-          projectId={projectId}
           initialMode={menuMode}
           onClose={() => {
             setMenuRow(null);
@@ -1902,6 +1901,7 @@ export default function ScheduleSheet({
             if (message) setError(message);
             syncRows();
           }}
+          onAdd={(asChild) => addRow(menuRow.id, asChild)}
         />
       )}
 

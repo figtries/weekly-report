@@ -15,17 +15,14 @@ import {
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
 import {
-  predictAdd,
   predictDelete,
   predictFlags,
   predictIndent,
   predictMove,
   predictOutdent,
-  tmpRowId,
 } from '@/lib/sheet-predict';
 import MoneyInput from '@/components/ui/MoneyInput';
 import {
-  addRowAction,
   deleteRowAction,
   indentRowAction,
   moveRowAction,
@@ -62,7 +59,6 @@ import {
  */
 export default function RowMenu({
   row,
-  projectId,
   initialMode = 'menu',
   onClose,
   onChanged,
@@ -70,9 +66,9 @@ export default function RowMenu({
   onUndoable,
   onPredict,
   onFailed,
+  onAdd,
 }: {
   row: SheetRow;
-  projectId: string;
   /** 'delete' when the sheet opened this panel to ask about a row with children. */
   initialMode?: 'menu' | 'delete';
   onClose: () => void;
@@ -113,6 +109,18 @@ export default function RowMenu({
    * and there is nothing to accuse anybody of.
    */
   onFailed?: (message: string) => void;
+  /**
+   * Add a row below this one, or inside it, THROUGH THE SHEET.
+   *
+   * These two used to run their own `addRowAction` here, with a placeholder the
+   * sheet had no record of. So nothing mapped it to the id the server gave: the
+   * row was thrown away and rebuilt the moment the answer landed, the name
+   * being typed into it went with the input, and a rename sent before then
+   * named a row that never existed and was refused. The row appeared, vanished
+   * under the cursor, and came back as "New task" (25 Sep 2026). The sheet's
+   * own `addRow` already carries all of that, and opens the name for typing.
+   */
+  onAdd: (asChild: boolean) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -245,26 +253,20 @@ export default function RowMenu({
           <div className="mt-3 space-y-0.5">
             <Item
               icon={<Plus className="size-4" />}
-              onClick={() =>
-                undoable(
-                  () => addRowAction(projectId, { afterNodeId: row.id }),
-                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null),
-                  (rs) => predictAdd(rs, row.id, false, tmpRowId())
-                )
-              }
+              onClick={() => {
+                onClose();
+                onAdd(false);
+              }}
               disabled={pending}
             >
               Add row below
             </Item>
             <Item
               icon={<CornerDownRight className="size-4" />}
-              onClick={() =>
-                undoable(
-                  () => addRowAction(projectId, { afterNodeId: row.id, asChild: true }),
-                  ({ newId }) => (newId ? () => deleteRowAction(newId) : null),
-                  (rs) => predictAdd(rs, row.id, true, tmpRowId())
-                )
-              }
+              onClick={() => {
+                onClose();
+                onAdd(true);
+              }}
               disabled={pending}
             >
               Add row inside

@@ -149,6 +149,37 @@ await cdp.send('Network.emulateNetworkConditions', {
   uploadThroughput: -1,
 });
 
+/**
+ * Press Enter in the row being typed in, then watch THAT ROW every frame for
+ * 1.5s and return every name it showed.
+ *
+ * The closed cell has to read the typed name at once and on every frame after.
+ * Two faults broke that, both "hilang timbul" (25 Sep 2026): the typed name was
+ * set inside a transition, which React holds until the action ends, so the
+ * cell read "New task" for the whole round trip; and a row added from the row
+ * menu was REBUILT when its answer landed, input and all. The element is held
+ * rather than looked up again, so a rebuilt row shows up as a replaced element
+ * instead of quietly passing on its successor. A fixed wait would land before
+ * or after the add's answer by luck.
+ */
+async function enterAndWatch() {
+  await page.evaluate((sel) => {
+    const row = document.activeElement.closest(sel);
+    const seen = new Set();
+    window.__shown = seen;
+    const t0 = performance.now();
+    const tick = () => {
+      if (!row.isConnected) seen.add('(row element replaced)');
+      else if (!row.querySelector('input')) seen.add(row.children[1]?.innerText.trim().split('\n')[0] ?? '');
+      if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, ROW);
+  await page.keyboard.press('Enter');
+  await new Promise((r) => setTimeout(r, 1600));
+  return page.evaluate(() => [...window.__shown]);
+}
+
 await clickToolbar('Add row');
 // No wait: the point is that the caret is there before the server has answered.
 const focused = await page.evaluate(() => {
@@ -172,29 +203,10 @@ if (midTyping !== TYPED) failures.push(`typing: the field lost the draft mid-wor
 // one day and that was rejected at once: a row you did not ask for, to delete,
 // for every name you finished.
 const beforeEnter = await rowCount();
-// The closed cell has to show the typed name AT ONCE and on every frame after,
-// not "New task" until the rename answers. It fell back for the whole round
-// trip while the guess was set inside the transition, which React holds until
-// the action ends — 1.5 to 3 seconds of the old name on the deployment
-// ("hilang timbul", 25 Sep 2026). Sampled per frame on the row being typed in,
-// because a fixed wait lands before or after the add's answer by luck.
-await page.evaluate((sel) => {
-  const row = document.activeElement.closest(sel);
-  const seen = new Set();
-  window.__shown = seen;
-  const t0 = performance.now();
-  const tick = () => {
-    if (!row.querySelector('input')) seen.add(row.children[1]?.innerText.trim().split('\n')[0] ?? '');
-    if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}, ROW);
-await page.keyboard.press('Enter');
-await new Promise((r) => setTimeout(r, 1600));
-const shownAfterEnter = await page.evaluate(() => [...window.__shown]);
+const shownAfterEnter = await enterAndWatch();
 const steady = shownAfterEnter.length === 1 && shownAfterEnter[0] === TYPED;
-say(steady, `shown   after Enter the cell only ever read ${JSON.stringify(shownAfterEnter)}`);
-if (!steady) failures.push(`shown: the name flickered after Enter (${shownAfterEnter.join(' → ')})`);
+say(steady, `shown   after Enter the row only ever read ${JSON.stringify(shownAfterEnter)}`);
+if (!steady) failures.push(`shown: the new row flickered after Enter (${shownAfterEnter.join(' → ')})`);
 const stillTyping = await page.evaluate(() => document.activeElement?.tagName === 'INPUT');
 const afterEnter = await rowCount();
 say(
@@ -215,8 +227,59 @@ const total = await rowCount();
 say(total === start + BURST + 1, `total   ${total - start} rows added in all (want ${BURST + 1})`);
 if (total !== start + BURST + 1) failures.push(`total: ${total - start} rows added, wanted ${BURST + 1}`);
 
+/* ── 4. The row menu's Add row below is the same add, not a second kind ──── */
+// It ran its own action with a placeholder the sheet had no record of, so the
+// row was rebuilt when the answer landed, the rename was refused, and the row
+// came back as "New task". It goes through the sheet's own add now, which also
+// opens the name for typing the way the toolbar does.
+const MENU_TYPED = 'Menu Works';
+await new Promise((r) => setTimeout(r, 2500));
+await cdp.send('Network.emulateNetworkConditions', {
+  offline: false,
+  latency: LATENCY_MS,
+  downloadThroughput: -1,
+  uploadThroughput: -1,
+});
+// From the last row the project started with — a leaf, so "below" is simply the
+// next line, ahead of the rows the sections above appended.
+await page.evaluate((sel, n) => [...document.querySelectorAll(sel)[n].querySelectorAll('button')].at(-1).click(), ROW, start - 1);
+await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Add row below'));
+await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add row below').click());
+const menuCaret = await page
+  .waitForFunction(() => document.activeElement?.tagName === 'INPUT', { timeout: 1000 })
+  .then(() => true, () => false);
+say(menuCaret, `menu    ⋯ → Add row below opens the new row's name for typing`);
+if (!menuCaret) {
+  failures.push('menu: ⋯ → Add row below left nothing focused');
+  // Open it by hand so the rest of the section still says something.
+  await page.evaluate((sel, n) => [...document.querySelectorAll(sel)[n].children[1].querySelectorAll('button')].at(-1).click(), ROW, start);
+}
+await page.keyboard.type(MENU_TYPED, { delay: 25 });
+const menuShown = await enterAndWatch();
+const menuSteady = menuShown.length === 1 && menuShown[0] === MENU_TYPED;
+say(menuSteady, `menu    after Enter the row only ever read ${JSON.stringify(menuShown)}`);
+if (!menuSteady) failures.push(`menu: the row flickered after Enter (${menuShown.join(' → ')})`);
+await settle();
+await page.reload({ waitUntil: 'networkidle0', timeout: 90_000 });
+await page.waitForSelector(ROW, { timeout: 30_000 });
+const menuAt = (await names()).indexOf(MENU_TYPED);
+say(menuAt === start, `menu    "${MENU_TYPED}" is in the database, directly below the row it was added from`);
+if (menuAt !== start) failures.push(`menu: "${MENU_TYPED}" stored at index ${menuAt}, wanted ${start}`);
+
 /* ── Put the project back the way it was found ───────────────────────────── */
 await new Promise((r) => setTimeout(r, 2000));
+await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+const menuRowAt = (await names()).indexOf(MENU_TYPED);
+const leftover = menuRowAt >= 0 ? menuRowAt : (await names()).lastIndexOf('New task', start);
+if (leftover >= start) {
+  await page.evaluate(
+    (sel, n) => document.querySelectorAll(sel)[n].dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
+    ROW,
+    leftover
+  );
+  await clickToolbar('Delete');
+  await new Promise((r) => setTimeout(r, 1600));
+}
 for (let i = 0; i < BURST + 1; i += 1) {
   try {
     await page.evaluate(

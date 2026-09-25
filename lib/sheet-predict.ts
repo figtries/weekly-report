@@ -83,12 +83,20 @@ function blankRow(id: string, depth: number, parentId: string | null): SheetRow 
   };
 }
 
-/** Add: after the anchor's whole subtree, or as its first child. */
+/**
+ * Add: after the anchor's whole subtree — as its sibling, or as its LAST child.
+ *
+ * Inside meant FIRST child here after the server had moved to last (14 Sep
+ * 2026, `addRowAction`), so a row added inside a branch with children was drawn
+ * under the branch and then, when the answer landed, taken from there and put
+ * at the bottom of the branch: gone from where you were looking, back somewhere
+ * else. Both cases end at the subtree's end; only the depth differs.
+ */
 export function predictAdd(rows: SheetRow[], anchorId: string | null, asChild: boolean, tmpId: string): SheetRow[] {
   const i = anchorId ? rows.findIndex((r) => r.id === anchorId) : -1;
   if (i < 0) return [...rows, blankRow(tmpId, 0, null)];
   const a = rows[i];
-  const at = asChild ? i + 1 : subtreeEnd(rows, i);
+  const at = subtreeEnd(rows, i);
   const row = blankRow(tmpId, a.depth + (asChild ? 1 : 0), asChild ? a.id : a.parentId);
   const next = [...rows.slice(0, at), row, ...rows.slice(at)];
   if (asChild) next[i] = { ...a, isLeaf: false, childCount: a.childCount + 1 };
