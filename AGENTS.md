@@ -188,7 +188,10 @@ and a work package's budget opens a dialog that says what the new figure does
 (short or over against its rows, the project budget before and after, and
 whether that passes the contract value) before Save. And a budget is changed
 on Weights ONLY: since 25 Sep 2026 `ActivityPanel` shows the row's budget and
-weight as a card with an "Edit in Weights" link, and has no money box of its own.
+weight as a tile that opens Weights (beside a Schedule tile that opens the
+planner), and has no money box of its own. Its foot has ONE button: Save saves
+a changed figure and records an unchanged one as "nothing moved this week";
+the separate "Nothing this week" button is gone.
 
 Stored `bobot` follows: `syncDerivedWeights` writes 0 on an unbudgeted leaf
 (a real zero, not a missing figure), a contract value edit re-syncs, and

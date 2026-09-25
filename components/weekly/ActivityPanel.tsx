@@ -17,7 +17,6 @@ import type { Milestone } from '@/lib/types';
 import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
 import { changeFor } from '@/lib/work-kind-apply';
 import { MOTION } from '@/lib/design';
-import { Expand } from '@/components/motion/Expand';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { cn } from '@/lib/utils';
@@ -71,11 +70,12 @@ const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 const fmt1 = (v: number) => v.toFixed(1);
 const fmt2 = (v: number) => v.toFixed(2);
 
-function fmtDate(iso: string | null | undefined) {
+/** "29 Dec 25": the long form does not fit two to a half-width tile. */
+function fmtShortDate(iso: string | null | undefined) {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
 }
 
 function fmtMoney(v: number | null | undefined) {
@@ -329,7 +329,6 @@ function PanelBody({
   const kindLabel =
     BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
-  const [open, setOpen] = useState<'schedule' | null>(null);
   // The raw string in the percent box while it has focus. See the input.
   const [typing, setTyping] = useState<string | null>(null);
 
@@ -451,6 +450,21 @@ function PanelBody({
     });
   }
 
+  /**
+   * The one button at the foot. A changed figure is saved; an unchanged one
+   * is recorded as "checked, nothing moved", which is what takes the row out
+   * of this week's queue. There used to be a separate "Nothing this week"
+   * button beside Save for that, and three ways out of one panel (that, Save
+   * and the X) read as three different questions. The X still records
+   * nothing, and a row already dealt with this week just closes rather than
+   * writing a second identical entry into its log.
+   */
+  function saveOrConfirm() {
+    if (dirty) return save();
+    if (node.filledCount > 0) return onClose();
+    nothing();
+  }
+
   function nothing() {
     if (saving) return;
     setError(null);
@@ -513,14 +527,10 @@ function PanelBody({
               {tag && <CodeChip className="mt-0.5">{tag}</CodeChip>}
               <h2 className="text-[15px] font-semibold leading-snug text-foreground">{name}</h2>
             </div>
-            <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">
-              Week {week}
-              {node.startWeek && node.finishWeek
-                ? ` · W${node.startWeek}–W${node.finishWeek}`
-                : ''}
-              {' · '}
-              Weight {fmt2(node.weight)}%
-            </p>
+            {/* The week only: the span and the weight each have a card of their
+                own at the foot of the panel, and a figure said twice is a
+                figure somebody has to check twice. */}
+            <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">Week {week}</p>
           </div>
           <m.button
             {...pressMotion}
@@ -695,22 +705,11 @@ function PanelBody({
             onOpenWeekChanged={(p) => onSaved(node.id, p)}
           />
 
-          <PriceWeight node={node} weightsHref={canPrice ? `/weekly/${week}/weights` : null} />
-
-          <div className="mt-4 border-t border-border">
-            <Disclosure
-              label="Schedule"
-              value={
-                node.startWeek && node.finishWeek
-                  ? `W${node.startWeek}–W${node.finishWeek}`
-                  : 'Not scheduled'
-              }
-              open={open === 'schedule'}
-              onToggle={() => setOpen(open === 'schedule' ? null : 'schedule')}
-            >
-              <ScheduleSection node={node} projectHref={projectHref} />
-            </Disclosure>
-          </div>
+          <FactTiles
+            node={node}
+            weightsHref={canPrice ? `/weekly/${week}/weights` : null}
+            projectHref={projectHref}
+          />
 
           {error && (
             <p className="mt-3 animate-fade-in-up rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">
@@ -722,16 +721,8 @@ function PanelBody({
         <div className="flex gap-2 border-t border-border bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
           <m.button
             {...pressMotion}
-            onClick={nothing}
+            onClick={saveOrConfirm}
             disabled={saving}
-            className="min-h-12 flex-1 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60 disabled:opacity-50"
-          >
-            Nothing this week
-          </m.button>
-          <m.button
-            {...pressMotion}
-            onClick={save}
-            disabled={!dirty || saving}
             className="btn-primary min-h-12 flex-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
           >
             {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
@@ -815,112 +806,98 @@ function BareStep({
   );
 }
 
-/* ------------------------------------------------------------- disclosures */
+/* ------------------------------------------------------------ fact tiles */
 
-function Disclosure({
+/**
+ * Budget and schedule as two tiles side by side, each one the way to the
+ * screen that changes it: Weights for money, the planner for dates. The same
+ * tile as the kind-of-work choice at the top of the panel, so the panel opens
+ * and closes on one shape instead of adding a second one at the foot.
+ *
+ * Nothing is edited here. A budget edit is checked against its heading's pool
+ * and moves every weight in that pool, which only the Weights screen can show.
+ * A tile with nowhere to go (an imported project has no Weights screen) is
+ * drawn without its chevron rather than hidden, because the figures still hold.
+ */
+function FactTiles({
+  node,
+  weightsHref,
+  projectHref,
+}: {
+  node: MapNode;
+  weightsHref: string | null;
+  projectHref: string | null;
+}) {
+  const money = fmtMoney(node.price);
+  const span =
+    node.startWeek && node.finishWeek ? `W${node.startWeek}–W${node.finishWeek}` : null;
+  const from = fmtShortDate(node.startDate);
+  const to = fmtShortDate(node.finishDate);
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-2">
+      <FactTile label="Budget" href={weightsHref}>
+        <FactValue value={money} empty="No budget" />
+        <p className="mt-0.5 text-[12px] tabular-nums text-chart-1">{fmt2(node.weight)}% of project</p>
+      </FactTile>
+      <FactTile label="Schedule" href={projectHref}>
+        <FactValue value={span} empty="Not set" />
+        {from && to && (
+          <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
+            {from} to {to}
+          </p>
+        )}
+      </FactTile>
+    </div>
+  );
+}
+
+function FactTile({
   label,
-  value,
-  open,
-  onToggle,
+  href,
   children,
 }: {
   label: string;
-  value: string;
-  open: boolean;
-  onToggle: () => void;
+  href: string | null;
   children: React.ReactNode;
 }) {
-  return (
-    <div className="border-b border-border">
-      <m.button
-        {...pressMotion}
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex min-h-12 w-full items-center gap-3 py-1 text-left"
-      >
-        <span className="flex-1 text-sm text-foreground">{label}</span>
-        <span className="text-[13px] tabular-nums text-muted-foreground">{value}</span>
-        <m.span
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ duration: MOTION.duration, ease: [...MOTION.ease] }}
-          className="text-muted-foreground"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M7.5 4.5l6 5.5-6 5.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </m.span>
-      </m.button>
-      <Expand open={open}>
-        <div className="pb-4 pt-1">{children}</div>
-      </Expand>
-    </div>
+  const inner = (
+    <>
+      <div className="flex items-center gap-2">
+        <p className="flex-1 text-[12px] text-muted-foreground">{label}</p>
+        {href && <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={2} aria-hidden="true" />}
+      </div>
+      {children}
+    </>
+  );
+  const cls = 'block min-w-0 rounded-2xl border border-input bg-card px-3.5 py-3';
+  return href ? (
+    <Link
+      href={href}
+      className={cn(cls, 'transition-colors duration-200 ease-ios hover:bg-muted/60 active:bg-muted')}
+    >
+      {inner}
+    </Link>
+  ) : (
+    <div className={cls}>{inner}</div>
   );
 }
 
 /**
- * Budget and weight, READ here and changed in Weights. A budget edit is
- * checked against its heading's pool and moves every weight in it, which the
- * Weights screen shows and a box in this panel could not, so the panel says
- * what the figures are and hands the change to the one screen built for it.
- * Hidden for an imported project, whose Weights screen is gated anyway.
+ * The figure itself. A long budget steps down a size instead of wrapping or
+ * being cut: at 390px a tile holds "Rp 56,162" at 17px but not
+ * "Rp 11,253,000,000", and a figure broken over two lines is not read as one.
  */
-function PriceWeight({ node, weightsHref }: { node: MapNode; weightsHref: string | null }) {
-  const money = fmtMoney(node.price);
+function FactValue({ value, empty }: { value: string | null; empty: string }) {
+  const long = (value ?? '').length > 12;
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] divide-x divide-border">
-        <div className="min-w-0 px-4 py-3">
-          <p className="text-[12px] text-muted-foreground">Budget</p>
-          <p
-            className={cn(
-              'mt-0.5 text-[17px] font-semibold tabular-nums tracking-tight',
-              money ? 'text-foreground' : 'text-muted-foreground'
-            )}
-          >
-            {money ?? 'No budget yet'}
-          </p>
-        </div>
-        <div className="px-4 py-3 text-right">
-          <p className="text-[12px] text-muted-foreground">Weight</p>
-          <p className="mt-0.5 text-[17px] font-semibold tabular-nums tracking-tight text-chart-1">
-            {fmt2(node.weight)}%
-          </p>
-        </div>
-      </div>
-      {weightsHref && (
-        <Link
-          href={weightsHref}
-          className="flex min-h-11 items-center gap-2 border-t border-border bg-muted/40 px-4 text-[13px] font-medium text-chart-1 transition-colors duration-200 ease-ios hover:bg-muted"
-        >
-          <span className="flex-1">Edit in Weights</span>
-          <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        </Link>
+    <p
+      className={cn(
+        'mt-1 font-semibold tabular-nums tracking-tight',
+        long ? 'text-[15px] leading-6' : 'text-[17px] leading-6',
+        value === null ? 'text-muted-foreground' : 'text-foreground'
       )}
-    </div>
-  );
-}
-
-function ScheduleSection({ node, projectHref }: { node: MapNode; projectHref: string | null }) {
-  const start = fmtDate(node.startDate);
-  const finish = fmtDate(node.finishDate);
-  return (
-    <div className="text-[13px] text-muted-foreground">
-      <div className="flex justify-between py-1">
-        <span>Starts</span>
-        <span className="text-foreground">{start ?? (node.startWeek ? `Week ${node.startWeek}` : '—')}</span>
-      </div>
-      <div className="flex justify-between py-1">
-        <span>Finishes</span>
-        <span className="text-foreground">{finish ?? (node.finishWeek ? `Week ${node.finishWeek}` : '—')}</span>
-      </div>
-      {projectHref && (
-        <Link
-          href={projectHref}
-          className="mt-2 inline-flex min-h-11 items-center text-[13px] font-medium text-chart-1 hover:underline"
-        >
-          Open the planner
-        </Link>
-      )}
-    </div>
+    >
+      {value ?? empty}
+    </p>
   );
 }
