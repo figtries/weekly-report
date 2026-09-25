@@ -498,6 +498,52 @@ a:active {
   animation: scrim-in 0.4s var(--ease-ios) both;
 }
 
+/* The way out is the way in, backwards in space and equal in time: the same
+   0.5s on the same curve, so closing is seen rather than being a cut (25 Sep
+   2026). A separate keyframe rather than `animation-direction: reverse` on the
+   old one: keeping the name would not restart the animation, and a finished
+   `both` fill flipped to reverse jumps straight to its end. */
+@keyframes sheet-down {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 100%, 0);
+  }
+}
+
+@keyframes sheet-right {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+@keyframes scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-sheet-out {
+  animation: sheet-down 0.5s var(--ease-ios) both;
+}
+
+@media (min-width: 640px) {
+  .animate-sheet-out {
+    animation-name: sheet-right;
+  }
+}
+
+.animate-scrim-out {
+  animation: scrim-out 0.4s var(--ease-ios) both;
+}
+
 @keyframes level-in-fwd {
   from {
     opacity: 0;

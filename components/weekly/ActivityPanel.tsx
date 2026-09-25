@@ -147,10 +147,10 @@ export default function ActivityPanel({
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
-  // No AnimatePresence: the sheet closes in the same frame as the press. The
-  // slide-up spring over a blurred map stuttered on every device it was tried
-  // on, iPhone, Android and desktop alike (25 Sep 2026); the opening is now a
-  // CSS keyframe instead, see `.animate-sheet-in`.
+  // No AnimatePresence: the slide-up spring over a blurred map stuttered on
+  // every device it was tried on, iPhone, Android and desktop alike (25 Sep
+  // 2026). Both ways are CSS keyframes instead, `.animate-sheet-in` and
+  // `.animate-sheet-out`; PanelBody plays the second before calling `onClose`.
   return (
     node && (
       <PanelBody
@@ -168,6 +168,13 @@ export default function ActivityPanel({
       />
     )
   );
+}
+
+/** Tell the parent the sheet is gone — once, whichever signal arrives first. */
+function handOver(closed: { current: boolean }, onClose: { current: () => void }) {
+  if (closed.current) return;
+  closed.current = true;
+  onClose.current();
 }
 
 function PanelBody({
@@ -361,6 +368,27 @@ function PanelBody({
   const panelRef = useRef<HTMLDivElement>(null);
   const pctRef = useRef<HTMLInputElement>(null);
 
+  /*
+   * EVERY WAY OUT GOES THROUGH `close()`, which plays the exit slide and only
+   * then hands over to `onClose` — the parent unmounts this the moment that is
+   * called, so calling it directly is a cut, which is what closing used to be
+   * (25 Sep 2026). `closedRef` makes the handover happen once whichever of the
+   * two lands first: the wrapper's own `animationend`, or the timer, which
+   * covers a tab hidden mid-slide where no animation event ever arrives.
+   */
+  const [closing, setClosing] = useState(false);
+  const closedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  const close = () => setClosing(true);
+  useEffect(() => {
+    if (!closing) return;
+    const t = window.setTimeout(() => handOver(closedRef, onCloseRef), 650);
+    return () => window.clearTimeout(t);
+  }, [closing]);
+
   /**
    * The week log's own row for the week on screen hands over to the figure
    * here rather than opening a second editor for the same week.
@@ -399,7 +427,7 @@ function PanelBody({
   // panel — the three things a hand-rolled overlay always forgets.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') setClosing(true);
     };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -413,7 +441,7 @@ function PanelBody({
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, []);
 
   function finish(nextPct: number) {
     // The week just saved is one of the log's weeks; the log cached for this
@@ -424,7 +452,7 @@ function PanelBody({
     // Short enough that the tick is a confirmation rather than a wait. It used
     // to be 420ms, which is most of a beat added to the end of every single
     // row on a screen people fill in nine at a time.
-    window.setTimeout(onClose, 140);
+    window.setTimeout(close, 140);
   }
 
   function save() {
@@ -472,7 +500,7 @@ function PanelBody({
    */
   function saveOrConfirm() {
     if (dirty) return save();
-    if (node.filledCount > 0) return onClose();
+    if (node.filledCount > 0) return close();
     nothing();
   }
 
@@ -490,14 +518,29 @@ function PanelBody({
   const crumb = trail.map((t) => splitCode(t.name).name).join(' › ');
 
   const body = (
-    <div className="fixed inset-0 z-50 flex sm:justify-end">
+    // Closing, the sheet stops taking presses: it is on its way out, and a tap
+    // that lands on it mid-slide should reach the page it is uncovering.
+    <div className={cn('fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
       {/* No blur: a full-screen backdrop-filter is the most expensive thing a
           phone can be asked to paint, and it was paid on the opening frame. */}
-      <div className="animate-scrim-in absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className={cn('absolute inset-0 bg-black/40', closing ? 'animate-scrim-out' : 'animate-scrim-in')}
+        onClick={close}
+      />
 
-      {/* The opening slide lives on this wrapper and the drag on the `m.div`
-          inside it, so the two never write the same transform. */}
-      <div className="animate-sheet-in relative mt-auto flex w-full flex-col sm:mt-0 sm:h-full sm:w-[27rem]">
+      {/* The slides, in and out, live on this wrapper and the drag on the
+          `m.div` inside it, so the two never write the same transform. The
+          target check matters: animations inside the sheet bubble their own
+          `animationend` up through here. */}
+      <div
+        className={cn(
+          'relative mt-auto flex w-full flex-col sm:mt-0 sm:h-full sm:w-[27rem]',
+          closing ? 'animate-sheet-out' : 'animate-sheet-in'
+        )}
+        onAnimationEnd={(e) => {
+          if (closing && e.target === e.currentTarget) handOver(closedRef, onCloseRef);
+        }}
+      >
         <m.div
           ref={panelRef}
           role="dialog"
@@ -508,7 +551,7 @@ function PanelBody({
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.4 }}
           onDragEnd={(_, info) => {
-            if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            if (info.offset.y > 120 || info.velocity.y > 600) close();
           }}
           className={cn(
             'relative flex w-full flex-col bg-card shadow-2xl outline-none',
@@ -536,7 +579,7 @@ function PanelBody({
             </div>
             <m.button
               {...pressMotion}
-              onClick={onClose}
+              onClick={close}
               aria-label="Close"
               className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted"
             >
