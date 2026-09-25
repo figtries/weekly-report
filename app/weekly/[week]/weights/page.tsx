@@ -51,6 +51,7 @@ async function WeightsPageBody({ params }: { params: Promise<{ week: string }> }
           section="Data Overall"
           title="Weights"
           className="mb-0 animate-enter"
+          descriptionClassName="text-pretty md:max-w-[50%]"
           action={<SectionSwitch week={week} to="report" />}
         >
           {/* Both promises, said once, at the top, in the words that remove the

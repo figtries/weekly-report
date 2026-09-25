@@ -25,6 +25,7 @@ export default function PageHeader({
   children,
   action,
   className,
+  descriptionClassName,
 }: {
   section?: string;
   title: string;
@@ -36,6 +37,8 @@ export default function PageHeader({
    *  (25 Sep 2026). */
   action?: ReactNode;
   className?: string;
+  /** Overrides the line's measure, e.g. Weights stops it at half the page. */
+  descriptionClassName?: string;
 }) {
   return (
     <header className={cn('mb-5 sm:mb-6', className)}>
@@ -47,7 +50,14 @@ export default function PageHeader({
         {action}
       </div>
       {children && (
-        <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground sm:mt-2">{children}</p>
+        <p
+          className={cn(
+            'mt-1.5 max-w-3xl text-sm text-muted-foreground sm:mt-2',
+            descriptionClassName,
+          )}
+        >
+          {children}
+        </p>
       )}
     </header>
   );
