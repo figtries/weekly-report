@@ -48,6 +48,8 @@ import { cn } from '@/lib/utils';
 export interface WeekStep {
   key: string;
   label: string;
+  /** What a phone shows instead of `label`, when four labels do not fit 390px. */
+  short?: string;
   href: string;
   /** Rendered as a pill after the label. Omitted when there is nothing to say. */
   badge?: string;
@@ -65,14 +67,16 @@ export default function WeekSteps({
   steps,
   activeKey,
   className,
+  ariaLabel = 'Weekly steps',
 }: {
   steps: WeekStep[];
   activeKey: string;
   className?: string;
+  ariaLabel?: string;
 }) {
   return (
     <nav
-      aria-label="Weekly steps"
+      aria-label={ariaLabel}
       className={cn('w-full rounded-2xl bg-card p-1 shadow-sm ring-1 ring-foreground/5 sm:w-fit sm:p-1.5 print:hidden', className)}
     >
       {/* The bar is the white ground and never moves; the LIST scrolls inside
@@ -108,7 +112,14 @@ export default function WeekSteps({
                     className="rounded-full bg-chart-1/10 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)] ring-0 dark:ring-0"
                   />
                 )}
-                {s.label}
+                {s.short ? (
+                  <>
+                    <span className="sm:hidden">{s.short}</span>
+                    <span className="hidden sm:inline">{s.label}</span>
+                  </>
+                ) : (
+                  s.label
+                )}
                 {s.badge && (
                   <Badge
                     className={cn(

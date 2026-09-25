@@ -1,7 +1,7 @@
 'use client';
 
-import SectionTabs from '@/components/layout/SectionTabs';
-import WeekSelect from '@/components/weekly/WeekSelect';
+import WeekRow from '@/components/weekly/WeekRow';
+import WeekSteps from '@/components/weekly/WeekSteps';
 import { REGISTER_INFO } from '@/lib/register-shared';
 import { usePathname } from 'next/navigation';
 
@@ -12,8 +12,9 @@ import { usePathname } from 'next/navigation';
  * It used to sit below a page title, a contract number and a paragraph of
  * explanation, inside a centred `max-w-6xl` column — so every edge on this
  * screen landed a different distance from the window than the same edge on the
- * weekly report. The padding here is `WeekTabs`' own, and the tab row is the
- * shared `SectionTabs`, so the two sections now line up to the pixel.
+ * weekly report. The padding here is `WeekTabs`' own, and the week row and the
+ * tab bar are the weekly pages' own components, so the two sections line up to
+ * the pixel.
  *
  * They are routes rather than tab state, so a controller can bookmark the
  * screen they live in and a reload lands where they were. The week picker is
@@ -47,38 +48,31 @@ export function RegisterTabs({
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
-      {/* The week picker leads, the tab row follows a step behind — the same
-          two-beat shape the weekly report's header uses, so entering either
-          section feels like the same app. */}
-      <div className="flex animate-enter items-center gap-2">
-        <WeekSelect
+      {/* THE SAME HEADER AS THE WEEKLY PAGES (25 Sep 2026): the shared
+          `WeekRow` over the shared `WeekSteps` bar, in a column that hugs the
+          bar so the week picker and Current share its edges. This section had
+          its own copy before, a small pill and a grey full-width tab strip,
+          and moving between the two sections read as moving between apps. */}
+      <div className="flex w-full animate-enter flex-col gap-3 sm:w-fit">
+        <WeekRow
           weeks={weeks}
           selectedWeek={selectedWeek}
           projectCurrentWeek={projectCurrentWeek}
           activeTab={active}
           basePath="/dokumen"
         />
-        {selectedWeek === projectCurrentWeek && (
-          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Current
-          </span>
-        )}
+        <WeekSteps
+          className="sm:w-full"
+          ariaLabel="Document Control"
+          activeKey={active}
+          steps={TABS.map((t) => ({
+            key: t.key,
+            href: `/dokumen/${selectedWeek}/${t.key}`,
+            label: t.label,
+            short: t.short,
+          }))}
+        />
       </div>
-
-      {/* `stretch` for the same reason the weekly header has it, and because
-          this row was built to line up with that one to the pixel. Stretch one
-          and not the other and moving between the two sections stops feeling
-          like the same app. */}
-      <SectionTabs
-        className="-mx-3 mt-2 stagger-1 px-3 sm:mx-0 sm:px-0"
-        stretch
-        tabs={TABS.map((t) => ({
-          href: `/dokumen/${selectedWeek}/${t.key}`,
-          label: t.label,
-          short: t.short,
-        }))}
-      />
 
       {/* WHICH OF THE TWO YOU ARE LOOKING AT, AND WHAT THAT MEANS. Four tabs
           reading EDL, EDL list, VDRL, VDRL list told a document controller
@@ -88,7 +82,7 @@ export function RegisterTabs({
           screens draws a plan line or counts anything overdue. One line, on
           every screen of the section, because the pair is a choice you make
           again every time you come back. */}
-      <p className="mt-2 stagger-2 animate-enter max-w-4xl text-[11px] leading-snug text-muted-foreground">
+      <p className="mt-3 stagger-1 animate-enter max-w-4xl text-[11px] leading-snug text-muted-foreground">
         <span className="font-semibold text-foreground">
           {info.short} · {info.long}
         </span>{' '}

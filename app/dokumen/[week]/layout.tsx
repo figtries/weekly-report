@@ -96,8 +96,8 @@ async function RegisterTabsForOpenProject({ week }: { week: number }) {
 function RegisterTabsFallback() {
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8">
-      <Skeleton className="h-11 w-32 rounded-lg" />
-      <Skeleton className="mt-3 h-9 w-full rounded-lg" />
+      <Skeleton className="h-11 w-full rounded-lg sm:w-[560px]" />
+      <Skeleton className="mt-3 h-[52px] w-full rounded-2xl sm:h-14 sm:w-[560px]" />
     </div>
   );
 }
