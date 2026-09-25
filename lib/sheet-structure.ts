@@ -283,7 +283,7 @@ function defaultStart(
 ): string {
   const baselineId = getActiveBaselineId(projectId);
   const project = db
-    .select({ startDate: schema.projects.startDate })
+    .select({ startDate: schema.projects.startDate, finishDate: schema.projects.finishDate })
     .from(schema.projects)
     .where(eq(schema.projects.id, projectId))
     .all()[0];
@@ -317,6 +317,15 @@ function defaultStart(
       if (start < box.start) start = box.start;
       if (start > box.finish) start = box.finish;
     }
+  } else if (!parentId && project?.finishDate && start > project.finishDate) {
+    // A TOP-LEVEL row's box is the project. Add row with nothing selected lands
+    // after the last top-level row, and on a plan that already runs to the
+    // project's finish "the day after" is past it: the header's "Plan runs past
+    // this project's finish" warning appeared on the first press, pushed the
+    // whole sheet down under the pointer, and the second press missed the
+    // button (Retrofit, 25 Sep 2026). A date nobody typed is not a reason to
+    // outgrow the contract; one somebody types still can.
+    start = project.finishDate;
   }
   return start;
 }
