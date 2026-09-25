@@ -16,11 +16,18 @@ import { cn } from '@/lib/utils';
  * four entries, fixed that.
  *
  * DRAWN AS THE REFERENCE HE CHOSE ON 25 SEP 2026: plain labels on a white bar,
- * the active one in a warm pill. It was a stepper before, with a numeral on
- * each stage, chevrons between them and a rule before Weights; the order still
+ * the active one in a pill. It was a stepper before, with a numeral on each
+ * stage, chevrons between them and a rule before Weights; the order still
  * reads left to right, and the bar stopped looking like a form to be completed
  * in sequence. Steps were never gated anyway — a wrong count must never be able
  * to lock someone out of their own report.
+ *
+ * The pill is the SIDEBAR'S active blue (`bg-chart-1/10 text-chart-1`), and so
+ * are both counts. The reference's peach went the same day: on screen it read
+ * as brown, the one warm thing in a blue app. The bar also stopped running the
+ * full width on desktop, because four tabs in a 1600px white box left most of
+ * it empty; it hugs its tabs from `sm` up, and on a phone the four split the
+ * width evenly so no pill sits squeezed against the edge.
  *
  * The counts stay, and they are the point: an intern who does not yet know
  * what "deviation" means can still read "6" beside Fill in and know where they
@@ -63,7 +70,7 @@ export default function WeekSteps({
   return (
     <nav
       aria-label="Weekly steps"
-      className={cn('rounded-2xl bg-card p-1 shadow-sm sm:p-1.5 ring-1 ring-foreground/5 print:hidden', className)}
+      className={cn('w-full rounded-2xl bg-card p-1 shadow-sm ring-1 ring-foreground/5 sm:w-fit sm:p-1.5 print:hidden', className)}
     >
       {/* The bar is the white ground and never moves; the LIST scrolls inside
           it when a narrow phone runs out of width, so the rounded edge stays
@@ -72,7 +79,7 @@ export default function WeekSteps({
         {steps.map((s) => {
           const active = s.key === activeKey;
           return (
-            <li key={s.key} className="shrink-0">
+            <li key={s.key} className="flex-1 sm:flex-none">
               <PressLink
                 href={s.href}
                 aria-current={active ? 'page' : undefined}
@@ -82,20 +89,20 @@ export default function WeekSteps({
                   // touch target. Padding and type tighten below `sm` instead,
                   // because all four must fit a 360px screen: this list hides
                   // its scrollbar, and a label cut mid-word reads as broken.
-                  'relative isolate flex min-h-11 items-center gap-1 whitespace-nowrap rounded-full px-2 text-sm sm:gap-1.5 sm:px-5 sm:text-[15px]',
+                  'relative isolate flex min-h-11 w-full items-center justify-center gap-1 whitespace-nowrap rounded-full px-1.5 text-sm sm:gap-1.5 sm:px-4 sm:text-[15px]',
                   // `transition-colors`, not `transition-all`: the press is
                   // framer-motion's, and two writers on one transform is a
                   // press that stutters halfway down.
                   'transition-colors duration-300 ease-ios',
                   active
-                    ? 'font-semibold text-nav-active'
+                    ? 'font-semibold text-chart-1'
                     : 'font-medium text-foreground/80 hover:text-foreground'
                 )}
               >
                 {active && (
                   <SlideTab
                     id="week-step"
-                    className="rounded-full bg-nav-active-soft shadow-none ring-0 dark:ring-0"
+                    className="rounded-full bg-chart-1/10 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)] ring-0 dark:ring-0"
                   />
                 )}
                 {s.label}

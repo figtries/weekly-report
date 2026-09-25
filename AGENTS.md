@@ -341,7 +341,7 @@ came BACK into the week bar as an unnumbered entry called Weights. The old
 rule here said not to put it beside the stepper, and the half of it that still
 holds is that it is not a STEP: what an activity is worth belongs to the project
 and is as true in week 4 as in week 40, so it sits LAST in the bar. (Since 25 Sep
-2026 the bar is plain labels on a white ground with a warm active pill, from a
+2026 the bar is plain labels on a white ground with the sidebar's blue active pill, from a
 reference he chose; no entry has a numeral any more, and the week picker with
 its Current badge / Set as current button is a row of its own above it.) The half that was wrong is that a
 setup card and a quiet link under the map were enough to find it by; they were

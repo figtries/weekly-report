@@ -106,7 +106,7 @@ export default function WeekTabs({
       label: 'Check',
       href: `/weekly/${selectedWeek}/control`,
       badge: checkCount > 0 ? String(checkCount) : undefined,
-      badgeTone: 'warn',
+      badgeTone: 'todo',
     },
     // Lands on Summary, and the four sheets appear as a tab row beneath.
     { key: 'report', label: 'Report', href: `/weekly/${selectedWeek}/summary` },
