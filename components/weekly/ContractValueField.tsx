@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
  * ungrouped string of them is unreadable, which is how a zero gets miscounted.
  */
 export default function ContractValueField({ value }: { value: number | null }) {
-  const [raw, setRaw] = useState(value ? value.toLocaleString('id-ID') : '');
+  const [raw, setRaw] = useState(value ? value.toLocaleString('en-GB') : '');
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +25,7 @@ export default function ContractValueField({ value }: { value: number | null }) 
 
   function onChange(next: string) {
     const d = next.replace(/\D/g, '');
-    setRaw(d ? Number(d).toLocaleString('id-ID') : '');
+    setRaw(d ? Number(d).toLocaleString('en-GB') : '');
     setError(null);
   }
 

@@ -139,6 +139,7 @@ export default function OverallMap({
   projectId,
   canPrice,
   projectHref,
+  currency,
   initialLens = null,
   blockingIds = [],
   initialItem = null,
@@ -154,6 +155,8 @@ export default function OverallMap({
   projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
+  /** The project's currency, for the budget the panel shows. */
+  currency: string;
   /** Arrived via `?lens=` from the Check screen. Read once, on mount. */
   initialLens?: Lens;
   /** What the `'blocking'` lens keeps. */
@@ -458,6 +461,7 @@ export default function OverallMap({
         projectId={projectId}
         canPrice={canPrice}
         projectHref={projectHref}
+        currency={currency}
         peers={peers}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}

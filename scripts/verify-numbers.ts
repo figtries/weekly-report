@@ -3,10 +3,10 @@
  *
  * Run: npx tsx scripts/verify-numbers.ts
  *
- * SI groups digits in threes with a SPACE, never a comma and never a dot,
- * precisely because `5.000` is five thousand in Jakarta and five in London. The
- * two rules worth pinning here are that rule and its exception — SI leaves a
- * four-digit group alone, because isolating a single digit gains nothing.
+ * MONEY is grouped with commas, `SGD 5,920,000`, the way everybody writes a
+ * price (25 Sep 2026). Plain counts keep SI: a narrow space, and a four-digit
+ * group left alone. The decimal marker is a point in both, so a comma can only
+ * ever mean thousands.
  *
  * The round trip matters more than the look: whatever a person types has to come
  * back out as something `Number()` accepts, or a contract value ends up wrong by
@@ -34,10 +34,12 @@ const show = (s: string) => s.replace(new RegExp(sp, 'g'), '·');
 /* --- the separator itself -------------------------------------------------- */
 
 check(
-  'the separator is a space, never a comma or a dot',
-  !formatMoney(5_000_000_000, 'USD').includes(',') &&
-    formatMoney(5_000_000_000, 'USD').includes(sp),
-  show(formatMoney(5_000_000_000, 'USD'))
+  'money is grouped with commas, never a space or a dot',
+  // Intl puts a no-break space between a code and its figure; that one stays.
+  formatMoney(5_000_000_000, 'USD') === 'US$5,000,000,000' &&
+    formatMoney(5_920_000, 'SGD').replace(/\s/g, ' ') === 'SGD 5,920,000' &&
+    formatMoney(1234, 'IDR').replace(/\s/g, ' ') === 'IDR 1,234',
+  `${formatMoney(5_000_000_000, 'USD')} · ${formatMoney(5_920_000, 'SGD')} · ${formatMoney(1234, 'IDR')}`
 );
 
 check(
@@ -66,11 +68,11 @@ check(
 
 {
   const cases: [string, string][] = [
-    ['5000000000', `5${sp}000${sp}000${sp}000`],
-    ['1234', '1234'],
-    ['12345', `12${sp}345`],
-    ['5000.', `5000.`],
-    ['5920000.006405', `5${sp}920${sp}000.006405`],
+    ['5000000000', '5,000,000,000'],
+    ['1234', '1,234'],
+    ['12345', '12,345'],
+    ['5000.', '5,000.'],
+    ['5920000.006405', '5,920,000.006405'],
     ['', ''],
   ];
   check(
@@ -108,10 +110,10 @@ check(
 /* --- the caret ------------------------------------------------------------- */
 
 {
-  // Typing a 9 straight after the first digit of "5 000 000 000": the caret has
+  // Typing a 9 straight after the first digit of "5,000,000,000": the caret has
   // to land after "59", not drift right by the separator that was inserted.
-  const typed = `59${sp}000${sp}000${sp}000`;
-  const digits = digitsBeforeCaret('59 000 000 000'.replace(/ /g, sp), 2);
+  const typed = '59,000,000,000';
+  const digits = digitsBeforeCaret(typed, 2);
   check(
     'the caret is counted in digits, not characters',
     digits === 2 && caretAfterGrouping(typed, digits) === 2,
@@ -140,7 +142,7 @@ check(
 
 check(
   "Gundih's contract still reads correctly",
-  formatMoney(5920000.006405001, 'USD') === `US$5${sp}920${sp}000`,
+  formatMoney(5920000.006405001, 'USD') === 'US$5,920,000',
   show(formatMoney(5920000.006405001, 'USD'))
 );
 

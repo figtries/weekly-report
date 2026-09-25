@@ -270,6 +270,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           projectId={open?.id ?? null}
           canPrice={!!open && !open.legacyJsonId}
           projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
+          currency={money?.currency ?? 'IDR'}
           initialLens={initialLens}
           blockingIds={blocking}
           initialItem={initialItem}

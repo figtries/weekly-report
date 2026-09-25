@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
+import { formatMoney } from '@/lib/currency';
 
 /**
  * Everything about ONE activity, in one place, over the map that was not
@@ -78,9 +79,9 @@ function fmtShortDate(iso: string | null | undefined) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
 }
 
-function fmtMoney(v: number | null | undefined) {
+function fmtMoney(v: number | null | undefined, currency: string) {
   if (v === null || v === undefined || !Number.isFinite(v)) return null;
-  return `Rp ${Math.round(v).toLocaleString('en-GB')}`;
+  return formatMoney(v, currency);
 }
 
 /** What the panel is currently holding, before it is saved. */
@@ -124,6 +125,7 @@ export default function ActivityPanel({
   projectId,
   canPrice,
   projectHref,
+  currency,
   peers,
   onClose,
   onSaved,
@@ -139,6 +141,8 @@ export default function ActivityPanel({
   projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
+  /** The project's own currency, so a budget reads SGD on an SGD project and not Rp. */
+  currency: string;
   /** Every leaf elsewhere in the tree that already has an answer, for the work-kind picker. */
   peers: WorkKindPeer[];
   onClose: () => void;
@@ -154,6 +158,7 @@ export default function ActivityPanel({
         projectId={projectId}
         canPrice={canPrice}
         projectHref={projectHref}
+        currency={currency}
         peers={peers}
         onClose={onClose}
         onSaved={onSaved}
@@ -169,6 +174,7 @@ function PanelBody({
   projectId,
   canPrice,
   projectHref,
+  currency,
   peers,
   onClose,
   onSaved,
@@ -179,6 +185,7 @@ function PanelBody({
   projectId: string | null;
   canPrice: boolean;
   projectHref: string | null;
+  currency: string;
   peers: WorkKindPeer[];
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
@@ -709,6 +716,7 @@ function PanelBody({
             node={node}
             weightsHref={canPrice ? `/weekly/${week}/weights` : null}
             projectHref={projectHref}
+            currency={currency}
           />
 
           {error && (
@@ -823,12 +831,14 @@ function FactTiles({
   node,
   weightsHref,
   projectHref,
+  currency,
 }: {
   node: MapNode;
   weightsHref: string | null;
   projectHref: string | null;
+  currency: string;
 }) {
-  const money = fmtMoney(node.price);
+  const money = fmtMoney(node.price, currency);
   const span =
     node.startWeek && node.finishWeek ? `W${node.startWeek}–W${node.finishWeek}` : null;
   const from = fmtShortDate(node.startDate);

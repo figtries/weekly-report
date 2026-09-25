@@ -704,10 +704,13 @@ export function formatRupiah(n: number): string {
   // Spelled out rather than abbreviated: Indonesian "M" means miliar while
   // English "M" means million, and a Rupiah figure off by a thousand times is
   // the kind of mistake a meeting does not catch.
-  if (abs >= 1e12) return `Rp ${fmtNum(n / 1e12, 2)} trillion`;
-  if (abs >= 1e9) return `Rp ${fmtNum(n / 1e9, 2)} billion`;
-  if (abs >= 1e6) return `Rp ${fmtNum(n / 1e6, 1)} million`;
-  return `Rp ${fmtNum(n)}`;
+  // Commas, not SI spaces: money is written the way `formatMoney` writes it.
+  const grouped = (v: number, digits = 0) =>
+    v.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  if (abs >= 1e12) return `Rp ${grouped(n / 1e12, 2)} trillion`;
+  if (abs >= 1e9) return `Rp ${grouped(n / 1e9, 2)} billion`;
+  if (abs >= 1e6) return `Rp ${grouped(n / 1e6, 1)} million`;
+  return `Rp ${grouped(n)}`;
 }
 
 function round(n: number): string {

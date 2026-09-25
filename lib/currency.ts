@@ -38,23 +38,26 @@ export function isKnownCurrency(code: string): boolean {
  * A rupiah contract runs to ten digits and its last two are noise; a dollar one
  * is quoted to the dollar. Showing 5,920,000.01 in either invites someone to
  * reconcile a rounding artefact against a signed figure.
+ *
+ * **Money is grouped with COMMAS**, `SGD 5,920,000`, the way a search engine, a
+ * bank statement and every spreadsheet write it. It was regrouped to SI for a
+ * while (a narrow space, `SGD 5 920 000`) and on 25 Sep 2026 that was sent
+ * back: a price with gaps in it reads as three numbers, not one. The decimal
+ * marker is still a point, so a comma here can only ever mean thousands. Plain
+ * counts and percentages (`fmtNum` / `fmtPct` in `lib/analysis.ts`) keep SI;
+ * this is money only.
  */
 export function formatMoney(value: number | null | undefined, currency: string): string {
   if (value == null || !Number.isFinite(value)) return '—';
   try {
-    // Formatted through en-GB for the symbol and its placement, then regrouped
-    // to SI — Intl has no locale that pairs a space separator with a decimal
-    // POINT, and this app is locked to the point. See `toSi`.
-    return toSi(
-      new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 0,
-      }).format(value)
-    );
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
   } catch {
     // An unknown code must not take the page down with it.
-    return `${currency} ${toSi(Math.round(value).toLocaleString('en-GB'))}`;
+    return `${currency} ${groupThousands(String(Math.round(value)))}`;
   }
 }
 
@@ -62,20 +65,23 @@ export function formatMoney(value: number | null | undefined, currency: string):
 export function formatMoneyShort(value: number | null | undefined, currency: string): string {
   if (value == null || !Number.isFinite(value)) return '—';
   try {
-    return toSi(
-      new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency,
-        notation: 'compact',
-        maximumFractionDigits: 1,
-      }).format(value)
-    );
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency,
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(value);
   } catch {
-    return `${currency} ${toSi(Math.round(value).toLocaleString('en-GB'))}`;
+    return `${currency} ${groupThousands(String(Math.round(value)))}`;
   }
 }
 
-/* ------------------------------------------------------------- SI grouping */
+/** Commas every three digits of a whole number, `5920000` to `5,920,000`. */
+function groupThousands(whole: string): string {
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/* ------------------------------------------- SI grouping, for counts only */
 
 /**
  * The SI thousands separator: a narrow no-break space, never a comma or a dot.
@@ -112,8 +118,9 @@ export function toSi(formatted: string): string {
  * Thousands separators WHILE the number is being typed.
  *
  * `5000000000` in a box is unreadable — nobody counts ten digits by eye, and
- * the figure printed under it on the same screen already reads US$5 000 000 000.
- * A field that shows one and prints the other is a field people re-check.
+ * the figure printed under it on the same screen already reads US$5,000,000,000.
+ * A field that shows one and prints the other is a field people re-check, so
+ * the box groups with the same commas `formatMoney` prints, four digits included.
  *
  * The decimal part is left exactly as typed — including a lone trailing dot, so
  * `5000.` does not fight the person about to type the cents.
@@ -124,7 +131,7 @@ export function groupAmount(raw: string): string {
   const dot = clean.indexOf('.');
   const whole = dot < 0 ? clean : clean.slice(0, dot);
   const rest = dot < 0 ? '' : clean.slice(dot);
-  return siGroupWhole(whole) + rest;
+  return groupThousands(whole) + rest;
 }
 
 /**
@@ -173,7 +180,7 @@ export function digitsBeforeCaret(text: string, caret: number): number {
 /**
  * Where the caret belongs after regrouping.
  *
- * Counted in DIGITS rather than characters: inserting a space to the left of
+ * Counted in DIGITS rather than characters: inserting a comma to the left of
  * the caret would otherwise push it one place right on every third keystroke,
  * and a ten-digit figure would come out scrambled.
  */

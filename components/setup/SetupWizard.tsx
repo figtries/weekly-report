@@ -436,7 +436,7 @@ export default function SetupWizard({ hasExistingProject }: { hasExistingProject
                             type="text"
                             inputMode="numeric"
                             disabled={useEven}
-                            value={r.unitPrice ? r.unitPrice.toLocaleString('id-ID') : ''}
+                            value={r.unitPrice ? r.unitPrice.toLocaleString('en-GB') : ''}
                             onChange={(e) =>
                               patchRow(i, {
                                 unitPrice: Number(e.target.value.replace(/\D/g, '')) || 0,

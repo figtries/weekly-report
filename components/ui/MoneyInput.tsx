@@ -10,10 +10,10 @@ import {
 } from '@/lib/currency';
 
 /**
- * A box you type money into, grouped the SI way while you type.
+ * A box you type money into, grouped with commas while you type.
  *
  * `5000000000` in a field is unreadable — nobody counts ten digits by eye — and
- * the figure printed a few pixels below it already says US$5 000 000 000. A
+ * the figure printed a few pixels below it already says US$5,000,000,000. A
  * screen that shows the same number two ways is a screen people re-check.
  *
  * **The caret is counted in DIGITS, not characters.** Inserting a separator to
