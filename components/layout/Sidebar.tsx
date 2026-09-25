@@ -16,7 +16,6 @@ import {
   Menu,
   FolderKanban,
   Settings,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -316,16 +315,10 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
             )}
           >
             <div className="flex h-full flex-col">
-              <div className="flex h-14 items-center justify-between border-b px-6">
+              {/* No close button: tapping the dimmed backdrop closes the
+                  drawer, and so does following any link in it. */}
+              <div className="flex h-14 items-center border-b px-6">
                 <Brand compact />
-                <m.button
-                  {...pressMotion}
-                  onClick={() => setOpen(false)}
-                  aria-label="Close menu"
-                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-5 w-5" />
-                </m.button>
               </div>
 
               {switcher}
