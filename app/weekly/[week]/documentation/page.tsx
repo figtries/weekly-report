@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getOpenDb, getWeekMeta } from '@/lib/data';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 
@@ -37,7 +38,12 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
   return (
     <RouteTransition id="weekly-documentation">
       <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
-        <PageHeader section="Weekly Progress" title="Documentation" className="animate-enter">
+        <PageHeader
+          section="Weekly Progress"
+          title="Documentation"
+          className="animate-enter"
+          action={<SectionSwitch week={week} to="data" />}
+        >
           {/* Explicit {' '}: JSX dropped the space before the middot here and
               the line read "Week 36· The photographs". */}
           <span className="font-medium text-foreground">Week {week}</span>{' '}

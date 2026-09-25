@@ -6,7 +6,10 @@ import { SlideTab } from '@/components/motion/SlideTab';
 import { cn } from '@/lib/utils';
 
 /**
- * The weekly section's one navigation bar: Fill in, Check, Report, Weights.
+ * The weekly section's one navigation bar: Fill in, Check, Weights on Data
+ * Overall, and the four report sheets on Weekly Progress. Since 25 Sep 2026
+ * Report is not an entry here; the two sections cross through `SectionSwitch`
+ * beside the page title. The history below is of the earlier four-entry bar.
  *
  * The tab row this replaces was two SEPARATE groups — [Update, Review] and
  * [Summary, Detail, S-Curve, Photos] — and which one you saw depended on which

@@ -3,6 +3,7 @@ import { getOpenWeekRollup } from '@/lib/data';
 import { summariseUnits } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
 import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 
@@ -68,7 +69,12 @@ async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }
     // with both, and a card would travel 32px instead of 16.
     <RouteTransition id="weekly-summary">
       <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
-        <PageHeader section="Weekly Progress" title="Overall Summary" className="animate-enter">
+        <PageHeader
+          section="Weekly Progress"
+          title="Overall Summary"
+          className="animate-enter"
+          action={<SectionSwitch week={week} to="data" />}
+        >
           <span className="font-medium text-foreground">Week {week}</span> · Progress per{' '}
           {basis === 'branch' ? 'section' : 'contract'}.
         </PageHeader>

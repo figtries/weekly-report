@@ -2,6 +2,7 @@ import { getOpenProject } from '@/lib/legacy-bridge';
 import { loadWeightsScreen } from '@/lib/weights-screen';
 import WeightsWorkbench from '@/components/weekly/WeightsWorkbench';
 import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { Reveal } from '@/components/motion/Reveal';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { MOTION } from '@/lib/design';
@@ -29,22 +30,29 @@ export const unstable_instant = {
  * no `wbs_nodes` to price, so the gate says so instead of rendering an empty
  * list that looks like data loss.
  */
-export default function WeightsPage() {
+export default function WeightsPage({ params }: { params: Promise<{ week: string }> }) {
   return (
     <LegacyGate what="prices and weights" planned="schedule">
-      <WeightsPageBody />
+      <WeightsPageBody params={params} />
     </LegacyGate>
   );
 }
 
-async function WeightsPageBody() {
+async function WeightsPageBody({ params }: { params: Promise<{ week: string }> }) {
+  const { week: weekParam } = await params;
+  const week = Number(weekParam);
   const open = await getOpenProject();
   const screen = open ? loadWeightsScreen(open.id) : null;
 
   return (
     <RouteTransition id="weekly-weights">
       <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
-        <PageHeader section="Data Overall" title="Weights" className="mb-0 animate-enter">
+        <PageHeader
+          section="Data Overall"
+          title="Weights"
+          className="mb-0 animate-enter"
+          action={<SectionSwitch week={week} to="report" />}
+        >
           {/* Both promises, said once, at the top, in the words that remove the
               two fears. Nobody arrives with a complete BOQ, and believing you
               need one is what stops a project getting set up at all. And nobody

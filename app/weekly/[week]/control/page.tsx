@@ -5,6 +5,9 @@ import { getOpenDb } from '@/lib/data';
 import WeekChecks from '@/components/weekly/WeekChecks';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
+import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
+import { weekPeriodShort } from '@/lib/weeks';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -78,6 +81,19 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
   return (
     <RouteTransition id="weekly-control">
       <div className="space-y-4 px-3 py-4 sm:p-6 lg:p-8 print:hidden">
+        {/* Here for the Report button more than for the title: Fill in and
+            Weights carry the way to the report beside their headers, and a
+            door that is missing on one of three screens reads as broken. */}
+        <PageHeader
+          section="Data Overall"
+          title="Check"
+          className="mb-4 animate-enter"
+          action={<SectionSwitch week={week} to="report" />}
+        >
+          <span className="font-semibold text-foreground">
+            Week {week} · {weekPeriodShort(db.project.weekAnchorEndDate, week)}
+          </span>
+        </PageHeader>
         <div className="animate-enter">
           <WeekChecks week={week} validation={validation} handTyped={handTyped} />
         </div>

@@ -6,6 +6,7 @@ import OverallMap from '@/components/weekly/OverallMap';
 import { buildOverallMap, type RowFact } from '@/lib/overall-map';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { Reveal } from '@/components/motion/Reveal';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { Card, CardContent } from '@/components/ui/card';
@@ -214,7 +215,12 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
        cutting the header down to its dates bought back most of that height, and
        a summary you have to scroll DOWN to stops being a summary. */}
     <div className="flex flex-col gap-4 px-3 py-4 sm:p-6 lg:p-8">
-      <PageHeader section="Data Overall" title="Update progress" className="mb-0 animate-enter">
+      <PageHeader
+        section="Data Overall"
+        title="Update progress"
+        className="mb-0 animate-enter"
+        action={<SectionSwitch week={week} to="report" />}
+      >
         {/* The dates and nothing else. The sentence that used to follow them
             explained how the screen works, which is a thing you read once and
             then scroll past every week — while the dates are what someone

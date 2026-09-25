@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getOpenDb, getWeekMeta, getOpenSCurveSeries } from '@/lib/data';
 import SCurveClient from '@/components/weekly/SCurveClient';
 import PageHeader from '@/components/layout/PageHeader';
+import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 
@@ -48,7 +49,12 @@ async function SCurvePageBody({ params }: { params: Promise<{ week: string }> })
           flex column with the chart as the only growing child — see
           SCurveClient for why that had to go. */}
       <div className="px-3 py-4 sm:px-6 sm:py-6 lg:px-8 print:hidden">
-        <PageHeader section="Weekly Progress" title="S-Curve" className="mb-4 animate-enter">
+        <PageHeader
+          section="Weekly Progress"
+          title="S-Curve"
+          className="mb-4 animate-enter"
+          action={<SectionSwitch week={week} to="data" />}
+        >
           <span className="font-medium text-foreground">Week {week}</span> · Plan against actual,
           week by week.
         </PageHeader>

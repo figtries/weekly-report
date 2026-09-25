@@ -8,7 +8,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useOptimistic, useTransition } from 'react';
 import { setCurrentWeekAction } from '@/lib/actions';
 import SavePdfButton from '@/components/print/SavePdfButton';
-import SectionTabs from '@/components/layout/SectionTabs';
 import WeekSteps, { type WeekStep } from './WeekSteps';
 import WeekSelect from './WeekSelect';
 
@@ -91,31 +90,38 @@ export default function WeekTabs({
   const onReport = GROUPS.laporan.some((t) => t.key === activeTab);
   const isCurrent = selectedWeek === optimisticCurrent;
 
-  const steps: WeekStep[] = [
-    {
-      key: 'overall',
-      label: 'Fill in',
-      href: `/weekly/${selectedWeek}/overall`,
-      // No badge at zero rather than a "0": an empty week should read as
-      // finished, and a grey nought beside every step is just furniture.
-      badge: dueCount > 0 ? String(dueCount) : undefined,
-      badgeTone: 'todo',
-    },
-    {
-      key: 'control',
-      label: 'Check',
-      href: `/weekly/${selectedWeek}/control`,
-      badge: checkCount > 0 ? String(checkCount) : undefined,
-      badgeTone: 'todo',
-    },
-    // Lands on Summary, and the four sheets appear as a tab row beneath.
-    { key: 'report', label: 'Report', href: `/weekly/${selectedWeek}/summary` },
-    // Not a stage of the week (what an activity is worth is as true in week 4
-    // as in week 40), but it is here all the same: left out on 13 Sep 2026,
-    // nobody could find it.
-    { key: 'weights', label: 'Weights', href: `/weekly/${selectedWeek}/weights` },
-  ];
-  const activeStep = onReport ? 'report' : activeTab;
+  // THE BAR HOLDS THE SECTION YOU ARE IN, AND ONLY THAT (25 Sep 2026). Report
+  // was a fourth tab here beside Fill in, Check and Weights; it is now the
+  // `SectionSwitch` button beside each page title, and on the report the four
+  // sheets are the bar themselves instead of a second row under a "Report" tab.
+  const steps: WeekStep[] = onReport
+    ? GROUPS.laporan.map((t) => ({
+        key: t.key,
+        label: t.short,
+        href: `/weekly/${selectedWeek}/${t.key}`,
+      }))
+    : [
+        {
+          key: 'overall',
+          label: 'Fill in',
+          href: `/weekly/${selectedWeek}/overall`,
+          // No badge at zero rather than a "0": an empty week should read as
+          // finished, and a grey nought beside every step is just furniture.
+          badge: dueCount > 0 ? String(dueCount) : undefined,
+          badgeTone: 'todo',
+        },
+        {
+          key: 'control',
+          label: 'Check',
+          href: `/weekly/${selectedWeek}/control`,
+          badge: checkCount > 0 ? String(checkCount) : undefined,
+          badgeTone: 'todo',
+        },
+        // Not a stage of the week (what an activity is worth is as true in
+        // week 4 as in week 40), but it is here all the same: left out on
+        // 13 Sep 2026, nobody could find it.
+        { key: 'weights', label: 'Weights', href: `/weekly/${selectedWeek}/weights` },
+      ];
 
   // Keep the likeliest next hops warm: this week's sibling tabs and the daily
   // list. `weeks` gets a fresh identity on every server re-render (i.e. after
@@ -190,21 +196,7 @@ export default function WeekTabs({
         )}
       </div>
 
-      <WeekSteps className="mt-3" steps={steps} activeKey={activeStep} />
-
-      {/* The four sheets are siblings, not stages, so they stay a plain tab
-          row — and only while Report is where you are. Showing them
-          permanently put eight destinations on a 390px screen and made
-          "Report" look like a heading rather than somewhere to go. */}
-      {onReport && (
-        <SectionTabs
-          className="mt-2"
-          tabs={GROUPS.laporan.map((t) => ({
-            href: `/weekly/${selectedWeek}/${t.key}`,
-            label: t.short,
-          }))}
-        />
-      )}
+      <WeekSteps className="mt-3" steps={steps} activeKey={activeTab} />
     </div>
   );
 }
