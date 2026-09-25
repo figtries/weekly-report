@@ -1,10 +1,10 @@
 'use client';
 
 import { AnimatePresence, m } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { ArrowLeftRight, Clock, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Clock, TriangleAlert } from 'lucide-react';
 
 import {
   markNoProgressAction,
@@ -12,7 +12,6 @@ import {
   saveWeekUpdatesAction,
   setWorkKindAction,
 } from '@/lib/actions';
-import { updateRowTextAction } from '@/lib/sheet-actions';
 import type { MapNode } from '@/lib/overall-map';
 import type { Milestone } from '@/lib/types';
 import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
@@ -21,7 +20,6 @@ import { MOTION } from '@/lib/design';
 import { Expand } from '@/components/motion/Expand';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
-import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
@@ -331,7 +329,7 @@ function PanelBody({
   const kindLabel =
     BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
-  const [open, setOpen] = useState<'money' | 'schedule' | null>(null);
+  const [open, setOpen] = useState<'schedule' | null>(null);
   // The raw string in the percent box while it has focus. See the input.
   const [typing, setTyping] = useState<string | null>(null);
 
@@ -697,16 +695,9 @@ function PanelBody({
             onOpenWeekChanged={(p) => onSaved(node.id, p)}
           />
 
-          <div className="mt-4 border-t border-border">
-            <Disclosure
-              label="Price and weight"
-              value={fmtMoney(node.price) ?? `${fmt2(node.weight)}%`}
-              open={open === 'money'}
-              onToggle={() => setOpen(open === 'money' ? null : 'money')}
-            >
-              <MoneySection node={node} canEdit={canPrice} />
-            </Disclosure>
+          <PriceWeight node={node} weightsHref={canPrice ? `/weekly/${week}/weights` : null} />
 
+          <div className="mt-4 border-t border-border">
             <Disclosure
               label="Schedule"
               value={
@@ -866,53 +857,45 @@ function Disclosure({
   );
 }
 
-function MoneySection({ node, canEdit }: { node: MapNode; canEdit: boolean }) {
-  const [pending, start] = useTransition();
-  const [value, setValue] = useState(node.price === null || node.price === undefined ? '' : String(node.price));
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const changed = useMemo(
-    () => Number(value || 0) !== Number(node.price ?? 0),
-    [value, node.price]
-  );
-
-  if (!canEdit) {
-    return (
-      <div className="flex justify-between py-1 text-[13px] text-muted-foreground">
-        <span>Weight</span>
-        <span className="tabular-nums text-foreground">{fmt2(node.weight)}%</span>
-      </div>
-    );
-  }
-
+/**
+ * Budget and weight, READ here and changed in Weights. A budget edit is
+ * checked against its heading's pool and moves every weight in it, which the
+ * Weights screen shows and a box in this panel could not, so the panel says
+ * what the figures are and hands the change to the one screen built for it.
+ * Hidden for an imported project, whose Weights screen is gated anyway.
+ */
+function PriceWeight({ node, weightsHref }: { node: MapNode; weightsHref: string | null }) {
+  const money = fmtMoney(node.price);
   return (
-    <div>
-      <MoneyInput
-        defaultValue={value}
-        placeholder="0"
-        disabled={pending}
-        onValueChange={(v) => {
-          setValue(v);
-          setDone(false);
-        }}
-        className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
-      />
-      <m.button
-        {...pressMotion}
-        onClick={() => {
-          setError(null);
-          start(async () => {
-            const res = await updateRowTextAction(node.id, 'price', value);
-            if (!res.ok) setError(res.error);
-            else setDone(true);
-          });
-        }}
-        disabled={pending || !changed}
-        className="btn-primary mt-2 min-h-11 w-full rounded-lg text-sm font-medium disabled:opacity-40"
-      >
-        {done ? 'Saved' : pending ? 'Saving…' : 'Save price'}
-      </m.button>
-      {error && <p className="mt-2 text-[13px] text-bad">{error}</p>}
+    <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] divide-x divide-border">
+        <div className="min-w-0 px-4 py-3">
+          <p className="text-[12px] text-muted-foreground">Budget</p>
+          <p
+            className={cn(
+              'mt-0.5 text-[17px] font-semibold tabular-nums tracking-tight',
+              money ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          >
+            {money ?? 'No budget yet'}
+          </p>
+        </div>
+        <div className="px-4 py-3 text-right">
+          <p className="text-[12px] text-muted-foreground">Weight</p>
+          <p className="mt-0.5 text-[17px] font-semibold tabular-nums tracking-tight text-chart-1">
+            {fmt2(node.weight)}%
+          </p>
+        </div>
+      </div>
+      {weightsHref && (
+        <Link
+          href={weightsHref}
+          className="flex min-h-11 items-center gap-2 border-t border-border bg-muted/40 px-4 text-[13px] font-medium text-chart-1 transition-colors duration-200 ease-ios hover:bg-muted"
+        >
+          <span className="flex-1">Edit in Weights</span>
+          <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </Link>
+      )}
     </div>
   );
 }

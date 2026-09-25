@@ -186,7 +186,9 @@ stored 0. **Nothing changes a budget without being pressed first**: a row's
 figures are a button until pressed, then Save or Cancel (blur saves nothing),
 and a work package's budget opens a dialog that says what the new figure does
 (short or over against its rows, the project budget before and after, and
-whether that passes the contract value) before Save.
+whether that passes the contract value) before Save. And a budget is changed
+on Weights ONLY: since 25 Sep 2026 `ActivityPanel` shows the row's budget and
+weight as a card with an "Edit in Weights" link, and has no money box of its own.
 
 Stored `bobot` follows: `syncDerivedWeights` writes 0 on an unbudgeted leaf
 (a real zero, not a missing figure), a contract value edit re-syncs, and
