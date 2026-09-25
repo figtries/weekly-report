@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, m } from 'framer-motion';
+import { m } from 'framer-motion';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
@@ -16,7 +16,6 @@ import type { MapNode } from '@/lib/overall-map';
 import type { Milestone } from '@/lib/types';
 import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
 import { changeFor } from '@/lib/work-kind-apply';
-import { MOTION } from '@/lib/design';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { cn } from '@/lib/utils';
@@ -148,8 +147,11 @@ export default function ActivityPanel({
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
+  // No AnimatePresence: the sheet opens and closes in the same frame as the
+  // press. The slide-up spring over a blurred map stuttered on every device
+  // it was tried on, iPhone, Android and desktop alike (25 Sep 2026).
   return (
-    <AnimatePresence>{node && (
+    node && (
       <PanelBody
         key={node.id}
         node={node}
@@ -163,7 +165,7 @@ export default function ActivityPanel({
         onClose={onClose}
         onSaved={onSaved}
       />
-    )}</AnimatePresence>
+    )
   );
 }
 
@@ -487,28 +489,18 @@ function PanelBody({
 
   const body = (
     <div className="fixed inset-0 z-50 flex sm:justify-end">
-      <m.div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: MOTION.duration, ease: [...MOTION.ease] }}
-        onClick={onClose}
-      />
+      {/* No blur: a full-screen backdrop-filter is the most expensive thing a
+          phone can be asked to paint, and it was paid on the opening frame. */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      {/* The spring, not the curve: this panel MOVES from somewhere to
-          somewhere. `y`/`x` are transforms, so it runs on the compositor and a
-          phone stays at sixty frames while the map sits behind it. */}
+      {/* Instant, no enter or exit motion. `m.div` stays only for the
+          drag-to-dismiss gesture below, which follows the finger. */}
       <m.div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={name}
         tabIndex={-1}
-        initial={wide ? { x: '100%' } : { y: '100%' }}
-        animate={wide ? { x: 0 } : { y: 0 }}
-        exit={wide ? { x: '100%' } : { y: '100%' }}
-        transition={MOTION.spring}
         drag={wide ? false : 'y'}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.4 }}
