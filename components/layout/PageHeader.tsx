@@ -30,28 +30,25 @@ export default function PageHeader({
   title: string;
   /** The line under the title. Keep it to one sentence. */
   children?: ReactNode;
-  /** Sits right of the title on a wide screen and drops beneath it on a phone. */
+  /** Sits on the title's own line, centred on it, and wraps beneath it only
+   *  when the two do not fit. It used to sit at the foot of the whole block
+   *  (`items-end`), level with the dates rather than the title it belongs to
+   *  (25 Sep 2026). */
   action?: ReactNode;
   className?: string;
 }) {
   return (
-    <header
-      className={cn(
-        'mb-5 sm:mb-6',
-        action && 'flex flex-wrap items-end justify-between gap-x-4 gap-y-3',
-        className
+    <header className={cn('mb-5 sm:mb-6', className)}>
+      {section && (
+        <p className="mb-1 text-xs font-semibold tracking-wide text-chart-1">{section}</p>
       )}
-    >
-      <div className="min-w-0">
-        {section && (
-          <p className="mb-1 text-xs font-semibold tracking-wide text-chart-1">{section}</p>
-        )}
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-        {children && (
-          <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground sm:mt-2">{children}</p>
-        )}
+      <div className={cn(action && 'flex flex-wrap items-center justify-between gap-x-4 gap-y-3')}>
+        <h1 className="min-w-0 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+        {action}
       </div>
-      {action}
+      {children && (
+        <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground sm:mt-2">{children}</p>
+      )}
     </header>
   );
 }
