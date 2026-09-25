@@ -714,15 +714,35 @@ export default function ScheduleSheet({
       if (raw === before) return;
       setError(null);
 
+      /**
+       * The guess goes up HERE, before the transition, never inside it.
+       *
+       * A state update made inside `startTransition(async …)` ahead of its
+       * first await belongs to that action, and React holds it back until the
+       * action has finished. So Enter closed the cell, the cell fell back to
+       * the value it had — "New task" on a row just added — and the typed name
+       * only came back when the server answered, 1.5 to 3 seconds later on the
+       * deployment (25 Sep 2026, "hilang timbul"). `structure` has always put
+       * its guess up outside the transition; this does the same.
+       *
+       * The target date moves nothing, so it is safe to show at once and to
+       * work out "late by" here — the same subtraction the server does on the
+       * next read. Dates are not guessed (see above).
+       */
+      const guess: Partial<SheetRow> | null =
+        field === 'target'
+          ? { targetDate: raw || null, daysLate: lateBy(raw || null, row.finishDate) }
+          : field === 'name'
+            ? { name: raw }
+            : field === 'price'
+              ? { price: raw === '' ? null : Number(raw) }
+              : null;
+      const drop = guess
+        ? overlay((rs) => rs.map((r) => (r.id === resolveId(row.id) ? { ...r, ...guess } : r)))
+        : () => {};
+
       startTransition(async () => {
-        // The target date moves nothing, so it is safe to show immediately and
-        // to work out "late by" here — the same subtraction the server does on
-        // the next read.
         if (field === 'target') {
-          const next = { targetDate: raw || null, daysLate: lateBy(raw || null, row.finishDate) };
-          const drop = overlay((rs) =>
-            rs.map((r) => (r.id === resolveId(row.id) ? { ...r, ...next } : r))
-          );
           // `.catch` and not a bare await: a throw would skip `drop()` and pin
           // the guess to the screen for good.
           const res = await queued(() => updateRowTargetAction(resolveId(row.id), raw)).catch(
@@ -737,7 +757,7 @@ export default function ScheduleSheet({
             });
             return;
           }
-          patch(resolveId(row.id), next);
+          patch(resolveId(row.id), guess!);
         } else if (field === 'name' || field === 'price') {
           /**
            * The typed value is held as an OVERLAY, not written straight into
@@ -751,11 +771,6 @@ export default function ScheduleSheet({
            * the value, and `resolveId` is what sends the rename to the row the
            * database actually made.
            */
-          const next =
-            field === 'name' ? { name: raw } : { price: raw === '' ? null : Number(raw) };
-          const drop = overlay((rs) =>
-            rs.map((r) => (r.id === resolveId(row.id) ? { ...r, ...next } : r))
-          );
           const res = await queued(() =>
             updateRowTextAction(resolveId(row.id), field, raw)
           ).catch(() => ({ ok: false as const, error: 'Something went wrong' }));
@@ -768,7 +783,7 @@ export default function ScheduleSheet({
             );
             return;
           }
-          patch(resolveId(row.id), next);
+          patch(resolveId(row.id), guess!);
         } else {
           const res = await queued(() => updateRowDatesAction(resolveId(row.id), field, raw));
           if (!res.ok) {

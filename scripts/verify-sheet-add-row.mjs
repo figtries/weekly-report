@@ -172,8 +172,29 @@ if (midTyping !== TYPED) failures.push(`typing: the field lost the draft mid-wor
 // one day and that was rejected at once: a row you did not ask for, to delete,
 // for every name you finished.
 const beforeEnter = await rowCount();
+// The closed cell has to show the typed name AT ONCE and on every frame after,
+// not "New task" until the rename answers. It fell back for the whole round
+// trip while the guess was set inside the transition, which React holds until
+// the action ends — 1.5 to 3 seconds of the old name on the deployment
+// ("hilang timbul", 25 Sep 2026). Sampled per frame on the row being typed in,
+// because a fixed wait lands before or after the add's answer by luck.
+await page.evaluate((sel) => {
+  const row = document.activeElement.closest(sel);
+  const seen = new Set();
+  window.__shown = seen;
+  const t0 = performance.now();
+  const tick = () => {
+    if (!row.querySelector('input')) seen.add(row.children[1]?.innerText.trim().split('\n')[0] ?? '');
+    if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}, ROW);
 await page.keyboard.press('Enter');
-await new Promise((r) => setTimeout(r, 500));
+await new Promise((r) => setTimeout(r, 1600));
+const shownAfterEnter = await page.evaluate(() => [...window.__shown]);
+const steady = shownAfterEnter.length === 1 && shownAfterEnter[0] === TYPED;
+say(steady, `shown   after Enter the cell only ever read ${JSON.stringify(shownAfterEnter)}`);
+if (!steady) failures.push(`shown: the name flickered after Enter (${shownAfterEnter.join(' → ')})`);
 const stillTyping = await page.evaluate(() => document.activeElement?.tagName === 'INPUT');
 const afterEnter = await rowCount();
 say(
