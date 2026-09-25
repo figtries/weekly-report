@@ -271,9 +271,18 @@ function LiveLinks({ dests }: { dests: Destination[] }) {
   return <Links dests={dests} pathname={usePathname()} />;
 }
 
+/**
+ * The name is also the way home: pressing the mark or the word goes to the
+ * Dashboard, as a logo does everywhere else on the web (25 Sep 2026).
+ */
 function Brand() {
   return (
-    <div className="flex items-center gap-2">
+    <PressLink
+      href="/"
+      aria-label="Lucille, go to Dashboard"
+      {...pressMotion}
+      className="flex min-h-11 items-center gap-2 rounded-lg"
+    >
       {/* The mark is taller than it is wide (307x512), so it is sized by
           HEIGHT and left to find its own width. Squared off it would have had
           to shrink to fit, and at 32px it read as a speck beside the word.
@@ -284,7 +293,7 @@ function Brand() {
           the gap and the word steps out of the column; re-do that sum. */}
       <Image src="/lucille-mark.png" alt="" width={22} height={36} className="h-9 w-auto" />
       <h1 className="text-lg font-semibold tracking-tight text-foreground">Lucille</h1>
-    </div>
+    </PressLink>
   );
 }
 
@@ -397,8 +406,15 @@ export default function Sidebar({
             renders that <h1>, and both halves sit in the DOM at once. They stay
             OUTSIDE the boundary below, in the static shell, so the bar is never
             briefly empty. */}
-        <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
-        <span className="text-base font-semibold tracking-tight text-foreground">Lucille</span>
+        <PressLink
+          href="/"
+          aria-label="Lucille, go to Dashboard"
+          {...pressMotion}
+          className="flex min-h-11 items-center gap-2.5 rounded-lg"
+        >
+          <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
+          <span className="text-base font-semibold tracking-tight text-foreground">Lucille</span>
+        </PressLink>
         {/* The drawer reads the pathname, which is request data and cannot
             prerender. ONE boundary: the shell may not own a third streamed one,
             which is where the PPR resume segments start colliding with
