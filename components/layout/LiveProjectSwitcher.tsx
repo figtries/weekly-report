@@ -1,6 +1,7 @@
 import { connection } from 'next/server';
 
 import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
+import { getOpenProjectStatus } from '@/lib/data';
 import { listProjects } from '@/lib/projects';
 
 /**
@@ -19,27 +20,24 @@ import { listProjects } from '@/lib/projects';
  * sit behind `<Suspense>` in `app/layout.tsx` — an uncached read in the root
  * layout blocks every route in the app and fails the build on `/_not-found`.
  * The rest of the sidebar still prerenders; only this card streams in.
+ *
+ * The card's progress figures ride in the SAME boundary: they are request data
+ * too (the open project is a cookie, the current week reads the clock), and a
+ * boundary of their own would be one more than the shell may own — see the
+ * note in `Sidebar.tsx`.
  */
 export default async function LiveProjectSwitcher() {
   await connection();
-  const projects = await listProjects();
+  const [projects, status] = await Promise.all([listProjects(), getOpenProjectStatus()]);
   if (projects.length === 0) return null;
 
-  return (
-    <div className="px-4 pt-3">
-      <ProjectSwitcher projects={projects} />
-    </div>
-  );
+  return <ProjectSwitcher projects={projects} status={status} />;
 }
 
 /**
- * Held space, not a spinner: the card is 56px tall and the nav below it must
- * not jump when the name arrives.
+ * Held space, not a spinner: roughly the card's own height, so Settings below
+ * it does not jump when the name arrives.
  */
 export function ProjectSwitcherFallback() {
-  return (
-    <div className="px-4 pt-3">
-      <div className="min-h-14 animate-pulse rounded-xl border bg-muted/40" />
-    </div>
-  );
+  return <div className="min-h-48 animate-pulse rounded-xl border bg-muted/40" />;
 }

@@ -122,7 +122,7 @@ function NavItem({ dest, week, pathname }: { dest: Destination; week: number | n
   );
 }
 
-function NavList({ pathname }: { pathname: string | null }) {
+function Links({ dests, pathname }: { dests: Destination[]; pathname: string | null }) {
   /*
    * Keep links on the week being viewed; when the path holds no week, send
    * them to the INDEX route rather than guess a number.
@@ -183,15 +183,34 @@ function NavList({ pathname }: { pathname: string | null }) {
    */
 
   return (
-    <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-6">
-      <div className="space-y-1">
-        {DESTINATIONS.map((dest) => (
-          <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
-        ))}
-      </div>
+    <>
+      {dests.map((dest) => (
+        <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
+      ))}
+    </>
+  );
+}
 
-      <div className="mt-auto border-t pt-3">
-        <NavItem dest={SETTINGS} week={week} pathname={pathname} />
+/**
+ * The menu's frame. The links arrive as SLOTS rather than being drawn here,
+ * because on the desktop they swap from an unlit list to a lit one after
+ * hydration (see `ActiveLinks`) — and the project card must not swap with
+ * them. A card inside the swapping subtree is remounted on every page load:
+ * its streamed content is thrown away and redrawn a frame later.
+ *
+ * The card sits at the FOOT, above Settings (25 Sep 2026): on a phone that is
+ * under the thumb, and it leaves the destinations as the first thing under the
+ * name. The rule above it runs edge to edge (-mx-3), which is what separates
+ * "where to go" from "what you are looking at".
+ */
+function NavList({ links, settings, card }: { links: ReactNode; settings: ReactNode; card: ReactNode }) {
+  return (
+    <nav className="flex flex-1 flex-col px-3 pb-3 pt-2">
+      <div className="space-y-1">{links}</div>
+
+      <div className="-mx-3 mt-auto border-t px-3 pt-3">
+        {card}
+        <div className="mt-2">{settings}</div>
       </div>
     </nav>
   );
@@ -227,11 +246,11 @@ function NavList({ pathname }: { pathname: string | null }) {
  * boundaries than three. So the pathname is read AFTER mount instead: nothing
  * postpones, no boundary is emitted, the nav ships complete in the shell, and
  * the active link lights up on hydration. Client-side navigation still updates
- * it, because `LiveNavList` keeps the real hook.
+ * it, because `LiveLinks` keeps the real hook.
  *
  * `scripts/verify-hydration.mjs` fails the moment a fourth boundary comes back.
  */
-function ActiveNavList() {
+function ActiveLinks({ dests }: { dests: Destination[] }) {
   // `useSyncExternalStore` rather than a mounted flag in an effect: it takes a
   // server snapshot and a client one directly, so there is no setState during
   // an effect and no extra render pass to get there.
@@ -241,20 +260,20 @@ function ActiveNavList() {
     () => false
   );
   return live ? (
-    <LiveNavList />
+    <LiveLinks dests={dests} />
   ) : (
-    <NavList pathname={null} />
+    <Links dests={dests} pathname={null} />
   );
 }
 
 /** Mounted only after hydration, which is what keeps `usePathname()` off the prerender. */
-function LiveNavList() {
-  return <NavList pathname={usePathname()} />;
+function LiveLinks({ dests }: { dests: Destination[] }) {
+  return <Links dests={dests} pathname={usePathname()} />;
 }
 
-function Brand({ compact }: { compact?: boolean }) {
+function Brand() {
   return (
-    <div className={cn('flex items-center', compact ? 'gap-3' : 'gap-2')}>
+    <div className="flex items-center gap-2">
       {/* The mark is taller than it is wide (307x512), so it is sized by
           HEIGHT and left to find its own width. Squared off it would have had
           to shrink to fit, and at 32px it read as a speck beside the word.
@@ -263,14 +282,8 @@ function Brand({ compact }: { compact?: boolean }) {
           px-3), and the gap is picked so the word lands on the nav LABELS at
           54px — 36px tall is 21.6px wide, + gap-2 = 53.6. Change the height or
           the gap and the word steps out of the column; re-do that sum. */}
-      <Image
-        src="/lucille-mark.png"
-        alt=""
-        width={compact ? 17 : 22}
-        height={compact ? 28 : 36}
-        className={compact ? 'h-7 w-auto' : 'h-9 w-auto'}
-      />
-      <h1 className={cn('font-semibold tracking-tight text-foreground', compact ? 'text-base' : 'text-lg')}>Lucille</h1>
+      <Image src="/lucille-mark.png" alt="" width={22} height={36} className="h-9 w-auto" />
+      <h1 className="text-lg font-semibold tracking-tight text-foreground">Lucille</h1>
     </div>
   );
 }
@@ -301,28 +314,40 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
         <>
           <div
             className={cn(
-              'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 print:hidden',
+              'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden print:hidden',
               open ? 'opacity-100' : 'pointer-events-none opacity-0'
             )}
             onClick={() => setOpen(false)}
           />
 
+          {/* From the RIGHT, the side its button is on (25 Sep 2026). What
+              opens is the desktop sidebar itself — same name row, same menu,
+              same project card at the foot — so a phone and a laptop teach one
+              layout, not two.
+              The shadow is worn ONLY while open: parked off-screen, a 50px
+              blur still reached back into the viewport and drew a grey smear
+              down the edge of every page, desktop included — the portal lands
+              in <body> whatever the header's `lg:hidden` says, which is why
+              both layers carry their own. */}
           <div
             className={cn(
-              'fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-2xl transition-transform duration-300 print:hidden',
+              'fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-card transition-[translate,box-shadow] duration-300 lg:hidden print:hidden',
               'ease-[cubic-bezier(0.32,0.72,0,1)]',
-              open ? 'translate-x-0' : '-translate-x-full'
+              open ? 'translate-x-0 shadow-2xl' : 'translate-x-full shadow-none'
             )}
           >
-            <div className="flex h-full flex-col">
+            <div className="flex h-full flex-col overflow-y-auto">
               {/* No close button: tapping the dimmed backdrop closes the
                   drawer, and so does following any link in it. */}
-              <div className="flex h-14 items-center border-b px-6">
-                <Brand compact />
+              <div className="flex h-16 shrink-0 items-center px-6">
+                <Brand />
               </div>
 
-              {switcher}
-              <NavList pathname={pathname} />
+              <NavList
+                links={<Links dests={DESTINATIONS} pathname={pathname} />}
+                settings={<Links dests={[SETTINGS]} pathname={pathname} />}
+                card={switcher}
+              />
             </div>
           </div>
         </>,
@@ -341,9 +366,9 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
         {...pressMotion}
         onClick={() => setOpen(true)}
         aria-label="Open menu"
-        className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="ml-auto flex size-12 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="size-6" />
       </m.button>
       {overlay}
     </>
@@ -352,7 +377,6 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
 
 export default function Sidebar({
   switcher,
-  openTag,
 }: {
   /**
    * The open project's card, handed down as a NODE rather than as data. It is a
@@ -360,42 +384,43 @@ export default function Sidebar({
    * a server component cannot be imported into a client one — which this is.
    */
   switcher: ReactNode;
-  /**
-   * The open project's initial for the mobile bar — a NODE for the same reason
-   * as `switcher`, and it rides inside the drawer's own `<Suspense>` because
-   * the shell may not own a third streamed boundary. See OpenProjectTag.
-   */
-  openTag: ReactNode;
 }) {
   return (
     <>
-      {/* Mobile / tablet: slim top bar with hamburger */}
-      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur lg:hidden print:hidden">
-        {/* ONE boundary, two children. Both of these are request data and
-            neither can prerender; giving the tag its own `<Suspense>` would be
-            the third in the shell, which is where the PPR resume segments start
-            colliding with React's. The title stays OUTSIDE it, in the static
-            shell, so the bar is never briefly empty. */}
-        <Suspense>
-          <MobileDrawer switcher={switcher} />
-          {openTag}
-        </Suspense>
+      {/* Mobile / tablet: the name on the left, the menu on the right, on a
+          SOLID white bar with a rule under it — the bar is what separates the
+          app's chrome from the page scrolling beneath it (25 Sep 2026). It no
+          longer carries the open project's initial: that lives on the card at
+          the foot of the menu. */}
+      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2.5 border-b bg-card pl-4 pr-2 lg:hidden print:hidden">
         {/* The mark and the name, not <Brand>: the desktop sidebar already
-            renders that <h1>, and both halves sit in the DOM at once. */}
+            renders that <h1>, and both halves sit in the DOM at once. They stay
+            OUTSIDE the boundary below, in the static shell, so the bar is never
+            briefly empty. */}
         <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
         <span className="text-base font-semibold tracking-tight text-foreground">Lucille</span>
+        {/* The drawer reads the pathname, which is request data and cannot
+            prerender. ONE boundary: the shell may not own a third streamed one,
+            which is where the PPR resume segments start colliding with
+            React's. */}
+        <Suspense>
+          <MobileDrawer switcher={switcher} />
+        </Suspense>
       </header>
 
-      {/* Desktop: full sidebar */}
-      <aside className="hidden h-screen w-56 flex-shrink-0 border-r bg-card lg:block print:hidden">
-        <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center border-b px-6">
+      {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
+          card at its foot can print a contract title whole in a few lines. */}
+      <aside className="hidden h-screen w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
+        <div className="flex h-full flex-col overflow-y-auto">
+          <div className="flex h-16 shrink-0 items-center px-6">
             <Brand />
           </div>
 
-          {switcher}
-
-          <ActiveNavList />
+          <NavList
+            links={<ActiveLinks dests={DESTINATIONS} />}
+            settings={<ActiveLinks dests={[SETTINGS]} />}
+            card={switcher}
+          />
         </div>
       </aside>
     </>

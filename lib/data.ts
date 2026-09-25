@@ -215,6 +215,43 @@ export async function getOpenWeekRollup(week: number): Promise<WeekRollup | null
   return db ? getWeekRollup(db, week) : null;
 }
 
+/**
+ * The open project's headline for the sidebar card: its current week, and the
+ * same Plan / Actual / Deviation the Fill in screen prints for that week —
+ * `targetWF`, `curProgressPct` and `variance` off the one rollup, so the card
+ * and the page can never disagree.
+ *
+ * Null when there is nothing honest to show: no project, no week, or a plan
+ * nobody has given a budget yet (every figure would be a 0.00% that reads as
+ * something somebody typed). Reads the clock through `currentWeekOf`, so it
+ * must be called after a request read — `LiveProjectSwitcher` awaits
+ * `connection()` first.
+ */
+export interface OpenProjectStatus {
+  week: number;
+  actual: number;
+  plan: number;
+  variance: number;
+}
+
+export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> {
+  const id = await getActiveProjectId();
+  if (!id) return null;
+  const legacy = isLegacyProject(id);
+  const db = legacy ? await getDb() : buildProjectDashboardData(id)?.db;
+  if (!db || db.weeks.length === 0) return null;
+
+  const week = currentWeekOf(db);
+  // The imported project's rollup is cached against the 'db' tag like every
+  // other read of it; a SQLite project is built fresh, as `getOpenWeekRollup`
+  // does, so a save shows on the next navigation.
+  const rollup = legacy ? await getCachedWeekRollup(week) : getWeekRollup(db, week);
+  if (!rollup || rollup.grandTotal.bobot <= 0) return null;
+
+  const { curProgressPct, targetWF, variance } = rollup.grandTotal;
+  return { week, actual: curProgressPct, plan: targetWF, variance };
+}
+
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
   const id = await getActiveProjectId();
   if (!id || isLegacyProject(id)) return getCachedSCurveSeries(upToWeek);

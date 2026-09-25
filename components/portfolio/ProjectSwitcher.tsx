@@ -1,11 +1,12 @@
 import { ChevronRight } from 'lucide-react';
 import { PressLink, pressMotion } from '@/components/motion/Press';
+import type { OpenProjectStatus } from '@/lib/data';
 import type { ProjectCard } from '@/lib/projects';
 
 /**
- * Which project you are looking at — and the way to the page that manages
- * them. It answers one question all day ("whose numbers are these?") and
- * offers one action: go to Projects.
+ * Which project you are looking at, how far along it is — and the way to the
+ * page that manages them. It answers "whose numbers are these, and are they
+ * behind?" and offers one action: go to Projects.
  *
  * It used to be a native `<select>` laid over this card. On iOS that opens
  * the system picker, which was the point — but on desktop it drops an
@@ -13,64 +14,106 @@ import type { ProjectCard } from '@/lib/projects';
  * rendered as one unwrapped blue bar. There is no CSS for that list; a
  * `<select>` is only ever as good as the platform draws it. So switching
  * moved to Projects, where a project is a row with room for its name, its
- * customer and its numbers — which is a better place to choose from than a
- * 191px strip anyway.
+ * customer and its numbers.
+ *
+ * THE FULL NAME, NOT THE INITIAL (25 Sep 2026). The card used to be one
+ * truncated 150px row, so it showed the three-letter initial instead of a
+ * seventy-character title cut to "RELOKASI 2 …". It now sits at the foot of
+ * the sidebar with room to wrap, so the name is printed whole and the initial
+ * rides above it as a tile.
+ *
+ * The figures are the Fill in screen's own for the current week — Actual in
+ * `chart-1` blue, Plan in `chart-2` red, as on the S-Curve — and the tick on
+ * the bar is where the plan stands. No bar at all when there is no honest
+ * figure (see `getOpenProjectStatus`): an empty bar reads as zero progress.
  *
  * No `'use client'`: nothing here holds state. It renders inside the
  * sidebar, which is already a client component.
  */
-export default function ProjectSwitcher({ projects }: { projects: ProjectCard[] }) {
+const pct = (n: number) =>
+  `${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+
+const clamp = (n: number) => Math.min(100, Math.max(0, n));
+
+export default function ProjectSwitcher({
+  projects,
+  status,
+}: {
+  projects: ProjectCard[];
+  status: OpenProjectStatus | null;
+}) {
   const active = projects.find((p) => p.isActive) ?? projects[0];
   if (!active) return null;
 
   const others = projects.length - 1;
-  // No week number here any more. The list now comes from SQLite, where "which
-  // week is it" is a question about today's date — and this renders in the root
-  // layout, which prerenders into the static shell, so a clock read here would
-  // be frozen at build time and drift further from the truth every day.
-  const subtitle =
-    active.clientName || (active.rowCount > 0 ? `${active.rowCount} rows` : 'Not planned yet');
+  const initial = active.initial || active.name.trim().charAt(0) || '?';
+
+  // The same three words the Deviation card on Fill in uses under its figure.
+  const verdict = !status
+    ? null
+    : status.variance < 0
+      ? `${pct(Math.abs(status.variance))} behind plan`
+      : status.variance > 0
+        ? `${pct(status.variance)} ahead of plan`
+        : 'on plan';
 
   return (
     <PressLink
       href="/projects"
       {...pressMotion}
       aria-label={`${active.name}, go to Projects`}
-      className="flex min-h-14 items-center gap-2.5 rounded-xl border bg-background px-2.5 py-2 shadow-sm transition-colors duration-300 ease-ios hover:border-chart-1/40 hover:bg-muted/40"
+      className="block rounded-xl border bg-card p-3 shadow-sm transition-colors duration-300 ease-ios hover:border-chart-1/40"
     >
-      <span
-        aria-hidden
-        className="grid size-9 shrink-0 place-items-center rounded-lg bg-chart-1/10 text-sm font-semibold uppercase text-chart-1"
-      >
-        {active.name.trim().charAt(0) || '?'}
+      <span className="flex items-center gap-2">
+        <span className="inline-flex h-8 items-center rounded-lg bg-chart-1/10 px-2.5 text-xs font-bold uppercase tracking-wider text-primary">
+          {initial}
+        </span>
+        <span className="flex-1" />
+        {/* When there is somewhere to switch TO, say so — otherwise the card
+            is a signpost pointing at a page with one row on it. */}
+        {others > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            +{others} {others === 1 ? 'project' : 'projects'}
+          </span>
+        )}
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </span>
 
-      <span className="min-w-0 flex-1">
-        {/* The one place the initial REPLACES the name rather than sitting
-            beside it. This line is a single truncated row about 150px wide,
-            and a seventy-character contract title truncated into it reads
-            "RELOKASI 2 …", which identifies nothing. A short name identifies.
-            The full one is still on the `aria-label` above and in the `title`,
-            and it is the heading of the page this card links to.
-
-            `initial`, not `alias`: the three projects made before the column
-            existed have none stored, so this line was showing them the long
-            name it was written to avoid — which is exactly what was reported
-            on 15 Sep 2026. `lib/projects.ts` derives one for display. */}
-        <span
-          title={active.name}
-          className="block truncate text-[13px] font-semibold leading-tight text-foreground"
-        >
-          {active.initial || active.name}
-        </span>
-        <span className="block truncate text-[11px] leading-tight text-muted-foreground">
-          {/* When there is somewhere to switch TO, say so — otherwise the card
-              is a signpost pointing at a page with one row on it. */}
-          {others > 0 ? `${subtitle} · +${others} more` : subtitle}
-        </span>
+      <span className="mt-2.5 block text-[13px] font-semibold leading-snug text-foreground">
+        {active.name}
       </span>
+      {active.clientName && (
+        <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
+          {active.clientName}
+        </span>
+      )}
 
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      {status ? (
+        <>
+          <span className="mt-3 flex items-baseline justify-between gap-2">
+            <span className="text-lg font-bold tabular-nums text-chart-1">{pct(status.actual)}</span>
+            <span className="text-[11px] font-medium tabular-nums text-chart-2">Plan {pct(status.plan)}</span>
+          </span>
+          <span className="relative mt-1.5 block h-1.5 rounded-full bg-muted">
+            <span
+              className="absolute inset-y-0 left-0 rounded-full bg-chart-1"
+              style={{ width: `${clamp(status.actual)}%` }}
+            />
+            <span
+              aria-hidden
+              className="absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded-full bg-chart-2"
+              style={{ left: `${clamp(status.plan)}%` }}
+            />
+          </span>
+          <span className="mt-2 block text-[11px] leading-tight text-muted-foreground">
+            Week {status.week} · {verdict}
+          </span>
+        </>
+      ) : (
+        <span className="mt-2 block text-[11px] leading-tight text-muted-foreground">
+          {active.rowCount > 0 ? 'No progress to show yet' : 'Not planned yet'}
+        </span>
+      )}
     </PressLink>
   );
 }
