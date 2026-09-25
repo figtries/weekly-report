@@ -147,9 +147,10 @@ export default function ActivityPanel({
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
-  // No AnimatePresence: the sheet opens and closes in the same frame as the
-  // press. The slide-up spring over a blurred map stuttered on every device
-  // it was tried on, iPhone, Android and desktop alike (25 Sep 2026).
+  // No AnimatePresence: the sheet closes in the same frame as the press. The
+  // slide-up spring over a blurred map stuttered on every device it was tried
+  // on, iPhone, Android and desktop alike (25 Sep 2026); the opening is now a
+  // CSS keyframe instead, see `.animate-sheet-in`.
   return (
     node && (
       <PanelBody
@@ -406,7 +407,8 @@ function PanelBody({
     // Focus the PANEL, not the close button. Focusing a control draws its ring
     // the moment the sheet opens, which reads as the app pointing at the way
     // out before anyone has looked at what is inside.
-    panelRef.current?.focus();
+    // preventScroll: the sheet is still below the fold on this frame, mid-slide.
+    panelRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
@@ -491,244 +493,246 @@ function PanelBody({
     <div className="fixed inset-0 z-50 flex sm:justify-end">
       {/* No blur: a full-screen backdrop-filter is the most expensive thing a
           phone can be asked to paint, and it was paid on the opening frame. */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="animate-scrim-in absolute inset-0 bg-black/40" onClick={onClose} />
 
-      {/* Instant, no enter or exit motion. `m.div` stays only for the
-          drag-to-dismiss gesture below, which follows the finger. */}
-      <m.div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={name}
-        tabIndex={-1}
-        drag={wide ? false : 'y'}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.4 }}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 600) onClose();
-        }}
-        className={cn(
-          'relative flex w-full flex-col bg-card shadow-2xl outline-none',
-          'mt-auto max-h-[88vh] rounded-t-3xl',
-          'sm:mt-0 sm:h-full sm:max-h-none sm:w-[27rem] sm:rounded-none sm:rounded-l-3xl'
-        )}
-      >
-        {/* The grab handle is the affordance for the drag above it — without
-            one, a sheet that can be flicked away never tells anyone it can. */}
-        <div className="flex justify-center pt-2.5 sm:hidden">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
-
-        <div className="flex items-start gap-3 px-5 pb-3 pt-3 sm:pt-5">
-          <div className="min-w-0 flex-1">
-            {crumb && <p className="truncate text-[11px] text-muted-foreground">{crumb}</p>}
-            <div className="mt-1 flex items-start gap-2">
-              {tag && <CodeChip className="mt-0.5">{tag}</CodeChip>}
-              <h2 className="text-[15px] font-semibold leading-snug text-foreground">{name}</h2>
-            </div>
-            {/* The week only: the span and the weight each have a card of their
-                own at the foot of the panel, and a figure said twice is a
-                figure somebody has to check twice. */}
-            <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">Week {week}</p>
-          </div>
-          <m.button
-            {...pressMotion}
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-            </svg>
-          </m.button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
-          <div className="rounded-2xl bg-muted/40 p-4">
-            {asking ? (
-              <WorkKindPicker
-                node={node}
-                peers={peers}
-                current={answered ? effectiveNode.workKind ?? null : null}
-                onPick={pickKind}
-                onCancel={answered ? () => setPicking(false) : undefined}
-              />
-            ) : (
-              <>
-                {/* The way back in, named with the same word the answer was
-                    given in. It sits above the form because it is what the
-                    form IS, not an action to take on it.
-
-                    A BUTTON THAT SAYS SO. It was the answer and a chevron in
-                    plain text, which read as a heading: nobody pressed it to
-                    change the kind of work, because nothing on it said it
-                    could (23 Sep 2026). Now it is a bordered row, the same
-                    surface as the picker's own Cancel, naming what it holds
-                    and carrying the word "Change".
-
-                    ONLY "CHANGE" IS THE BUTTON. The row used to be the button
-                    and light up as a whole, first grey (the same hover as every
-                    rung under it) and then a blue border, and both read as
-                    "all of this is lit" rather than "this is the action". Now
-                    the row is a plain label and the pill is the one thing that
-                    answers the pointer: faintly tinted at rest so a phone,
-                    which has no hover, still sees a button, and SOLID blue under
-                    the pointer (a deeper tint was measured and read as the same
-                    pill). 44px tall, so a thumb still finds it. */}
-                <div className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] text-muted-foreground">Kind of work</span>
-                    <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
-                  </span>
-                  {/* The exchange arrows, not a chevron: a › reads as "next",
-                      and this goes BACK to the question to swap the answer. */}
-                  <m.button
-                    {...pressMotion}
-                    type="button"
-                    onClick={() => setPicking(true)}
-                    className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
-                  >
-                    <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                    Change
-                  </m.button>
-                </div>
-                <ProgressEntry
-                  node={effectiveNode}
-                  draft={draft}
-                  setDraft={setDraft}
-                  shape={shape}
-                  /* Clearing the raw string matters as much as clearing the flag:
-                     the box may still be holding "42.5" from a moment ago, and
-                     a display that outranks the evidence would keep showing it
-                     over the rung that was just ticked. */
-                  onManualOff={() => {
-                    setManual(false);
-                    setTyping(null);
-                  }}
-                />
-              </>
-            )}
-
-            {/* THE FIGURE IS THE INPUT. It was a read-only number with a pair
-                of buttons above it for swapping to a percent box and back;
-                three controls saying one thing. Typing here is the override:
-                the typed figure wins until somebody touches a rung or the
-                count, and then the evidence takes over again. Nothing is
-                asked, and nothing has to be pressed first. */}
-            <div className="mt-4 flex items-center gap-3 border-t border-border/60 pt-3">
-              <BareStep label="Less" onClick={() => stepPct(-1)}>
-                −
-              </BareStep>
-              {/* NO BOX. The panel's own card is already a rounded surface, so
-                  a bordered field inside it is a box in a box, and it made the
-                  figure look like a widget dropped on the card rather than the
-                  card's own headline. What says "you can change this" instead
-                  is the size and the rule under it: 40px, the largest thing on
-                  the screen, over a line that lights up when the caret lands. */}
-              <div className="group min-w-0 flex-1">
-                <div className="flex items-baseline justify-center gap-1">
-              <input
-                /* TEXT, NEVER `type="number"`. A number input renders its value
-                   through the BROWSER's locale, so "100.0" came back on screen
-                   as "100,0" — a decimal comma, in an app whose every other
-                   figure is written with a point, and a string `Number()`
-                   reads as NaN. A text box shows the string it was given. */
-                ref={pctRef}
-                type="text"
-                inputMode="decimal"
-                aria-label="Percent complete"
-                /* `typing` is what makes a decimal typeable at all: parsing
-                   every keystroke back into the value turns "4." into "4" and
-                   eats the dot before the digit after it can be pressed. The
-                   raw string stands while the box has focus, the parsed figure
-                   is what the draft carries, and blur hands the display back to
-                   whatever the evidence says. */
-                value={shownPct}
-                /* Sized to its own digits rather than to a fixed width, so
-                   "7.5 %" sits in the middle of the card exactly as "100.0 %"
-                   does. A right-aligned box of constant width would put a
-                   short figure visibly off centre. `ch` is the width of a
-                   DIGIT under tabular-nums; a dot is about half that, so a
-                   plain character count over-measures and opens a gap before
-                   the per-cent sign. */
-                style={{
-                  width: `${Math.max(shownPct.length - (shownPct.split('.').length - 1) * 0.55, 1)}ch`,
-                }}
-                onFocus={(e) => e.currentTarget.select()}
-                onBlur={() => setTyping(null)}
-                onChange={(e) => {
-                  // A comma is what an Indonesian phone keyboard puts under the
-                  // decimal key, and it means the same thing here: a percent is
-                  // 0 to 100, so there is no thousands separator for it to be
-                  // confused with. Everything else that is not a digit or a dot
-                  // is dropped rather than rejected.
-                  const cleaned = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
-                  // One dot only. A second one makes `Number()` return NaN, and
-                  // the box would then sit showing "7.42.55" while the draft
-                  // quietly kept the last figure that did parse.
-                  const parts = cleaned.split('.');
-                  const raw =
-                    parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
-                  setTyping(raw);
-                  setManual(true);
-                  const n = Number(raw);
-                  if (raw !== '' && Number.isFinite(n)) {
-                    setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
-                  }
-                }}
-                className="appearance-none border-0 bg-transparent p-0 text-center text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <span className="text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1">
-                    %
-                  </span>
-                </div>
-                <div className="mt-1.5 h-[2px] w-full rounded-full bg-border transition-colors duration-200 ease-ios group-focus-within:bg-chart-1" />
-              </div>
-              <BareStep label="More" onClick={() => stepPct(1)}>
-                +
-              </BareStep>
-            </div>
-          </div>
-
-          <FinishNotice node={node} />
-
-          {/* Keyed on what the SERVER says the row is measured by, not on the
-              optimistic override: the log is re-read when a new way of counting
-              has actually been written, not while the write is still in flight. */}
-          <WeekLog
-            key={`${node.id}:${node.workKind ?? ''}:${node.method ?? ''}`}
-            node={effectiveNode}
-            week={week}
-            projectId={projectId}
-            onFocusHeadline={focusHeadline}
-            onOpenWeekChanged={(p) => onSaved(node.id, p)}
-          />
-
-          <FactTiles
-            node={node}
-            weightsHref={canPrice ? `/weekly/${week}/weights` : null}
-            projectHref={projectHref}
-            currency={currency}
-          />
-
-          {error && (
-            <p className="mt-3 animate-fade-in-up rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">
-              {error}
-            </p>
+      {/* The opening slide lives on this wrapper and the drag on the `m.div`
+          inside it, so the two never write the same transform. */}
+      <div className="animate-sheet-in relative mt-auto flex w-full flex-col sm:mt-0 sm:h-full sm:w-[27rem]">
+        <m.div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={name}
+          tabIndex={-1}
+          drag={wide ? false : 'y'}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.4 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+          }}
+          className={cn(
+            'relative flex w-full flex-col bg-card shadow-2xl outline-none',
+            'max-h-[88vh] rounded-t-3xl',
+            'sm:h-full sm:max-h-none sm:rounded-none sm:rounded-l-3xl'
           )}
-        </div>
-
-        <div className="flex gap-2 border-t border-border bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-          <m.button
-            {...pressMotion}
-            onClick={saveOrConfirm}
-            disabled={saving}
-            className="btn-primary min-h-12 flex-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
-          >
-            {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
-          </m.button>
-        </div>
-      </m.div>
+        >
+          {/* The grab handle is the affordance for the drag above it — without
+              one, a sheet that can be flicked away never tells anyone it can. */}
+          <div className="flex justify-center pt-2.5 sm:hidden">
+            <div className="h-1 w-10 rounded-full bg-border" />
+          </div>
+  
+          <div className="flex items-start gap-3 px-5 pb-3 pt-3 sm:pt-5">
+            <div className="min-w-0 flex-1">
+              {crumb && <p className="truncate text-[11px] text-muted-foreground">{crumb}</p>}
+              <div className="mt-1 flex items-start gap-2">
+                {tag && <CodeChip className="mt-0.5">{tag}</CodeChip>}
+                <h2 className="text-[15px] font-semibold leading-snug text-foreground">{name}</h2>
+              </div>
+              {/* The week only: the span and the weight each have a card of their
+                  own at the foot of the panel, and a figure said twice is a
+                  figure somebody has to check twice. */}
+              <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">Week {week}</p>
+            </div>
+            <m.button
+              {...pressMotion}
+              onClick={onClose}
+              aria-label="Close"
+              className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            </m.button>
+          </div>
+  
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+            <div className="rounded-2xl bg-muted/40 p-4">
+              {asking ? (
+                <WorkKindPicker
+                  node={node}
+                  peers={peers}
+                  current={answered ? effectiveNode.workKind ?? null : null}
+                  onPick={pickKind}
+                  onCancel={answered ? () => setPicking(false) : undefined}
+                />
+              ) : (
+                <>
+                  {/* The way back in, named with the same word the answer was
+                      given in. It sits above the form because it is what the
+                      form IS, not an action to take on it.
+  
+                      A BUTTON THAT SAYS SO. It was the answer and a chevron in
+                      plain text, which read as a heading: nobody pressed it to
+                      change the kind of work, because nothing on it said it
+                      could (23 Sep 2026). Now it is a bordered row, the same
+                      surface as the picker's own Cancel, naming what it holds
+                      and carrying the word "Change".
+  
+                      ONLY "CHANGE" IS THE BUTTON. The row used to be the button
+                      and light up as a whole, first grey (the same hover as every
+                      rung under it) and then a blue border, and both read as
+                      "all of this is lit" rather than "this is the action". Now
+                      the row is a plain label and the pill is the one thing that
+                      answers the pointer: faintly tinted at rest so a phone,
+                      which has no hover, still sees a button, and SOLID blue under
+                      the pointer (a deeper tint was measured and read as the same
+                      pill). 44px tall, so a thumb still finds it. */}
+                  <div className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-muted-foreground">Kind of work</span>
+                      <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
+                    </span>
+                    {/* The exchange arrows, not a chevron: a › reads as "next",
+                        and this goes BACK to the question to swap the answer. */}
+                    <m.button
+                      {...pressMotion}
+                      type="button"
+                      onClick={() => setPicking(true)}
+                      className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                    >
+                      <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      Change
+                    </m.button>
+                  </div>
+                  <ProgressEntry
+                    node={effectiveNode}
+                    draft={draft}
+                    setDraft={setDraft}
+                    shape={shape}
+                    /* Clearing the raw string matters as much as clearing the flag:
+                       the box may still be holding "42.5" from a moment ago, and
+                       a display that outranks the evidence would keep showing it
+                       over the rung that was just ticked. */
+                    onManualOff={() => {
+                      setManual(false);
+                      setTyping(null);
+                    }}
+                  />
+                </>
+              )}
+  
+              {/* THE FIGURE IS THE INPUT. It was a read-only number with a pair
+                  of buttons above it for swapping to a percent box and back;
+                  three controls saying one thing. Typing here is the override:
+                  the typed figure wins until somebody touches a rung or the
+                  count, and then the evidence takes over again. Nothing is
+                  asked, and nothing has to be pressed first. */}
+              <div className="mt-4 flex items-center gap-3 border-t border-border/60 pt-3">
+                <BareStep label="Less" onClick={() => stepPct(-1)}>
+                  −
+                </BareStep>
+                {/* NO BOX. The panel's own card is already a rounded surface, so
+                    a bordered field inside it is a box in a box, and it made the
+                    figure look like a widget dropped on the card rather than the
+                    card's own headline. What says "you can change this" instead
+                    is the size and the rule under it: 40px, the largest thing on
+                    the screen, over a line that lights up when the caret lands. */}
+                <div className="group min-w-0 flex-1">
+                  <div className="flex items-baseline justify-center gap-1">
+                <input
+                  /* TEXT, NEVER `type="number"`. A number input renders its value
+                     through the BROWSER's locale, so "100.0" came back on screen
+                     as "100,0" — a decimal comma, in an app whose every other
+                     figure is written with a point, and a string `Number()`
+                     reads as NaN. A text box shows the string it was given. */
+                  ref={pctRef}
+                  type="text"
+                  inputMode="decimal"
+                  aria-label="Percent complete"
+                  /* `typing` is what makes a decimal typeable at all: parsing
+                     every keystroke back into the value turns "4." into "4" and
+                     eats the dot before the digit after it can be pressed. The
+                     raw string stands while the box has focus, the parsed figure
+                     is what the draft carries, and blur hands the display back to
+                     whatever the evidence says. */
+                  value={shownPct}
+                  /* Sized to its own digits rather than to a fixed width, so
+                     "7.5 %" sits in the middle of the card exactly as "100.0 %"
+                     does. A right-aligned box of constant width would put a
+                     short figure visibly off centre. `ch` is the width of a
+                     DIGIT under tabular-nums; a dot is about half that, so a
+                     plain character count over-measures and opens a gap before
+                     the per-cent sign. */
+                  style={{
+                    width: `${Math.max(shownPct.length - (shownPct.split('.').length - 1) * 0.55, 1)}ch`,
+                  }}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onBlur={() => setTyping(null)}
+                  onChange={(e) => {
+                    // A comma is what an Indonesian phone keyboard puts under the
+                    // decimal key, and it means the same thing here: a percent is
+                    // 0 to 100, so there is no thousands separator for it to be
+                    // confused with. Everything else that is not a digit or a dot
+                    // is dropped rather than rejected.
+                    const cleaned = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                    // One dot only. A second one makes `Number()` return NaN, and
+                    // the box would then sit showing "7.42.55" while the draft
+                    // quietly kept the last figure that did parse.
+                    const parts = cleaned.split('.');
+                    const raw =
+                      parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+                    setTyping(raw);
+                    setManual(true);
+                    const n = Number(raw);
+                    if (raw !== '' && Number.isFinite(n)) {
+                      setDraft((d) => ({ ...d, pct: clampPct(round2(n)) }));
+                    }
+                  }}
+                  className="appearance-none border-0 bg-transparent p-0 text-center text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span className="text-[40px] font-semibold leading-tight tabular-nums tracking-tight text-chart-1">
+                      %
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-[2px] w-full rounded-full bg-border transition-colors duration-200 ease-ios group-focus-within:bg-chart-1" />
+                </div>
+                <BareStep label="More" onClick={() => stepPct(1)}>
+                  +
+                </BareStep>
+              </div>
+            </div>
+  
+            <FinishNotice node={node} />
+  
+            {/* Keyed on what the SERVER says the row is measured by, not on the
+                optimistic override: the log is re-read when a new way of counting
+                has actually been written, not while the write is still in flight. */}
+            <WeekLog
+              key={`${node.id}:${node.workKind ?? ''}:${node.method ?? ''}`}
+              node={effectiveNode}
+              week={week}
+              projectId={projectId}
+              onFocusHeadline={focusHeadline}
+              onOpenWeekChanged={(p) => onSaved(node.id, p)}
+            />
+  
+            <FactTiles
+              node={node}
+              weightsHref={canPrice ? `/weekly/${week}/weights` : null}
+              projectHref={projectHref}
+              currency={currency}
+            />
+  
+            {error && (
+              <p className="mt-3 animate-fade-in-up rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">
+                {error}
+              </p>
+            )}
+          </div>
+  
+          <div className="flex gap-2 border-t border-border bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+            <m.button
+              {...pressMotion}
+              onClick={saveOrConfirm}
+              disabled={saving}
+              className="btn-primary min-h-12 flex-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
+            >
+              {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
+            </m.button>
+          </div>
+        </m.div>
+      </div>
     </div>
   );
 
