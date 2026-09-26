@@ -5,7 +5,7 @@ import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import PlanActualBar from '@/components/ui/PlanActualBar';
 import { fmtNum, fmtPct } from '@/lib/analysis';
 import { apportion } from '@/lib/figures';
-import { TYPE, signed, verdictChip, verdictOf, verdictText } from '@/lib/design';
+import { TYPE, signed, verdictChip, verdictOf, type Verdict } from '@/lib/design';
 import type { Contribution, Mover } from '@/lib/analysis';
 import type { SummaryRow } from '@/lib/rollup';
 import type { SCurveRow } from '@/lib/scurve';
@@ -125,25 +125,12 @@ export function UnitBreakdown({
           <li key={r.id} className="flex flex-1 flex-col justify-center">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2.5">
-                {chip &&
-                  (chip.length <= 3 ? (
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-muted-foreground">
-                      {chip}
-                    </span>
-                  ) : (
-                    <CodeChip>{chip}</CodeChip>
-                  ))}
+                {chip && <RowBadge code={chip} />}
                 <p className={cn('truncate', TYPE.row)}>{name}</p>
               </div>
-              <span
-                className={cn(
-                  'shrink-0 rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums whitespace-nowrap',
-                  verdictChip[verdict],
-                  verdict === 'neutral' && 'text-foreground'
-                )}
-              >
+              <VerdictPill verdict={verdict}>
                 {done ? 'Done' : dev === 0 ? 'On plan' : signed(dev, fmtNum(dev, 2))}
-              </span>
+              </VerdictPill>
             </div>
             <PlanActualBar actual={actual} plan={plan} className="mt-2 w-full flex-none" />
             <MeasureCaption actual={actual} plan={plan} right={`${fmtPct(share)} of the project`} />
@@ -151,6 +138,31 @@ export function UnitBreakdown({
         );
       })}
     </ul>
+  );
+}
+
+/** A row's code: a soft round badge when it is short enough to fit one. */
+function RowBadge({ code }: { code: string }) {
+  if (code.length > 3) return <CodeChip>{code}</CodeChip>;
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-muted-foreground">
+      {code}
+    </span>
+  );
+}
+
+/** A row's verdict figure, on a ground tinted in its own colour. */
+function VerdictPill({ verdict, children }: { verdict: Verdict; children: ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums whitespace-nowrap',
+        verdictChip[verdict],
+        verdict === 'neutral' && 'text-foreground'
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -169,20 +181,19 @@ export function ContributionList({ rows, limit = 3 }: { rows: Contribution[]; li
     return <p className="text-sm text-muted-foreground">Every item is exactly on plan.</p>;
   }
 
+  // Same face as By section: no rules between rows, air instead (26 Sep 2026).
   return (
-    <ul className="divide-y">
+    <ul className="flex flex-col gap-5">
       {rows.slice(0, limit).map((c) => (
-        <li key={c.id} className="py-3 first:pt-0 last:pb-0">
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <CodeChip>{c.wbsCode}</CodeChip>
+        <li key={c.id}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <RowBadge code={c.wbsCode} />
               <p className={cn('truncate', TYPE.row)}>{c.deskripsi}</p>
             </div>
-            <span
-              className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText[c.share < 0 ? 'behind' : 'ahead'])}
-            >
+            <VerdictPill verdict={c.share < 0 ? 'behind' : 'ahead'}>
               {signed(c.share, fmtNum(c.share, 2))}
-            </span>
+            </VerdictPill>
           </div>
           <PlanActualBar actual={c.actualPct} plan={c.planPct} className="mt-2 w-full flex-none" />
           <MeasureCaption actual={c.actualPct} plan={c.planPct} />
