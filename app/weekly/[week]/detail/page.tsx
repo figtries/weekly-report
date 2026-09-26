@@ -21,12 +21,23 @@ export const unstable_instant = {
  * The gate is asked PER REQUEST, and the answer is never prerendered — a
  * project's name baked into this page's static HTML was served from the CDN to
  * whoever opened a different one. See components/projects/LegacyGate.tsx.
+ *
+ * THE TRANSITION WRAPS THE GATE, NOT THE BODY, as it does on the dashboard.
+ * Inside the gate, the boundary only mounted when the streamed body arrived,
+ * so that arrival ran a SECOND view transition after the route's own: the
+ * screen froze for the snapshot, then the skeleton's picture was laid over the
+ * page and faded out for 250ms, right across the Set-as-current button and the
+ * progress card while they played their entrances (27 Sep 2026, arriving from
+ * the dashboard's "All items"). Mounted with the route, the body's arrival is
+ * an update this boundary does not animate, and the entrances run clean.
  */
 export default function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports" planned>
-      <DetailProgressPageBody params={params} />
-    </LegacyGate>
+    <RouteTransition id="weekly-detail">
+      <LegacyGate what="weekly reports" planned>
+        <DetailProgressPageBody params={params} />
+      </LegacyGate>
+    </RouteTransition>
   );
 }
 
@@ -53,25 +64,23 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
   ).length;
 
   return (
-    <RouteTransition id="weekly-detail">
-      <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
-        <PageHeader
-          section="Weekly Progress"
-          title="Detail Progress"
-          className="animate-enter"
-          action={<SectionSwitch week={week} to="data" />}
-        >
-          <span className="font-medium text-foreground">Week {week}</span> · {leafCount} activities.{' '}
-          <span className="hidden sm:inline">The numbers are edited in </span>
-          <span className="sm:hidden">Edit in </span>
-          <span className="font-semibold text-foreground">Fill in</span>.
-        </PageHeader>
-        {/* One step behind the header, and no further: this tree can render
-            every leaf at once, so nothing inside it is staggered per row. */}
-        <div className="animate-enter stagger-1">
-          <WbsTreeVisual roots={roots} weightsLocked={weightsLocked} />
-        </div>
+    <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
+      <PageHeader
+        section="Weekly Progress"
+        title="Detail Progress"
+        className="animate-enter"
+        action={<SectionSwitch week={week} to="data" />}
+      >
+        <span className="font-medium text-foreground">Week {week}</span> · {leafCount} activities.{' '}
+        <span className="hidden sm:inline">The numbers are edited in </span>
+        <span className="sm:hidden">Edit in </span>
+        <span className="font-semibold text-foreground">Fill in</span>.
+      </PageHeader>
+      {/* One step behind the header, and no further: this tree can render
+          every leaf at once, so nothing inside it is staggered per row. */}
+      <div className="animate-enter stagger-1">
+        <WbsTreeVisual roots={roots} weightsLocked={weightsLocked} />
       </div>
-    </RouteTransition>
+    </div>
   );
 }
