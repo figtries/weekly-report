@@ -5,6 +5,7 @@ import { Reveal } from '@/components/motion/Reveal';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { MOTION, TYPE, verdictChip, type Verdict } from '@/lib/design';
+import { apportion, r2, shownDiff } from '@/lib/figures';
 import { cn } from '@/lib/utils';
 
 /**
@@ -104,7 +105,16 @@ export default function SummaryCards({
   roots: SummaryRow[];
   grandTotal: GrandTotal;
 }) {
-  const gtStatus = statusOf(grandTotal.curProgressPct, grandTotal.variance);
+  // ONE SCALE, AND FIGURES THAT SUBTRACT (26 Sep 2026). Plan is a share of the
+  // total weight like actual — this sheet printed raw `targetWF` and `variance`
+  // and read "51.09% of plan 24.76%, deviation +11.40" — and every difference
+  // is taken between the figures as printed (lib/figures.ts).
+  const gtActual = r2(grandTotal.curProgressPct);
+  const gtPlan = r2(grandTotal.planPct);
+  const gtStatus = statusOf(gtActual, grandTotal.deviationPct);
+  const covered = Math.abs(roots.reduce((s, r) => s + r.bobot, 0) - grandTotal.bobot) < 1e-6;
+  const rawShares = roots.map((r) => (grandTotal.bobot > 0 ? (r.bobot / grandTotal.bobot) * 100 : 0));
+  const shares = apportion(rawShares, covered ? 100 : rawShares.reduce((s, v) => s + v, 0));
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -117,12 +127,12 @@ export default function SummaryCards({
                 <p className={TYPE.statLabel}>Overall project progress</p>
                 <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className={cn('text-4xl font-semibold tracking-tight sm:text-5xl', FIG.actual)}>
-                    <AnimatedNumber value={grandTotal.curProgressPct} suffix="%" />
+                    <AnimatedNumber value={gtActual} suffix="%" />
                   </span>
                   <span className="text-sm text-muted-foreground">
                     of plan{' '}
                     <span className={cn('font-semibold tabular-nums', FIG.plan)}>
-                      {grandTotal.targetWF.toFixed(2)}%
+                      {gtPlan.toFixed(2)}%
                     </span>
                   </span>
                 </div>
@@ -130,13 +140,13 @@ export default function SummaryCards({
               <StatusBadge status={gtStatus} />
             </div>
 
-            <PlanBar actual={grandTotal.curProgressPct} plan={grandTotal.targetWF} />
+            <PlanBar actual={gtActual} plan={gtPlan} />
 
             <FigureRow
-              actual={grandTotal.curProgressPct}
-              plan={grandTotal.targetWF}
+              actual={gtActual}
+              plan={gtPlan}
               thisWeek={grandTotal.thisWeekProgressPct}
-              deviation={grandTotal.variance}
+              deviation={grandTotal.deviationPct}
             />
           </CardContent>
         </Card>
@@ -145,9 +155,13 @@ export default function SummaryCards({
       {/* ---- One card per SPK contract ---- */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-2">
         {roots.map((item, idx) => {
-          // Per-contract target in the contract's own progress terms (WF ÷ weight)
-          const targetPct = item.bobot > 0 ? (item.targetWF / item.bobot) * 100 : 0;
-          const status = statusOf(item.curProgressPct, item.variance);
+          // Every figure on the card in the contract's own terms (WF ÷ weight),
+          // so the row subtracts: its deviation used to be project points, and
+          // Engineering read "50.00%, plan 0.00%, deviation +7.35".
+          const actualPct = r2(item.curProgressPct);
+          const targetPct = r2(item.bobot > 0 ? (item.targetWF / item.bobot) * 100 : 0);
+          const deviation = shownDiff(actualPct, targetPct);
+          const status = statusOf(actualPct, deviation);
           return (
             <Reveal key={item.id} delay={MOTION.stagger * (idx + 1)} className="h-full">
               <Card className="h-full py-0 transition-shadow duration-300 ease-ios hover:shadow-md">
@@ -159,7 +173,7 @@ export default function SummaryCards({
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Weight{' '}
-                        <span className="font-semibold tabular-nums">{item.bobot.toFixed(2)}%</span>{' '}
+                        <span className="font-semibold tabular-nums">{shares[idx].toFixed(2)}%</span>{' '}
                         of project
                       </p>
                     </div>
@@ -170,17 +184,17 @@ export default function SummaryCards({
                     <span
                       className={cn('text-2xl font-semibold tracking-tight sm:text-3xl', FIG.actual)}
                     >
-                      <AnimatedNumber value={item.curProgressPct} suffix="%" />
+                      <AnimatedNumber value={actualPct} suffix="%" />
                     </span>
                   </div>
 
-                  <PlanBar actual={item.curProgressPct} plan={targetPct} />
+                  <PlanBar actual={actualPct} plan={targetPct} />
 
                   <FigureRow
-                    actual={item.curProgressPct}
+                    actual={actualPct}
                     plan={targetPct}
-                    thisWeek={item.thisWeekProgressPct}
-                    deviation={item.variance}
+                    thisWeek={shownDiff(item.curProgressPct, item.prevProgressPct)}
+                    deviation={deviation}
                   />
                 </CardContent>
               </Card>

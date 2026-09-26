@@ -171,6 +171,8 @@ remainder, anywhere, including a plan with no budgets at all. It was read as a
 figure somebody had typed ("= IDR 11 253" under five empty boxes), and the
 consequence is the user's by decision: the total reads what the budgets reach,
 and the strip at the top NAMES every activity with no budget, one press away.
+Since 26 Sep 2026 that total is also a GATE: no progress figure is shown
+anywhere until it closes (see "No figure until the weights close" below).
 **The cap is refused, in both directions, inside a heading**, by
 `checkBudgetEdit`: a budget may not take more than its heading has left, and a
 heading may not be lowered below what already draws on it. The project level
@@ -371,6 +373,51 @@ by excluding `overall`; adding Panel Kendali under that rule pointed the PDF
 button at `?only=control`, which renders no sheet — and `lib/pdf.ts` waits for
 `.print-sheet-a4`, so the request hangs rather than failing. Set the flag
 deliberately.
+
+# No figure until the weights close, and every figure adds up
+
+Decided 26 Sep 2026 from a card-by-card breakdown of the dashboard against
+week 36 of the deployed project, whose weights totalled 70.79%. The same week
+read 51.09 / 34.98 / +16.11 on the dashboard and 51.09 / 24.76 / 11.40 on Data
+Overall, because `computeGrandTotal` gave ACTUAL as a share of the total weight
+and PLAN and VARIANCE as raw weight points. Spec:
+`docs/superpowers/specs/2026-09-26-dashboard-truth-design.md`. Proof:
+`scripts/verify-dashboard-figures.ts`.
+
+**The weight gate** (`lib/weight-gate.ts`): figures appear only when leaf
+weights total 100 (±0.01, the `validateWeek` tolerance) AND no non-milestone
+leaf weighs 0 — a finished activity with no budget counts for nothing, so a
+total can close and still be wrong. Until then the dashboard, Summary, Detail,
+S-Curve, Data Overall's four figures, the weekly PDF (one "figures held" sheet,
+never an empty page), the sidebar card and the Save PDF button all hold back.
+FILLING IN IS NEVER GATED: site facts are recorded regardless and every figure
+appears from them once the weights close. Check carries the same rule as an
+error. No exemption for a locked BOQ: Gundih, the only one, is being removed.
+
+**One scale.** Read `GrandTotal.planPct` / `deviationPct`, never `targetWF` /
+`variance`, for anything a person sees; section and item shares are divided by
+the total weight too. The S-curve's plan point is `planPct`.
+
+**A figure you can recompute on screen must recompute** (`lib/figures.ts`).
+Differences are taken between ROUNDED figures (`shownDiff`): deviation, SPI,
+added this week, lead change, look-ahead gaps. Parts explaining a printed total
+are apportioned by largest remainder (`apportion`): By section, the items in
+"Why the project sits here" (both ways: what holds it back when behind, what
+carries the lead when ahead), Work spread, What moved. Detail prints one
+decimal, so it subtracts at one decimal. People check this app with a
+calculator; 40.71 − 34.44 printed as 6.26 read as a bug.
+
+**Money beside a percentage is priced against the project budget**
+(`ProjectInfo.projectBudget`), the denominator of every weight, not the typed
+contract value.
+
+**Plan is a bar, not a tick** (`components/ui/PlanActualBar.tsx`, `PlanBar`,
+`OverallMap` `Bar`, `WeekLog`). Blue actual over a thin red plan bar on one
+scale. The tick at a 0% plan sat on the bar's start and read as a stray mark.
+
+**The dashboard tells the week.** Work spread carries a Week N block (added vs
+plan added, lead change, what moved with before → after) and "+N this week" on
+its key; the block stretches to the card's foot so the row shares both edges.
 
 # Progress has one origin
 

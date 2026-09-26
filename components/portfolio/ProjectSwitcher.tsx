@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { PressLink, pressMotion } from '@/components/motion/Press';
+import PlanActualBar from '@/components/ui/PlanActualBar';
 import type { OpenProjectStatus } from '@/lib/data';
 import type { ProjectCard } from '@/lib/projects';
 
@@ -23,8 +24,8 @@ import type { ProjectCard } from '@/lib/projects';
  * rides above it as a tile.
  *
  * The figures are the Fill in screen's own for the current week — Actual in
- * `chart-1` blue, Plan in `chart-2` red, as on the S-Curve — and the tick on
- * the bar is where the plan stands. No bar at all when there is no honest
+ * `chart-1` blue, Plan in `chart-2` red, as on the S-Curve — and under them the
+ * two bars, blue over red, on one scale. No bar at all when there is no honest
  * figure (see `getOpenProjectStatus`): an empty bar reads as zero progress.
  *
  * No `'use client'`: nothing here holds state. It renders inside the
@@ -33,7 +34,6 @@ import type { ProjectCard } from '@/lib/projects';
 const pct = (n: number) =>
   `${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
-const clamp = (n: number) => Math.min(100, Math.max(0, n));
 
 export default function ProjectSwitcher({
   projects,
@@ -88,22 +88,27 @@ export default function ProjectSwitcher({
         </span>
       )}
 
-      {status ? (
+      {status && !status.ready ? (
+        // The weights do not close, so no screen shows a figure — this card
+        // included. It says what is missing instead. See lib/weight-gate.ts.
+        <>
+          <span className="mt-3 block text-[13px] font-semibold tabular-nums text-warn">
+            Weights {pct(status.weightsTotal)} of 100%
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
+            Figures wait for the weights
+          </span>
+        </>
+      ) : status ? (
         <>
           <span className="mt-3 flex items-baseline justify-between gap-2">
             <span className="text-lg font-bold tabular-nums text-chart-1">{pct(status.actual)}</span>
             <span className="text-[11px] font-medium tabular-nums text-chart-2">Plan {pct(status.plan)}</span>
           </span>
-          <span className="relative mt-1.5 block h-1.5 rounded-full bg-muted">
-            <span
-              className="absolute inset-y-0 left-0 rounded-full bg-chart-1"
-              style={{ width: `${clamp(status.actual)}%` }}
-            />
-            <span
-              aria-hidden
-              className="absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded-full bg-chart-2"
-              style={{ left: `${clamp(status.plan)}%` }}
-            />
+          {/* Actual over plan as two bars, the app's one way of drawing the
+              pair (components/ui/PlanActualBar.tsx). */}
+          <span className="mt-1.5 flex">
+            <PlanActualBar actual={status.actual} plan={status.plan} size="sm" />
           </span>
           <span className="mt-2 block text-[11px] leading-tight text-muted-foreground">
             Week {status.week} · {verdict}

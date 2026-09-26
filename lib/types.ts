@@ -39,6 +39,11 @@ export interface WbsItem {
    */
   isReportingUnit?: boolean;
   unitLabel?: string | null;
+  /**
+   * The planner's milestone flag. The weight gate reads it: a milestone is the
+   * one leaf allowed to weigh nothing. Absent on the db.json path.
+   */
+  isMilestone?: boolean;
 }
 
 export interface LeafSnapshot {
@@ -164,6 +169,13 @@ export interface ProjectInfo {
    * which is the only language the layers above PM actually read.
    */
   contractValue?: number;
+  /**
+   * What every weight is a share of: the budgets drawing straight on the
+   * project, added up (`WeightResult.projectBudget`). Money printed beside a
+   * percentage is priced against this, not against `contractValue`, which is
+   * only compared with it. Absent on the db.json path.
+   */
+  projectBudget?: number;
   /**
    * True where this project's weights are its own STATEMENT rather than a
    * figure derived from its prices — `weight_basis = 'boq'`.

@@ -6,6 +6,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
+import { weightGateView } from '@/components/weekly/WeightGateView';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -56,6 +57,10 @@ export default function SummaryPage({ params }: { params: Promise<{ week: string
 async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekParam } = await params;
   const week = Number(weekParam);
+
+  // No figure until the weights close — see lib/weight-gate.ts.
+  const held = await weightGateView(week);
+  if (held) return held;
 
   const result = await getOpenWeekRollup(week);
   if (!result) notFound();

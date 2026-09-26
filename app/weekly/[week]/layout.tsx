@@ -1,5 +1,6 @@
 import { getDb, getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { validateWeek } from '@/lib/analysis';
+import { weightGate } from '@/lib/weight-gate';
 import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -61,6 +62,7 @@ async function WeeklyTabsFor({ week }: { week: number }) {
 
   return (
     <WeekTabs
+      figuresReady={weightGate(db.wbsItems).ok}
       weeks={weeks}
       selectedWeek={week}
       projectCurrentWeek={currentWeekOf(db)}

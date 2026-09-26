@@ -7,6 +7,9 @@ import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
 import WeeklyPrintDetail from '@/components/print/WeeklyPrintDetail';
 import WeeklyPrintSCurve from '@/components/print/WeeklyPrintSCurve';
 import WeeklyPrintDocumentation from '@/components/print/WeeklyPrintDocumentation';
+import PrintHeader from '@/components/print/PrintHeader';
+import { weekPeriodLabel } from '@/lib/weeks';
+import { weightGate } from '@/lib/weight-gate';
 
 // The page headless Chromium renders into the weekly PDF (see lib/pdf.ts).
 // `?only=` narrows it to one report; without it you get the whole weekly pack.
@@ -48,7 +51,14 @@ async function WeeklyPrintBody({ params, searchParams }: Props) {
   if (!result) notFound();
   const { meta, roots, grandTotal } = result;
 
-  const show = (key: ReportKey) => !only || only === key;
+  // NO FIGURE UNTIL THE WEIGHTS CLOSE (lib/weight-gate.ts). The app hides the
+  // Save button on those tabs, but this page answers any request that reaches
+  // it, so it holds the figures back itself — with one sheet saying why, never
+  // an empty page: lib/pdf.ts waits for a .print-sheet-a4 and would hang.
+  const gate = weightGate(db.wbsItems);
+  const figures = gate.ok;
+  const show = (key: ReportKey) => (!only || only === key) && (figures || key === 'documentation');
+  const held = !figures && (!only || only !== 'documentation');
 
   return (
     <div className="bg-gray-100 min-h-full overflow-x-auto print:overflow-visible">
@@ -66,6 +76,24 @@ async function WeeklyPrintBody({ params, searchParams }: Props) {
         {show('detail') && <WeeklyPrintDetail project={db.project} meta={meta} roots={roots} />}
         {show('scurve') && (
           <WeeklyPrintSCurve project={db.project} meta={meta} series={buildSCurveSeries(db, week)} />
+        )}
+        {held && (
+          <div className="print-sheet-a4">
+            <PrintHeader
+              title={`Weekly Report No. ${meta.week}`}
+              subtitle={db.project.name}
+              period={weekPeriodLabel(db.project.weekAnchorEndDate, meta.week)}
+            />
+            <h2 className="rpt-section">Progress figures held</h2>
+            <p>
+              The weights add up to {gate.total.toFixed(2)}%
+              {gate.unbudgeted.length > 0
+                ? `, and ${gate.unbudgeted.length} ${gate.unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`
+                : ''}
+              . Progress figures are issued once every activity has a budget and the weights total
+              100%.
+            </p>
+          </div>
         )}
         {show('documentation') && <WeeklyPrintDocumentation project={db.project} meta={meta} />}
       </div>

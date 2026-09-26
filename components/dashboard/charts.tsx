@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
-import { fmtPct } from '@/lib/analysis';
+import PlanActualBar from '@/components/ui/PlanActualBar';
+import { fmtNum, fmtPct } from '@/lib/analysis';
+import { apportion } from '@/lib/figures';
 import { TYPE, signed, verdictOf, verdictText } from '@/lib/design';
-import type { Laggard } from '@/lib/analysis';
+import type { Contribution, Mover } from '@/lib/analysis';
 import type { SummaryRow } from '@/lib/rollup';
 import type { SCurveRow } from '@/lib/scurve';
 
@@ -44,92 +47,88 @@ export function MeasureLegend({ className }: { className?: string }) {
 }
 
 /**
- * The shape every "actual against plan" row on this page shares: a filled bar
- * for what was reached, and a tick for where it was meant to be.
+ * The caption under every actual-over-plan bar: the two numbers the two bars
+ * draw, each in its bar's colour, so which bar is which never has to be guessed.
  */
-function MeasureBar({
-  actual,
-  plan,
-  showPlan = true,
-  height = 'h-2',
-}: {
-  actual: number;
-  plan: number;
-  showPlan?: boolean;
-  height?: string;
-}) {
+function MeasureCaption({ actual, plan, right }: { actual: number; plan: number; right?: string }) {
   return (
-    <div className={cn('relative min-w-0 flex-1 overflow-hidden rounded-full bg-muted', height)}>
-      <div className="h-full animate-bar-grow rounded-full bg-chart-1" style={{ width: `${clamp(actual)}%` }} />
-      {/* Clamped short of the end: the track is overflow-hidden, so a tick at
-          exactly 100% is clipped away entirely. Hidden once complete, where it
-          would read as a notch cut out of a full bar rather than as a mark. */}
-      {showPlan && (
-        <div
-          className="absolute inset-y-0 w-[3px] rounded-full bg-chart-2"
-          style={{ left: `${Math.min(99.2, clamp(plan))}%` }}
-          aria-hidden
-        />
-      )}
-    </div>
+    <p className={cn('mt-1.5 flex items-baseline justify-between gap-3 whitespace-nowrap', TYPE.meta)}>
+      <span>
+        <span className="font-medium text-blue-600">{fmtPct(actual)} done</span>
+        {' · '}
+        <span className="font-medium text-red-600">plan {fmtPct(plan)}</span>
+      </span>
+      {right && <span>{right}</span>}
+    </p>
   );
 }
 
 /* ---------------------------------------------------------------- per unit */
 
 /**
- * One row per contract, actual against plan.
+ * One row per contract or section, actual against plan.
  *
  * This is the chart that answers "which contract is dragging" — the question
- * the overall percentage cannot answer. On the Gundih data the total reads
- * comfortably ahead while the 47.65%-weight contract underneath it is behind,
- * and only a per-unit breakdown shows that.
+ * the overall percentage cannot answer.
+ *
+ * EVERY FIGURE HERE ADDS UP TO ONE PRINTED ELSEWHERE (26 Sep 2026). The shares
+ * add to 100 and the verdict figures add to the deviation in the hero, because
+ * both are apportioned (lib/figures.ts) rather than rounded one by one — and
+ * both are shares of the TOTAL weight, the same scale as the hero. They used to
+ * be raw weight points, which on a 70.79-weight plan summed to 70.79 and 11.40
+ * under a hero saying 100 and 16.11. Where the rows do not cover every weighted
+ * item (a plan that marked only some units) the parts are left to add up to
+ * themselves instead of being forced onto a total they do not explain.
  */
-export function UnitBreakdown({ rows, limit }: { rows: SummaryRow[]; limit?: number }) {
-  if (rows.length < 2) return null;
-  // A plan with four contracts prints all four; a plan whose breakdown is its
-  // own top level can have thirty, and thirty rows is the Overall Summary
-  // screen, not a dashboard card. The card header says how many there are and
-  // links to the rest — the same admission the laggards card above it makes.
-  const shown = limit ? rows.slice(0, limit) : rows;
+export function UnitBreakdown({
+  rows,
+  limit,
+  totalBobot,
+  deviationPct,
+}: {
+  rows: SummaryRow[];
+  limit?: number;
+  /** Every weighted leaf's weight, added up. */
+  totalBobot: number;
+  /** The hero's deviation, as printed. */
+  deviationPct: number;
+}) {
+  if (rows.length < 2 || totalBobot <= 0) return null;
+  const covered = Math.abs(rows.reduce((s, r) => s + r.bobot, 0) - totalBobot) < 1e-6;
+  const rawShare = rows.map((r) => (r.bobot / totalBobot) * 100);
+  const rawDev = rows.map((r) => (r.variance / totalBobot) * 100);
+  const shares = apportion(rawShare, covered ? 100 : rawShare.reduce((s, v) => s + v, 0));
+  const devs = apportion(rawDev, covered ? deviationPct : rawDev.reduce((s, v) => s + v, 0));
+  const shown = (limit ? rows.slice(0, limit) : rows).map((r, i) => ({ r, share: shares[i], dev: devs[i] }));
 
   return (
-    <ul className="divide-y">
-      {shown.map((r) => {
+    <ul className="flex h-full flex-col divide-y">
+      {shown.map(({ r, share, dev }) => {
         const actual = r.bobot > 0 ? (r.curWF / r.bobot) * 100 : 0;
         const plan = r.bobot > 0 ? (r.targetWF / r.bobot) * 100 : 0;
         // A finished contract has nothing to be ahead or behind of, and "+0.00%"
         // reads as a measurement rather than as done.
         const done = actual >= 99.995;
-        const verdict = done ? 'done' : verdictOf(r.variance);
+        const verdict = done ? 'done' : verdictOf(dev);
         // Strip the "(SPK-###)" tag out of the label and show it as its own
         // chip. A unit or a section carries no tag in its name, so it hands
-        // over its WBS code instead — the chip is what makes two rows starting
-        // "Procurement Material…" tell themselves apart at 390px.
+        // over its WBS code instead.
         const { tag, name } = splitCode(r.deskripsi);
         const chip = tag ?? r.code;
 
         return (
-          <li key={r.id} className="py-3 first:pt-0 last:pb-0">
+          <li key={r.id} className="flex flex-1 flex-col justify-center py-3 first:pt-0 last:pb-0">
             <div className="flex items-baseline justify-between gap-3">
-              {/* The weight sits on its own line rather than beside the name: at
-                  390px it stole enough room to truncate every contract down to
-                  "Pekerjaan Relok…", which is the same name three times over. */}
               <div className="flex min-w-0 items-baseline gap-2">
                 {chip && <CodeChip>{chip}</CodeChip>}
                 <p className={cn('truncate', TYPE.row)}>{name}</p>
               </div>
               <span className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText[verdict])}>
-                {done ? 'Done' : signed(r.variance, fmtPct(r.variance))}
+                {done ? 'Done' : dev === 0 ? 'On plan' : signed(dev, fmtNum(dev, 2))}
               </span>
             </div>
-
-            <div className="mt-2 flex items-center gap-3">
-              <MeasureBar actual={actual} plan={plan} showPlan={!done} />
-              <span className={cn(FIGURE_COL, TYPE.meta)}>{fmtPct(actual)}</span>
-            </div>
-
-            <p className={cn('mt-1.5', TYPE.meta)}>{fmtPct(r.bobot)} of the project</p>
+            <PlanActualBar actual={actual} plan={plan} className="mt-2 w-full flex-none" />
+            <MeasureCaption actual={actual} plan={plan} right={`${fmtPct(share)} of the project`} />
           </li>
         );
       })}
@@ -137,42 +136,38 @@ export function UnitBreakdown({ rows, limit }: { rows: SummaryRow[]; limit?: num
   );
 }
 
-/* ------------------------------------------------------------------- drags */
+/* ------------------------------------------------------------ why it sits */
 
 /**
- * The handful of leaves holding the project back, largest first.
+ * The items that explain the deviation, largest first — both ways.
  *
- * Fill is what the item has reached, the tick is where it should be. A bar
- * sized by variance instead read as "nearly done" on precisely the worst
- * offender.
+ * Behind: what holds the number back. Ahead: what carries the lead. It used to
+ * list laggards only, so a project with nothing behind printed its one finished
+ * item at "−0.00%" (a floating-point crumb) and called it the reason. Figures
+ * are shares of the deviation apportioned to add up to it as printed.
  */
-export function DragList({ rows, limit = 3 }: { rows: Laggard[]; limit?: number }) {
+export function ContributionList({ rows, limit = 3 }: { rows: Contribution[]; limit?: number }) {
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nothing is lagging.</p>;
+    return <p className="text-sm text-muted-foreground">Every item is exactly on plan.</p>;
   }
 
   return (
     <ul className="divide-y">
-      {rows.slice(0, limit).map((l) => (
-        <li key={l.id} className="py-3 first:pt-0 last:pb-0">
+      {rows.slice(0, limit).map((c) => (
+        <li key={c.id} className="py-3 first:pt-0 last:pb-0">
           <div className="flex items-baseline justify-between gap-3">
             <div className="flex min-w-0 items-baseline gap-2">
-              <CodeChip>{l.wbsCode}</CodeChip>
-              <p className={cn('truncate', TYPE.row)}>{l.deskripsi}</p>
+              <CodeChip>{c.wbsCode}</CodeChip>
+              <p className={cn('truncate', TYPE.row)}>{c.deskripsi}</p>
             </div>
-            <span className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText.behind)}>
-              {fmtPct(l.varianceWF)}
+            <span
+              className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText[c.share < 0 ? 'behind' : 'ahead'])}
+            >
+              {signed(c.share, fmtNum(c.share, 2))}
             </span>
           </div>
-          <div className="mt-2 flex items-center gap-3">
-            <MeasureBar actual={l.actualPct} plan={l.planPct} />
-            {/* Reached over planned, in one column rather than two lines: the
-                slash is what makes the pair readable at 390px, where the old
-                8.5rem "0.00% of 100.00%" left the bar barely wider than a thumb. */}
-            <span className={cn('w-[7.5rem] shrink-0 text-right', TYPE.meta)}>
-              {fmtPct(l.actualPct)} / {fmtPct(l.planPct)}
-            </span>
-          </div>
+          <PlanActualBar actual={c.actualPct} plan={c.planPct} className="mt-2 w-full flex-none" />
+          <MeasureCaption actual={c.actualPct} plan={c.planPct} />
         </li>
       ))}
     </ul>
@@ -253,30 +248,42 @@ export interface LeafSpread {
  * how much of the project is actually stalled. No red anywhere: this is a
  * picture of state, and there is no baseline here to be behind of.
  */
-export function ProgressSpread({ spread }: { spread: LeafSpread }) {
+export function ProgressSpread({
+  spread,
+  arrived,
+}: {
+  spread: LeafSpread;
+  /** How many items entered each state this week. Only arrivals are said. */
+  arrived?: { done: number; running: number; notStarted: number };
+}) {
   const total = spread.notStartedWeight + spread.runningWeight + spread.doneWeight || 1;
+  // Apportioned so the three shares print as exactly 100.00 between them.
+  const [doneShare, runningShare, notStartedShare] = apportion(
+    [spread.doneWeight, spread.runningWeight, spread.notStartedWeight].map((w) => (w / total) * 100),
+    100
+  );
   const seg = [
-    { key: 'done', label: 'Done', w: spread.doneWeight, n: spread.done, cls: 'bg-chart-3' },
+    { key: 'done', label: 'Done', share: doneShare, n: spread.done, cls: 'bg-chart-3', in: arrived?.done ?? 0 },
     {
       key: 'running',
       label: 'Running',
-      w: spread.runningWeight,
+      share: runningShare,
       n: spread.running,
       cls: 'bg-chart-1',
+      in: arrived?.running ?? 0,
     },
     {
       key: 'notStarted',
       label: 'Not started',
-      w: spread.notStartedWeight,
+      share: notStartedShare,
       n: spread.notStarted,
       cls: 'bg-chart-5/45',
+      in: arrived?.notStarted ?? 0,
     },
   ];
 
   return (
-    // Full height so the key spreads down a card that has been stretched to
-    // match its neighbour, rather than floating in the middle of it.
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       {/* The sweep goes on the CONTAINER, not on each segment. These are flex
           siblings with a 2px gap: scaling them individually would pull the gaps
           open mid-animation and the row would read as several bars racing each
@@ -286,40 +293,32 @@ export function ProgressSpread({ spread }: { spread: LeafSpread }) {
           <div
             key={s.key}
             className={cn('first:rounded-l-full last:rounded-r-full', s.cls)}
-            style={{ width: `${(s.w / total) * 100}%` }}
-            title={`${s.label}: ${fmtPct((s.w / total) * 100)}`}
+            style={{ width: `${s.share}%` }}
+            title={`${s.label}: ${fmtPct(s.share)}`}
           />
         ))}
       </div>
-      {/* Two fixed columns rather than one right-aligned run: with the weight
-          and the count in the same span, "65.02% 107 items" and "7.21% 28
-          items" put their percent signs in different places on adjacent rows. */}
-      {/* Rows keep their own height rather than stretching to fill a card that
-          has been matched to a taller neighbour: three legend rows pulled to
-          160px apiece read as a gap, not as spacing. */}
-      {/* THE ROW WRAPS, and the label carries a floor. This card is one of
-          three `lg` columns, so at 1024 it comes out 234px wide — and a label
-          with `flex-1` (basis 0) collapses rather than forcing a wrap, so "Not
-          started" was squeezed into 27px and spilled straight across "24.43%".
-          `min-w-24` gives the label a real base width, which is what makes the
-          line overflow and pushes the item count down to a second line;
-          `ml-auto` keeps it right-aligned there. Above ~272px of card all three
-          still sit on one line exactly as before. */}
+      {/* THE ROW WRAPS, and the label carries a floor: at 1024 this card is
+          234px wide, and a label with flex-1 (basis 0) collapsed rather than
+          forcing a wrap. min-w-24 is what pushes the count onto a second line. */}
       <ul className="mt-4 flex flex-col divide-y">
         {seg.map((s) => (
           <li
             key={s.key}
             className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2.5 text-sm first:pt-0 last:pb-0"
           >
-            <span className="flex min-w-24 flex-1 items-center gap-2 text-muted-foreground">
+            <span className="flex min-w-24 flex-1 flex-wrap items-center gap-2 text-muted-foreground">
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', s.cls)} />
               {s.label}
+              {s.in > 0 && (
+                <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-ok">
+                  +{s.in} this week
+                </span>
+              )}
             </span>
-            <span className={cn(FIGURE_COL, 'font-semibold')}>
-              {fmtPct((s.w / total) * 100)}
-            </span>
+            <span className={cn(FIGURE_COL, 'font-semibold')}>{fmtPct(s.share)}</span>
             <span className={cn('ml-auto w-16 shrink-0 text-right', TYPE.meta)}>
-              {s.n} items
+              {s.n} {s.n === 1 ? 'item' : 'items'}
             </span>
           </li>
         ))}
@@ -328,9 +327,228 @@ export function ProgressSpread({ spread }: { spread: LeafSpread }) {
   );
 }
 
+/* --------------------------------------------------------------- the week */
+
+/**
+ * WHAT THE WEEK DID, in the room Work spread left over (26 Sep 2026).
+ *
+ * The hero is cumulative, so nothing on this page used to say what happened in
+ * the week being looked at: week 36 added 10.38% — one item, Engineering by
+ * Solar, 0% to 100% — and the page never said so. Three figures, then the
+ * items. Every figure is a difference between figures printed elsewhere on the
+ * page, so they check: added − plan added = lead change, and What moved adds up
+ * to added (lib/figures.ts).
+ */
+export function WeekStory({
+  week,
+  addedPct,
+  planAddedPct,
+  prevDeviationPct,
+  deviationPct,
+  deviationChange,
+  movers,
+  moreHref,
+}: {
+  week: number;
+  addedPct: number;
+  planAddedPct: number;
+  prevDeviationPct: number;
+  deviationPct: number;
+  deviationChange: number;
+  movers: Mover[];
+  moreHref: string;
+}) {
+  const scale = Math.max(Math.abs(addedPct), Math.abs(planAddedPct), 0.01);
+  const leadScale = Math.max(Math.abs(prevDeviationPct), Math.abs(deviationPct), 0.01);
+  // "+9.84" means opposite things on the two sides of zero, so the label says
+  // which side this week ended on.
+  const leadLabel = deviationPct >= 0 ? 'Lead over plan' : 'Gap to plan';
+  const shown = movers.slice(0, 3);
+  const more = movers.length - shown.length;
+  const wentBack = (m: Mover) => m.share < 0 || m.curPct < m.prevPct;
+  const anyBack = movers.some(wentBack);
+
+  return (
+    <div className="flex h-full flex-col rounded-xl border bg-muted/40 p-3.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Week {week}
+      </p>
+      <div className="mt-2.5 grid grid-cols-2 gap-4">
+        <div className="min-w-0">
+          <p className={TYPE.statLabel}>Added this week</p>
+          <p className={cn('mt-0.5 text-chart-1', TYPE.figure)}>{signed(addedPct, fmtPct(addedPct))}</p>
+          <div className="mt-2 flex flex-col gap-[3px]" aria-hidden>
+            <div className="h-[5px] rounded-full bg-muted">
+              <div className="h-full rounded-full bg-chart-1" style={{ width: `${pctOf(addedPct, scale)}%` }} />
+            </div>
+            <div className="h-[5px] rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-chart-2"
+                style={{ width: `${pctOf(planAddedPct, scale)}%` }}
+              />
+            </div>
+          </div>
+          <p className={cn('mt-1.5 whitespace-nowrap', TYPE.meta)}>
+            <span className="font-medium text-red-600">
+              plan {signed(planAddedPct, fmtPct(planAddedPct))}
+            </span>
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className={TYPE.statLabel}>{leadLabel}</p>
+          <p
+            className={cn(
+              'mt-0.5',
+              TYPE.figure,
+              deviationChange > 0 ? 'text-ok' : deviationChange < 0 ? 'text-bad' : ''
+            )}
+          >
+            {signed(deviationChange, fmtNum(deviationChange, 2))}
+          </p>
+          <div className="mt-2 flex flex-col gap-[3px]" aria-hidden>
+            <div className="h-[5px] rounded-full bg-muted">
+              <div
+                className={cn('h-full rounded-full', deviationPct >= 0 ? 'bg-ok' : 'bg-bad')}
+                style={{ width: `${pctOf(deviationPct, leadScale)}%` }}
+              />
+            </div>
+            <div className="h-[5px] rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-chart-5/60"
+                style={{ width: `${pctOf(prevDeviationPct, leadScale)}%` }}
+              />
+            </div>
+          </div>
+          <p className={cn('mt-1.5 whitespace-nowrap', TYPE.meta)}>
+            {fmtPct(prevDeviationPct)} → {fmtPct(deviationPct)}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        What moved
+      </p>
+      {shown.length === 0 ? (
+        <p className="mt-1.5 text-sm text-muted-foreground">Nothing moved in week {week}.</p>
+      ) : (
+        <ul className="mt-1.5 flex flex-col gap-1.5">
+          {shown.map((m) => (
+            <li key={m.id} className="rounded-lg border bg-card px-3 py-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className={cn('min-w-0 truncate', TYPE.row)}>{m.deskripsi}</p>
+                <span
+                  className={cn(
+                    'shrink-0 text-sm font-semibold tabular-nums',
+                    wentBack(m) ? 'text-bad' : 'text-chart-1'
+                  )}
+                >
+                  {signed(m.share, fmtNum(m.share, 2))}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={TYPE.meta}>
+                  {stateOf(m.prevPct)} → {stateOf(m.curPct)} · {fmtPct(m.prevPct, 0)} → {fmtPct(m.curPct, 0)}
+                </span>
+                {m.milestones.length > 0 && (
+                  <span className="rounded-full bg-meta-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-meta">
+                    {m.milestones.join(' · ')}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(more > 0 || !anyBack) && (
+        <p className={cn('mt-auto pt-2', TYPE.meta)}>
+          {more > 0 ? (
+            <a href={moreHref} className="font-medium text-chart-1 hover:underline">
+              {more} more moved this week
+            </a>
+          ) : (
+            'Nothing went backwards'
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A label centred under a mark, held inside the track at both ends. */
+function TrackLabel({ at, className, children }: { at: number; className?: string; children: ReactNode }) {
+  if (at >= 94) return <span className={cn('absolute right-0', className)}>{children}</span>;
+  return (
+    <span className={cn('absolute -translate-x-1/2', className)} style={{ left: `${Math.max(at, 6)}%` }}>
+      {children}
+    </span>
+  );
+}
+
+function stateOf(pct: number) {
+  return pct >= 99.995 ? 'Done' : pct > 0 ? 'Running' : 'Not started';
+}
+
+function pctOf(v: number, scale: number) {
+  return Math.max(0, Math.min(100, (Math.abs(v) / scale) * 100));
+}
+
+/* ---------------------------------------------------------------- forecast */
+
+/**
+ * Week 1, now, the forecast and the contract end on one track, so "Week 55 ·
+ * 17 weeks earlier" is a distance you can see and not only a sum.
+ */
+export function ForecastTrack({
+  week,
+  forecastWeek,
+  lastWeek,
+}: {
+  week: number;
+  forecastWeek: number;
+  lastWeek: number;
+}) {
+  const end = Math.max(lastWeek, forecastWeek, week, 2);
+  const at = (w: number) => Math.max(0, Math.min(100, ((w - 1) / (end - 1)) * 100));
+  const now = at(week);
+  const fc = at(forecastWeek);
+  const endAt = at(lastWeek);
+  const late = forecastWeek > lastWeek + 0.5;
+  return (
+    <div aria-hidden>
+      <div className="relative h-2 rounded-full bg-muted">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-chart-1" style={{ width: `${now}%` }} />
+        <div
+          className="absolute inset-y-0 bg-[repeating-linear-gradient(90deg,color-mix(in_oklab,var(--chart-1)_35%,transparent)_0_6px,transparent_6px_10px)]"
+          style={{ left: `${now}%`, width: `${Math.max(0, fc - now)}%` }}
+        />
+        <span
+          className={cn('absolute -top-1 h-4 w-1 -translate-x-1/2 rounded-full', late ? 'bg-bad' : 'bg-ok')}
+          style={{ left: `${fc}%` }}
+        />
+        <span
+          className="absolute -top-1 h-4 w-1 -translate-x-1/2 rounded-full bg-muted-foreground"
+          style={{ left: `${endAt}%` }}
+        />
+      </div>
+      {/* Each label sits under its own mark. The contract's end is only the
+          track's end when the forecast lands inside the contract; a late one
+          stretches the track past it, and "72" pinned to the right edge sat
+          on top of "165" (26 Sep 2026). */}
+      <div className={cn('relative mt-2 h-4 whitespace-nowrap', TYPE.meta)}>
+        <span className="absolute left-0">Week 1</span>
+        {now > 16 && Math.abs(now - fc) > 14 && Math.abs(now - endAt) > 14 && (
+          <span className="absolute -translate-x-1/2" style={{ left: `${now}%` }}>
+            Now · {week}
+          </span>
+        )}
+        <TrackLabel at={fc} className={cn('font-semibold', late ? 'text-bad' : 'text-ok')}>
+          {Math.round(forecastWeek)}
+        </TrackLabel>
+        {Math.abs(fc - endAt) > 8 && <TrackLabel at={endAt}>{lastWeek}</TrackLabel>}
+      </div>
+    </div>
+  );
+}
+
 // CodeChip moved to components/ui/CodeChip.tsx — Detail Progress shows the
 // same tag in the same place, and a contract has to look like itself on both.
-
-function clamp(n: number) {
-  return Math.max(0, Math.min(100, n));
-}

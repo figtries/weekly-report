@@ -10,6 +10,8 @@ import { weekOfDate } from './weeks';
 import { buildWorklist } from './worklist';
 import type { Database } from './types';
 import { toSi } from './currency';
+import { apportion, r2, shownDiff } from './figures';
+import { weightGate } from './weight-gate';
 
 /**
  * The reading layer.
@@ -26,12 +28,32 @@ const VELOCITY_WINDOW = 4;
 export interface ProjectHealth {
   week: number;
   lastWeek: number;
+  /**
+   * Every percentage here is ROUNDED to what the screen prints, and every
+   * difference is taken between rounded figures, so anybody checking the
+   * dashboard with a calculator gets the dashboard's answer. See lib/figures.ts.
+   */
   planPct: number;
   actualPct: number;
   /** Negative = behind schedule. */
   deviationPct: number;
   /** actual / plan. Below 1.00 is behind. */
   spi: number;
+  /** The same three figures for the week before, or zeros before week 1. */
+  prevActualPct: number;
+  prevPlanPct: number;
+  prevDeviationPct: number;
+  /** actual − last week's actual. */
+  addedPct: number;
+  /** plan − last week's plan. */
+  planAddedPct: number;
+  /** deviation − last week's deviation; always addedPct − planAddedPct. */
+  deviationChange: number;
+  /**
+   * What money beside a percentage is priced against: the project budget, the
+   * denominator of every weight. Falls back to the typed contract value only
+   * where no budget exists (the db.json path).
+   */
   contractValue: number | null;
   earnedValue: number | null;
   plannedValue: number | null;
@@ -71,15 +93,20 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
   if (!gt) return null;
 
   const lastWeek = db.weeks.length ? Math.max(...db.weeks.map((w) => w.week)) : week;
-  const planPct = gt.bobot > 0 ? (gt.targetWF / gt.bobot) * 100 : 0;
-  const actualPct = gt.curProgressPct;
+  const planPct = r2(gt.planPct);
+  const actualPct = r2(gt.curProgressPct);
+  const deviationPct = shownDiff(actualPct, planPct);
+  const prev = totalAt(week - 1);
+  const prevActualPct = prev ? r2(prev.curProgressPct) : 0;
+  const prevPlanPct = prev ? r2(prev.planPct) : 0;
+  const prevDeviationPct = shownDiff(prevActualPct, prevPlanPct);
 
   // Velocity from the actual line, not from this week alone — one strong or
   // idle week shouldn't swing the forecast by months.
   const backWeek = Math.max(1, week - VELOCITY_WINDOW);
   const back = totalAt(backWeek);
   const span = week - backWeek;
-  const velocityPerWeek = back && span > 0 ? (actualPct - back.curProgressPct) / span : 0;
+  const velocityPerWeek = back && span > 0 ? shownDiff(actualPct, back.curProgressPct) / span : 0;
 
   const weeksLeftOnContract = Math.max(0, lastWeek - week);
   const requiredVelocity = weeksLeftOnContract > 0 ? (100 - actualPct) / weeksLeftOnContract : 0;
@@ -91,7 +118,7 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
     forecastFinishWeek = week;
   }
 
-  const contractValue = db.project.contractValue ?? null;
+  const contractValue = db.project.projectBudget ?? db.project.contractValue ?? null;
   const earnedValue = contractValue !== null ? (contractValue * actualPct) / 100 : null;
   const plannedValue = contractValue !== null ? (contractValue * planPct) / 100 : null;
 
@@ -100,13 +127,20 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
     lastWeek,
     planPct,
     actualPct,
-    deviationPct: actualPct - planPct,
+    deviationPct,
     spi: planPct > 0 ? actualPct / planPct : 1,
+    prevActualPct,
+    prevPlanPct,
+    prevDeviationPct,
+    addedPct: shownDiff(actualPct, prevActualPct),
+    planAddedPct: shownDiff(planPct, prevPlanPct),
+    deviationChange: shownDiff(deviationPct, prevDeviationPct),
     contractValue,
     earnedValue,
     plannedValue,
-    scheduleVarianceRp:
-      plannedValue !== null && earnedValue !== null ? plannedValue - earnedValue : null,
+    // From the deviation AS PRINTED, so "16.11% ahead" and the money beside it
+    // are the same statement.
+    scheduleVarianceRp: contractValue !== null ? (-contractValue * deviationPct) / 100 : null,
     velocityPerWeek,
     requiredVelocity,
     forecastFinishWeek,
@@ -142,8 +176,14 @@ export function findLaggards(
   contractValue: number | null,
   limit = 8
 ): Laggard[] {
-  return flattenTree(roots)
-    .filter((n) => n.isLeaf && n.bobot > 0 && n.variance < 0)
+  const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const total = leaves.reduce((s, n) => s + n.bobot, 0);
+  // A share of the total weight, like every other percentage, and only when it
+  // prints as something: "PO Material Solar −0.00%, 100% / 100%" was a finished
+  // item ranked as a laggard over a 1e-15 left by floating point.
+  const shareOf = (n: RollupNode) => (total > 0 ? (n.variance / total) * 100 : 0);
+  return leaves
+    .filter((n) => shareOf(n) <= -0.005)
     .sort((a, b) => a.variance - b.variance)
     .slice(0, limit)
     .map((n) => ({
@@ -153,9 +193,94 @@ export function findLaggards(
       bobot: n.bobot,
       planPct: n.bobot > 0 ? (n.targetWF / n.bobot) * 100 : 0,
       actualPct: n.curProgressPct,
-      varianceWF: n.variance,
-      valueRp: contractValue !== null ? (contractValue * Math.abs(n.variance)) / 100 : null,
+      varianceWF: shareOf(n),
+      valueRp: contractValue !== null ? (contractValue * Math.abs(shareOf(n))) / 100 : null,
     }));
+}
+
+export interface Contribution {
+  id: string;
+  wbsCode: string;
+  deskripsi: string;
+  planPct: number;
+  actualPct: number;
+  /** Project percent this item adds to (+) or takes from (−) the deviation. */
+  share: number;
+}
+
+/**
+ * Every item's part in the deviation, apportioned so the parts add up to the
+ * deviation AS PRINTED. What "Why the project sits here" lists, both ways: the
+ * items holding the number back when behind, the items carrying the lead when
+ * ahead — so "the 16.11% lead comes from" is followed by figures that add to
+ * 16.11.
+ */
+export function contributions(roots: RollupNode[], deviationPct: number): Contribution[] {
+  const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const total = leaves.reduce((s, n) => s + n.bobot, 0);
+  const shares = apportion(
+    leaves.map((n) => (total > 0 ? (n.variance / total) * 100 : 0)),
+    deviationPct
+  );
+  return leaves
+    .map((n, i) => ({
+      id: n.id,
+      wbsCode: n.wbsCode,
+      deskripsi: n.deskripsi,
+      planPct: n.bobot > 0 ? (n.targetWF / n.bobot) * 100 : 0,
+      actualPct: n.curProgressPct,
+      share: shares[i],
+    }))
+    .filter((c) => c.share !== 0);
+}
+
+export interface Mover {
+  id: string;
+  wbsCode: string;
+  deskripsi: string;
+  prevPct: number;
+  curPct: number;
+  /** Project percent this item added this week; negative when it went back. */
+  share: number;
+  /** The milestones reached, by label, on a milestone item. */
+  milestones: string[];
+}
+
+/**
+ * What moved in the week, apportioned so it adds up to "added this week" as
+ * printed. Largest first; an item that went backwards is listed like any other,
+ * with a negative share, because hiding it is how a report ends up disagreeing
+ * with the site.
+ */
+export function weekMovers(
+  roots: RollupNode[],
+  addedPct: number,
+  leafData: Database['weeks'][number]['leafData']
+): Mover[] {
+  const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const total = leaves.reduce((s, n) => s + n.bobot, 0);
+  const moved = leaves.filter((n) => Math.abs(n.curProgressPct - n.prevProgressPct) >= 0.005);
+  const shares = apportion(
+    moved.map((n) => (total > 0 ? ((n.curWF - n.prevWF) / total) * 100 : 0)),
+    addedPct
+  );
+  return moved
+    .map((n, i) => {
+      const done = new Set(leafData[n.id]?.milestonesDone ?? []);
+      return {
+        id: n.id,
+        wbsCode: n.wbsCode,
+        deskripsi: n.deskripsi,
+        prevPct: n.prevProgressPct,
+        curPct: n.curProgressPct,
+        share: shares[i],
+        milestones:
+          n.progressMethod === 'milestone'
+            ? (n.milestones ?? []).filter((m) => done.has(m.id)).map((m) => m.label)
+            : [],
+      };
+    })
+    .sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +450,31 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'ok',
           title: 'Weights total 100.00%',
           detail: `All ${leaves.length} leaf items add up, with no weight left dangling.`,
+        }
+  );
+
+  // 2b. Every activity carries weight. The same rule the weight gate holds
+  //     every figure behind, so Check and the dashboard can never disagree
+  //     about whether this week has numbers at all (26 Sep 2026).
+  const { unbudgeted } = weightGate(db.wbsItems);
+  findings.push(
+    unbudgeted.length
+      ? {
+          level: 'error',
+          title: `${unbudgeted.length} ${unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`,
+          detail:
+            'An activity with no budget weighs nothing, so its progress counts for nothing. Give it a budget on Weights.',
+          rows: unbudgeted.map((u) => ({
+            label: u.name,
+            value: u.code || 'no budget',
+            trail: trails.get(u.id),
+            id: u.id,
+          })),
+        }
+      : {
+          level: 'ok',
+          title: 'Every activity has a budget',
+          detail: 'Milestones are the only rows that weigh nothing.',
         }
   );
 
@@ -881,8 +1031,10 @@ export function buildLookAhead(db: Database, health: ProjectHealth, weeks = 2): 
     if (!meta) break;
     const prev = weekMap.get(w - 1);
     const gt = computeGrandTotal(computeRollup(db.wbsItems, meta.leafData, prev?.leafData ?? null));
-    const targetPct = gt.bobot > 0 ? (gt.targetWF / gt.bobot) * 100 : 0;
-    const gapFromNow = targetPct - health.actualPct;
+    const targetPct = r2(gt.planPct);
+    // Negative once the project is already past that week's plan; the screen
+    // says "Reached" then, never "+-15.57%".
+    const gapFromNow = shownDiff(targetPct, health.actualPct);
     out.push({
       week: w,
       targetPct,

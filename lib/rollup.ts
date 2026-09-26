@@ -1,3 +1,4 @@
+import { shownDiff } from './figures';
 import { resolveLeafProgress } from './progress';
 import type { WbsItem, WeeklyLeafData } from './types';
 
@@ -197,6 +198,15 @@ export function promoteNestedSpkContracts(roots: RollupNode[]): RollupNode[] {
 }
 
 export interface GrandTotal {
+  /**
+   * Plan as a percent of the total weight, the same scale as `curProgressPct`.
+   * `targetWF` is raw weight points; the two agree only while the weights close
+   * at 100, and the weight gate keeps every figure off screen until they do.
+   * Read THIS for any plan percentage a person sees (26 Sep 2026).
+   */
+  planPct: number;
+  /** Actual − plan, taken between the two as they are printed. See lib/figures.ts. */
+  deviationPct: number;
   bobot: number;
   prevProgressPct: number;
   prevWF: number;
@@ -213,14 +223,20 @@ export function computeGrandTotal(roots: RollupNode[]): GrandTotal {
   const curWF = roots.reduce((s, n) => s + n.curWF, 0);
   const prevWF = roots.reduce((s, n) => s + n.prevWF, 0);
   const targetWF = roots.reduce((s, n) => s + n.targetWF, 0);
+  const curProgressPct = bobot > 0 ? (curWF / bobot) * 100 : 0;
+  const planPct = bobot > 0 ? (targetWF / bobot) * 100 : 0;
   return {
+    planPct,
+    deviationPct: shownDiff(curProgressPct, planPct),
     bobot,
     prevWF,
     curWF,
     prevProgressPct: bobot > 0 ? (prevWF / bobot) * 100 : 0,
-    curProgressPct: bobot > 0 ? (curWF / bobot) * 100 : 0,
+    curProgressPct,
     thisWeekWF: curWF - prevWF,
-    thisWeekProgressPct: bobot > 0 ? ((curWF - prevWF) / bobot) * 100 : 0,
+    // Between the two cumulative figures AS PRINTED, so last week's 40.71 and
+    // this week's 51.09 say +10.38 and not the +10.39 their unrounded gap is.
+    thisWeekProgressPct: bobot > 0 ? shownDiff(curProgressPct, (prevWF / bobot) * 100) : 0,
     targetWF,
     variance: curWF - targetWF,
   };

@@ -5,6 +5,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
+import { weightGateView } from '@/components/weekly/WeightGateView';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -31,6 +32,10 @@ async function SCurvePageBody({ params }: { params: Promise<{ week: string }> })
 
   const { week: weekParam } = await params;
   const week = Number(weekParam);
+
+  // No figure until the weights close — see lib/weight-gate.ts.
+  const held = await weightGateView(week);
+  if (held) return held;
   const [db, series] = await Promise.all([
     getOpenDb(),
     getOpenSCurveSeries(week),

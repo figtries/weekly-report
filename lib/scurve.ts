@@ -37,7 +37,12 @@ export function buildSCurveSeries(db: Database, upToWeek?: number): SCurveRow[] 
     if (meta) {
       const prevMeta = weekMap.get(week - 1);
       const gt = computeGrandTotal(computeRollup(db.wbsItems, meta.leafData, prevMeta?.leafData ?? null));
-      plan = gt.targetWF;
+      // A percent of the total weight, the scale `curProgressPct` is on. This
+      // read raw `targetWF` and drew week 36's plan at 24.76 beside an actual
+      // of 51.09 on a 70.79-weight plan, while the figure under the curve said
+      // 34.98 (26 Sep 2026). The weight gate now keeps such a plan off screen;
+      // this keeps the curve on the same scale as its own endpoint chips.
+      plan = gt.planPct;
       actual = week <= currentWeek ? gt.curProgressPct : null;
     }
     rows.push({ week, planPct: plan, actualPct: actual });

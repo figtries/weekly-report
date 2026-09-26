@@ -54,6 +54,7 @@ export default function WeekTabs({
   projectCurrentWeek,
   dueCount,
   checkCount,
+  figuresReady = true,
 }: {
   weeks: number[];
   selectedWeek: number;
@@ -72,6 +73,12 @@ export default function WeekTabs({
   dueCount: number;
   /** Validation findings that are errors or warnings. */
   checkCount: number;
+  /**
+   * False while the weights do not close (lib/weight-gate.ts). The report
+   * pages then show the gate instead of figures, and a PDF of figures that are
+   * not shown anywhere would be the one place they still leaked out.
+   */
+  figuresReady?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,7 +153,7 @@ export default function WeekTabs({
           {/* In the row on a phone, where the bar is the screen's width and
               the row ends where the screen does. From `sm` it leaves the row
               for the page's top corner, so the row can stay the bar's width. */}
-          {active.printable && (
+          {active.printable && (figuresReady || activeTab === 'documentation') && (
             <div className="shrink-0 sm:absolute sm:top-4 sm:right-6 lg:right-8">
               <SavePdfButton
                 url={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}

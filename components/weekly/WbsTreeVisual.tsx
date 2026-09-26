@@ -526,8 +526,13 @@ function OverviewHero({
   const actual = round2(grand.curProgressPct);
   const plan = grand.bobot > 0 ? round2((grand.targetWF / grand.bobot) * 100) : 0;
   const st = statusOf(actual, plan);
-  const thisWeek = round2(grand.thisWeekProgressPct);
-  const dev = round2(actual - plan);
+  // This card prints one decimal, so its differences are taken at one decimal:
+  // the rail has to subtract as printed, like every other screen
+  // (lib/figures.ts). At two decimals 51.14 − 35.06 is 16.08, which prints as
+  // 16.1 beside 51.1 and 35.1.
+  const one = (n: number) => Number(n.toFixed(1));
+  const thisWeek = one(one(grand.curProgressPct) - one(grand.prevProgressPct));
+  const dev = one(one(actual) - one(plan));
   const devCls = Math.abs(dev) < 0.05 ? 'text-gray-700' : dev < 0 ? 'text-red-500' : 'text-emerald-600';
   const devText = Math.abs(dev) < 0.05 ? '0%' : `${dev < 0 ? '−' : '+'}${Math.abs(dev).toFixed(1)}%`;
 
@@ -854,7 +859,7 @@ function LeafCard({ node, open, onToggle }: { node: RollupNode; open: boolean; o
       {/* Progress bar with target tick */}
       {!isDone && (
         <>
-          <PlanBar actual={cum} plan={plan} className="mt-3.5 h-2.5" />
+          <PlanBar actual={cum} plan={plan} className="mt-3.5" size="sm" />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
             <span>
               Last week <span className="font-medium text-foreground">{node.prevProgressPct.toFixed(1)}%</span>

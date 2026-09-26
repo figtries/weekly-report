@@ -822,27 +822,32 @@ const Row = memo(function Row({
  */
 function Bar({ actual, plan, thick }: { actual: number; plan: number; thick?: boolean }) {
   const a = Math.max(0, Math.min(100, actual)) / 100;
-  const p = Math.max(0, Math.min(100, plan));
+  const p = Math.max(0, Math.min(100, plan)) / 100;
+  // Plan is a bar of its own under the actual one, on the same scale — the
+  // app's one way of drawing the pair since 26 Sep 2026 (see
+  // components/ui/PlanActualBar.tsx). It was a tick on the fill, which at a
+  // plan of 0% sat on the bar's start and read as a stray mark.
   return (
-    <span
-      className={cn(
-        'relative mt-2.5 block w-full overflow-hidden rounded-full bg-foreground/8',
-        thick ? 'h-2.5' : 'h-2'
-      )}
-    >
-      <m.span
-        className="absolute inset-y-0 left-0 block w-full origin-left rounded-full bg-chart-1"
-        initial={false}
-        animate={{ scaleX: a }}
-        transition={MOTION.spring}
-      />
-      {p > 0 && (
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-0 w-[3px] rounded-full bg-chart-2 ring-1 ring-card"
-          style={{ left: `calc(${Math.min(99.5, p)}% - 1.5px)` }}
+    <span className="mt-2.5 flex w-full flex-col gap-[3px]">
+      <span
+        className={cn(
+          'relative block w-full overflow-hidden rounded-full bg-foreground/8',
+          thick ? 'h-2.5' : 'h-2'
+        )}
+      >
+        <m.span
+          className="absolute inset-y-0 left-0 block w-full origin-left rounded-full bg-chart-1"
+          initial={false}
+          animate={{ scaleX: a }}
+          transition={MOTION.spring}
         />
-      )}
+      </span>
+      <span aria-hidden="true" className="relative block h-1 w-full overflow-hidden rounded-full bg-foreground/8">
+        <span
+          className="absolute inset-y-0 left-0 block w-full origin-left rounded-full bg-chart-2"
+          style={{ transform: `scaleX(${p})` }}
+        />
+      </span>
     </span>
   );
 }

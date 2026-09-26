@@ -18,6 +18,8 @@ import { getOpenProject } from '@/lib/legacy-bridge';
 import { loadWeightsScreen } from '@/lib/weights-screen';
 import { formatMoney } from '@/lib/currency';
 import { blockingIds, validateWeek } from '@/lib/analysis';
+import { r2 } from '@/lib/figures';
+import { weightGate } from '@/lib/weight-gate';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -135,11 +137,28 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // prices derive. Gundih stores 100.000000 and derives 154.58, so asking the
   // wrong one would put a red card on the one project in the database whose
   // weights are correct.
-  const governing = wscreen?.locked ? money?.storedTotal : money?.derivedTotal;
-  const weightsOff = governing != null && Math.abs(governing - 100) > 0.5;
+  //
+  // Since 26 Sep 2026 the question is the WEIGHT GATE's (lib/weight-gate.ts):
+  // total 100 and every activity budgeted. It is asked of the weights the
+  // reports are actually built on, so this card, the dashboard, the sidebar
+  // and Check can never disagree about whether figures exist this week.
+  const gate = weightGate(db.wbsItems);
+  const overrun = money && money.overrun.branches > 0
+    ? ` ${money.overrun.branches} headings hand out more than they hold, ${formatMoney(money.overrun.amount, money.currency)} over between them.`
+    : '';
 
   const guide =
-    !money || !open
+    // The gate is asked of every project, priced or not, so a plan whose
+    // money this screen cannot read still says why its figures are held.
+    (!money || !open) && !gate.ok
+      ? {
+          title: `${gate.unbudgeted.length} ${gate.unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`,
+          body: 'Progress figures wait until every activity has a budget and the budgets reach 100%. Filling in below still works.',
+          cta: 'Complete in Weights',
+          href: `/weekly/${week}/weights`,
+          tone: 'warn' as const,
+        }
+      : !money || !open
       ? null
       : money.leaves === 0
         ? {
@@ -148,20 +167,18 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
             cta: 'Open the planner',
             href: `/projects/${open.id}`,
           }
-        : weightsOff
+        : !gate.ok
           ? {
               // The weights are the one figure here that is not negotiable:
-              // every percentage in every report is measured against this
-              // total, so a plan that does not close at 100 is reporting
-              // against the wrong denominator everywhere at once. Said here
-              // as well as on Weights because this is the screen people
-              // actually open.
-              title: `The weights add up to ${governing!.toFixed(2)}%, not 100%`,
-              body:
-                money.overrun.branches > 0
-                  ? `${money.overrun.branches} headings hand out more than they hold, ${formatMoney(money.overrun.amount, money.currency)} over between them. Every figure above is measured against that total.`
-                  : `The prices cover ${formatMoney(money.allocated, money.currency)} of a ${formatMoney(money.contractValue, money.currency)} contract and nothing is left to take the rest. Every figure above is measured against that total.`,
-              cta: 'Check the prices',
+              // every percentage in every report is a share of their total, so
+              // until it closes no report shows a figure at all — the four
+              // below included. Filling in is not held: that is this screen.
+              title:
+                Math.abs(gate.total - 100) > 0.01
+                  ? `The weights add up to ${gate.total.toFixed(2)}%, not 100%`
+                  : `${gate.unbudgeted.length} ${gate.unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`,
+              body: `Progress figures wait until every activity has a budget and the budgets reach 100%.${overrun} Filling in below still works.`,
+              cta: 'Complete in Weights',
               href: `/weekly/${week}/weights`,
               tone: 'warn' as const,
             }
@@ -194,17 +211,22 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // green when the project is ahead. The verdict has not been dropped, it has
   // moved into the word underneath: colour here identifies which figure you are
   // looking at, and the line below says how to feel about it.
+  //
+  // ONE SCALE (26 Sep 2026): plan is a share of the total weight like actual,
+  // and the deviation is actual − plan as printed. This row read raw
+  // `targetWF` and `variance` — "Plan 24.76, Actual 51.09, Deviation 11.40",
+  // three figures that did not subtract.
   const stats = [
-    { label: 'Plan', value: grandTotal.targetWF, tone: 'text-chart-2', sub: undefined as string | undefined },
-    { label: 'Actual', value: grandTotal.curProgressPct, tone: 'text-chart-1', sub: undefined },
+    { label: 'Plan', value: r2(grandTotal.planPct), tone: 'text-chart-2', sub: undefined as string | undefined },
+    { label: 'Actual', value: r2(grandTotal.curProgressPct), tone: 'text-chart-1', sub: undefined },
     { label: 'Added this week', value: grandTotal.thisWeekProgressPct, tone: 'text-ok', sub: undefined },
     {
       label: 'Deviation',
-      value: grandTotal.variance,
+      value: grandTotal.deviationPct,
       tone: 'text-deviation',
       // One word, not a sentence: the figure above already says how much, and
       // the sign is the one thing about it a newcomer reads wrong.
-      sub: grandTotal.variance < 0 ? 'behind plan' : grandTotal.variance > 0 ? 'ahead of plan' : 'on plan',
+      sub: grandTotal.deviationPct < 0 ? 'behind plan' : grandTotal.deviationPct > 0 ? 'ahead of plan' : 'on plan',
     },
   ];
 
@@ -238,6 +260,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
         </Reveal>
       )}
 
+      {gate.ok && (
       <Reveal delay={MOTION.stagger * (guide ? 2 : 1)}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {stats.map((s) => (
@@ -258,6 +281,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           ))}
         </div>
       </Reveal>
+      )}
 
       {/* The project itself. Everything about one activity — its figure, how it
           is counted, what it is worth, when it runs — is one press away inside

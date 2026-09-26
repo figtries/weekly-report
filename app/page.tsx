@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRight,
   ChartLine,
+  Check,
   CircleAlert,
   FolderKanban,
   Scale,
@@ -18,13 +19,16 @@ import {
 import {
   buildLookAhead,
   computeHealth,
-  findLaggards,
+  contributions,
   fmtNum,
   fmtPct,
   validateWeek,
+  weekMovers,
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, promoteNestedSpkContracts, summariseUnits, summaryTitle } from '@/lib/rollup';
+import { weightGate } from '@/lib/weight-gate';
+import WeightGateNotice from '@/components/dashboard/WeightGateNotice';
 import { currentWeekOf } from '@/lib/current-week';
 import { getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
@@ -32,11 +36,13 @@ import { getActiveProjectId } from '@/lib/projects';
 import { buildSCurveSeries } from '@/lib/scurve';
 import ProgressCurve from '@/components/dashboard/ProgressCurve';
 import {
-  DragList,
+  ContributionList,
+  ForecastTrack,
   MeasureLegend,
   ProgressSpread,
   UnitBreakdown,
   VelocityBars,
+  WeekStory,
   type LeafSpread,
 } from '@/components/dashboard/charts';
 import DashboardWeekBar from '@/components/dashboard/DashboardWeekBar';
@@ -180,6 +186,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     project: {
       ...openDb.project,
       contractValue: openDb.project.contractValue ?? data.db.project.contractValue,
+      projectBudget: openDb.project.projectBudget ?? data.db.project.projectBudget,
     },
   };
 
@@ -218,13 +225,47 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     );
   }
 
-  const laggards = findLaggards(rollup.roots, health.contractValue);
+  // NO FIGURE UNTIL THE WEIGHTS CLOSE (26 Sep 2026). Every percentage below is
+  // a share of the total weight; while that total is short of 100, or an
+  // activity weighs nothing, the page says so instead of dividing anyway. See
+  // lib/weight-gate.ts. The header stays, so the week picker still works.
+  const gate = weightGate(db.wbsItems);
+  if (!gate.ok) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8">
+        <DashboardHeader
+          name={db.project.name}
+          customer={db.project.customer}
+          reportedWeek={reportedWeek}
+          weeks={weeks}
+          week={week}
+          currentWeek={currentWeek}
+        />
+        <WeightGateNotice
+          gate={gate}
+          week={week}
+          budget={db.project.projectBudget ?? null}
+          currency={data.currency}
+        />
+      </div>
+    );
+  }
+
   const validation = validateWeek(db, week);
   const lookAhead = buildLookAhead(db, health);
-  // The list below shows the three costliest; this is what all of them cost
-  // together, which is the one figure the list itself cannot state.
-  const totalDrag = Math.abs(laggards.reduce((sum, l) => sum + l.varianceWF, 0));
+  // Why the project sits where it does, BOTH WAYS: every item's part in the
+  // deviation, apportioned so the parts add up to the deviation as printed.
+  // Behind, the list is what holds it back; ahead, what carries the lead. It
+  // used to be laggards only, so a project with nothing behind listed a
+  // finished item at "−0.00%" and called it the reason.
+  const parts = contributions(rollup.roots, health.deviationPct);
+  const holding = parts.filter((c) => c.share < 0).sort((a, b) => a.share - b.share);
+  const carrying = parts.filter((c) => c.share > 0).sort((a, b) => b.share - a.share);
+  const heldBack = Math.abs(holding.reduce((s, c) => s + c.share, 0));
+  const carried = carrying.reduce((s, c) => s + c.share, 0);
   const curve = buildSCurveSeries(db, week);
+  const weekMeta = db.weeks.find((w) => w.week === week);
+  const movers = weekMovers(rollup.roots, health.addedPct, weekMeta?.leafData ?? {});
   // What this splits into, in whichever of the three ways the plan supports:
   // the units it marked, the "(SPK-###)" contracts the importer wrote, or its
   // own top level. A project that was never given packages still gets the
@@ -235,18 +276,24 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   );
 
   // By weight, not by count: a 3.3% leaf and a 0.03% leaf are not equals.
-  const spread: LeafSpread = flattenTree(rollup.roots)
-    .filter((n) => n.isLeaf && n.bobot > 0)
-    .reduce<LeafSpread>(
-      (acc, n) => {
-        const bucket =
-          n.curProgressPct >= 99.995 ? 'done' : n.curProgressPct > 0 ? 'running' : 'notStarted';
-        acc[bucket] += 1;
-        acc[`${bucket}Weight` as const] += n.bobot;
-        return acc;
-      },
-      { notStarted: 0, running: 0, done: 0, notStartedWeight: 0, runningWeight: 0, doneWeight: 0 }
-    );
+  const weighted = flattenTree(rollup.roots).filter((n) => n.isLeaf && n.bobot > 0);
+  const totalBobot = weighted.reduce((s, n) => s + n.bobot, 0);
+  const bucketOf = (pct: number) => (pct >= 99.995 ? 'done' : pct > 0 ? 'running' : 'notStarted');
+  const spread: LeafSpread = weighted.reduce<LeafSpread>(
+    (acc, n) => {
+      const bucket = bucketOf(n.curProgressPct);
+      acc[bucket] += 1;
+      acc[`${bucket}Weight` as const] += n.bobot;
+      return acc;
+    },
+    { notStarted: 0, running: 0, done: 0, notStartedWeight: 0, runningWeight: 0, doneWeight: 0 }
+  );
+  // Which items ENTERED each state this week — the "+1 this week" on a row.
+  const arrived = { done: 0, running: 0, notStarted: 0 };
+  for (const n of weighted) {
+    const now = bucketOf(n.curProgressPct);
+    if (now !== bucketOf(n.prevProgressPct)) arrived[now] += 1;
+  }
 
   const verdict = verdictOf(health.deviationPct);
   const behind = verdict === 'behind';
@@ -259,52 +306,14 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8">
-      {/* Whose numbers these are, and which week of them. The name is here
-          rather than only in the sidebar because this page is what somebody
-          screenshots into a chat — and a percentage with no project on it is
-          the same trap the sidebar mismatch was. */}
-      {/* THE PICKER IS PINNED TOP RIGHT, LEVEL WITH THE FIRST LINE OF THE NAME.
-          That is where it was asked for on 10 September 2026, and both of the
-          obvious alternatives were tried and rejected on the way: bottom-
-          aligned it sat beside the customer line and read as belonging to that
-          line, and wrapped onto its own row it dropped below the heading
-          entirely — which this project's 100-character contract title
-          guarantees at every width, because the name alone fills the row.
-
-          So the name gets `flex-1 min-w-0` and wraps INSIDE its own column
-          rather than pushing the picker anywhere. Nothing here wraps. */}
-      {/* Below `sm` the name takes the whole row and the picker drops under it:
-          a 110px control beside a 20px-per-word contract title leaves the title
-          about 230px on a 390px phone, and clamping it to two lines there loses
-          the words that say which project this is. */}
-      <header className="animate-enter flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
-          <h1 className="line-clamp-2 text-xl font-semibold tracking-tight sm:text-2xl">
-            {db.project.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {db.project.customer || 'No customer set'}
-            {/* The week used to be stated here too — ' · reported up to week 43' — and
-                once the picker beside it carries the Current badge that is the same
-                fact printed twice, disagreeing with itself on the one project whose
-                two stores disagree. The picker owns the week; the banner below owns
-                how far the figures actually go. */}
-            {/* `currentWeek` was in this test until 17 Sep 2026, when it stopped
-                meaning "somebody filed something" and started meaning "the week the
-                calendar says we are in", which is never zero. Leaving it here would
-                have retired this line permanently. Only the REPORTED week can say
-                whether anything has been reported. */}
-            {reportedWeek > 0 ? '' : ' · nothing reported yet'}
-          </p>
-        </div>
-        <div className="shrink-0">
-          <DashboardWeekBar
-            weeks={weeks}
-            selectedWeek={week}
-            projectCurrentWeek={currentWeek}
-          />
-        </div>
-      </header>
+      <DashboardHeader
+        name={db.project.name}
+        customer={db.project.customer}
+        reportedWeek={reportedWeek}
+        weeks={weeks}
+        week={week}
+        currentWeek={currentWeek}
+      />
 
       {unreported && (
         <p className="animate-fade-in-up rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2.5 text-sm text-warn">
@@ -402,7 +411,11 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           <CardHeader>
             <CardTitle className={TYPE.cardTitle}>Why the project sits here</CardTitle>
             <CardDescription className={TYPE.cardDesc}>
-              The items holding the number back, by how much project percent each one costs
+              {behind
+                ? 'The items holding the number back, by how much project percent each one costs'
+                : holding.length === 0
+                  ? 'Nothing is behind plan this week. The items carrying the lead, by how much project percent each one adds'
+                  : 'The items carrying the lead, by how much project percent each one adds'}
             </CardDescription>
             <CardAction>
               <Link
@@ -414,14 +427,34 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             </CardAction>
           </CardHeader>
           <CardContent className="space-y-4">
-            {laggards.length > 0 && (
+            {/* Every figure in the sentence and the list is a share of the
+                deviation apportioned to add up to it as printed, so "the 16.11%
+                lead comes from" is followed by numbers that make 16.11. */}
+            {behind ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                The {fmtNum(laggards.length)} biggest laggards hold back{' '}
-                <span className="font-semibold text-bad">{fmtPct(totalDrag)}</span> of project
-                progress between them. The three that cost the most:
+                {holding.length === 1 ? 'One item behind plan holds' : `${fmtNum(holding.length)} items behind plan hold`}{' '}
+                back <span className="font-semibold text-bad">{fmtPct(heldBack)}</span> of project
+                progress{holding.length > 1 ? ' between them' : ''}
+                {/* Said whenever something is ahead, so the sentence ends on
+                    the hero's own gap: 4.37 held back, 1.39 given back, 2.98. */}
+                {carrying.length > 0
+                  ? `; ${carrying.length === 1 ? 'one item' : `${fmtNum(carrying.length)} items`} ahead of plan ${carrying.length === 1 ? 'gives' : 'give'} back ${fmtPct(carried)}, which leaves the ${fmtPct(Math.abs(health.deviationPct))} gap.`
+                  : '.'}
+                {holding.length > 3 ? ' The three that cost the most:' : ''}
+              </p>
+            ) : verdict === 'ahead' ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                The <span className="font-semibold text-ok">{fmtPct(health.deviationPct)}</span> lead
+                {holding.length === 0 && carrying.length <= 3
+                  ? ` comes from ${carrying.length === 1 ? 'one item' : `${fmtNum(carrying.length)} items`}:`
+                  : ` is ${fmtPct(carried)} carried by ${fmtNum(carrying.length)} items, less ${fmtPct(heldBack)} held back by ${fmtNum(holding.length)}. The three adding the most:`}
+              </p>
+            ) : (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                The project is exactly on plan this week.
               </p>
             )}
-            <DragList rows={laggards} limit={3} />
+            {verdict !== 'neutral' && <ContributionList rows={behind ? holding : carrying} limit={3} />}
           </CardContent>
         </Card>
       </Reveal>
@@ -447,8 +480,13 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   </CardAction>
                 )}
               </CardHeader>
-              <CardContent>
-                <UnitBreakdown rows={units} limit={UNIT_ROWS} />
+              <CardContent className="flex flex-1 flex-col">
+                <UnitBreakdown
+                  rows={units}
+                  limit={UNIT_ROWS}
+                  totalBobot={totalBobot}
+                  deviationPct={health.deviationPct}
+                />
               </CardContent>
             </Card>
           )}
@@ -460,11 +498,28 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 How much of the project has been started
               </CardDescription>
             </CardHeader>
-            {/* The bar and its key sit at the top; the rest of the height is
-                given to the legend rows so the card fills its row instead of
-                stopping halfway down beside a taller neighbour. */}
+            {/* The bar and its key sit at the top; what the week did fills the
+                rest, pinned to the bottom so this card and its neighbour end on
+                the same line. That room was empty until 26 Sep 2026, and the
+                page had nowhere that said what happened in the week it shows. */}
             <CardContent className="flex flex-1 flex-col">
-              <ProgressSpread spread={spread} />
+              <ProgressSpread spread={spread} arrived={arrived} />
+              {/* SEJAJAR MEANS STRETCH: the block starts under the key and its
+                  box grows to the card's foot, so this card and its taller
+                  neighbour share both edges instead of leaving a hole between
+                  the key and a block pinned to the bottom. */}
+              <div className="mt-4 flex flex-1 flex-col">
+                <WeekStory
+                  week={week}
+                  addedPct={health.addedPct}
+                  planAddedPct={health.planAddedPct}
+                  prevDeviationPct={health.prevDeviationPct}
+                  deviationPct={health.deviationPct}
+                  deviationChange={health.deviationChange}
+                  movers={movers}
+                  moreHref={`/weekly/${week}/overall`}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -486,11 +541,22 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 <span className="font-semibold text-foreground">
                   {fmtPct(health.velocityPerWeek)}
                 </span>{' '}
-                per week; the plan demands{' '}
-                <span className="font-semibold text-foreground">
-                  {fmtPct(health.requiredVelocity)}
-                </span>
-                .
+                per week.{' '}
+                {/* Not "the plan demands": this is the even pace that finishes
+                    on the contract's last week from here, not a figure off the
+                    plan curve, and naming it the plan's was a claim nobody
+                    could find on the plan. */}
+                {weeksLeft > 0 ? (
+                  <>
+                    Finishing by week {health.lastWeek} needs{' '}
+                    <span className="font-semibold text-foreground">
+                      {fmtPct(health.requiredVelocity)}
+                    </span>{' '}
+                    per week.
+                  </>
+                ) : (
+                  'This is the contract’s last week.'
+                )}
               </p>
             </CardContent>
           </Card>
@@ -530,10 +596,18 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                     </Badge>
                   )}
                   {/* Pinned to the bottom: the card is stretched to its
-                      neighbour's height, and this is the line that closes it. */}
-                  <p className="mt-auto pt-4 text-xs text-muted-foreground">
-                    Contract ends in week {health.lastWeek}
-                  </p>
+                      neighbour's height. The track fills what was a hole the
+                      height of a hand, with the distance the badge states. */}
+                  <div className="mt-auto pt-5">
+                    <ForecastTrack
+                      week={health.week}
+                      forecastWeek={health.forecastFinishWeek}
+                      lastWeek={health.lastWeek}
+                    />
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Contract ends in week {health.lastWeek}
+                    </p>
+                  </div>
                 </>
               )}
             </CardContent>
@@ -602,6 +676,17 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   </Link>
                 </div>
               )}
+              {/* Warnings only: say it can go, so a list of amber triangles
+                  is not read as a list of reasons it cannot. */}
+              {validation.canIssue && urgent.length > 0 && (
+                <div className="mt-auto pt-4">
+                  <p className="flex min-h-11 items-center gap-2 rounded-xl bg-ok-soft px-3 py-2 text-sm font-semibold text-ok">
+                    <Check className="h-4 w-4 shrink-0" aria-hidden />
+                    Ready to issue. {urgent.length === 1 ? 'The finding above is a warning' : 'The findings above are warnings'}, not
+                    {urgent.length === 1 ? ' a blocker' : ' blockers'}.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -628,10 +713,22 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   {lookAhead.map((w) => (
                     <li key={w.week} className="py-3 text-sm first:pt-0 last:pb-0">
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-muted-foreground">Week {w.week}</span>
-                        <span className="font-semibold tabular-nums">+{fmtPct(w.gapFromNow)}</span>
+                        <span className="text-muted-foreground">
+                          Week {w.week} <span className="tabular-nums">· plan {fmtPct(w.targetPct)}</span>
+                        </span>
+                        {/* Already past that week's plan: say so. It used to
+                            print "+-15.57%" and "-6.0× the current pace". */}
+                        {w.gapFromNow <= 0 ? (
+                          <span className="font-semibold text-ok">Reached</span>
+                        ) : (
+                          <span className="font-semibold tabular-nums">+{fmtPct(w.gapFromNow)}</span>
+                        )}
                       </div>
-                      {w.paceMultiple !== null && (
+                      {w.gapFromNow <= 0 ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Already {fmtPct(-w.gapFromNow)} past it. Nothing to catch up.
+                        </p>
+                      ) : w.paceMultiple !== null && (
                         <p
                           className={cn(
                             'mt-0.5 text-xs',
@@ -650,6 +747,74 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
         </div>
       </ScrollReveal>
     </div>
+  );
+}
+
+/** Whose numbers these are, and which week of them — on the gate too. */
+function DashboardHeader({
+  name,
+  customer,
+  reportedWeek,
+  weeks,
+  week,
+  currentWeek,
+}: {
+  name: string;
+  customer: string | undefined;
+  reportedWeek: number;
+  weeks: number[];
+  week: number;
+  currentWeek: number;
+}) {
+  return (
+    <>
+    {/* Whose numbers these are, and which week of them. The name is here
+        rather than only in the sidebar because this page is what somebody
+        screenshots into a chat — and a percentage with no project on it is
+        the same trap the sidebar mismatch was. */}
+    {/* THE PICKER IS PINNED TOP RIGHT, LEVEL WITH THE FIRST LINE OF THE NAME.
+        That is where it was asked for on 10 September 2026, and both of the
+        obvious alternatives were tried and rejected on the way: bottom-
+        aligned it sat beside the customer line and read as belonging to that
+        line, and wrapped onto its own row it dropped below the heading
+        entirely — which this project's 100-character contract title
+        guarantees at every width, because the name alone fills the row.
+
+        So the name gets `flex-1 min-w-0` and wraps INSIDE its own column
+        rather than pushing the picker anywhere. Nothing here wraps. */}
+    {/* Below `sm` the name takes the whole row and the picker drops under it:
+        a 110px control beside a 20px-per-word contract title leaves the title
+        about 230px on a 390px phone, and clamping it to two lines there loses
+        the words that say which project this is. */}
+    <header className="animate-enter flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+      <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+        <h1 className="line-clamp-2 text-xl font-semibold tracking-tight sm:text-2xl">
+          {name}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {customer || 'No customer set'}
+          {/* The week used to be stated here too — ' · reported up to week 43' — and
+              once the picker beside it carries the Current badge that is the same
+              fact printed twice, disagreeing with itself on the one project whose
+              two stores disagree. The picker owns the week; the banner below owns
+              how far the figures actually go. */}
+          {/* `currentWeek` was in this test until 17 Sep 2026, when it stopped
+              meaning "somebody filed something" and started meaning "the week the
+              calendar says we are in", which is never zero. Leaving it here would
+              have retired this line permanently. Only the REPORTED week can say
+              whether anything has been reported. */}
+          {reportedWeek > 0 ? '' : ' · nothing reported yet'}
+        </p>
+      </div>
+      <div className="shrink-0">
+        <DashboardWeekBar
+          weeks={weeks}
+          selectedWeek={week}
+          projectCurrentWeek={currentWeek}
+        />
+      </div>
+    </header>
+    </>
   );
 }
 

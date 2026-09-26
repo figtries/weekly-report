@@ -13,6 +13,8 @@ import { buildProjectDashboardData } from './dashboard-db';
 import { isLegacyProject, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 import { currentWeekOf } from './current-week';
+import { r2, shownDiff } from './figures';
+import { weightGate } from './weight-gate';
 import type { Database, WeeklyMeta } from './types';
 
 // Cached so every page renders into an instant static shell (see
@@ -232,6 +234,12 @@ export interface OpenProjectStatus {
   actual: number;
   plan: number;
   variance: number;
+  /**
+   * False while the weights do not close (lib/weight-gate.ts): the card then
+   * shows the weight total instead of figures, like every other screen.
+   */
+  ready: boolean;
+  weightsTotal: number;
 }
 
 export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> {
@@ -248,8 +256,15 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
   const rollup = legacy ? await getCachedWeekRollup(week) : getWeekRollup(db, week);
   if (!rollup || rollup.grandTotal.bobot <= 0) return null;
 
-  const { curProgressPct, targetWF, variance } = rollup.grandTotal;
-  return { week, actual: curProgressPct, plan: targetWF, variance };
+  const gate = weightGate(db.wbsItems);
+  if (!gate.ok) return { week, actual: 0, plan: 0, variance: 0, ready: false, weightsTotal: gate.total };
+  // Plan as a share of the total weight, like actual — it read raw `targetWF`
+  // and said "Plan 24.76% · 11.40% ahead" beside a dashboard saying 34.98% and
+  // 16.11% for the same week (26 Sep 2026). Rounded as printed, so the three
+  // figures on the card subtract.
+  const actual = r2(rollup.grandTotal.curProgressPct);
+  const plan = r2(rollup.grandTotal.planPct);
+  return { week, actual, plan, variance: shownDiff(actual, plan), ready: true, weightsTotal: gate.total };
 }
 
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {

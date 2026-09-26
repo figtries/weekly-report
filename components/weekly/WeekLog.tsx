@@ -689,8 +689,10 @@ export default function WeekLog({
                   </p>
                 </div>
 
-                <span className="relative block h-1.5">
-                  <span className="absolute inset-0 overflow-hidden rounded-full bg-foreground/8">
+                {/* Actual over plan as two bars on one scale, like every other
+                    such pair in the app (components/ui/PlanActualBar.tsx). */}
+                <span className="flex flex-col gap-[3px]">
+                  <span className="relative block h-1.5 overflow-hidden rounded-full bg-foreground/8">
                     <span
                       className={cn(
                         'absolute inset-y-0 left-0 block w-full origin-left rounded-full transition-transform duration-300 ease-ios',
@@ -699,13 +701,12 @@ export default function WeekLog({
                       style={{ transform: `scaleX(${clampPct(pct) / 100})` }}
                     />
                   </span>
-                  {r.planPct > 0 && (
+                  <span aria-hidden="true" className="relative block h-1 overflow-hidden rounded-full bg-foreground/8">
                     <span
-                      aria-hidden="true"
-                      className="absolute -top-[3px] h-3 w-[2px] rounded-full bg-chart-2"
-                      style={{ left: `calc(${Math.min(99.5, r.planPct)}% - 1px)` }}
+                      className="absolute inset-y-0 left-0 block w-full origin-left rounded-full bg-chart-2"
+                      style={{ transform: `scaleX(${clampPct(r.planPct) / 100})` }}
                     />
-                  )}
+                  </span>
                 </span>
 
                 {log.editable ? (

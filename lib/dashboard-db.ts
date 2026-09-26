@@ -36,6 +36,7 @@ import { leafPlanFraction } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
 import { db as sqlite, schema } from './sqlite';
 import { parseSignature } from './signature';
+import { deriveWeights } from './weights';
 import type {
   ChangeLogEntry,
   Database,
@@ -145,6 +146,8 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // Overall Summary sheet for every project made inside the app.
     isReportingUnit: n.isReportingUnit,
     unitLabel: n.unitLabel,
+    // The one leaf the weight gate lets weigh nothing. See lib/weight-gate.ts.
+    isMilestone: n.isMilestone,
   }));
 
   // Dates come from the ACTIVE baseline, like every other reader: the
@@ -352,6 +355,24 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // computed `currentWeek` above for a pin. See lib/current-week.ts.
     currentWeekOverride: project.pinnedCurrentWeek ?? null,
     contractValue: project.contractValue ?? undefined,
+    // What every weight is a share of, so money said beside a percentage is
+    // priced against the same thing the percentage is (26 Sep 2026). The typed
+    // contract value is only compared with it; see lib/weights.ts.
+    projectBudget:
+      deriveWeights(
+        nodes.map((n) => ({
+          id: n.id,
+          parentId: n.parentId ?? null,
+          order: n.order,
+          price: n.price,
+          workstepFactor: n.workstepFactor != null && n.workstepFactor > 0 ? n.workstepFactor : null,
+          isReportingUnit: n.isReportingUnit,
+          unitContractValue: n.unitContractValue,
+          bobot: n.bobot,
+          isLeaf: n.isLeaf,
+        })),
+        project.contractValue ?? undefined
+      ).projectBudget || undefined,
     weightsLocked: project.weightBasis === 'boq',
   };
 
