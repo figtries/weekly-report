@@ -26,6 +26,8 @@ import WeekSelect from './WeekSelect';
  *
  * One component because Document Control used to draw its own copy: a smaller
  * pill, in its own greens, and no button at all when the week was not current.
+ * The dashboard drew a third (a small capsule badge and a solid green button)
+ * until 26 Sep 2026, so the same control changed shape between sections.
  */
 export default function WeekRow({
   weeks,
@@ -33,6 +35,8 @@ export default function WeekRow({
   projectCurrentWeek,
   activeTab,
   basePath,
+  hrefPattern,
+  prefetch,
   children,
 }: {
   weeks: number[];
@@ -41,6 +45,9 @@ export default function WeekRow({
   /** The tab the picker keeps you on when it changes week. */
   activeTab: string;
   basePath?: string;
+  /** Passed to the picker: the dashboard links weeks as `/?week={week}`. */
+  hrefPattern?: string;
+  prefetch?: boolean;
   /** Anything that ends the row, after the seat. */
   children?: ReactNode;
 }) {
@@ -66,6 +73,8 @@ export default function WeekRow({
         projectCurrentWeek={optimisticCurrent}
         activeTab={activeTab}
         basePath={basePath}
+        hrefPattern={hrefPattern}
+        prefetch={prefetch}
       />
       {isCurrent ? (
         <span className="inline-flex min-h-11 flex-1 animate-pop-in items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-ok-soft px-3.5 text-sm font-semibold text-ok">

@@ -838,7 +838,9 @@ function DashboardHeader({
           {reportedWeek > 0 ? '' : ' · nothing reported yet'}
         </p>
       </div>
-      <div className="shrink-0">
+      {/* Data Overall's row is 285px at desktop and the screen's width on a
+          phone; this matches it so the seat is the same size in both. */}
+      <div className="w-full shrink-0 sm:w-72">
         <DashboardWeekBar
           weeks={weeks}
           selectedWeek={week}
