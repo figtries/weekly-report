@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Check, ChevronDown, CircleAlert } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert } from 'lucide-react';
 
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PlanActualBar from '@/components/ui/PlanActualBar';
@@ -22,13 +22,15 @@ import { cn } from '@/lib/utils';
  * THE SAME SIZE whatever it says, so the column reads as a column. The week's
  * checks are ONE PILL that opens Control: the warnings they used to list
  * ("100% of values are multiples of 5") read the same every week and were
- * never urgent; the full list is still one press away. And the rows past five
- * open in place through a native `<details>`, so the card needs no client
- * JavaScript at all.
+ * never urgent; the full list is still one press away. And THE CARD STOPS AT
+ * FOUR ROWS, the four most urgent (the list is already sorted worst first):
+ * the rows past five used to open in place under a "Show all", which made the
+ * dashboard's last card as long as the plan's backlog (27 Sep 2026). The
+ * headline still counts every one, so the number never shrinks to fit.
  */
 
-/** Rows shown before "Show all". */
-const ROWS = 5;
+/** The most rows the card shows. */
+const ROWS = 4;
 
 const LEVEL_TONE: Record<PriorityLevel, string> = {
   1: 'bg-bad-soft text-bad',
@@ -63,9 +65,14 @@ function Row({ a }: { a: PriorityAction }) {
     // under them. From sm up the wrapper dissolves (`sm:contents`) and all
     // four sit on one grid line, so every bar and figure share a column.
     <li className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 sm:grid-cols-[6.5rem_minmax(0,1fr)_minmax(10rem,16rem)_5.5rem] sm:gap-x-4">
+      {/* RELATIVE for the sr-only label inside: absolutely positioned with no
+          positioned ancestor, it was laid out against the page, not against
+          <main>, so once the card's reveal ended the document grew to reach
+          it and the whole app could be scrolled into a blank strip
+          (27 Sep 2026). */}
       <span
         className={cn(
-          'flex h-7 w-26 items-center justify-center rounded-lg text-xs font-semibold tabular-nums whitespace-nowrap',
+          'relative flex h-7 w-26 items-center justify-center rounded-lg text-xs font-semibold tabular-nums whitespace-nowrap',
           LEVEL_TONE[a.level]
         )}
       >
@@ -103,7 +110,6 @@ export default function PriorityActionsCard({
 }) {
   const { actions, horizonWeek, next } = pa;
   const shown = actions.slice(0, ROWS);
-  const rest = actions.slice(ROWS);
 
   return (
     <Card className="h-full">
@@ -188,6 +194,7 @@ export default function PriorityActionsCard({
               </span>
               <span className="text-sm text-muted-foreground">
                 {actions.length === 1 ? 'needs' : 'need'} action by W{horizonWeek}
+                {actions.length > ROWS && ` · the ${ROWS} most urgent`}
               </span>
             </p>
             <ul className="flex flex-col gap-5">
@@ -195,23 +202,6 @@ export default function PriorityActionsCard({
                 <Row key={a.node.id} a={a} />
               ))}
             </ul>
-            {rest.length > 0 && (
-              // One way only: opened, the button goes and the list simply runs
-              // on. A "Show fewer" can only sit ABOVE the rows it would hide
-              // (a summary is always a <details>'s first child), which read as
-              // the list ending in the middle.
-              <details className="group mt-5">
-                <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-semibold text-primary group-open:hidden [&::-webkit-details-marker]:hidden">
-                  Show all {actions.length}
-                  <ChevronDown className="h-4 w-4" aria-hidden />
-                </summary>
-                <ul className="flex flex-col gap-5">
-                  {rest.map((a) => (
-                    <Row key={a.node.id} a={a} />
-                  ))}
-                </ul>
-              </details>
-            )}
           </>
         )}
       </CardContent>
