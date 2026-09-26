@@ -31,11 +31,11 @@ export const unstable_instant = {
  * report it belongs to (`WeekAnalysis`). What is left is the verdict and the
  * list of what was examined.
  *
- * The sign-off panel was taken off this screen too. Only the SCREEN — the
- * approval record itself is untouched: `applyApproval`, `approveWeekAction` and
- * `db.approvals` all still work, existing approvals are still stored, and the
- * Portfolio still reads `approvedThroughWeek` from them. Putting the panel back
- * is re-adding `<ApprovalPanel>` here and nothing else.
+ * The sign-off panel was taken off this screen too, and on 26 Sep 2026 its code
+ * went with the imported project it wrote for: `ApprovalPanel`,
+ * `approveWeekAction` and `applyApproval` all edited db.json, which no project
+ * keeps its weekly figures in any more. Signed weeks on the project database
+ * are read by `signedWeeksSqlite`; a sign-off screen for them is new work.
  */
 /**
  * The gate is asked PER REQUEST, and the answer is never prerendered — a

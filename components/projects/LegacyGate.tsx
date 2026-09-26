@@ -29,7 +29,7 @@ type Planned = boolean | 'schedule';
 /** Null when the page may render; otherwise the card to show instead. */
 async function gateFor(planned: Planned, what: string): Promise<ReactNode | null> {
   const open = await getOpenProject();
-  if (!open || open.hasLegacyData) return null;
+  if (!open) return null;
   if (!planned) return <NoLegacyData what={what} />;
   const plan = planOf(open.id);
   if (plan.weighed || (planned === 'schedule' && plan.scheduled)) return null;

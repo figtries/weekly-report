@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
-import { getDb, getOpenJsonDb } from '@/lib/data';
+import { getOpenJsonDb, getWorkspace } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
 import DailyForm from '@/components/daily/DailyForm';
 import CreateReportHere from '@/components/daily/CreateReportHere';
@@ -20,14 +20,17 @@ import DailyDetailLoading from './loading';
  * A HEAD START, NOT A WHITELIST — and it cannot be per project.
  *
  * This runs at build time, where there is no request and therefore no open
- * project (see the weekly layout's copy of this note). It names the imported
- * project's dates because those are the only ones a build can see; every other
- * project's day renders on demand, which is correct — the whole body of this
- * page sits behind `<Suspense>` and is resolved per request anyway.
+ * project (see the weekly layout's copy of this note). It names the dates any
+ * project has filed; every other day renders on demand, which is correct — the
+ * whole body of this page sits behind `<Suspense>` and is resolved per request
+ * anyway.
  */
 export async function generateStaticParams() {
-  const db = await getDb();
-  return db.daily.map((d) => ({ date: d.date }));
+  // Every day any project has filed. With none filed anywhere, one sample date
+  // so the build still has a shell to prerender; its body is per request.
+  const ws = await getWorkspace();
+  const dates = [...new Set(Object.values(ws.projects).flatMap((p) => p.daily.map((d) => d.date)))];
+  return dates.length ? dates.map((date) => ({ date })) : [{ date: '2026-01-01' }];
 }
 
 async function DailyDetail({ date }: { date: string }) {

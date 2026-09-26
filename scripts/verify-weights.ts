@@ -1,57 +1,22 @@
 /**
  * Guards the money formula.
  *
- * Two things are asserted, and the second is the one that matters most.
- *
- * 1. The contract value derived from the reporting units matches the stored
- *    figure exactly. Units NEST — SPK-007 sits inside SPK-004 and is still its
- *    own contract — so this is the check that catches anyone "simplifying" the
- *    sum later.
- *
- * 2. Recomputing weights over Gundih would CHANGE them. That sounds like a
- *    failure and is the opposite: only 95 of its 176 stored leaf weights can be
- *    re-derived from its prices, because the construction rows carry weights
- *    that came from the workbook. If this assertion ever stops holding, either
- *    the data changed or someone made the recompute run silently — and a silent
- *    recompute here replaces correct figures with wrong ones and breaks a total
- *    that closes at exactly 100.000000.
+ * The contract a plan adds up to must survive the two shapes that broke it on
+ * the real data: reporting units that NEST (a contract inside another
+ * contract's heading, still its own contract — SPK-007 inside SPK-004's 1.4),
+ * and a row that restates the whole contract on one line (Gundih's "1.5
+ * Finish"). Gundih itself was removed on 26 Sep 2026, so both shapes are built
+ * here by hand; the rules they prove are the formula's, not that project's.
  *
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-weights.ts
  */
-import Database from 'better-sqlite3';
-
 import {
   checkBudgetEdit,
   computeContractValue,
   deriveWeights,
-  previewWeights,
   summariseWeights,
   type WeightNode,
 } from '../lib/weights.ts';
-
-const db = new Database('data/report.db', { readonly: true });
-
-function load(projectId: string): WeightNode[] {
-  return db
-    .prepare(
-      `select id, parent_id, sort_order, price, workstep_factor, is_reporting_unit,
-              unit_contract_value, bobot, is_leaf
-       from wbs_nodes where project_id = ? order by sort_order`
-    )
-    .all(projectId)
-    .map((row) => row as Record<string, unknown>)
-    .map((r) => ({
-      id: r.id as string,
-      parentId: (r.parent_id as string) ?? null,
-      order: r.sort_order as number,
-      price: (r.price as number) ?? null,
-      workstepFactor: (r.workstep_factor as number) ?? null,
-      isReportingUnit: !!r.is_reporting_unit,
-      unitContractValue: (r.unit_contract_value as number) ?? null,
-      bobot: (r.bobot as number) ?? null,
-      isLeaf: !!r.is_leaf,
-    }));
-}
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail: string) => {
@@ -59,36 +24,56 @@ const check = (label: string, ok: boolean, detail: string) => {
   if (!ok) failed += 1;
 };
 
-const nodes = load('gundih');
-const stored = db.prepare("select contract_value v, currency c from projects where id='gundih'").get() as {
-  v: number;
-  c: string;
-};
+const node = (n: Partial<WeightNode> & Pick<WeightNode, 'id' | 'parentId' | 'order' | 'isLeaf'>): WeightNode => ({
+  price: null,
+  workstepFactor: null,
+  isReportingUnit: false,
+  unitContractValue: null,
+  bobot: null,
+  ...n,
+});
 
-const derived = computeContractValue(nodes);
+// Two contracts, one nested inside the other's heading, and a closing row that
+// restates the whole 750 on one line. As on Gundih, the rows beside it (600)
+// come close enough to its figure (within 35%) to read as what it restates.
+//   U1  (contract, 600 of its own)
+//     a   600
+//     U2  (contract, 150, nested inside U1 but NOT inside U1's 600)
+//       b   150
+//   fin 750  ← restates the contract
+const nested: WeightNode[] = [
+  node({ id: 'U1', parentId: null, order: 0, isLeaf: false, price: 600, isReportingUnit: true, unitContractValue: 600 }),
+  node({ id: 'a', parentId: 'U1', order: 1, isLeaf: true, price: 600 }),
+  node({ id: 'U2', parentId: 'U1', order: 2, isLeaf: false, price: 150, isReportingUnit: true, unitContractValue: 150 }),
+  node({ id: 'b', parentId: 'U2', order: 3, isLeaf: true, price: 150 }),
+  node({ id: 'fin', parentId: null, order: 4, isLeaf: true, price: 750 }),
+];
+
+const derived = computeContractValue(nested);
+check('contract value from reporting units, nested ones included', Math.abs(derived - 750) < 0.01, `${derived} (600 + 150)`);
+
+const nestedWeights = deriveWeights(nested, 750);
 check(
-  'contract value from reporting units',
-  Math.abs(derived - stored.v) < 0.01,
-  `${derived.toFixed(4)} ${stored.c} vs stored ${stored.v.toFixed(4)}`
+  'a nested contract draws on the project, not on the heading it sits in',
+  nestedWeights.projectBudget === 750 && Math.abs(nestedWeights.total - 100) < 1e-9,
+  `project budget ${nestedWeights.projectBudget}, weights total ${nestedWeights.total.toFixed(6)}`
+);
+check(
+  'a row restating the whole contract is not counted as work',
+  !nestedWeights.bobotOf.has('fin') || (nestedWeights.bobotOf.get('fin') ?? 0) === 0,
+  `fin weighs ${(nestedWeights.bobotOf.get('fin') ?? 0).toFixed(4)}`
 );
 
-const storedTotal = nodes.filter((n) => n.isLeaf).reduce((s, n) => s + (n.bobot ?? 0), 0);
+const nestedSummary = summariseWeights(nested, 'USD', 750);
 check(
-  'stored leaf weights still close at 100',
-  Math.abs(storedTotal - 100) < 1e-6,
-  storedTotal.toFixed(6)
-);
-
-const { changes, result } = previewWeights(nodes);
-check(
-  'recompute over an imported project is NOT a no-op',
-  changes.length > 0,
-  `${changes.length} of ${result.leaves} leaves would move — which is why it must never run silently`
+  'allocation reconciles with the signed contract',
+  Math.abs(nestedSummary.gap) < 0.01,
+  `signed ${nestedSummary.contractValue} − allocated ${nestedSummary.allocated} = ${nestedSummary.gap}`
 );
 check(
-  'derived total is reported as partial, not passed off as 100',
-  result.basis === 'partial',
-  `basis=${result.basis}, derived total ${result.total.toFixed(4)}, covers ${result.covered}/${result.leaves}`
+  'a NESTED reporting unit counts as its own contract',
+  Math.abs(nestedSummary.unitTotal - nestedSummary.contractValue) < 0.01,
+  `units add up to ${nestedSummary.unitTotal} of ${nestedSummary.contractValue}`
 );
 
 // A plan priced end to end must close at exactly 100 by construction.
@@ -119,20 +104,6 @@ check(
   'a plan with no budgets weighs nothing and says so',
   e.basis === 'even' && e.total === 0,
   `basis ${e.basis}, total ${e.total.toFixed(6)} across ${e.leaves} leaves`
-);
-
-/* -------------------------------------------------- signed vs allocated (②) */
-
-const summary = summariseWeights(nodes, stored.c, stored.v);
-check(
-  'allocation reconciles with the signed contract',
-  Math.abs(summary.gap) < 0.01,
-  `signed ${summary.contractValue.toFixed(4)} − allocated ${summary.allocated.toFixed(4)} = ${summary.gap.toFixed(4)}`
-);
-check(
-  'a NESTED reporting unit counts as its own contract',
-  Math.abs(summary.unitTotal - summary.contractValue) < 0.01,
-  `SPK-007 sits inside SPK-004; treating its ${842723.72448.toFixed(2)} as nested lost exactly that from the total`
 );
 
 // Work with no price on it must SHOW as a gap, never be absorbed silently.

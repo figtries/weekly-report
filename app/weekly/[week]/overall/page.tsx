@@ -104,7 +104,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // cover the whole plan, and a card that cannot be dismissed is worse than no
   // card. `wouldChange > 0` is what lets it finish.
   const open = await getOpenProject();
-  const wscreen = open && !open.legacyJsonId ? loadWeightsScreen(open.id) : null;
+  const wscreen = open ? loadWeightsScreen(open.id) : null;
   const estimated = wscreen
     ? [...wscreen.units.flatMap((u) => u.rows), ...wscreen.looseRows].filter(
         (r) => r.isLeaf && r.estimated
@@ -292,8 +292,8 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           map={map}
           week={week}
           projectId={open?.id ?? null}
-          canPrice={!!open && !open.legacyJsonId}
-          projectHref={open && !open.legacyJsonId ? `/projects/${open.id}` : null}
+          canPrice={!!open}
+          projectHref={open ? `/projects/${open.id}` : null}
           currency={money?.currency ?? 'IDR'}
           initialLens={initialLens}
           blockingIds={blocking}

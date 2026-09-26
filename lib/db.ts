@@ -52,17 +52,6 @@ export async function readWorkspace(): Promise<Workspace> {
   return migrate(await readStored());
 }
 
-/**
- * The active project.
- *
- * Kept returning `Database` on purpose: roughly forty call sites read it, and
- * multi-project support would have meant touching all of them for no gain. Only
- * code that genuinely needs to see across projects calls `readWorkspace()`.
- */
-export async function readDb(): Promise<Database> {
-  return activeProject(await readWorkspace());
-}
-
 async function writeWorkspace(ws: Workspace): Promise<void> {
   const json = JSON.stringify(ws);
   if (redisConfigured) {
@@ -142,15 +131,18 @@ export async function mutateProjectDb<T>(
   });
 }
 
-/** Mutate the active project. Every existing caller keeps working unchanged. */
-export function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
-  // This edits whatever `db.json` calls active, which is not necessarily the
-  // project on screen: projects are chosen in SQLite now. Without the guard,
-  // saving a daily report while an app-made project is open would file it under
-  // Gundih — a write landing in the wrong project, silently. The screens above
-  // already refuse to render for such a project; this is the same rule enforced
-  // where the data actually changes.
-  assertLegacyWritable();
+/**
+ * Mutate whatever `db.json` itself calls active — NOT the project on screen.
+ *
+ * Its one remaining caller is the weekly photo route, which predates projects.
+ * The guard is AWAITED now: it was called without `await` for months, so its
+ * refusal became an unhandled rejection while the write went ahead, and weekly
+ * photos uploaded from an app-made project were filed under the imported
+ * project (Gundih, removed 26 Sep 2026). Refusing is the honest answer until
+ * weekly photos get a per-project home.
+ */
+export async function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
+  await assertLegacyWritable();
   return mutateWorkspace(async (ws) => mutator(activeProject(ws)));
 }
 

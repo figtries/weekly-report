@@ -140,15 +140,16 @@ tokens ever change.
 
 # Setup, weights and the plan curve
 
-**Weight is derived, never typed.** `bobot = line value / contract value × 100`,
-computed in `lib/setup.ts` from priced BOQ lines. A BOQ exists on every EPC
+**Weight is derived, never typed.** `bobot = line value / project budget × 100`,
+computed in `lib/weights.ts` from priced rows. A BOQ exists on every EPC
 contract — it is what the bid was priced from — so asking for prices asks for a
 document people already have, the weights close at 100 by construction instead
 of by luck, and `contractValue` (and therefore earned value) falls out for free
 rather than needing its own field. Never accept a weight from a client payload:
-`applySetup` in `lib/mutations.ts` is the only door into the database, and it
-recomputes. (The db.json setup wizard still gives a project without a priced
-BOQ `evenWeights()`; a SQLite project with no budgets weighs nothing — see below.)
+the weight is recomputed on every price and structure write
+(`lib/weights-auto.ts`). A project with no budgets weighs nothing — see below.
+(The db.json setup wizard and its `evenWeights()` were removed with Gundih on
+26 Sep 2026.)
 
 **A BUDGET IS THE ONLY THING THAT GIVES A ROW WEIGHT** (24 Sep 2026, replacing
 the 14 Sep "price or share" rule; spec in
@@ -294,12 +295,9 @@ the sides the right way round. Gundih on the SQLite path now prints byte for
 byte what db.json prints, which is what makes moving it later a migration
 rather than a change of number.
 
-**An imported project's report header does NOT come from these columns.** A
-project with `legacyJsonId` reads db.json, so typing a report number into
-Project details looks like it worked and changes nothing on the paper. The
-dialog says so, in warn colour, on those two fields only. Say it rather than
-hide the fields: the fork is deliberate and the admission is the same kind
-`/klaim` makes about photos carrying no timestamps.
+**Every project's report header comes from these columns.** The one exception
+was the imported project, which read its header from db.json and had a warning
+in Project details saying so; both went with it on 26 Sep 2026.
 
 **The planner asks for a schedule, and nothing else.** Four columns: task name,
 duration, start, finish. Target, Price and Weight were removed on 12 Sep 2026
@@ -464,11 +462,11 @@ real total first rather than inventing one.
 
 # Multi-project
 
-**`readDb()` still returns one `Database` — the active project.** The store now
-holds a `Workspace` (see `lib/workspace.ts`), but roughly forty call sites read
-a single project and rewriting them would have bought nothing. Only code that
-genuinely spans projects calls `readWorkspace()`. Legacy single-project files
-are wrapped on read and never rewritten until something is actually saved.
+**db.json is a `Workspace`: a map of per-project records** (see
+`lib/workspace.ts`), each read and written by its own key. `readDb()` — "the
+file's active project" — was removed with Gundih on 26 Sep 2026; nothing may
+read a project out of db.json without naming it. Legacy single-project files
+are still wrapped on read and never rewritten until something is saved.
 
 **Anything the root layout reads must be cached.** `getProjects()` and
 `getWorkspace()` in `lib/data.ts` exist because an uncached read in
@@ -535,8 +533,7 @@ while the missing writes were rows nobody asserted on, and stopped being
 invisible when `projects` gained `alias` — two verify scripts died with
 `no such column: "alias"`, which looks exactly like a bug in the code under
 test. Use `copyDbFixture` from `scripts/db-fixture.ts` (it serializes, the same
-image the snapshot push uploads). `scripts/backfill-schedule.ts` still copies by
-file for its backup and has the same latent gap.
+image the snapshot push uploads).
 
 **Attaching the store is a deploy-time act, not a dashboard act.** Creating the
 Blob store and connecting it to the project is only half of it: Vercel bakes
@@ -575,22 +572,31 @@ curl the failing path, and each entry's `logs` array holds the Next.js message.
 
 # Which store a project reads, and which one it writes
 
-**`legacy_json_id` decides, and only ONE project has it.** `db.json` holds
-exactly one project; SQLite holds them all. Dashboard, Weekly Progress and
-Reports now read whichever project is OPEN through `getOpenDb` /
-`getOpenWeekRollup` / `getOpenSCurveSeries` in `lib/data.ts`: a project with
-`legacyJsonId` reads db.json through the same cached functions it always did,
-every other project reads SQLite through `lib/dashboard-db.ts`. Their writes
-follow the same fork — `lib/actions.ts` asks `sqliteProject()` first and hands
-off to `lib/progress-sqlite.ts`, which calls `lib/progress.ts` for every figure
-so the evidence still decides the percentage.
+**Every project's weekly figures live in SQLite; db.json holds its daily
+reports.** Dashboard, Weekly Progress and Reports read whichever project is OPEN
+through `getOpenDb` / `getOpenWeekRollup` / `getOpenSCurveSeries` in
+`lib/data.ts`, all of it SQLite through `lib/dashboard-db.ts`. Writes go
+through `lib/actions.ts` → `sqliteProject()` → `lib/progress-sqlite.ts`, which
+calls `lib/progress.ts` for every figure so the evidence still decides the
+percentage. With no project open, a weekly write refuses rather than guessing.
 
-**Gundih stays on db.json on purpose.** Both stores hold it and they do not
-agree: week by week (`scripts/verify-weekly-store.ts`) they differ by up to
-12.85 points, because db.json's later weeks carry leaves that fall back to zero
-while SQLite carries each leaf forward. Whichever is nearer the truth, moving a
-signed report onto a different number is not a migration. It moves when board
-item 08 reconciles it deliberately.
+**GUNDIH WAS REMOVED ON 26 SEP 2026, and the db.json fork went with it.** It
+had been the imported reference project, the only one with `legacy_json_id`,
+and it read its weekly figures from db.json because its two stores disagreed
+by up to 12.85 points. The user deleted it from the deployment and asked for it
+gone everywhere. Gone: its rows in `data/report.db` and `data/seed.db` (FK
+cascade, proved empty after), its `p-utama` record and the `seed` script that
+rebuilt it, the whole weekly db.json read/write path (`getDb`, `readDb`,
+`isLegacyProject`, the cached rollups), the v1 portfolio and setup wizard
+(`/portfolio`, `/setup`, `lib/setup.ts`), the db.json approval, contract-value
+and WBS/S-curve/week API routes, and the importer and verify scripts that only
+proved Gundih's own numbers. Verify scripts that used Gundih as a FIXTURE for
+general rules now run on the largest plan in the database or on a hand-built
+plan (`verify-weights`, `verify-worklist`, `verify-week-grid`, `verify-paste`);
+`verify-chains` and `verify-bar-styles` went, because only a plan of Gundih's
+shape exercised them. **The `legacy_json_id` column stays in the schema,
+empty**: dropping it is the drizzle table rebuild that deletes child rows (see
+below). Nothing reads it.
 
 **`targetWF` is never written on the SQLite side.** The curve comes from the
 dates. `applyWeekUpdates` accepts a target only because db.json stores the curve
@@ -603,22 +609,21 @@ exactly the pair that disagree. `app/api/pdf/weekly/[week]/route.ts` resolves it
 in the USER's request and passes `?project=`; `getPrintDb` renders an empty sheet
 for an id it does not know, never somebody else's.
 
-**Still db.json for Daily, Klaim and the Settings catalogs — but PER PROJECT
-now.** They need tables SQLite does not have, and **a deployment restores its
-schema from the blob snapshot, not from a migration** (`instrumentation.ts`
-pulls the file; nothing runs `drizzle-kit migrate`), so adding a table is a
-deployment question before it is a code one — answer that first. What did not
-need a table: `db.json` has held a MAP of projects since the portfolio tier, and
-only `readDb()` insisted on returning whichever one the file called active.
-`jsonKeyFor()` in `lib/legacy-bridge.ts` answers which record a project reads
-and writes — `legacyJsonId` for the imported one, its own SQLite id for
-everybody else, created on first write and seeded with the identity SQLite
+**Still db.json for Daily, Klaim and the Settings catalogs — PER PROJECT.**
+They need tables SQLite does not have, and **a deployment restores its schema
+from the blob snapshot, not from a migration** (`instrumentation.ts` pulls the
+file; nothing runs `drizzle-kit migrate`), so adding a table is a deployment
+question before it is a code one — answer that first. `db.json` holds a MAP of
+projects; `jsonKeyFor()` in `lib/legacy-bridge.ts` names each project's record
+(its SQLite id), created on first write and seeded with the identity SQLite
 already holds. Read through `getOpenJsonDb()` / `getPrintJsonDb()`, write
-through `mutateOpenDb()`; `mutateDb()` and its `assertLegacyWritable` guard are
-left for the weekly and setup paths, which still belong to the one project.
-A daily report is a form filled in from the site, not something derived from a
-plan — there was never a reason a project had to be imported before it could
-have one.
+through `mutateOpenDb()`. On the deployment that map lives in Redis
+(`weekly-report:db`), not in the file. `mutateDb()` — whatever the FILE calls
+active — has one caller left, the weekly photo route, and its guard refuses
+while a project is open. **Weekly photos therefore do not save for any
+project**: they never did for an app-made one (the guard was called without
+`await` and the upload was filed under Gundih; `dashboard-db` returns no
+documentation), and they need a per-project home before that screen works.
 
 **An index route that redirects must resolve the project behind `<Suspense>`.**
 `/weekly` and `/dokumen` send you to a week number, and reading db.json's sent a
@@ -627,7 +632,9 @@ in a child component with `connection()` and a `null` fallback — an uncached r
 in the page body fails the build.
 
 **Weight follows price, unless the weights are authoritative.** `weight_basis =
-'boq'` is the LOCK, and only an imported project carries it. The "Lock these
+'boq'` is the LOCK. Only the imported project ever carried it and that project
+is gone, so today no project does; the code path stays and
+`scripts/verify-weights-auto.ts` proves it by locking a fixture copy. The "Lock these
 weights" button and its dialog were REMOVED on 24 Sep 2026 because they only
 confused people (the dialog said "Apply anyway" when nothing would change);
 nothing in the app can set the lock any more. Everything else re-derives on

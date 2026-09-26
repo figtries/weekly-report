@@ -1,5 +1,5 @@
 import { cacheLife, cacheTag } from 'next/cache';
-import { readDb, readJsonProject, readWorkspace } from './db';
+import { readJsonProject, readWorkspace } from './db';
 import {
   computeGrandTotal,
   computeRollup,
@@ -10,21 +10,12 @@ import {
 import { buildSCurveSeries, type SCurveRow } from './scurve';
 import { listProjects, type ProjectSummary, type Workspace } from './workspace';
 import { buildProjectDashboardData } from './dashboard-db';
-import { isLegacyProject, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
+import { jsonKeyFor, jsonSeedFor } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 import { currentWeekOf } from './current-week';
 import { r2, shownDiff } from './figures';
 import { weightGate } from './weight-gate';
 import type { Database, WeeklyMeta } from './types';
-
-// Cached so every page renders into an instant static shell (see
-// unstable_instant exports); mutateDb expires the 'db' tag on every write.
-export async function getDb(): Promise<Database> {
-  'use cache';
-  cacheTag('db');
-  cacheLife('max');
-  return readDb();
-}
 
 export function getWeekMeta(db: Database, week: number): WeeklyMeta | null {
   return db.weeks.find((w) => w.week === week) ?? null;
@@ -61,24 +52,6 @@ export function getWeekRollup(db: Database, week: number): WeekRollup | null {
   return { meta, prevMeta, roots, grandTotal: computeGrandTotal(roots) };
 }
 
-export async function getCachedWeekRollup(week: number): Promise<WeekRollup | null> {
-  'use cache';
-  cacheTag('db');
-  cacheLife('max');
-
-  const db = await readDb();
-  return getWeekRollup(db, week);
-}
-
-export async function getCachedSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
-  'use cache';
-  cacheTag('db');
-  cacheLife('max');
-
-  const db = await readDb();
-  return buildSCurveSeries(db, upToWeek);
-}
-
 /**
  * The project list for the sidebar.
  *
@@ -107,35 +80,17 @@ export async function getWorkspace(): Promise<Workspace> {
 /* ------------------------------------------------- the project that is OPEN */
 
 /**
- * The weekly report, for whichever project is open — not for whichever project
- * `db.json` happens to hold.
+ * The weekly report, for whichever project is open. EVERY project reads SQLite,
+ * through the same adapter the dashboard uses (`lib/dashboard-db.ts`), and
+ * uncached: cached would mean a planner edit not showing until something
+ * expired the tag.
  *
- * Weekly Progress, Daily, Reports and Klaim all read `readDb()`, and `db.json`
- * holds exactly ONE project. `lib/legacy-bridge.ts` stopped that from lying by
- * refusing to draw anything for a project db.json has never heard of, which was
- * the right call and also a dead end: a project built in the app — real WBS,
- * real dates, real prices — could never be reported on at all. "This project
- * has no weekly reports yet" was not a state it could leave.
- *
- * SQLite already holds everything the weekly report needs for those projects,
- * and `lib/dashboard-db.ts` already shapes it into the `Database` that
- * `lib/rollup.ts` and `lib/analysis.ts` take. The dashboard has read every
- * project that way for months. This is the same adapter, reached from the
- * weekly pages.
- *
- * **THE IMPORTED PROJECT STAYS ON db.json, DELIBERATELY.** Both stores hold
- * Gundih and they do not agree: compared week by week
- * (`scripts/verify-weekly-store.ts`) the two disagree by up to 12.85 points,
- * because db.json's later weeks carry leaves that fall back to zero while
- * SQLite carries each leaf forward. Whichever is nearer the truth, moving a
- * SIGNED report onto a different number is not a migration — it is a report
- * that stops matching the paper the client holds. Gundih moves when board item
- * 08 rebuilds these pages properly and the numbers are reconciled on purpose.
- *
- * So: a project with `legacyJsonId` reads exactly what it read before, through
- * the same cached functions. Every other project reads SQLite, uncached, the
- * way the dashboard does — cached would mean a planner edit not showing until
- * something expired the tag.
+ * Until 26 Sep 2026 there was a fork here. The imported project, Gundih, kept
+ * reading db.json through cached functions because its two stores disagreed by
+ * up to 12.85 points and a signed report must not move. Gundih was removed that
+ * day (it had only ever been a reference), and the fork went with it: no
+ * project reads weekly figures from db.json any more. db.json still holds each
+ * project's DAILY reports and catalogs — see `getOpenJsonDb` below.
  */
 /**
  * A project the database cannot find at all — deleted in another tab, or an
@@ -169,7 +124,7 @@ const NO_PROJECT: Database = {
 
 export async function getOpenDb(): Promise<Database> {
   const id = await getActiveProjectId();
-  if (!id || isLegacyProject(id)) return getDb();
+  if (!id) return NO_PROJECT;
   return buildProjectDashboardData(id)?.db ?? NO_PROJECT;
 }
 
@@ -212,7 +167,7 @@ export async function getPrintJsonDb(projectId: string | null): Promise<Database
 
 export async function getOpenWeekRollup(week: number): Promise<WeekRollup | null> {
   const id = await getActiveProjectId();
-  if (!id || isLegacyProject(id)) return getCachedWeekRollup(week);
+  if (!id) return null;
   const db = buildProjectDashboardData(id)?.db;
   return db ? getWeekRollup(db, week) : null;
 }
@@ -245,15 +200,13 @@ export interface OpenProjectStatus {
 export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
-  const legacy = isLegacyProject(id);
-  const db = legacy ? await getDb() : buildProjectDashboardData(id)?.db;
+  const db = buildProjectDashboardData(id)?.db;
   if (!db || db.weeks.length === 0) return null;
 
   const week = currentWeekOf(db);
-  // The imported project's rollup is cached against the 'db' tag like every
-  // other read of it; a SQLite project is built fresh, as `getOpenWeekRollup`
-  // does, so a save shows on the next navigation.
-  const rollup = legacy ? await getCachedWeekRollup(week) : getWeekRollup(db, week);
+  // Built fresh, as `getOpenWeekRollup` does, so a save shows on the next
+  // navigation.
+  const rollup = getWeekRollup(db, week);
   if (!rollup || rollup.grandTotal.bobot <= 0) return null;
 
   const gate = weightGate(db.wbsItems);
@@ -269,7 +222,7 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
 
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
   const id = await getActiveProjectId();
-  if (!id || isLegacyProject(id)) return getCachedSCurveSeries(upToWeek);
+  if (!id) return [];
   const db = buildProjectDashboardData(id)?.db;
   return db ? buildSCurveSeries(db, upToWeek) : [];
 }
@@ -292,7 +245,6 @@ export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]
  */
 export async function getPrintDb(projectId: string | null): Promise<Database> {
   if (!projectId) return getOpenDb();
-  if (isLegacyProject(projectId)) return getDb();
   return buildProjectDashboardData(projectId)?.db ?? NO_PROJECT;
 }
 
@@ -319,7 +271,6 @@ export async function getPrintWeekRollup(
   week: number
 ): Promise<WeekRollup | null> {
   if (!projectId) return getOpenWeekRollup(week);
-  if (isLegacyProject(projectId)) return getCachedWeekRollup(week);
   const db = buildProjectDashboardData(projectId)?.db;
   return db ? getWeekRollup(db, week) : null;
 }

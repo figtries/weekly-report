@@ -45,12 +45,51 @@ function check(name: string, pass: boolean, detail = '') {
 
 // ---------------------------------------------------------------- packages
 
-const PROJECT = 'gundih';
+// The largest plan in the database. Written against Gundih, removed 26 Sep 2026.
+const PROJECT = (
+  sqlite
+    .prepare('select project_id id, count(*) c from wbs_nodes group by project_id order by c desc limit 1')
+    .get() as { id: string } | undefined
+)?.id ?? 'none';
 const baselineId = getActiveBaselineId(PROJECT)!;
 
 // Gundih is the control: all 67 of its branches carry stored dates that already
 // equal their rollup, so a correct repair moves nothing at all.
 check('an intact plan is left alone', coverChildren(PROJECT, baselineId) === 0);
+
+// The checks below need a package: a branch with at least two dated rows. The
+// plan this was written against (Gundih) had 67; a flat plan has none, so one
+// is made here the way indent makes one — two rows moved under the row above
+// them, which stops being a leaf. The fixture is a throwaway copy.
+{
+  const hasBranch = db
+    .select({ id: schema.wbsNodes.id })
+    .from(schema.wbsNodes)
+    .where(and(eq(schema.wbsNodes.projectId, PROJECT), eq(schema.wbsNodes.isLeaf, false)))
+    .all()
+    .some((n) => db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.parentId, n.id)).all().length >= 2);
+  if (!hasBranch) {
+    const rows = db
+      .select({ id: schema.wbsNodes.id, parentId: schema.wbsNodes.parentId, order: schema.wbsNodes.order })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, PROJECT))
+      .all()
+      .sort((a, b) => a.order - b.order)
+      .filter((r) => !!rowSpan(r.id, baselineId));
+    const [head, ...next] = rows.filter((r) => (r.parentId ?? null) === (rows[0]?.parentId ?? null));
+    if (!head || next.length < 2) throw new Error('The plan under test has too few dated rows to build a package from');
+    sqlite.prepare('update wbs_nodes set parent_id = ? where id in (?, ?)').run(head.id, next[0].id, next[1].id);
+    sqlite.prepare('update wbs_nodes set is_leaf = 0 where id = ?').run(head.id);
+    // An intact package's box is exactly its work, as every one of Gundih's
+    // was: the checks below squash it and expect the repair to restore that.
+    const spans = [next[0].id, next[1].id].map((id) => rowSpan(id, baselineId)!);
+    const start = spans.map((s) => s.start).sort()[0];
+    const finish = spans.map((s) => s.finish).sort().at(-1)!;
+    sqlite
+      .prepare('update node_schedules set start_date = ?, finish_date = ? where baseline_id = ? and node_id = ?')
+      .run(start, finish, baselineId, head.id);
+  }
+}
 
 // Now break one the way the planner did: a package narrowed to a single day
 // with its children left where they are.
@@ -165,11 +204,6 @@ check(
   'the week anchor is week one, not week last',
   built.db.project.weekAnchorEndDate === originalWeeks[0].endDate,
   `${built.db.project.weekAnchorEndDate} vs ${originalWeeks[0].endDate}`
-);
-check(
-  'and it agrees with what db.json stores for the same project',
-  built.db.project.weekAnchorEndDate === '2025-10-30',
-  built.db.project.weekAnchorEndDate
 );
 
 // Shift the project three days later, exactly the Samberah case in reverse.

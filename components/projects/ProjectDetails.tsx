@@ -40,8 +40,6 @@ interface Project {
   alias: string | null;
   documentNoWeekly: string | null;
   documentNoDaily: string | null;
-  /** Set on the one imported project, whose reports still read db.json. */
-  legacyJsonId: string | null;
   /** JSON `{ company, name }` each. Read through lib/signature.ts. */
   signatureLeft: string | null;
   signatureRight: string | null;
@@ -113,24 +111,6 @@ const FIELDS: {
   },
   { key: 'signatureRightName', label: 'Signature, right: name', hint: 'Who signs for them' },
 ];
-
-/**
- * Fields whose ONLY reader is the printed report header.
- *
- * On an imported project every one of them is read from db.json rather than
- * from these columns, so typing here looks like it worked and changes nothing
- * on the paper. The dialog says so on exactly these fields. The fork is
- * deliberate — see `lib/data.ts`: moving a signed report onto a different
- * number is not a migration — and this is the admission that goes with it.
- */
-const PRINT_ONLY = new Set<ProjectField>([
-  'documentNoWeekly',
-  'documentNoDaily',
-  'signatureLeftCompany',
-  'signatureLeftName',
-  'signatureRightCompany',
-  'signatureRightName',
-]);
 
 export default function ProjectDetails({ project }: { project: Project }) {
   const router = useRouter();
@@ -298,21 +278,6 @@ export default function ProjectDetails({ project }: { project: Project }) {
                           </p>
                         ) : (
                           f.hint && <p className="text-[11px] text-muted-foreground">{f.hint}</p>
-                        )}
-                        {/* Said out loud rather than hidden. An imported
-                            project's reports still read their header from
-                            db.json, not from these columns, so typing here
-                            would look like it worked and change nothing on the
-                            paper. The fork is deliberate (see lib/data.ts:
-                            moving a signed report onto a different number is
-                            not a migration) and this is the admission that
-                            goes with it, the same way /klaim admits its photos
-                            carry no timestamps. */}
-                        {project.legacyJsonId && PRINT_ONLY.has(f.key) && (
-                          <p className="text-[11px] leading-relaxed text-warn">
-                            This project was imported, and its reports still read this from the
-                            imported file. Setting it here will not change the printed report yet.
-                          </p>
                         )}
                       </div>
                     ))}

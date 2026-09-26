@@ -1,25 +1,15 @@
 /**
- * Which project the v1 pages are allowed to show — and when they must not.
+ * Where a project's db.json record lives, and the one guard left on db.json.
  *
- * Dashboard, Weekly Progress, Daily, Reports and Klaim all read `readDb()`,
- * which returns the active project out of `db.json`. Projects are now chosen in
- * SQLite, so those two can disagree: opening a project made in the app left the
- * sidebar naming it while the Dashboard went on drawing Gundih's 70.14% and its
- * laggards. That is the failure this app fears most — a report that does not
- * match the site.
+ * This file used to answer "does the open project have v1 data?" — whether it
+ * was the imported project, Gundih, whose weekly figures lived in db.json while
+ * every other project's lived in SQLite. Gundih was removed on 26 Sep 2026 and
+ * with it every weekly read of db.json; no project carries `legacy_json_id`
+ * any more (the column stays in the schema: dropping it is the drizzle
+ * table-rebuild AGENTS.md warns deletes child rows).
  *
- * **Reads and writes must stay on the same store.** Twelve files write to
- * `db.json` through `mutateDb` (fourteen call sites in `lib/actions.ts` alone,
- * plus eight API routes). Serving those pages a `Database` built from SQLite
- * while their writes still land in JSON would lose people's edits silently —
- * worse than the problem being fixed. So this bridge does not translate
- * anything. It answers one question: does the open project have v1 data at all?
- *
- * A project made in the app has none, and the honest answer for it is not a
- * chart of zeroes — it is a sentence saying so and a way forward.
- *
- * `legacyJsonId` is the link, and it is meant to die: when board items 08–14
- * rebuild those pages on SQLite, both the column and this file go with them.
+ * What remains is db.json's real job: each project's DAILY reports and its own
+ * catalogs, keyed by the project's SQLite id.
  */
 import { eq } from 'drizzle-orm';
 
@@ -31,67 +21,33 @@ import type { Database } from './types';
 export interface OpenProject {
   id: string;
   name: string;
-  /** The `db.json` project this one is backed by, or null for app-made projects. */
-  legacyJsonId: string | null;
-  /** True when Dashboard, Weekly, Daily, Reports and Klaim have something to show. */
-  hasLegacyData: boolean;
-}
-
-/**
- * Does this project's data live in `db.json`?
- *
- * Synchronous on purpose: `lib/data.ts` asks this to choose a STORE, and an
- * async answer would force `<Suspense>` around every read in the app (see
- * AGENTS.md). A sync embedded-database query is deterministic and prerenders.
- */
-export function isLegacyProject(projectId: string): boolean {
-  const p = db
-    .select({ legacyJsonId: schema.projects.legacyJsonId })
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
-  return !!p?.legacyJsonId;
 }
 
 export async function getOpenProject(): Promise<OpenProject | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
   const p = db
-    .select({
-      id: schema.projects.id,
-      name: schema.projects.name,
-      legacyJsonId: schema.projects.legacyJsonId,
-    })
+    .select({ id: schema.projects.id, name: schema.projects.name })
     .from(schema.projects)
     .where(eq(schema.projects.id, id))
     .all()[0];
-  if (!p) return null;
-  return { ...p, hasLegacyData: !!p.legacyJsonId };
+  return p ?? null;
 }
 
 /**
- * WHICH JSON RECORD A PROJECT READS AND WRITES.
+ * WHICH JSON RECORD A PROJECT READS AND WRITES: its own, keyed by its SQLite id.
  *
- * `db.json` was never one project — `lib/workspace.ts` has held a map of them
- * since the portfolio tier — it was one project that everybody shared, because
- * `readDb()` always returned whichever one the FILE called active. That is why
- * the daily report could only ever belong to Gundih.
+ * `db.json` has held a map of projects since the portfolio tier, and only
+ * `readDb()` insisted on returning whichever one the FILE called active — which
+ * is why the daily report could once only belong to one project. Keyed, two
+ * projects can never write over each other's days. (The imported project used
+ * to read its own record through `legacy_json_id`; it was removed 26 Sep 2026.)
  *
- * The key is the answer: the imported project keeps reading `p-utama` through
- * its `legacyJsonId`, and every other project reads and writes a record of its
- * own, keyed by its SQLite id. Nothing moves, nothing is migrated, and two
- * projects can no longer write over each other's days.
- *
- * Synchronous for the same reason as `isLegacyProject`: callers use it to pick
- * a STORE, and an async answer would drag a `<Suspense>` around every read.
+ * Kept as a function rather than inlined at its callers so the key has one
+ * definition.
  */
 export function jsonKeyFor(projectId: string): string {
-  const p = db
-    .select({ legacyJsonId: schema.projects.legacyJsonId })
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
-  return p?.legacyJsonId ?? projectId;
+  return projectId;
 }
 
 /**
@@ -115,14 +71,16 @@ export function jsonSeedFor(projectId: string): Database {
 
 /**
  * Guard for the write path. `mutateDb` edits whatever `db.json` calls active,
- * which is not necessarily the project on screen — so without this, adding a
- * daily report while an app-made project is open would write it into Gundih.
+ * which is not the project on screen — so while a project is open it refuses,
+ * rather than writing that project's data into another one's record. No
+ * project reads its weekly figures from db.json any more, so nothing open can
+ * use `mutateDb` legitimately.
  */
 export async function assertLegacyWritable(): Promise<void> {
   const open = await getOpenProject();
-  if (open && !open.hasLegacyData) {
+  if (open) {
     throw new Error(
-      `"${open.name}" has no weekly or daily data yet, and saving here would write it into another project. Build its schedule first.`
+      `"${open.name}" keeps its weekly figures in the project database, and saving here would write them into another project's record.`
     );
   }
 }

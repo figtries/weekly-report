@@ -22,8 +22,8 @@
  * anything else finishes — produces a graph where everything follows everything
  * and every row is critical, which says nothing at all.
  *
- * Pure: no database, no React. `scripts/verify-chains.ts` runs the real plan
- * through it.
+ * Pure: no database, no React. It was proved against Gundih's 285-row plan by
+ * a script removed with that project on 26 Sep 2026.
  */
 
 const MS_PER_DAY = 86_400_000;

@@ -374,8 +374,7 @@ export function RegisterBuilder({
               onChange={(e) => setRule((r) => ({ ...r, prefix: e.target.value.toUpperCase() }))}
             />
             <p className="text-sm text-muted-foreground">
-              The short code on your drawings. Petrogas uses <code>WPP</code>, Gundih{' '}
-              <code>PRGG</code>.
+              The short code on your drawings, for example <code>WPP</code>.
             </p>
           </div>
 

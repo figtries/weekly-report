@@ -2,24 +2,15 @@
 
 import { refresh, updateTag } from 'next/cache';
 import { after } from 'next/server';
-import { mutateDb, mutateOpenDb, mutateProjectDb, mutateWorkspace } from './db';
+import { mutateOpenDb } from './db';
 import type { CatalogKey } from './catalogs';
-import { emptyDatabase, newProjectId } from './workspace';
 import {
-  applyApproval,
   applyCatalog,
   applyCreateDaily,
   applyDeleteDaily,
-  applyFieldProgress,
   applyPatchDaily,
-  applyProgressMethod,
-  applyRevokeApproval,
-  applySetup,
-  applyWeekUpdates,
-  markNoProgress,
   type FieldProgressUpdate,
 } from './mutations';
-import { isLegacyProject } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 import {
   markNoProgressSqlite,
@@ -36,11 +27,10 @@ import type { LeafWeekLog, WeekEvidence } from './week-log';
 import { readLeafLog } from './week-log-read';
 import { and, eq } from 'drizzle-orm';
 import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
-import type { SetupDraft } from './setup-draft';
 import { deleteUploadedPhoto } from './upload';
 import { BUILT_IN_KINDS, type Shape } from './work-kind';
 import { ladderFor } from './work-kind-apply';
-import type { CatalogEntry, Database, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
+import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
 // one round trip that mutates, expires the 'db' cache tag (updateTag = read
@@ -49,16 +39,10 @@ import type { CatalogEntry, Database, DailyReport, LeafSnapshot, Milestone, Prog
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 /**
- * WHICH STORE THIS WRITE BELONGS TO.
- *
- * The weekly pages read whichever project is open (`getOpenDb` in lib/data.ts),
- * so they now render for a project that has never been near `db.json`. Their
- * writes have to follow, or Fill in is a form that throws — `mutateDb` refuses
- * a project db.json has never heard of, and it is right to: it edits whatever
- * db.json calls active, which would be somebody else's project.
- *
- * Null means "this is a db.json project" — the imported one — and every action
- * below then behaves exactly as it always has.
+ * WHICH PROJECT THIS WRITE BELONGS TO: the id the caller names, or the open
+ * one. Every project keeps its weekly figures in SQLite; null means no project
+ * is open at all. (It used to mean "the imported project, whose figures lived
+ * in db.json" — that project, Gundih, was removed on 26 Sep 2026.)
  */
 async function sqliteProject(explicit?: string | null): Promise<string | null> {
   // AN ID PASSED IN WINS. The screen that is asking was rendered for one
@@ -67,25 +51,15 @@ async function sqliteProject(explicit?: string | null): Promise<string | null> {
   // answers "Item not found" for a row that is plainly on screen — which is
   // what every work-kind save did once the open project and the rendered page
   // drifted apart (a cached page, a second tab, a cookie that moved on).
-  const id = explicit ?? (await getActiveProjectId());
-  if (!id || isLegacyProject(id)) return null;
-  return id;
+  return explicit ?? (await getActiveProjectId()) ?? null;
 }
 
 /**
- * The json record a WRITE belongs to, given the project the caller names.
- *
- * `mutateDb` writes whatever db.json itself calls active and guards that with
- * `assertLegacyWritable`; that is the right shape for the setup paths, which
- * genuinely mean "the legacy project". A weekly write means "the project this
- * row came from", so it goes through the id it was handed.
+ * What a weekly write says when no project is open. It used to fall through to
+ * db.json and edit whatever that file called active — the imported project,
+ * removed 26 Sep 2026 — which is exactly the write that must not happen.
  */
-function mutateFor<T>(
-  projectId: string | null | undefined,
-  mutator: (db: Database) => T | Promise<T>
-): Promise<T> {
-  return projectId ? mutateProjectDb(projectId, mutator) : mutateDb(mutator);
-}
+const NO_PROJECT_OPEN: ActionResult = { ok: false, error: 'No project is open. Open one from Projects first.' };
 
 /**
  * A SQLite write, wrapped the way every other one in this app is: the snapshot
@@ -135,17 +109,7 @@ export async function setCurrentWeekAction(week: number): Promise<ActionResult> 
         .run();
     });
   }
-  try {
-    await mutateDb((db) => {
-      if (!db.weeks.some((w) => w.week === week)) throw new Error(`Week ${week} not found`);
-      db.project.currentWeek = week;
-    });
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 export async function createDailyAction(date: string): Promise<ActionResult> {
@@ -223,42 +187,7 @@ export async function saveWeekUpdatesAction(
 ): Promise<ActionResult> {
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => saveWeekUpdatesSqlite(projectId, week, updates));
-  try {
-    await mutateFor(forProject, (db) => applyWeekUpdates(db, week, updates));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-// --- Setup & baseline ------------------------------------------------------
-
-export async function setContractValueAction(value: number): Promise<ActionResult> {
-  try {
-    if (!Number.isFinite(value) || value < 0) throw new Error('Contract value is not valid');
-    await mutateDb((db) => {
-      // 0 clears it — a project that never had a BOQ should be able to go back
-      // to percent-only rather than carry a made-up number forward.
-      db.project.contractValue = value > 0 ? value : undefined;
-    });
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function commitSetupAction(draft: SetupDraft): Promise<ActionResult> {
-  try {
-    await mutateDb((db) => applySetup(db, draft));
-    updateTag('db');
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 export async function saveFieldProgressAction(
@@ -268,14 +197,7 @@ export async function saveFieldProgressAction(
 ): Promise<ActionResult> {
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => saveFieldProgressSqlite(projectId, week, updates));
-  try {
-    await mutateFor(forProject, (db) => applyFieldProgress(db, week, updates));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 /**
@@ -291,14 +213,7 @@ export async function markNoProgressAction(
 ): Promise<ActionResult> {
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => markNoProgressSqlite(projectId, week, leafIds));
-  try {
-    await mutateFor(forProject, (db) => markNoProgress(db, week, leafIds));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 export async function setProgressMethodAction(
@@ -308,14 +223,7 @@ export async function setProgressMethodAction(
 ): Promise<ActionResult> {
   const projectId = await sqliteProject();
   if (projectId) return sqliteWrite(() => setProgressMethodSqlite(leafId, method, opts));
-  try {
-    await mutateDb((db) => applyProgressMethod(db, leafId, method, opts));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 /**
@@ -342,18 +250,7 @@ export async function setWorkKindAction(
 
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts));
-  try {
-    await mutateFor(forProject, (db) => {
-      applyProgressMethod(db, leafId, method, methodOpts);
-      const item = db.wbsItems.find((i) => i.id === leafId);
-      if (item) item.workKind = kindId;
-    });
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
+  return NO_PROJECT_OPEN;
 }
 
 export async function saveCatalogAction(
@@ -362,85 +259,6 @@ export async function saveCatalogAction(
 ): Promise<ActionResult> {
   try {
     await mutateOpenDb((db) => applyCatalog(db, key, entries));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-// --- Workspace (multi-proyek) ----------------------------------------------
-
-export async function switchProjectAction(projectId: string): Promise<ActionResult> {
-  try {
-    await mutateWorkspace((ws) => {
-      if (!ws.projects[projectId]) throw new Error('Project not found');
-      ws.activeProjectId = projectId;
-    });
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function createProjectAction(name: string): Promise<ActionResult & { id?: string }> {
-  try {
-    const id = await mutateWorkspace((ws) => {
-      const newId = newProjectId();
-      ws.projects[newId] = emptyDatabase(name.trim() || 'New project');
-      ws.order.push(newId);
-      // Switch immediately: creating a project and then having to select it is
-      // a step that exists only because the data model made it convenient.
-      ws.activeProjectId = newId;
-      return newId;
-    });
-    updateTag('db');
-    return { ok: true, id };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function deleteProjectAction(projectId: string): Promise<ActionResult> {
-  try {
-    await mutateWorkspace((ws) => {
-      if (!ws.projects[projectId]) throw new Error('Project not found');
-      if (ws.order.length <= 1) throw new Error('The last project cannot be deleted');
-      delete ws.projects[projectId];
-      ws.order = ws.order.filter((id) => id !== projectId);
-      if (ws.activeProjectId === projectId) ws.activeProjectId = ws.order[0];
-    });
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function approveWeekAction(
-  week: number,
-  by: string,
-  role: string,
-  approvedPct: number,
-  note?: string
-): Promise<ActionResult> {
-  try {
-    await mutateDb((db) => applyApproval(db, week, by, role, approvedPct, note));
-    updateTag('db');
-    refresh();
-    return { ok: true };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function revokeApprovalAction(week: number): Promise<ActionResult> {
-  try {
-    await mutateDb((db) => applyRevokeApproval(db, week));
     updateTag('db');
     refresh();
     return { ok: true };

@@ -12,8 +12,8 @@
  * the list, and the list is the interface: you look down it, you find the first
  * line that describes a row, and that is what you will see.
  *
- * Pure — no database, no React, so `scripts/verify-bar-styles.ts` runs the real
- * project through it.
+ * Pure — no database, no React. It was proved against Gundih's plan by a
+ * script removed with that project on 26 Sep 2026.
  */
 import type { BarCondition, BarPaint, BarPreset, BarShape } from './schema';
 import type { SheetRow } from './sheet';

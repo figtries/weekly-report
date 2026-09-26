@@ -33,9 +33,11 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 
 const projects = db.select().from(schema.projects).all();
-const unlocked = projects.find((p) => p.weightBasis !== 'boq' && !p.legacyJsonId);
-const locked = projects.find((p) => p.weightBasis === 'boq');
-if (!unlocked || !locked) throw new Error('This database has no unlocked and locked project to compare');
+// The lock is proved on this same project further down, by locking it: the
+// imported project that used to carry the lock (Gundih) was removed on
+// 26 Sep 2026, and nothing in the app sets it any more.
+const unlocked = projects.find((p) => p.weightBasis !== 'boq');
+if (!unlocked) throw new Error('This database has no unlocked project to derive weights on');
 
 const leaves = db
   .select()
@@ -103,7 +105,12 @@ check(
   `1,000 of a 1,000 project budget (contract 4,000) = ${(after.find((l) => l.id === leaves[0].id)?.bobot ?? 0).toFixed(2)}%`
 );
 
-// The whole point of the lock: an imported project is never touched.
+// The whole point of the lock: a locked project is never touched, whatever its
+// prices say. Lock this one, move its contract value, and ask again.
+db.update(schema.projects).set({ weightBasis: 'boq' }).where(eq(schema.projects.id, unlocked.id)).run();
+db.update(schema.projects).set({ contractValue: 9000 }).where(eq(schema.projects.id, unlocked.id)).run();
+db.update(schema.wbsNodes).set({ price: 2500 }).where(eq(schema.wbsNodes.id, leaves[0].id)).run();
+const locked = { id: unlocked.id, name: unlocked.name };
 const before = db
   .select()
   .from(schema.wbsNodes)
@@ -121,7 +128,7 @@ const afterLocked = db
   .reduce((s, n) => s + (n.bobot ?? 0), 0);
 
 check(
-  'an imported project is refused, not recomputed',
+  'a locked project is refused, not recomputed',
   lockedMoved === 0 && Math.abs(before - afterLocked) < 1e-9,
   `${locked.name.slice(0, 28)}… still totals ${afterLocked.toFixed(6)}`
 );

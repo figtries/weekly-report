@@ -166,16 +166,28 @@ check(
 /* ------------------------------------------------------- the real workbook */
 
 {
+  // The largest plan in the database, written out the way Excel copies it.
+  // This was Gundih's 285 rows until that project was removed (26 Sep 2026).
+  const PROJECT = (
+    [
+      ...db
+        .select({ id: schema.wbsNodes.projectId })
+        .from(schema.wbsNodes)
+        .all()
+        .reduce((acc, r) => acc.set(r.id, (acc.get(r.id) ?? 0) + 1), new Map<string, number>())
+        .entries(),
+    ].sort((a, b) => b[1] - a[1])[0] ?? ['none']
+  )[0];
   const nodes = db
     .select()
     .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, 'gundih'))
+    .where(eq(schema.wbsNodes.projectId, PROJECT))
     .orderBy(asc(schema.wbsNodes.order))
     .all();
   const baseline = db
     .select()
     .from(schema.baselines)
-    .where(eq(schema.baselines.projectId, 'gundih'))
+    .where(eq(schema.baselines.projectId, PROJECT))
     .all()
     .find((b) => b.kind === 'active');
   const sched = new Map(
@@ -206,13 +218,13 @@ check(
   const p = parsePaste(lines.join('\n'));
 
   check(
-    'Gundih survives a round trip through the clipboard',
-    p.rows.length === nodes.length,
+    'a real plan survives a round trip through the clipboard',
+    nodes.length > 0 && p.rows.length === nodes.length,
     `${p.rows.length} rows parsed of ${nodes.length}`
   );
 
   const nameOk = p.rows.every((r, i) => r.name === nodes[i].deskripsi);
-  check('every name comes back unchanged', nameOk, nameOk ? '285/285' : 'mismatch');
+  check('every name comes back unchanged', nameOk, nameOk ? `${nodes.length}/${nodes.length}` : 'mismatch');
 
   const depthOk = p.rows.every((r, i) => r.depth === nodes[i].depth);
   check(
@@ -228,7 +240,7 @@ check(
     if (!s) return r.startDate === null;
     return r.startDate === s.startDate && r.finishDate === s.finishDate;
   });
-  check('every date comes back unchanged', dateOk, dateOk ? 'all 285' : 'mismatch');
+  check('every date comes back unchanged', dateOk, dateOk ? `all ${nodes.length}` : 'mismatch');
 
   const priced = p.rows.filter((r) => r.price != null && r.price > 0);
   const sum = priced.reduce((a, r) => a + (r.price ?? 0), 0);

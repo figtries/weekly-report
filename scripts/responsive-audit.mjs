@@ -39,7 +39,6 @@ const WIDTHS = [
 const ROUTES = [
   '/',
   '/projects',
-  '/projects/gundih',
   '/weekly/43/overall',
   '/weekly/43/control',
   '/weekly/43/summary',

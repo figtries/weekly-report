@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { getPrintDb } from './data';
-import { isLegacyProject } from './legacy-bridge';
 import { signedWeeksSqlite } from './progress-sqlite';
 import { getActiveProjectId } from './projects';
 import { ensureFreshDb } from './sqlite';
@@ -33,7 +32,7 @@ export async function readLeafLog(
 ): Promise<LeafWeekLog | null> {
   const projectId = forProject ?? (await getActiveProjectId());
   if (fresh) await ensureFreshDb();
-  const editable = Boolean(projectId) && !isLegacyProject(projectId!);
+  const editable = Boolean(projectId);
   const db = await getPrintDb(projectId ?? null);
   const signedWeeks = editable
     ? signedWeeksSqlite(projectId!)

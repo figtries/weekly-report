@@ -158,10 +158,6 @@ const structureAgain = writeDraft({
 });
 check('kategori baru', structureAgain.categories, 0);
 
-console.log('\nregister Gundih yang sudah ada tidak ikut tersentuh');
-check('dokumen gundih', db.select().from(schema.documents)
-  .where(eq(schema.documents.projectId, 'gundih')).all().length, 454);
-
 // Ditutup dulu: Windows mengunci berkas database selama koneksinya hidup, dan
 // WAL meninggalkan dua berkas pendamping.
 sqlite.close();

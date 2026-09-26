@@ -11,7 +11,6 @@ import { MOTION, TYPE, verdictOf, verdictText, type Verdict } from '@/lib/design
 import { Reveal } from '@/components/motion/Reveal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import ContractValueField from './ContractValueField';
 
 /**
  * The layer the app was missing: what the two S-Curve lines actually mean.
@@ -137,17 +136,6 @@ export default function WeekAnalysis({
         </section>
       </Reveal>
 
-      <Reveal delay={step}>
-        <Card>
-          <CardContent>
-            <ContractValueField value={health.contractValue} />
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Every item already carries a weight, so earned value is one multiplication away. This
-              single field is what lets the report speak in money instead of only percentages.
-            </p>
-          </CardContent>
-        </Card>
-      </Reveal>
 
       {/* Full width now. It used to share a two-column row with the checks
           card, which is how the gate ended up looking like a sibling of the

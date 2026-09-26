@@ -61,7 +61,7 @@ if (after !== 1) { failed++; console.log(`  ✗ setelah selesai harus tepat 1, d
 if (failed === 0) {
   console.log(`✓ ${EXPECTED.length} titik cocok dengan workbook, dalam toleransi ${TOLERANCE}`);
   console.log('✓ sebelum mulai = 0, setelah selesai = 1 tepat');
-  console.log('\nKurva rencana Gundih memang linier. Model terbukti.');
+  console.log('\nKurva rencana memang linier. Model terbukti.');
 } else {
   console.log(`\n${failed} pemeriksaan gagal.`);
   process.exitCode = 1;
