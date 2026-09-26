@@ -504,11 +504,11 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 page had nowhere that said what happened in the week it shows. */}
             <CardContent className="flex flex-1 flex-col">
               <ProgressSpread spread={spread} arrived={arrived} />
-              {/* SEJAJAR MEANS STRETCH: the block starts under the key and its
-                  box grows to the card's foot, so this card and its taller
-                  neighbour share both edges instead of leaving a hole between
-                  the key and a block pinned to the bottom. */}
-              <div className="mt-4 flex flex-1 flex-col">
+              {/* SEJAJAR MEANS STRETCH: the week starts under the key, behind
+                  one rule, and grows to the card's foot so this card and its
+                  taller neighbour share both edges. No box of its own: a box in
+                  a box was the complaint (26 Sep 2026). */}
+              <div className="mt-4 flex flex-1 flex-col border-t pt-4">
                 <WeekStory
                   week={week}
                   addedPct={health.addedPct}
@@ -638,15 +638,29 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   Nothing found. This week is safe to issue.
                 </p>
               ) : (
-                <ul className="grid gap-2.5 sm:grid-cols-2 sm:gap-x-6">
+                /* One finding per row, with what it means under it. Two
+                    titles side by side wrapped one of them to an orphaned
+                    last word and floated both above a hole the height of the
+                    card beside it (26 Sep 2026). */
+                <ul className="flex flex-col divide-y">
                   {urgent.slice(0, 4).map((f, i) => (
-                    <li key={i} className="flex gap-2.5">
-                      {f.level === 'error' ? (
-                        <CircleAlert className="mt-[3px] h-4 w-4 shrink-0 text-bad" />
-                      ) : (
-                        <AlertTriangle className="mt-[3px] h-4 w-4 shrink-0 text-warn" />
-                      )}
-                      <p className="text-sm font-medium leading-snug">{f.title}</p>
+                    <li key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                      <span
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                          f.level === 'error' ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn'
+                        )}
+                      >
+                        {f.level === 'error' ? (
+                          <CircleAlert className="h-4 w-4" aria-hidden />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4" aria-hidden />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-snug text-balance">{f.title}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{f.detail}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -662,32 +676,37 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   a red bar that does nothing. The state stays, in smaller type;
                   the line that looks pressable now says what pressing it does
                   and where it lands, which is step 2 of this same week. */}
-              {!validation.canIssue && (
-                <div className="mt-auto pt-4">
-                  <Link
-                    href={`/weekly/${week}/control`}
-                    className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-bad-soft px-3 py-2 text-bad transition-all duration-300 ease-ios hover:brightness-95 active:scale-[0.99]"
-                  >
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-[11px] font-medium opacity-80">Not ready to issue</span>
-                      <span className="text-sm font-semibold">Open Check and clear them</span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0" />
-                  </Link>
-                </div>
-              )}
-              {/* Warnings only: say it can go, so a list of amber triangles
-                  is not read as a list of reasons it cannot. */}
-              {validation.canIssue && urgent.length > 0 && (
-                <div className="mt-auto pt-4">
-                  <p className="flex min-h-11 items-center gap-2 rounded-xl bg-ok-soft px-3 py-2 text-sm font-semibold text-ok">
-                    <Check className="h-4 w-4 shrink-0" aria-hidden />
-                    Ready to issue. {urgent.length === 1 ? 'The finding above is a warning' : 'The findings above are warnings'}, not
-                    {urgent.length === 1 ? ' a blocker' : ' blockers'}.
-                  </p>
-                </div>
-              )}
             </CardContent>
+            {/* The verdict is the card's FLOOR, edge to edge, not a tinted
+                box floating inside it: a box in a box was the complaint on
+                26 Sep 2026. It sits at the foot whatever height the card is
+                stretched to, so the list above never floats over a hole. */}
+            {!validation.canIssue && (
+              <Link
+                href={`/weekly/${week}/control`}
+                className="-mb-(--card-spacing) flex min-h-14 items-center justify-between gap-3 bg-bad-soft px-(--card-spacing) py-3 text-bad transition-all duration-300 ease-ios hover:brightness-95"
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-[11px] font-medium opacity-80">Not ready to issue</span>
+                  <span className="text-sm font-semibold">Open Check and clear them</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+            )}
+            {/* Warnings only: say it can go, so a list of amber triangles
+                is not read as a list of reasons it cannot. */}
+            {validation.canIssue && urgent.length > 0 && (
+              <div className="-mb-(--card-spacing) flex min-h-14 items-center gap-3 bg-ok-soft px-(--card-spacing) py-3 text-ok">
+                <Check className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-sm font-semibold">Ready to issue</span>
+                  <span className="text-[11px] font-medium opacity-80">
+                    {urgent.length === 1 ? 'The finding above is a warning' : 'The findings above are warnings'}, not
+                    {urgent.length === 1 ? ' a blocker' : ' blockers'}.
+                  </span>
+                </span>
+              </div>
+            )}
           </Card>
 
           <Card className="h-full">

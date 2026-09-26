@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import PlanActualBar from '@/components/ui/PlanActualBar';
@@ -369,7 +370,10 @@ export function WeekStory({
   const anyBack = movers.some(wentBack);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border bg-muted/40 p-3.5">
+    // FLAT, in the card's own flow (26 Sep 2026): this was a tinted box inside
+    // the card with a bordered box per item inside that, three frames deep, and
+    // read as clutter. Sections are divided by rules, like the key above them.
+    <div className="flex h-full flex-col">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         Week {week}
       </p>
@@ -425,15 +429,15 @@ export function WeekStory({
         </div>
       </div>
 
-      <p className="mt-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mt-4 border-t pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         What moved
       </p>
       {shown.length === 0 ? (
         <p className="mt-1.5 text-sm text-muted-foreground">Nothing moved in week {week}.</p>
       ) : (
-        <ul className="mt-1.5 flex flex-col gap-1.5">
+        <ul className="mt-1 flex flex-col divide-y">
           {shown.map((m) => (
-            <li key={m.id} className="rounded-lg border bg-card px-3 py-2">
+            <li key={m.id} className="py-2.5 last:pb-0">
               <div className="flex items-baseline justify-between gap-3">
                 <p className={cn('min-w-0 truncate', TYPE.row)}>{m.deskripsi}</p>
                 <span
@@ -460,13 +464,16 @@ export function WeekStory({
         </ul>
       )}
       {(more > 0 || !anyBack) && (
-        <p className={cn('mt-auto pt-2', TYPE.meta)}>
+        <p className={cn('mt-auto flex items-center gap-1.5 pt-3', TYPE.meta)}>
           {more > 0 ? (
             <a href={moreHref} className="font-medium text-chart-1 hover:underline">
               {more} more moved this week
             </a>
           ) : (
-            'Nothing went backwards'
+            <>
+              <Check className="h-3.5 w-3.5 shrink-0 text-ok" aria-hidden />
+              Nothing went backwards
+            </>
           )}
         </p>
       )}
