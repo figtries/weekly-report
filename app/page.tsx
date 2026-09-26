@@ -340,20 +340,17 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               <p className="mt-2.5 text-sm text-muted-foreground">Project completed to date</p>
 
               <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    'gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold',
-                    verdictChip[verdict]
-                  )}
-                >
+                {/* Plain coloured text, not a tinted pill: the pill's padding
+                    pushed its words in past the left edge every other line in
+                    this column starts on (26 Sep 2026). */}
+                <p className={cn('flex items-center gap-1.5 text-sm font-semibold', verdictText[verdict])}>
                   {behind ? (
                     <TrendingDown className="h-4 w-4" />
                   ) : (
                     <TrendingUp className="h-4 w-4" />
                   )}
                   {fmtPct(Math.abs(health.deviationPct))} {behind ? 'behind' : 'ahead of'} schedule
-                </Badge>
+                </p>
                 {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
                   <p className="text-sm text-muted-foreground">
                     {/* In the project's OWN currency. `formatRupiah` stamped
@@ -666,7 +663,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 </ul>
               )}
               {urgent.length > 4 && (
-                <p className="mt-2.5 text-sm text-muted-foreground">
+                <p className="mt-2.5 pl-11 text-sm text-muted-foreground">
                   {urgent.length - 4} more {urgent.length - 4 === 1 ? 'finding' : 'findings'}
                 </p>
               )}
@@ -680,13 +677,19 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             {/* The verdict is the card's FLOOR, edge to edge, not a tinted
                 box floating inside it: a box in a box was the complaint on
                 26 Sep 2026. It sits at the foot whatever height the card is
-                stretched to, so the list above never floats over a hole. */}
+                stretched to, so the list above never floats over a hole.
+                ONE COLUMN LINE (26 Sep 2026): its icon sits in a slot as wide
+                as a finding's badge, so the icon centres under theirs and its
+                words start where their titles start. */}
             {!validation.canIssue && (
               <Link
                 href={`/weekly/${week}/control`}
-                className="-mb-(--card-spacing) flex min-h-14 items-center justify-between gap-3 bg-bad-soft px-(--card-spacing) py-3 text-bad transition-all duration-300 ease-ios hover:brightness-95"
+                className="-mb-(--card-spacing) flex min-h-14 items-center gap-3 bg-bad-soft px-(--card-spacing) py-3 text-bad transition-all duration-300 ease-ios hover:brightness-95"
               >
-                <span className="flex min-w-0 flex-col">
+                <span className="flex w-8 shrink-0 justify-center" aria-hidden>
+                  <CircleAlert className="h-4 w-4" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
                   <span className="text-[11px] font-medium opacity-80">Not ready to issue</span>
                   <span className="text-sm font-semibold">Open Check and clear them</span>
                 </span>
@@ -697,7 +700,9 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 is not read as a list of reasons it cannot. */}
             {validation.canIssue && urgent.length > 0 && (
               <div className="-mb-(--card-spacing) flex min-h-14 items-center gap-3 bg-ok-soft px-(--card-spacing) py-3 text-ok">
-                <Check className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="flex w-8 shrink-0 justify-center" aria-hidden>
+                  <Check className="h-4 w-4" />
+                </span>
                 <span className="flex min-w-0 flex-col">
                   <span className="text-sm font-semibold">Ready to issue</span>
                   <span className="text-[11px] font-medium opacity-80">
