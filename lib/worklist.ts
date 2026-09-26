@@ -59,14 +59,17 @@ export interface WorklistEntry {
 }
 
 /**
- * How many weeks before its finish an unfinished activity starts being called
- * out: the finish week itself and the two before it. Asked for on 23 Sep 2026
- * ("2-3 week sblmnya") so an activity heading for a late finish is flagged
- * while there is still time to act, not only once it has already missed.
+ * How many weeks ahead an unfinished activity's finish starts being called
+ * out: this week and the three after it. Asked for on 23 Sep 2026 ("2-3 week
+ * sblmnya") so an activity heading for a late finish is flagged while there is
+ * still time to act, not only once it has already missed. Widened by a week on
+ * 27 Sep 2026 so Data Overall's "ending soon" and the dashboard's Priority
+ * Actions (`lib/priority-actions.ts`, "the next three weeks") count the same
+ * finishes; they differed by the third week.
  */
 export const DUE_SOON_WEEKS = 3;
 
-/** An unfinished leaf whose scheduled finish is this week or one of the next two. */
+/** An unfinished leaf whose scheduled finish is this week or one of the next three. */
 export interface SoonEntry {
   node: RollupNode;
   finishWeek: number;
@@ -174,7 +177,7 @@ export function buildWorklist({
     const pct = node.curProgressPct;
 
     const weeksLeft = s.finishWeek - week;
-    if (weeksLeft >= 0 && weeksLeft < DUE_SOON_WEEKS && !isComplete(pct)) {
+    if (weeksLeft >= 0 && weeksLeft <= DUE_SOON_WEEKS && !isComplete(pct)) {
       soon.push({ node, finishWeek: s.finishWeek, weeksLeft, pct });
     }
 

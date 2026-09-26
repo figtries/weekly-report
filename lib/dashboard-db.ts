@@ -290,7 +290,8 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     };
   });
 
-  // Start and finish as week numbers, for the worklist behind "What is urgent".
+  // Start and finish as week numbers, for the worklist and the dashboard's
+  // Priority Actions.
   // A leaf finishing mid-week belongs to the week that CONTAINS its date, which
   // is the first week whose end is not before it.
   const weekOf = (isoDate: string, fallback: number) =>

@@ -4,11 +4,8 @@ import Link from 'next/link';
 import EmptyState from '@/components/ui/EmptyState';
 import { Suspense } from 'react';
 import {
-  AlertTriangle,
   ArrowRight,
   ChartLine,
-  Check,
-  CircleAlert,
   FolderKanban,
   Scale,
   TrendingDown,
@@ -17,7 +14,6 @@ import {
 } from 'lucide-react';
 
 import {
-  buildLookAhead,
   computeHealth,
   contributions,
   fmtNum,
@@ -29,6 +25,9 @@ import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, promoteNestedSpkContracts, summariseUnits, summaryTitle } from '@/lib/rollup';
 import { weightGate } from '@/lib/weight-gate';
 import WeightGateNotice from '@/components/dashboard/WeightGateNotice';
+import PriorityActionsCard from '@/components/dashboard/PriorityActionsCard';
+import { buildPriorityActions, LOOK_AHEAD_WEEKS } from '@/lib/priority-actions';
+import { buildWorklist } from '@/lib/worklist';
 import { currentWeekOf } from '@/lib/current-week';
 import { getOpenDb, getWeekRollup } from '@/lib/data';
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
@@ -260,7 +259,25 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   }
 
   const validation = validateWeek(db, week);
-  const lookAhead = buildLookAhead(db, health);
+  // Priority Actions: what has to be done in the three weeks after this one,
+  // by activity. The plan at the window's end comes from that week's own
+  // rollup; late and ending-soon are the worklist's, as on Data Overall.
+  const horizonWeek = Math.min(week + LOOK_AHEAD_WEEKS, health.lastWeek);
+  const worklist = buildWorklist({
+    roots: rollup.roots,
+    schedule: db.schedule,
+    week,
+    changeLog: db.changeLog,
+    weightsLocked: db.project.weightsLocked,
+  });
+  const priorities = buildPriorityActions({
+    roots: rollup.roots,
+    horizonRoots: getWeekRollup(db, horizonWeek)?.roots ?? rollup.roots,
+    schedule: db.schedule,
+    week,
+    horizonWeek,
+    worklist,
+  });
   // Why the project sits where it does, BOTH WAYS: every item's part in the
   // deviation, apportioned so the parts add up to the deviation as printed.
   // Behind, the list is what holds it back; ahead, what carries the lead. It
@@ -305,8 +322,6 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
 
   const verdict = verdictOf(health.deviationPct);
   const behind = verdict === 'behind';
-  const urgent = validation.findings.filter((f) => f.level !== 'ok');
-  const errors = urgent.filter((f) => f.level === 'error');
   const weeksLeft = Math.max(0, health.lastWeek - health.week);
   const curveWeeks = curve.map((r) => r.week);
   const firstWeek = curveWeeks.length ? Math.min(...curveWeeks) : health.week;
@@ -621,162 +636,14 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
       </ScrollReveal>
 
       <ScrollReveal>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* The wide half of every row is the one carrying more to read. A
-              two-week look-ahead in a two-column card left a hole the height of
-              the findings beside it; the findings are what fill a wide card. */}
-          {/* CardAction, not a flex-row override: shadcn's CardHeader is a grid
-              that only splits into two columns when a card-action slot is present. */}
-          <Card className={cn('h-full lg:col-span-2', errors.length > 0 && 'ring-destructive/30')}>
-            <CardHeader>
-              <CardTitle className={TYPE.cardTitle}>What is urgent</CardTitle>
-              <CardDescription className={TYPE.cardDesc}>
-                What stands between this week and issuing it
-              </CardDescription>
-              {urgent.length > 0 && (
-                <CardAction className={cn(ACTION, TYPE.meta)}>{urgent.length} findings</CardAction>
-              )}
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col">
-              {urgent.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nothing found. This week is safe to issue.
-                </p>
-              ) : (
-                /* One finding per row, with what it means under it. Two
-                    titles side by side wrapped one of them to an orphaned
-                    last word and floated both above a hole the height of the
-                    card beside it (26 Sep 2026). */
-                <ul className="flex flex-col">
-                  {urgent.slice(0, 4).map((f, i) => (
-                    <li key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                      <span
-                        className={cn(
-                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                          f.level === 'error' ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn'
-                        )}
-                      >
-                        {f.level === 'error' ? (
-                          <CircleAlert className="h-4 w-4" aria-hidden />
-                        ) : (
-                          <AlertTriangle className="h-4 w-4" aria-hidden />
-                        )}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold leading-snug text-balance">{f.title}</p>
-                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{f.detail}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {urgent.length > 4 && (
-                <p className="mt-2.5 pl-11 text-sm text-muted-foreground">
-                  {urgent.length - 4} more {urgent.length - 4 === 1 ? 'finding' : 'findings'}
-                </p>
-              )}
-
-              {/* "Not ready to issue" on its own named the STATE and left the
-                  action to be guessed, so a red bar that goes somewhere read as
-                  a red bar that does nothing. The state stays, in smaller type;
-                  the line that looks pressable now says what pressing it does
-                  and where it lands, which is step 2 of this same week. */}
-            </CardContent>
-            {/* The verdict is the card's FLOOR, edge to edge, not a tinted
-                box floating inside it: a box in a box was the complaint on
-                26 Sep 2026. It sits at the foot whatever height the card is
-                stretched to, so the list above never floats over a hole.
-                ONE COLUMN LINE (26 Sep 2026): its icon sits in a slot as wide
-                as a finding's badge, so the icon centres under theirs and its
-                words start where their titles start. */}
-            {!validation.canIssue && (
-              <Link
-                href={`/weekly/${week}/control`}
-                className="-mb-(--card-spacing) flex min-h-14 items-center gap-3 bg-bad-soft px-(--card-spacing) py-3 text-bad transition-all duration-300 ease-ios hover:brightness-95"
-              >
-                <span className="flex w-8 shrink-0 justify-center" aria-hidden>
-                  <CircleAlert className="h-4 w-4" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-[11px] font-medium opacity-80">Not ready to issue</span>
-                  <span className="text-sm font-semibold">Open Check and clear them</span>
-                </span>
-                <ArrowRight className="h-4 w-4 shrink-0" />
-              </Link>
-            )}
-            {/* Warnings only: say it can go, so a list of amber triangles
-                is not read as a list of reasons it cannot. */}
-            {validation.canIssue && urgent.length > 0 && (
-              <div className="-mb-(--card-spacing) flex min-h-14 items-center gap-3 bg-ok-soft px-(--card-spacing) py-3 text-ok">
-                <span className="flex w-8 shrink-0 justify-center" aria-hidden>
-                  <Check className="h-4 w-4" />
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-sm font-semibold">Ready to issue</span>
-                  <span className="text-[11px] font-medium opacity-80">
-                    {urgent.length === 1 ? 'The finding above is a warning' : 'The findings above are warnings'}, not
-                    {urgent.length === 1 ? ' a blocker' : ' blockers'}.
-                  </span>
-                </span>
-              </div>
-            )}
-          </Card>
-
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle className={TYPE.cardTitle}>What has to happen next</CardTitle>
-              <CardDescription className={TYPE.cardDesc}>
-                What the coming weeks demand, against today&apos;s pace
-              </CardDescription>
-              <CardAction className={ACTION}>
-                <Link
-                  href={`/weekly/${week}/overall`}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-chart-1 hover:underline"
-                >
-                  Update <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col justify-center">
-              {lookAhead.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No week after this one.</p>
-              ) : (
-                <ul>
-                  {lookAhead.map((w) => (
-                    <li key={w.week} className="py-3 text-sm first:pt-0 last:pb-0">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Week {w.week} <span className="tabular-nums">· plan {fmtPct(w.targetPct)}</span>
-                        </span>
-                        {/* Already past that week's plan: say so. It used to
-                            print "+-15.57%" and "-6.0× the current pace". */}
-                        {w.gapFromNow <= 0 ? (
-                          <span className="font-semibold text-ok">Reached</span>
-                        ) : (
-                          <span className="font-semibold tabular-nums">+{fmtPct(w.gapFromNow)}</span>
-                        )}
-                      </div>
-                      {w.gapFromNow <= 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Already {fmtPct(-w.gapFromNow)} past it. Nothing to catch up.
-                        </p>
-                      ) : w.paceMultiple !== null && (
-                        <p
-                          className={cn(
-                            'mt-0.5 text-xs',
-                            w.paceMultiple > 1.5 ? 'font-medium text-warn' : 'text-muted-foreground'
-                          )}
-                        >
-                          {fmtNum(w.paceMultiple, 1)}× the current pace
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <PriorityActionsCard
+          pa={priorities}
+          week={week}
+          canIssue={validation.canIssue}
+          errors={validation.errors}
+          warnings={validation.warnings}
+          plannerHref={`/projects/${projectId}`}
+        />
       </ScrollReveal>
     </div>
   );

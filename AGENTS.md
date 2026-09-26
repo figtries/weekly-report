@@ -417,6 +417,20 @@ scale. The tick at a 0% plan sat on the bar's start and read as a stray mark.
 plan added, lead change, what moved with before → after) and "+N this week" on
 its key; the block stretches to the card's foot so the row shares both edges.
 
+**Priority Actions names ACTIVITIES, not a project percentage** (27 Sep 2026,
+`lib/priority-actions.ts`, proof `scripts/verify-priority-actions.ts`). It
+replaced "What is urgent" (data-quality warnings that read the same every week)
+and "What has to happen next" (the project total against the next two weeks'
+plan, which read "Reached" twice on a project ahead of plan). The window is the
+three weeks after the viewed one. P1: late, or finishing in the window while
+behind plan now. P2: finishing in the window on plan, or running and at least a
+point behind. P3: starting in the window. Running on plan is ordinary work and
+stays OFF the list; that exclusion is what keeps it a priority list and not the
+WBS. Late and finishing are the worklist's `stuck` and `soon`, so the worklist's
+due-soon window was widened to this week plus three to match: Data Overall's
+"ending soon" and this card count the same finishes. The week's checks are one
+pill to Control; the full list of findings lives there.
+
 # Progress has one origin
 
 **`lib/progress.ts` decides every leaf percentage, and `lib/rollup.ts` calls it
