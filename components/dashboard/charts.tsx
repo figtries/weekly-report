@@ -5,7 +5,7 @@ import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import PlanActualBar from '@/components/ui/PlanActualBar';
 import { fmtNum, fmtPct } from '@/lib/analysis';
 import { apportion } from '@/lib/figures';
-import { TYPE, signed, verdictOf, verdictText } from '@/lib/design';
+import { TYPE, signed, verdictChip, verdictOf, verdictText } from '@/lib/design';
 import type { Contribution, Mover } from '@/lib/analysis';
 import type { SummaryRow } from '@/lib/rollup';
 import type { SCurveRow } from '@/lib/scurve';
@@ -103,7 +103,11 @@ export function UnitBreakdown({
   const shown = (limit ? rows.slice(0, limit) : rows).map((r, i) => ({ r, share: shares[i], dev: devs[i] }));
 
   return (
-    <ul className="flex h-full flex-col divide-y">
+    // NO RULES BETWEEN ROWS (26 Sep 2026, variant A of three shown to him):
+    // the dividers and the tracks together read as a sheet of lines. Air
+    // separates the rows now, the number is a soft round badge, and the
+    // verdict sits in a tinted pill.
+    <ul className="flex h-full flex-col gap-5">
       {shown.map(({ r, share, dev }) => {
         const actual = r.bobot > 0 ? (r.curWF / r.bobot) * 100 : 0;
         const plan = r.bobot > 0 ? (r.targetWF / r.bobot) * 100 : 0;
@@ -118,13 +122,26 @@ export function UnitBreakdown({
         const chip = tag ?? r.code;
 
         return (
-          <li key={r.id} className="flex flex-1 flex-col justify-center py-3 first:pt-0 last:pb-0">
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="flex min-w-0 items-baseline gap-2">
-                {chip && <CodeChip>{chip}</CodeChip>}
+          <li key={r.id} className="flex flex-1 flex-col justify-center">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                {chip &&
+                  (chip.length <= 3 ? (
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-muted-foreground">
+                      {chip}
+                    </span>
+                  ) : (
+                    <CodeChip>{chip}</CodeChip>
+                  ))}
                 <p className={cn('truncate', TYPE.row)}>{name}</p>
               </div>
-              <span className={cn(FIGURE_COL, 'text-sm font-semibold', verdictText[verdict])}>
+              <span
+                className={cn(
+                  'shrink-0 rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums whitespace-nowrap',
+                  verdictChip[verdict],
+                  verdict === 'neutral' && 'text-foreground'
+                )}
+              >
                 {done ? 'Done' : dev === 0 ? 'On plan' : signed(dev, fmtNum(dev, 2))}
               </span>
             </div>
