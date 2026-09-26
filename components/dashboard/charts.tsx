@@ -364,6 +364,10 @@ export function WeekStory({
   // "+9.84" means opposite things on the two sides of zero, so the label says
   // which side this week ended on.
   const leadLabel = deviationPct >= 0 ? 'Lead over plan' : 'Gap to plan';
+  // Last week is the same measure, so the same colour, paler. It was grey,
+  // and grey read as "empty track", not as a week (26 Sep 2026).
+  const curBar = deviationPct >= 0 ? 'bg-ok' : 'bg-bad';
+  const prevBar = prevDeviationPct >= 0 ? 'bg-ok/35' : 'bg-bad/35';
   const shown = movers.slice(0, 3);
   const more = movers.length - shown.length;
   const wentBack = (m: Mover) => m.share < 0 || m.curPct < m.prevPct;
@@ -412,20 +416,32 @@ export function WeekStory({
           <div className="mt-2 flex flex-col gap-[3px]" aria-hidden>
             <div className="h-[5px] rounded-full bg-muted">
               <div
-                className={cn('h-full rounded-full', deviationPct >= 0 ? 'bg-ok' : 'bg-bad')}
+                className={cn('h-full rounded-full', curBar)}
                 style={{ width: `${pctOf(deviationPct, leadScale)}%` }}
               />
             </div>
             <div className="h-[5px] rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-chart-5/60"
+                className={cn('h-full rounded-full', prevBar)}
                 style={{ width: `${pctOf(prevDeviationPct, leadScale)}%` }}
               />
             </div>
           </div>
-          <p className={cn('mt-1.5 whitespace-nowrap', TYPE.meta)}>
-            {fmtPct(prevDeviationPct)} → {fmtPct(deviationPct)}
-          </p>
+          {/* A KEY, not "6.48% → 16.65%": a grey bar with nothing naming it
+              was read as nothing at all (26 Sep 2026). Each line carries its
+              bar's colour and says which week it is, in the bars' order. */}
+          <dl className={cn('mt-1.5 flex flex-col gap-0.5', TYPE.meta)}>
+            {[
+              { wk: week, pct: deviationPct, bar: curBar, text: 'font-medium text-foreground' },
+              { wk: week - 1, pct: prevDeviationPct, bar: prevBar, text: '' },
+            ].map((r) => (
+              <div key={r.wk} className="flex items-center gap-1.5 whitespace-nowrap">
+                <span className={cn('h-[5px] w-2.5 shrink-0 rounded-full', r.bar)} aria-hidden />
+                <dt>Week {r.wk}</dt>
+                <dd className={cn('ml-auto', r.text)}>{fmtPct(r.pct)}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
 
