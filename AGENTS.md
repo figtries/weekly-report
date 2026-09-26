@@ -429,7 +429,11 @@ stays OFF the list; that exclusion is what keeps it a priority list and not the
 WBS. Late and finishing are the worklist's `stuck` and `soon`, so the worklist's
 due-soon window was widened to this week plus three to match: Data Overall's
 "ending soon" and this card count the same finishes. The week's checks are one
-pill to Control; the full list of findings lives there.
+pill to Control; the full list of findings lives there. The row pill reads
+the REASON as in the chosen variant ("Late 2 wk", "Finish W38", "Catch up",
+"Start W39") and its COLOUR is the priority: red P1, amber P2, blue P3, every
+pill one fixed size. Printing "P1" in the pill was built and rejected the
+same day.
 
 # Progress has one origin
 

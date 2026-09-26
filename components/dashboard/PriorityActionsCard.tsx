@@ -8,21 +8,23 @@ import { TYPE } from '@/lib/design';
 import { cn } from '@/lib/utils';
 
 /**
- * PRIORITY ACTIONS: what has to be done in the next three weeks, P1 to P3.
+ * PRIORITY ACTIONS: what has to be done in the next three weeks.
  *
  * One full-width card in place of "What is urgent" and "What has to happen
- * next" (27 Sep 2026, variant A of three shown to him, then asked for three
- * colours standing for priority). The rule is `lib/priority-actions.ts`; this
- * only draws it.
+ * next" (27 Sep 2026, variant A of three rendered for him). The rule is
+ * `lib/priority-actions.ts`; this only draws it.
  *
- * Three things here are decisions, not taste. EVERY P PILL IS THE SAME SIZE,
- * whatever it says: a pill sized to its words made "Late 2 wk" and
- * "Finish W38" different shapes, and the column stopped reading as a column.
- * The reason sits under the name instead. The week's checks are ONE PILL that
- * opens Control: the warnings they used to list ("100% of values are
- * multiples of 5") read the same every week and were never urgent; the full
- * list is still one press away. And the rows past five open in place through
- * a native `<details>`, so the card needs no client JavaScript at all.
+ * Three things here are decisions, not taste. THE PILL SAYS WHY AND ITS COLOUR
+ * SAYS HOW URGENT: "Late 2 wk", "Finish W38", "Catch up", "Start W39" as in
+ * variant A, in three colours only, red for P1, amber for P2, blue for P3. The
+ * first build printed "P1".."P3" in the pill with the reason underneath; he
+ * wanted A's words back and the priority carried by the colour. EVERY PILL IS
+ * THE SAME SIZE whatever it says, so the column reads as a column. The week's
+ * checks are ONE PILL that opens Control: the warnings they used to list
+ * ("100% of values are multiples of 5") read the same every week and were
+ * never urgent; the full list is still one press away. And the rows past five
+ * open in place through a native `<details>`, so the card needs no client
+ * JavaScript at all.
  */
 
 /** Rows shown before "Show all". */
@@ -36,45 +38,47 @@ const LEVEL_TONE: Record<PriorityLevel, string> = {
   3: 'bg-chart-1/10 text-primary',
 };
 
-function reasonOf(a: PriorityAction): string {
+/** The pill's words. Every one fits the fixed pill, "Late 104 wk" included. */
+function labelOf(a: PriorityAction): string {
   switch (a.kind) {
     case 'late':
-      return `Late ${a.weeksLate} ${a.weeksLate === 1 ? 'week' : 'weeks'}`;
+      return `Late ${a.weeksLate} wk`;
     case 'finish':
-      return a.behind ? `Finish by W${a.week} · behind plan` : `Finish by W${a.week}`;
+      return `Finish W${a.week}`;
     case 'behind':
-      return a.nowPct === 0 ? 'Not started yet' : 'Behind plan';
+      return a.nowPct === 0 ? 'Not started' : 'Catch up';
     case 'start':
-      return `Starts W${a.week}`;
+      return `Start W${a.week}`;
   }
 }
 
 function Row({ a }: { a: PriorityAction }) {
+  // Where it sits, so two rows of the same name can be told apart: the
+  // heading, or on a flat plan with no headings the WBS code. A finish in red
+  // says why it is red, so the colour is never the only thing saying it.
+  const where = a.section ?? (a.node.wbsCode ? `WBS ${a.node.wbsCode}` : null);
+  const meta = [a.kind === 'finish' && a.behind ? 'Behind plan' : null, where].filter(Boolean).join(' · ');
   return (
-    // Phone: pill + name on one line, the bar and figures under the name.
-    // From sm up the wrapper dissolves (`sm:contents`) and all four sit on
-    // one grid line, so every row's bar and figure share a column.
-    <li className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[2.75rem_minmax(0,1fr)_minmax(10rem,16rem)_5.5rem] sm:gap-x-4">
+    // Phone: pill + name on one line, the bar and figures across the row
+    // under them. From sm up the wrapper dissolves (`sm:contents`) and all
+    // four sit on one grid line, so every bar and figure share a column.
+    <li className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 sm:grid-cols-[6.5rem_minmax(0,1fr)_minmax(10rem,16rem)_5.5rem] sm:gap-x-4">
       <span
         className={cn(
-          'flex h-7 w-11 items-center justify-center rounded-lg text-xs font-bold tabular-nums',
+          'flex h-7 w-26 items-center justify-center rounded-lg text-xs font-semibold tabular-nums whitespace-nowrap',
           LEVEL_TONE[a.level]
         )}
       >
-        P{a.level}
+        <span className="sr-only">Priority {a.level}: </span>
+        {labelOf(a)}
       </span>
       <div className="min-w-0">
         <p className={cn('truncate', TYPE.row)}>{a.node.deskripsi}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {reasonOf(a)}
-          {/* Where it sits, so two rows of the same name can be told apart:
-              the heading, or on a flat plan with no headings the WBS code. */}
-          {a.section ? <> · {a.section}</> : a.node.wbsCode && <> · WBS {a.node.wbsCode}</>}
-        </p>
+        {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
       </div>
-      <div className="col-start-2 flex items-center gap-3 sm:col-start-auto sm:contents">
+      <div className="col-span-2 flex items-center gap-3 sm:col-span-1 sm:contents">
         <PlanActualBar actual={a.nowPct} plan={a.targetPct} />
-        <span className="shrink-0 text-right text-sm font-semibold tabular-nums whitespace-nowrap">
+        <span className="w-22 shrink-0 text-right text-sm font-semibold tabular-nums whitespace-nowrap">
           {a.nowPct} → {a.targetPct}%
         </span>
       </div>
@@ -100,9 +104,6 @@ export default function PriorityActionsCard({
   const { actions, horizonWeek, next } = pa;
   const shown = actions.slice(0, ROWS);
   const rest = actions.slice(ROWS);
-  const counts = ([1, 2, 3] as const)
-    .map((level) => ({ level, n: actions.filter((a) => a.level === level).length }))
-    .filter((c) => c.n > 0);
 
   return (
     <Card className="h-full">
@@ -181,26 +182,14 @@ export default function PriorityActionsCard({
           </div>
         ) : (
           <>
-            <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-              <p className="flex flex-wrap items-baseline gap-x-2">
-                <span className={TYPE.figure}>
-                  {actions.length} {actions.length === 1 ? 'activity' : 'activities'}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {actions.length === 1 ? 'needs' : 'need'} action by W{horizonWeek}
-                </span>
-              </p>
-              <div className="flex gap-1.5">
-                {counts.map((c) => (
-                  <span
-                    key={c.level}
-                    className={cn('rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums', LEVEL_TONE[c.level])}
-                  >
-                    P{c.level} · {c.n}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <p className="mb-5 flex flex-wrap items-baseline gap-x-2">
+              <span className={TYPE.figure}>
+                {actions.length} {actions.length === 1 ? 'activity' : 'activities'}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {actions.length === 1 ? 'needs' : 'need'} action by W{horizonWeek}
+              </span>
+            </p>
             <ul className="flex flex-col gap-5">
               {shown.map((a) => (
                 <Row key={a.node.id} a={a} />
