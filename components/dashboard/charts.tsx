@@ -453,6 +453,11 @@ export function WeekStory({
       ) : (
         <ul className="mt-1 flex flex-col divide-y">
           {shown.map((m) => (
+            // WORDS LEFT, NUMBERS RIGHT (26 Sep 2026). The state and the
+            // percentages ran together in one grey sentence beside a pill, so
+            // no figure lined up with any other. Now the share and the item's
+            // own before → after stack in one right-aligned column, and the
+            // share carries a % like "Added this week" it adds up to.
             <li key={m.id} className="py-2.5 last:pb-0">
               <div className="flex items-baseline justify-between gap-3">
                 <p className={cn('min-w-0 truncate', TYPE.row)}>{m.deskripsi}</p>
@@ -462,19 +467,22 @@ export function WeekStory({
                     wentBack(m) ? 'text-bad' : 'text-chart-1'
                   )}
                 >
-                  {signed(m.share, fmtNum(m.share, 2))}
+                  {signed(m.share, fmtPct(m.share))}
                 </span>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className={TYPE.meta}>
-                  {stateOf(m.prevPct)} → {stateOf(m.curPct)} · {fmtPct(m.prevPct, 0)} → {fmtPct(m.curPct, 0)}
+              <div className={cn('mt-1 flex items-baseline justify-between gap-3', TYPE.meta)}>
+                <span className="min-w-0 truncate">
+                  {stateOf(m.prevPct)} → {stateOf(m.curPct)}
                 </span>
-                {m.milestones.length > 0 && (
-                  <span className="rounded-full bg-meta-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-meta">
-                    {m.milestones.join(' · ')}
-                  </span>
-                )}
+                <span className="shrink-0">
+                  {fmtPct(m.prevPct, 0)} → {fmtPct(m.curPct, 0)}
+                </span>
               </div>
+              {m.milestones.length > 0 && (
+                <span className="mt-1.5 inline-flex rounded-full bg-meta-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-meta">
+                  {m.milestones.join(' · ')}
+                </span>
+              )}
             </li>
           ))}
         </ul>
