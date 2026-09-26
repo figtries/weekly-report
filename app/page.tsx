@@ -120,6 +120,14 @@ export const metadata = { title: 'Lucille · Dashboard' };
  */
 const UNIT_ROWS = 6;
 
+/**
+ * A card's top-right action ("Update", "All items", "2 findings") centred on
+ * the TITLE'S line. CardAction starts at the header's top, and at 14px or 11px
+ * against a 15px title it sat 2 to 3px above the title's middle (26 Sep 2026).
+ * h-6 is the title's line box (15px × leading 1.625).
+ */
+const ACTION = 'flex h-6 items-center';
+
 export default function DashboardPage({
   searchParams,
 }: {
@@ -414,7 +422,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   ? 'Nothing is behind plan this week. The items carrying the lead, by how much project percent each one adds'
                   : 'The items carrying the lead, by how much project percent each one adds'}
             </CardDescription>
-            <CardAction>
+            <CardAction className={ACTION}>
               <Link
                 href={`/weekly/${week}/detail`}
                 className="inline-flex items-center gap-1 text-sm font-medium text-chart-1 hover:underline"
@@ -467,7 +475,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   Where the overall percentage comes from
                 </CardDescription>
                 {units.length > UNIT_ROWS && (
-                  <CardAction>
+                  <CardAction className={ACTION}>
                     <Link
                       href={`/weekly/${week}/summary`}
                       className="inline-flex items-center gap-1 text-sm font-medium text-chart-1 hover:underline"
@@ -505,7 +513,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   one rule, and grows to the card's foot so this card and its
                   taller neighbour share both edges. No box of its own: a box in
                   a box was the complaint (26 Sep 2026). */}
-              <div className="mt-4 flex flex-1 flex-col border-t pt-4">
+              <div className="mt-6 flex flex-1 flex-col">
                 <WeekStory
                   week={week}
                   addedPct={health.addedPct}
@@ -533,7 +541,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
               <VelocityBars rows={curve} />
-              <p className="mt-auto border-t pt-3 text-sm text-muted-foreground">
+              <p className="mt-auto pt-4 text-sm text-muted-foreground">
                 Running at{' '}
                 <span className="font-semibold text-foreground">
                   {fmtPct(health.velocityPerWeek)}
@@ -626,7 +634,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 What stands between this week and issuing it
               </CardDescription>
               {urgent.length > 0 && (
-                <CardAction className={TYPE.meta}>{urgent.length} findings</CardAction>
+                <CardAction className={cn(ACTION, TYPE.meta)}>{urgent.length} findings</CardAction>
               )}
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
@@ -639,7 +647,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                     titles side by side wrapped one of them to an orphaned
                     last word and floated both above a hole the height of the
                     card beside it (26 Sep 2026). */
-                <ul className="flex flex-col divide-y">
+                <ul className="flex flex-col">
                   {urgent.slice(0, 4).map((f, i) => (
                     <li key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
                       <span
@@ -720,7 +728,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               <CardDescription className={TYPE.cardDesc}>
                 What the coming weeks demand, against today&apos;s pace
               </CardDescription>
-              <CardAction>
+              <CardAction className={ACTION}>
                 <Link
                   href={`/weekly/${week}/overall`}
                   className="inline-flex items-center gap-1 text-sm font-medium text-chart-1 hover:underline"
@@ -733,7 +741,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               {lookAhead.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No week after this one.</p>
               ) : (
-                <ul className="divide-y">
+                <ul>
                   {lookAhead.map((w) => (
                     <li key={w.week} className="py-3 text-sm first:pt-0 last:pb-0">
                       <div className="flex items-baseline justify-between gap-3">

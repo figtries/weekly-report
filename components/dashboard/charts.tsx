@@ -251,7 +251,7 @@ export function VelocityBars({ rows, weeks = 14 }: { rows: SCurveRow[]; weeks?: 
           </div>
         ))}
       </div>
-      <div className={cn('mt-2 flex justify-between border-t pt-2', TYPE.meta)}>
+      <div className={cn('mt-2 flex justify-between', TYPE.meta)}>
         <span>Week {bars[0].week}</span>
         <span>Week {bars[bars.length - 1].week}</span>
       </div>
@@ -330,7 +330,7 @@ export function ProgressSpread({
       {/* THE ROW WRAPS, and the label carries a floor: at 1024 this card is
           234px wide, and a label with flex-1 (basis 0) collapsed rather than
           forcing a wrap. min-w-24 is what pushes the count onto a second line. */}
-      <ul className="mt-4 flex flex-col divide-y">
+      <ul className="mt-4 flex flex-col">
         {seg.map((s) => (
           <li
             key={s.key}
@@ -473,13 +473,13 @@ export function WeekStory({
         </div>
       </div>
 
-      <p className="mt-4 border-t pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         What moved
       </p>
       {shown.length === 0 ? (
         <p className="mt-1.5 text-sm text-muted-foreground">Nothing moved in week {week}.</p>
       ) : (
-        <ul className="mt-1 flex flex-col divide-y">
+        <ul className="mt-1 flex flex-col">
           {shown.map((m) => (
             // WORDS LEFT, NUMBERS RIGHT (26 Sep 2026). The state and the
             // percentages ran together in one grey sentence beside a pill, so
