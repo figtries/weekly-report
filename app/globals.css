@@ -892,6 +892,12 @@ a:active {
   }
 }
 
+/* The sidebar project card, when the current week changes under it: the
+   Current badge's own green glow, once, so the two read as one change. */
+.animate-card-glow {
+  animation: glow-once 0.75s ease-out both;
+}
+
 .animate-pop-in {
   animation:
     pop-in 0.42s var(--ease-out-expo) both,

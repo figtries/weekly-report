@@ -195,6 +195,13 @@ export interface OpenProjectStatus {
    */
   ready: boolean;
   weightsTotal: number;
+  /**
+   * Every week's Actual and Plan, worked out exactly as the figures above, so
+   * the card can follow "Set as current" the moment it is pressed instead of
+   * after the write, the snapshot push and the re-render (seconds on the
+   * deployment, 28 Sep 2026). Empty while the weights do not close.
+   */
+  byWeek: Record<number, { actual: number; plan: number }>;
 }
 
 export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> {
@@ -210,14 +217,19 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
   if (!rollup || rollup.grandTotal.bobot <= 0) return null;
 
   const gate = weightGate(db.wbsItems);
-  if (!gate.ok) return { week, actual: 0, plan: 0, variance: 0, ready: false, weightsTotal: gate.total };
+  if (!gate.ok) return { week, actual: 0, plan: 0, variance: 0, ready: false, weightsTotal: gate.total, byWeek: {} };
   // Plan as a share of the total weight, like actual — it read raw `targetWF`
   // and said "Plan 24.76% · 11.40% ahead" beside a dashboard saying 34.98% and
   // 16.11% for the same week (26 Sep 2026). Rounded as printed, so the three
   // figures on the card subtract.
   const actual = r2(rollup.grandTotal.curProgressPct);
   const plan = r2(rollup.grandTotal.planPct);
-  return { week, actual, plan, variance: shownDiff(actual, plan), ready: true, weightsTotal: gate.total };
+  const byWeek: OpenProjectStatus['byWeek'] = {};
+  for (const w of db.weeks) {
+    const r = w.week === week ? rollup : getWeekRollup(db, w.week);
+    if (r) byWeek[w.week] = { actual: r2(r.grandTotal.curProgressPct), plan: r2(r.grandTotal.planPct) };
+  }
+  return { week, actual, plan, variance: shownDiff(actual, plan), ready: true, weightsTotal: gate.total, byWeek };
 }
 
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {

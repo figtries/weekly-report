@@ -24,15 +24,18 @@ export default function AnimatedNumber({
     let raf = 0;
 
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
+      // Clamped at 0: a frame's timestamp is when the frame BEGAN, which can
+      // be before `start`, and a negative t overshot backwards (the sidebar
+      // card read -0.17% for one frame on its way from 0.00% to 1.15%).
+      const t = Math.max(0, Math.min(1, (now - start) / duration));
       // ease-out-expo — races through the bulk of the change, then settles softly
       const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
-      setDisplay(from + (to - from) * eased);
-      if (t < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = to;
-      }
+      const at = from + (to - from) * eased;
+      setDisplay(at);
+      // Where it stands NOW, so a new value mid-flight carries on from here
+      // instead of jumping back to where the last one started.
+      fromRef.current = at;
+      if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);

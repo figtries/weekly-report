@@ -31,13 +31,13 @@ export default function PlanActualBar({
     <div className={cn('flex min-w-0 flex-1 flex-col gap-[3px]', className)} aria-hidden>
       <div className={cn('overflow-hidden rounded-full bg-muted', size === 'sm' ? 'h-1.5' : 'h-2')}>
         <div
-          className="h-full animate-bar-grow rounded-full bg-chart-1"
+          className="h-full animate-bar-grow rounded-full bg-chart-1 transition-[width] duration-700 ease-ios"
           style={{ width: `${clamp(actual)}%` }}
         />
       </div>
       <div className={cn('overflow-hidden rounded-full bg-muted', size === 'sm' ? 'h-1' : 'h-[5px]')}>
         <div
-          className="h-full animate-bar-grow rounded-full bg-chart-2"
+          className="h-full animate-bar-grow rounded-full bg-chart-2 transition-[width] duration-700 ease-ios"
           style={{ width: `${clamp(plan)}%` }}
         />
       </div>

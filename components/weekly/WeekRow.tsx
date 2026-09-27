@@ -4,6 +4,7 @@ import { m } from 'framer-motion';
 import { useOptimistic, useTransition, type ReactNode } from 'react';
 import { pressMotion } from '@/components/motion/Press';
 import { setCurrentWeekAction } from '@/lib/actions';
+import { announceCurrentWeek } from '@/components/layout/current-week-signal';
 import WeekSelect from './WeekSelect';
 
 /**
@@ -58,10 +59,15 @@ export default function WeekRow({
   const isCurrent = selectedWeek === optimisticCurrent;
 
   function setAsCurrent() {
+    // The sidebar card follows in the same frame; see current-week-signal.
+    announceCurrentWeek(selectedWeek);
     startTransition(async () => {
       setOptimisticCurrent(selectedWeek);
       const res = await setCurrentWeekAction(selectedWeek);
-      if (!res.ok) alert(res.error);
+      if (!res.ok) {
+        announceCurrentWeek(null);
+        alert(res.error);
+      }
     });
   }
 
