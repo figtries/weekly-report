@@ -590,12 +590,12 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
             <CardHeader>
               <CardTitle className={TYPE.cardTitle}>Forecast</CardTitle>
               <CardDescription className={TYPE.cardDesc}>
-                When this finishes at the current pace
+                When the last activity finishes, from the schedule
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
               {health.forecastFinishWeek === null ? (
-                <p className="text-sm text-muted-foreground">Not enough to forecast yet.</p>
+                <p className="text-sm text-muted-foreground">No schedule to forecast from yet.</p>
               ) : (
                 <>
                   <p
@@ -616,8 +616,11 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                         verdictChip[verdictOf(health.weeksAgainstContract, 0)]
                       )}
                     >
-                      {Math.abs(Math.round(health.weeksAgainstContract))} weeks{' '}
-                      {health.weeksAgainstContract >= 0 ? 'earlier' : 'later'}
+                      {Math.round(health.weeksAgainstContract) === 0
+                        ? 'On the contract end'
+                        : `${Math.abs(Math.round(health.weeksAgainstContract))} weeks ${
+                            health.weeksAgainstContract > 0 ? 'earlier' : 'later'
+                          }`}
                     </Badge>
                   )}
                   {/* Pinned to the bottom: the card is stretched to its
