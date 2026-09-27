@@ -56,7 +56,12 @@ function leaf(id: string, bobot: number, cur: number, planPct: number, order: nu
   } as RollupNode;
 }
 
-function run(specs: Spec[], week: number, lastWeek: number) {
+function run(
+  specs: Spec[],
+  week: number,
+  lastWeek: number,
+  forecast: { slipping: Record<string, number>; path: string[] } | null = null
+) {
   const roots = specs.map(([id, b, cur, now], i) => leaf(id, b, cur, now, i));
   const horizonRoots = specs.map(([id, b, cur, , atH], i) => leaf(id, b, cur, atH, i));
   const schedule: ScheduleItem[] = specs.map(([id, , , , , s, f]) => ({
@@ -67,7 +72,7 @@ function run(specs: Spec[], week: number, lastWeek: number) {
   }));
   const worklist = buildWorklist({ roots, schedule, week, changeLog: [], weightsLocked: false });
   const horizonWeek = Math.min(week + LOOK_AHEAD_WEEKS, lastWeek);
-  return buildPriorityActions({ roots, horizonRoots, schedule, week, horizonWeek, worklist });
+  return buildPriorityActions({ roots, horizonRoots, schedule, week, horizonWeek, worklist, forecast });
 }
 
 /* ------------------------------------------------------------ every rule */
@@ -157,6 +162,26 @@ const samberah = (week: number, h: number): Spec[] => [
   ['3.3 Installation Retrofit', 2, 0, 0, 0, 68, 70],
   ['4.1 Pre-commissioning, Commissioning & Startup', 2, 0, 0, 0, 70, 72],
 ];
+
+/* ------------------------------------------ what the forecast adds (28 Sep 2026) */
+
+const later: Spec[] = [
+  ...plan,
+  ['X1', 6, 0, 0, 0, 50, 55], // far off, a vendor has moved it 4 weeks, on the finish path: P1
+  ['X2', 4, 0, 0, 0, 48, 52], // far off, pushed 2 weeks, off the path: P2
+];
+const f = run(later, W, 72, { slipping: { X1: 4, X2: 2, C1: 3, L1: 1 }, path: ['X1'] });
+const fx = new Map(f.actions.map((a) => [a.node.id, a]));
+check('without the forecast, nothing past the window is listed', !byId.has('X1'));
+check('a slip on the finish path is P1', fx.get('X1')?.level === 1 && fx.get('X1')?.kind === 'slips');
+check('it carries the weeks and both finishes', fx.get('X1')?.weeksLate === 4 && fx.get('X1')?.week === 59 && fx.get('X1')?.planWeek === 55);
+check('a slip off the path is P2', fx.get('X2')?.level === 2 && fx.get('X2')?.kind === 'slips');
+check('a row already listed keeps its own reason', fx.get('C1')?.kind === 'behind' && fx.get('L1')?.kind === 'late');
+check(
+  'slips sort after late and finish inside P1',
+  f.actions.filter((a) => a.level === 1).map((a) => a.kind).join(',') === 'late,late,finish,slips',
+  f.actions.filter((a) => a.level === 1).map((a) => `${a.node.id}:${a.kind}`).join(',')
+);
 
 const s36 = run(samberah(36, 39), 36, 72);
 check('Samberah W36: nothing is due by W39', s36.actions.length === 0, s36.actions.map((a) => a.node.id).join(', '));

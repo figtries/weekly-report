@@ -433,7 +433,12 @@ pill to Control; the full list of findings lives there. The row pill reads
 the REASON as in the chosen variant ("Late 2 wk", "Finish W38", "Catch up",
 "Start W39") and its COLOUR is the priority: red P1, amber P2, blue P3, every
 pill one fixed size. Printing "P1" in the pill was built and rejected the
-same day.
+same day. Since 28 Sep 2026 a fifth ground, checked LAST so it never
+relabels a row: "Slips N wk", an activity the FORECAST finishes a week or
+more past its plan on evidence (a vendor, site or client date, a measured
+rate, or a late activity it waits for), P1 if it sets the project finish,
+P2 otherwise, and the only ground that reaches past the window. Plan dates
+alone never make a slip (`ForecastSummary.slipping`).
 
 # Progress has one origin
 

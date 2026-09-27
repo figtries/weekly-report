@@ -57,7 +57,8 @@ export type ForecastIssue =
       afterPct: number;
     }
   | { kind: 'ladder-repeats'; kindLabel: string; keepLabels: string[]; siblings: LinkRef[] }
-  | { kind: 'typed-vs-ladder'; typedPct: number; ladderPct: number };
+  | { kind: 'typed-vs-ladder'; typedPct: number; ladderPct: number }
+  | { kind: 'material-early'; rungLabel: string; waiting: (LinkRef & { pct: number })[] };
 
 export interface ForecastLeafView {
   finish: string;
@@ -261,6 +262,14 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
     } else if (c.kind === 'typed-vs-ladder') {
       leaf.issues.push({ kind: 'typed-vs-ladder', typedPct: c.typedPct, ladderPct: c.ladderPct });
       say(c.leafId, `Typed ${fmt1(c.typedPct)}% while its ticked stages say ${fmt1(c.ladderPct)}%`);
+    } else if (c.kind === 'material-early') {
+      const waiting = c.waiting.map((w) => ({ ...ref(w.id), pct: w.pct }));
+      leaf.issues.push({ kind: 'material-early', rungLabel: c.rungLabel, waiting });
+      const first = waiting[0];
+      say(
+        c.leafId,
+        `${c.rungLabel} ticked, but ${first.code} ${first.name} is at ${fmt1(first.pct)}%${waiting.length > 1 ? ` and ${waiting.length - 1} more` : ''}`
+      );
     } else if (c.kind === 'needs-date') {
       say(c.leafId, 'Sets the finish on plan dates alone: no vendor, site or client date yet');
     }

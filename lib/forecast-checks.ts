@@ -10,11 +10,14 @@
  *   C3 a typed percent that is not what its own ticked ladder says
  *   C4 progress entered in bulk after weeks of nothing
  *   C5 activities on the path that sets the finish with no outside date
+ *   C6 "Material on site" ticked on a construction row while a delivery it
+ *      waits for is not in yet (28 Sep 2026): one of the two is wrong, and
+ *      the forecast cannot tell which
  *
  * Data only. What they say on screen is Plan B's.
  */
-import { milestoneProgress } from './progress';
-import { profileRowsOf, rungsNamedBy, stepIdOf, subjectOf, type Phase } from './forecast-epc';
+import { milestoneProgress, resolveLeafProgress } from './progress';
+import { profileRowsOf, rungsNamedBy, stepIdOf, subjectOf, suggestWaitsFor, type Phase } from './forecast-epc';
 import { BUILT_IN_KINDS } from './work-kind';
 import type { LeafForecast } from './forecast';
 import type { WbsItem, WeeklyLeafData } from './types';
@@ -24,7 +27,8 @@ export type ForecastCheck =
   | { kind: 'ladder-repeats'; leafId: string; keep: string[]; siblings: string[] }
   | { kind: 'typed-vs-ladder'; leafId: string; typedPct: number; ladderPct: number }
   | { kind: 'bulk-entry'; week: number; addedPct: number; quietWeeks: number }
-  | { kind: 'needs-date'; leafId: string };
+  | { kind: 'needs-date'; leafId: string }
+  | { kind: 'material-early'; leafId: string; rungLabel: string; waiting: { id: string; pct: number }[] };
 
 /** A week this big after this many silent ones reads as catching up, not as work. */
 const BULK_POINTS = 5;
@@ -101,6 +105,23 @@ export function forecastChecks(input: {
   // C5
   for (const id of chain) {
     if (leaves.get(id)?.basis === 'plan') out.push({ kind: 'needs-date', leafId: id });
+  }
+
+  // C6. The links a person confirmed, or EPC order's offer while nobody has
+  // answered, so the check works before anyone has pressed Link.
+  const offered = suggestWaitsFor(rows);
+  for (const r of leafRows) {
+    const item = itemById.get(r.id);
+    if (!item || r.phase !== 'construction' || item.progressMethod !== 'milestone') continue;
+    const material = (item.milestones ?? []).find((m) => stepIdOf(m.id) === 'material');
+    if (!material || !(leafData[r.id]?.milestonesDone ?? []).includes(material.id)) continue;
+    const preds = item.waitsFor ?? offered.get(r.id) ?? [];
+    const waiting = preds
+      .map((id) => ({ id, item: itemById.get(id) }))
+      .filter((p) => p.item && rows.find((x) => x.id === p.id)?.phase === 'procurement')
+      .map((p) => ({ id: p.id, pct: resolveLeafProgress(p.item!, leafData[p.id]) }))
+      .filter((p) => p.pct < 100);
+    if (waiting.length) out.push({ kind: 'material-early', leafId: r.id, rungLabel: material.label, waiting });
   }
 
   return out;

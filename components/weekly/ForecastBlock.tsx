@@ -193,6 +193,15 @@ export default function ForecastBlock({
                 </p>
               </>
             )}
+            {issue.kind === 'material-early' && (
+              <>
+                <p className="text-[13px] font-semibold text-warn">{issue.rungLabel} is ticked, but the delivery is not in</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-warn">
+                  {issue.waiting.map((w) => `${w.code} ${w.name} is at ${w.pct.toFixed(1)}%`).join(', ')}. One of the two is
+                  wrong: untick {issue.rungLabel} here, or bring the delivery to 100%.
+                </p>
+              </>
+            )}
             {issue.kind === 'typed-vs-ladder' && (
               <>
                 <p className="text-[13px] font-semibold text-warn">

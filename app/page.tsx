@@ -277,6 +277,9 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
     week,
     horizonWeek,
     worklist,
+    // What the forecast knows that the plan does not: a vendor date, a late
+    // delivery pushing what waits for it. See lib/priority-actions.ts.
+    forecast: health.forecast ? { slipping: health.forecast.slipping, path: health.forecast.path.map((p) => p.id) } : null,
   });
   // Why the project sits where it does, BOTH WAYS: every item's part in the
   // deviation, apportioned so the parts add up to the deviation as printed.

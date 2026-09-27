@@ -51,6 +51,8 @@ function labelOf(a: PriorityAction): string {
       return a.nowPct === 0 ? 'Not started' : 'Catch up';
     case 'start':
       return `Start W${a.week}`;
+    case 'slips':
+      return `Slips ${a.weeksLate} wk`;
   }
 }
 
@@ -59,7 +61,13 @@ function Row({ a }: { a: PriorityAction }) {
   // heading, or on a flat plan with no headings the WBS code. A finish in red
   // says why it is red, so the colour is never the only thing saying it.
   const where = a.section ?? (a.node.wbsCode ? `WBS ${a.node.wbsCode}` : null);
-  const meta = [a.kind === 'finish' && a.behind ? 'Behind plan' : null, where].filter(Boolean).join(' · ');
+  const meta = [
+    a.kind === 'finish' && a.behind ? 'Behind plan' : null,
+    a.kind === 'slips' ? `Finish W${a.week}, plan W${a.planWeek}` : null,
+    where,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     // Phone: pill + name on one line, the bar and figures across the row
     // under them. From sm up the wrapper dissolves (`sm:contents`) and all

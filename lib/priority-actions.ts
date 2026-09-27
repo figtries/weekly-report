@@ -24,6 +24,14 @@ import { DUE_SOON_WEEKS, type Worklist } from './worklist';
  *           is at least a point short of its plan now         at the window's end
  *   start   it is scheduled to start inside the window     → P3, aims at the plan
  *                                                             at the window's end
+ *   slips   the FORECAST finishes it a week or more after  → P1 if it sets the
+ *           its plan, on evidence: a vendor, site or          project finish, P2
+ *           client date, a measured rate, or a late thing     otherwise; aims at 100
+ *           it waits for (added 28 Sep 2026)
+ *
+ * Slips is checked LAST, so it never relabels a row the four above already
+ * explain, and it is the only ground that reaches past the window: a delivery
+ * a vendor has moved by five weeks is a priority now, long before its week.
  *
  * What stays OUT is as deliberate: an activity running on or ahead of plan is
  * ordinary work, not a priority, and listing it is what turns a priority list
@@ -45,7 +53,7 @@ export const LOOK_AHEAD_WEEKS = DUE_SOON_WEEKS;
 const BEHIND_MIN = 1;
 
 export type PriorityLevel = 1 | 2 | 3;
-export type PriorityKind = 'late' | 'finish' | 'behind' | 'start';
+export type PriorityKind = 'late' | 'finish' | 'behind' | 'start' | 'slips';
 
 export interface PriorityAction {
   node: RollupNode;
@@ -59,8 +67,10 @@ export interface PriorityAction {
   kind: PriorityKind;
   /** The finish week (late, finish) or the start week (start). The plan's own week for behind. */
   week: number;
-  /** Weeks past its finish. Late only; 0 otherwise. */
+  /** Weeks past its finish (late), or weeks the forecast runs past the plan (slips); 0 otherwise. */
   weeksLate: number;
+  /** Slips only: the plan's finish week, for "Finish W70, plan W67". */
+  planWeek?: number;
   /** Short of its plan NOW by at least a point. What makes a finish P1. */
   behind: boolean;
   /**
@@ -117,6 +127,7 @@ export function buildPriorityActions({
   week,
   horizonWeek,
   worklist,
+  forecast,
 }: {
   /** The rollup of the week being viewed. */
   roots: RollupNode[];
@@ -128,6 +139,12 @@ export function buildPriorityActions({
   horizonWeek: number;
   /** Built for the same week from the same roots. */
   worklist: Worklist;
+  /**
+   * From the forecast (`ForecastSummary` in lib/analysis.ts): leaf id → weeks
+   * it slips on evidence, and the path that sets the project finish. Absent,
+   * the card is exactly what it was before 28 Sep 2026.
+   */
+  forecast?: { slipping: Record<string, number>; path: string[] } | null;
 }): PriorityActions {
   const planAtHorizon = new Map(leavesOf(horizonRoots).map((n) => [n.id, planPctOf(n)]));
   const byLeaf = new Map((schedule ?? []).map((s) => [s.leafId, s]));
@@ -186,16 +203,39 @@ export function buildPriorityActions({
     }
   }
 
+  if (forecast) {
+    const onPath = new Set(forecast.path);
+    for (const n of leavesOf(roots)) {
+      const weeks = forecast.slipping[n.id];
+      if (!weeks || listed.has(n.id) || actions.some((a) => a.node.id === n.id) || n.bobot <= 0) continue;
+      if (isComplete(n.curProgressPct)) continue;
+      const s = byLeaf.get(n.id);
+      if (!s) continue;
+      actions.push({
+        node: n,
+        section: sectionOf(n),
+        level: onPath.has(n.id) ? 1 : 2,
+        kind: 'slips',
+        week: s.finishWeek + weeks,
+        weeksLate: weeks,
+        planWeek: s.finishWeek,
+        behind: false,
+        nowPct: shownNow(n.curProgressPct),
+        targetPct: 100,
+      });
+    }
+  }
+
   // Worst first inside each level, and weighted where it can be: a leaf 20
   // points short carrying 0.5% of the project matters less than one 10 short
   // carrying 12%. Ties fall back to WBS order so the list is stable.
-  const kindRank: Record<PriorityKind, number> = { late: 0, finish: 1, behind: 2, start: 3 };
+  const kindRank: Record<PriorityKind, number> = { late: 0, finish: 1, slips: 2, behind: 3, start: 4 };
   const remaining = (a: PriorityAction) => a.node.bobot * (a.targetPct - a.node.curProgressPct);
   actions.sort((a, b) => {
     if (a.level !== b.level) return a.level - b.level;
     if (a.kind !== b.kind) return kindRank[a.kind] - kindRank[b.kind];
     const byKind =
-      a.kind === 'late'
+      a.kind === 'late' || a.kind === 'slips'
         ? b.weeksLate - a.weeksLate
         : a.kind === 'behind'
           ? b.node.bobot * shortfall(b.node) - a.node.bobot * shortfall(a.node)

@@ -15,6 +15,7 @@ import { weightGate } from './weight-gate';
 import {
   disagreement,
   earnedSchedule,
+  weekContaining,
   type Disagreement,
   type EarnedSchedule,
   type StepBasis,
@@ -91,6 +92,14 @@ export interface ForecastSummary {
   earnedSchedule: EarnedSchedule | null;
   /** Why the two disagree, when they are two weeks or more apart. */
   disagreement: Disagreement | null;
+  /**
+   * Activities the forecast finishes a week or more after their plan, ON
+   * EVIDENCE: a date somebody gave, a measured quantity rate, or a late
+   * activity they wait for. Leaf id → whole weeks. A late start or an overrun
+   * on the plan's word alone is left out: the worklist already calls those
+   * late or behind, and Priority Actions lists them that way.
+   */
+  slipping: Record<string, number>;
 }
 
 export function computeHealth(db: Database, week: number): ProjectHealth | null {
@@ -160,6 +169,16 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
         share: c.share,
       }));
       const byId = new Map(db.wbsItems.map((i) => [i.id, i]));
+      const weekEnds = [...db.weeks].sort((a, b) => a.week - b.week).map((w) => ({ week: w.week, end: w.periodEnd }));
+      const planFinish = new Map((db.schedule ?? []).map((s) => [s.leafId, s.finishWeek]));
+      const slipping: Record<string, number> = {};
+      for (const [id, lf] of read.forecast.leaves) {
+        const onEvidence = lf.basis !== 'done' && (lf.basis === 'typed' || lf.basis === 'measured' || lf.push > 0);
+        const plannedWeek = planFinish.get(id);
+        if (!onEvidence || plannedWeek === undefined) continue;
+        const weeks = weekContaining(lf.finish, weekEnds) - plannedWeek;
+        if (weeks >= 1) slipping[id] = weeks;
+      }
       forecast = {
         finishDate: read.forecast.finish,
         path: read.forecast.chain.map((id) => ({
@@ -173,6 +192,7 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
           es && Math.abs(es.finishWeek - read.finishWeek) >= 2
             ? disagreement(shares, read.forecast.chain, deviationPct)
             : null,
+        slipping,
       };
     }
   }

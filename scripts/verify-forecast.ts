@@ -260,6 +260,28 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   check('and says it is the vendor', late.forecast.leaves.get(nid('2.4'))!.basis === 'typed' && late.forecast.leaves.get(nid('2.4'))!.source === 'vendor');
   const before = forecastFromDb(db, 30)!;
   check('a week before the date was given does not read it', before.forecast.leaves.get(nid('2.4'))!.basis === 'plan', before.forecast.leaves.get(nid('2.4'))!.basis);
+
+  // What Priority Actions is handed (28 Sep 2026): who slips, on evidence.
+  const slips = computeHealth(db, 38)!.forecast!.slipping;
+  const slipCodes = Object.keys(slips).map(codeOf).sort().join(' ');
+  check('the late vendor date slips its own row and what waits for it', slips[nid('2.4')] >= 1 && slips[nid('4.1')] >= 1, JSON.stringify(Object.fromEntries(Object.entries(slips).map(([k, v]) => [codeOf(k), v]))));
+  check('rows on plan dates alone never slip', !Object.keys(slips).some((id) => forecastFromDb(db, 38)!.forecast.leaves.get(id)!.basis === 'plan' && forecastFromDb(db, 38)!.forecast.leaves.get(id)!.push <= 0), slipCodes);
+  check('the finish moves by what the last row slips', slips[nid('4.1')] === 76 - 72, String(slips[nid('4.1')]));
+}
+{
+  // C6: "Material on site" ticked on a construction row whose delivery is not in.
+  const db = buildFixture();
+  const row = db.wbsItems.find((i) => i.id === nid('3.3'))!;
+  row.progressMethod = 'milestone';
+  row.milestones = ['material', 'install', 'connect', 'qc'].map((s, i) => ({ id: `${row.id}:${s}`, label: ['Material on site', 'Installation', 'Connections', 'QC inspection'][i], weight: [15, 50, 25, 10][i] }));
+  const w38 = db.weeks.find((w) => w.week === 38)!;
+  w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [`${row.id}:material`] };
+  const v = buildForecastView(db, 38)!;
+  const early = v.leaves[row.id].issues.find((i) => i.kind === 'material-early');
+  check('C6: material ticked before the delivery is flagged', early?.kind === 'material-early' && early.waiting.map((w) => w.code).join() === '2.3,2.5', JSON.stringify(early));
+  check('C6: and the strip says why', v.toCheck.find((t) => t.leaf.id === row.id)?.reasons.some((r) => r.startsWith('Material on site ticked, but 2.3')) === true, JSON.stringify(v.toCheck.find((t) => t.leaf.id === row.id)?.reasons));
+  w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [] };
+  check('C6: nothing ticked, nothing flagged', !buildForecastView(db, 38)!.leaves[row.id].issues.some((i) => i.kind === 'material-early'));
 }
 
 /* ------------------------------------------ 5. what the app finds by itself */
