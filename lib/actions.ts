@@ -18,7 +18,9 @@ import {
   saveFieldProgressSqlite,
   saveLeafWeeksSqlite,
   saveWeekUpdatesSqlite,
+  setLeafForecastSqlite,
   setProgressMethodSqlite,
+  setWaitsForSqlite,
   setWorkKindSqlite,
   SignedWeeksError,
   type LeafWeekBefore,
@@ -250,6 +252,33 @@ export async function setWorkKindAction(
 
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts));
+  return NO_PROJECT_OPEN;
+}
+
+/**
+ * The date someone outside the app gave for an activity's next stage, or null
+ * to go back to the plan. `week` is the week on screen: the forecast of an
+ * earlier week never reads a date that was given later.
+ */
+export async function setLeafForecastAction(
+  leafId: string,
+  value: { date: string; source: 'vendor' | 'site' | 'client'; rungId: string | null } | null,
+  week: number,
+  forProject?: string | null
+): Promise<ActionResult> {
+  const projectId = await sqliteProject(forProject);
+  if (projectId) return sqliteWrite(() => setLeafForecastSqlite(projectId, leafId, value, week));
+  return NO_PROJECT_OPEN;
+}
+
+/** What an activity waits for, as a person confirmed it. */
+export async function setWaitsForAction(
+  leafId: string,
+  ids: string[],
+  forProject?: string | null
+): Promise<ActionResult> {
+  const projectId = await sqliteProject(forProject);
+  if (projectId) return sqliteWrite(() => setWaitsForSqlite(projectId, leafId, ids));
   return NO_PROJECT_OPEN;
 }
 

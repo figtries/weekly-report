@@ -245,10 +245,12 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const read = forecastFromDb(db, 38)!;
   check('with the offered links confirmed, still week 72', read.finishWeek === 72 && read.forecast.finish === '2027-05-14', `${read.finishWeek} ${read.forecast.finish}`);
   check('and the path runs through the consumable retrofit', read.forecast.chain.map(codeOf).join() === '2.4,2.5,3.3,4.1', read.forecast.chain.map(codeOf).join());
-  db.weeks[37].leafData[nid('2.4')].forecast = { date: '2027-04-11', source: 'vendor', rungId: null };
+  db.wbsItems.find((i) => i.id === nid('2.4'))!.forecast = { date: '2027-04-11', source: 'vendor', rungId: null, week: 38 };
   const late = forecastFromDb(db, 38)!;
   check('a vendor date 4 weeks late moves the finish to week 76', late.finishWeek === 76 && late.forecast.finish === '2027-06-11', `${late.finishWeek} ${late.forecast.finish}`);
   check('and says it is the vendor', late.forecast.leaves.get(nid('2.4'))!.basis === 'typed' && late.forecast.leaves.get(nid('2.4'))!.source === 'vendor');
+  const before = forecastFromDb(db, 30)!;
+  check('a week before the date was given does not read it', before.forecast.leaves.get(nid('2.4'))!.basis === 'plan', before.forecast.leaves.get(nid('2.4'))!.basis);
 }
 
 /* ------------------------------------------ 5. what the app finds by itself */

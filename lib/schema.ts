@@ -233,6 +233,21 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
    */
   workKind: text('work_kind'),
 
+  /**
+   * When this activity's next rung (or, rung null, its finish) will happen
+   * according to someone outside the app: 'vendor' | 'site' | 'client'.
+   * `forecastWeek` is the week it was given in, so an earlier week's forecast
+   * never reads a date nobody had yet. On the ACTIVITY, not on the week's
+   * progress row, because a progress row is the record that somebody checked
+   * the progress (see lib/forecast.ts and the forecast plan, 27 Sep 2026).
+   */
+  forecastDate: text('forecast_date'),
+  forecastSource: text('forecast_source'),
+  forecastRung: text('forecast_rung'),
+  forecastWeek: integer('forecast_week'),
+  /** JSON array of the leaf ids this one waits for, confirmed by a person. */
+  waitsFor: text('waits_for'),
+
   createdAt: now(),
 }, (t) => [
   index('wbs_project_idx').on(t.projectId),

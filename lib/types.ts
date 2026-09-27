@@ -50,6 +50,13 @@ export interface WbsItem {
    * never land here on their own.
    */
   waitsFor?: string[];
+  /**
+   * When the next rung (or, rungId null, the finish) will happen according to
+   * someone outside the app: a vendor's promised date, the site, the client's
+   * shutdown or review. `week` is the week it was given in; lib/forecast-read.ts
+   * ignores it when reading an earlier week. Beats the plan in lib/forecast.ts.
+   */
+  forecast?: { date: string; source: 'vendor' | 'site' | 'client'; rungId: string | null; week: number };
 }
 
 export interface LeafSnapshot {
@@ -74,12 +81,6 @@ export interface LeafSnapshot {
    * be able to read weeks that were written before the form went away.
    */
   source?: 'gate' | 'steps' | 'qty' | 'quote' | 'manual';
-  /**
-   * When the next rung (or, rungId null, the finish) will happen according to
-   * someone outside the app: a vendor's promised date, the site, the client's
-   * shutdown or review. Read by lib/forecast.ts, where it beats the plan.
-   */
-  forecast?: { date: string; source: 'vendor' | 'site' | 'client'; rungId: string | null };
 }
 
 export type WeeklyLeafData = Record<string, LeafSnapshot>;

@@ -51,7 +51,12 @@ export function forecastFromDb(db: Database, week: number): ForecastRead | null 
           ? { total: totalQty(item), done: snap?.qtyDone ?? 0, firstMovedWeekEnd: firstMoved }
           : null,
       finishedAt: pct >= 100 ? finishedAt : null,
-      typed: snap?.forecast ?? null,
+      // Only a date somebody had by then: reading week 30 must not use a vendor
+      // date that was given in week 38.
+      typed:
+        item.forecast && item.forecast.week <= week
+          ? { date: item.forecast.date, source: item.forecast.source, rungId: item.forecast.rungId }
+          : null,
       waitsFor: item.waitsFor ?? [],
     });
   }

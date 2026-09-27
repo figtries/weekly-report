@@ -418,6 +418,70 @@ export function setWorkKindSqlite(
     .run();
 }
 
+/* ----------------------------------------------- what only a person knows */
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const FORECAST_SOURCES = new Set(['vendor', 'site', 'client']);
+
+/** A leaf of this project, or an error saying which it is not. */
+function leafOfProject(projectId: string, nodeId: string) {
+  const n = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId)).all()[0];
+  if (!n || n.projectId !== projectId) throw new Error('Item not found');
+  const child = db
+    .select({ id: schema.wbsNodes.id })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.parentId, nodeId))
+    .all()[0];
+  if (child) throw new Error('Only an activity can carry a forecast date or wait for another');
+  return n;
+}
+
+/**
+ * The date someone outside the app gave for this activity's next rung (or its
+ * finish), or null to go back to the plan. On the ACTIVITY, never on the
+ * week's progress row: that row is the record that somebody checked the
+ * progress, and a vendor's email is not that (lib/forecast.ts).
+ */
+export function setLeafForecastSqlite(
+  projectId: string,
+  nodeId: string,
+  value: { date: string; source: string; rungId: string | null } | null,
+  week: number
+): void {
+  leafOfProject(projectId, nodeId);
+  if (value) {
+    if (!ISO_DATE.test(value.date) || Number.isNaN(Date.parse(value.date))) throw new Error('That is not a date');
+    if (!FORECAST_SOURCES.has(value.source)) throw new Error('Say who gave the date: vendor, site or client');
+    if (value.rungId) {
+      const rung = db.select().from(schema.milestones).where(eq(schema.milestones.id, value.rungId)).all()[0];
+      if (!rung || rung.nodeId !== nodeId) throw new Error('That stage is not on this activity');
+    }
+  }
+  db.update(schema.wbsNodes)
+    .set({
+      forecastDate: value?.date ?? null,
+      forecastSource: value?.source ?? null,
+      forecastRung: value?.rungId ?? null,
+      forecastWeek: value ? week : null,
+    })
+    .where(eq(schema.wbsNodes.id, nodeId))
+    .run();
+}
+
+/** What this activity waits for, as a person confirmed it. Empty clears it. */
+export function setWaitsForSqlite(projectId: string, nodeId: string, ids: string[]): void {
+  leafOfProject(projectId, nodeId);
+  const unique = [...new Set(ids)];
+  for (const id of unique) {
+    if (id === nodeId) throw new Error('An activity cannot wait for itself');
+    leafOfProject(projectId, id);
+  }
+  db.update(schema.wbsNodes)
+    .set({ waitsFor: unique.length ? JSON.stringify(unique) : null })
+    .where(eq(schema.wbsNodes.id, nodeId))
+    .run();
+}
+
 /* ------------------------------------------------------ one leaf, many weeks */
 
 /**

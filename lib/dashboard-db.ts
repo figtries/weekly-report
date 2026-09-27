@@ -79,6 +79,35 @@ function legacyMethod(m: string | null): ProgressMethod {
   return m === 'qty' || m === 'milestone' ? m : 'lumpsum';
 }
 
+/** `waits_for` is a JSON array of ids. Anything else reads as no links, never as an error. */
+function parseIds(raw: string | null): string[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const FORECAST_SOURCES = new Set(['vendor', 'site', 'client']);
+
+/** The date someone outside the app gave, or nothing if any part of it is missing. */
+function forecastOf(n: {
+  forecastDate: string | null;
+  forecastSource: string | null;
+  forecastRung: string | null;
+  forecastWeek: number | null;
+}): WbsItem['forecast'] {
+  if (!n.forecastDate || !n.forecastSource || !FORECAST_SOURCES.has(n.forecastSource)) return undefined;
+  return {
+    date: n.forecastDate,
+    source: n.forecastSource as 'vendor' | 'site' | 'client',
+    rungId: n.forecastRung,
+    week: n.forecastWeek ?? 0,
+  };
+}
+
 export function buildProjectDashboardData(projectId: string): ProjectDashboardData | null {
   const project = sqlite
     .select()
@@ -148,6 +177,10 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     unitLabel: n.unitLabel,
     // The one leaf the weight gate lets weigh nothing. See lib/weight-gate.ts.
     isMilestone: n.isMilestone,
+    // What only a person knows, for the forecast (lib/forecast.ts): what this
+    // waits for, and the date somebody outside the app gave for it.
+    waitsFor: parseIds(n.waitsFor),
+    forecast: forecastOf(n),
   }));
 
   // Dates come from the ACTIVE baseline, like every other reader: the

@@ -205,6 +205,11 @@ const EXPECTED_COLUMNS: Array<{ table: string; column: string; decl: string }> =
   { table: 'projects', column: 'current_week', decl: 'integer' },
   { table: 'wbs_nodes', column: 'work_kind', decl: 'text' },
   { table: 'leaf_progress', column: 'source', decl: 'text' },
+  { table: 'wbs_nodes', column: 'forecast_date', decl: 'text' },
+  { table: 'wbs_nodes', column: 'forecast_source', decl: 'text' },
+  { table: 'wbs_nodes', column: 'forecast_rung', decl: 'text' },
+  { table: 'wbs_nodes', column: 'forecast_week', decl: 'integer' },
+  { table: 'wbs_nodes', column: 'waits_for', decl: 'text' },
 ];
 
 /**
