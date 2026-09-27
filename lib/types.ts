@@ -44,6 +44,12 @@ export interface WbsItem {
    * one leaf allowed to weigh nothing. Absent on the db.json path.
    */
   isMilestone?: boolean;
+  /**
+   * Activities this one waits for, CONFIRMED by a person. The forecast pushes it
+   * when one of them runs late (lib/forecast.ts). Links the EPC profile offers
+   * never land here on their own.
+   */
+  waitsFor?: string[];
 }
 
 export interface LeafSnapshot {
@@ -68,6 +74,12 @@ export interface LeafSnapshot {
    * be able to read weeks that were written before the form went away.
    */
   source?: 'gate' | 'steps' | 'qty' | 'quote' | 'manual';
+  /**
+   * When the next rung (or, rungId null, the finish) will happen according to
+   * someone outside the app: a vendor's promised date, the site, the client's
+   * shutdown or review. Read by lib/forecast.ts, where it beats the plan.
+   */
+  forecast?: { date: string; source: 'vendor' | 'site' | 'client'; rungId: string | null };
 }
 
 export type WeeklyLeafData = Record<string, LeafSnapshot>;
@@ -277,6 +289,9 @@ export interface ScheduleItem {
   startWeek: number;
   finishWeek: number;
   pattern: DistributionPattern;
+  /** The active baseline's own dates, for the forecast, which works in days. */
+  startDate?: string;
+  finishDate?: string;
 }
 
 /**

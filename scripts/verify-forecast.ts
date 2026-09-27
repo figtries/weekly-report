@@ -10,6 +10,8 @@
  *
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-forecast.ts
  */
+import { computeHealth, narrativeParts } from '../lib/analysis.ts';
+import { forecastFromDb } from '../lib/forecast-read.ts';
 import { leafPlanFraction } from '../lib/plan-curve.ts';
 import {
   PROCUREMENT_STEPS,
@@ -213,6 +215,39 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const lag = disagreement([{ id: 'a', name: 'A', share: -1 }, { id: 'b', name: 'B', share: -5 }], ['b'], -6)!;
   check('a lag mostly on the path is only partly off it', lag.direction === 'lag' && lag.items.map((i) => i.id).join() === 'a' && !lag.mostly, JSON.stringify(lag));
   check('everything on the path, nothing to explain', disagreement([{ id: 'b', name: 'B', share: 4 }], ['b'], 4) === null);
+}
+
+/* ------------------------------------- 4. Samberah at week 38, end to end */
+
+{
+  const db = buildFixture();
+  const h = computeHealth(db, 38)!;
+  check('fixture reproduces the deployed week 38', h.actualPct === 52.66 && h.planPct === 37.29, `${h.actualPct} / ${h.planPct}`);
+  check('forecast is week 72, not 56', h.forecastFinishWeek === 72 && h.weeksAgainstContract === 0, String(h.forecastFinishWeek));
+  check('with no links confirmed it is set by commissioning', h.forecast?.path.map((p) => p.wbsCode).join() === '4.1', h.forecast?.path.map((p) => p.wbsCode).join());
+  const es = h.forecast?.earnedSchedule;
+  check('Earned Schedule says week 65', !!es && es.es > 42.2 && es.es < 42.35 && Math.round(es.finishWeek) === 65, JSON.stringify(es));
+  const why = h.forecast?.disagreement;
+  check(
+    'and the lead it rests on is off the path',
+    why?.direction === 'lead' && why.mostly && why.items.map((i) => i.name).join('|') === 'Engineering by Solar|Fabrication and RTS Material Solar',
+    JSON.stringify(why)
+  );
+  const sentence = narrativeParts(h, []).forecast;
+  check('the sentence says week 72 and why ES differs', sentence.includes('week 72') && sentence.includes('Earned Schedule puts it at week 65') && !sentence.includes('—'), sentence);
+  check('the card never goes blank at week 40', computeHealth(db, 40)?.forecastFinishWeek === 72, String(computeHealth(db, 40)?.forecastFinishWeek));
+}
+{
+  const db = buildFixture();
+  const links = suggestWaitsFor(profileRowsOf(db.wbsItems));
+  for (const item of db.wbsItems) item.waitsFor = links.get(item.id);
+  const read = forecastFromDb(db, 38)!;
+  check('with the offered links confirmed, still week 72', read.finishWeek === 72 && read.forecast.finish === '2027-05-14', `${read.finishWeek} ${read.forecast.finish}`);
+  check('and the path runs through the consumable retrofit', read.forecast.chain.map(codeOf).join() === '2.4,2.5,3.3,4.1', read.forecast.chain.map(codeOf).join());
+  db.weeks[37].leafData[nid('2.4')].forecast = { date: '2027-04-11', source: 'vendor', rungId: null };
+  const late = forecastFromDb(db, 38)!;
+  check('a vendor date 4 weeks late moves the finish to week 76', late.finishWeek === 76 && late.forecast.finish === '2027-06-11', `${late.finishWeek} ${late.forecast.finish}`);
+  check('and says it is the vendor', late.forecast.leaves.get(nid('2.4'))!.basis === 'typed' && late.forecast.leaves.get(nid('2.4'))!.source === 'vendor');
 }
 
 // ---- summary ----

@@ -307,6 +307,8 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
       startWeek: weekOf(d.startDate, 1),
       finishWeek: weekOf(d.finishDate, lastWeekNo),
       pattern: 'linear',
+      startDate: d.startDate,
+      finishDate: d.finishDate,
     });
   }
 

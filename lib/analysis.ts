@@ -6,12 +6,20 @@ import {
   type RollupNode,
 } from './rollup';
 import { hasRealQuantity } from './progress';
-import { weekOfDate } from './weeks';
+import { formatDateLong, weekOfDate } from './weeks';
 import { buildWorklist } from './worklist';
 import type { Database } from './types';
 import { toSi } from './currency';
 import { apportion, r2, shownDiff } from './figures';
 import { weightGate } from './weight-gate';
+import {
+  disagreement,
+  earnedSchedule,
+  type Disagreement,
+  type EarnedSchedule,
+  type StepBasis,
+} from './forecast';
+import { forecastFromDb } from './forecast-read';
 
 /**
  * The reading layer.
@@ -63,10 +71,26 @@ export interface ProjectHealth {
   velocityPerWeek: number;
   /** Percent per week still needed to finish on contract time. */
   requiredVelocity: number;
-  /** null when velocity is zero or negative — no honest forecast exists. */
+  /**
+   * The week the last activity finishes, from the schedule activity by activity
+   * (lib/forecast.ts). Null only when there is no schedule to forecast from.
+   */
   forecastFinishWeek: number | null;
   /** Positive = finishing early. */
   weeksAgainstContract: number | null;
+  /** What stands behind the forecast week. Null when there is none. */
+  forecast: ForecastSummary | null;
+}
+
+export interface ForecastSummary {
+  /** ISO date the last activity finishes. */
+  finishDate: string;
+  /** The activities that set it, first to last. */
+  path: { id: string; wbsCode: string; name: string; basis: StepBasis }[];
+  /** The top-down second opinion. */
+  earnedSchedule: EarnedSchedule | null;
+  /** Why the two disagree, when they are two weeks or more apart. */
+  disagreement: Disagreement | null;
 }
 
 export function computeHealth(db: Database, week: number): ProjectHealth | null {
@@ -111,11 +135,46 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
   const weeksLeftOnContract = Math.max(0, lastWeek - week);
   const requiredVelocity = weeksLeftOnContract > 0 ? (100 - actualPct) / weeksLeftOnContract : 0;
 
+  // THE SCHEDULE'S FORECAST, activity by activity (27 Sep 2026). The pace above
+  // stays a figure people read; it no longer decides a date, because on PHSS
+  // Samberah at week 38 it was one bulk entry divided by four and read "week 56,
+  // 16 weeks earlier" for a job whose commissioning is planned for week 72.
   let forecastFinishWeek: number | null = null;
-  if (velocityPerWeek > 0.01 && actualPct < 100) {
-    forecastFinishWeek = week + (100 - actualPct) / velocityPerWeek;
-  } else if (actualPct >= 100) {
+  let forecast: ForecastSummary | null = null;
+  if (actualPct >= 100) {
     forecastFinishWeek = week;
+  } else {
+    const read = forecastFromDb(db, week);
+    if (read) {
+      forecastFinishWeek = read.finishWeek;
+      const plan = [...db.weeks]
+        .sort((a, b) => a.week - b.week)
+        .map((w) => totalAt(w.week)?.planPct ?? 0);
+      const es = earnedSchedule(plan, actualPct, week);
+      const roots = promoteNestedSpkContracts(
+        computeRollup(db.wbsItems, meta.leafData, weekMap.get(week - 1)?.leafData ?? null)
+      );
+      const shares = contributions(roots, deviationPct).map((c) => ({
+        id: c.id,
+        name: c.deskripsi,
+        share: c.share,
+      }));
+      const byId = new Map(db.wbsItems.map((i) => [i.id, i]));
+      forecast = {
+        finishDate: read.forecast.finish,
+        path: read.forecast.chain.map((id) => ({
+          id,
+          wbsCode: byId.get(id)?.wbsCode ?? '',
+          name: byId.get(id)?.deskripsi ?? '',
+          basis: read.forecast.leaves.get(id)?.basis ?? 'plan',
+        })),
+        earnedSchedule: es,
+        disagreement:
+          es && Math.abs(es.finishWeek - read.finishWeek) >= 2
+            ? disagreement(shares, read.forecast.chain, deviationPct)
+            : null,
+      };
+    }
   }
 
   const contractValue = db.project.projectBudget ?? db.project.contractValue ?? null;
@@ -145,6 +204,7 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
     requiredVelocity,
     forecastFinishWeek,
     weeksAgainstContract: forecastFinishWeek !== null ? lastWeek - forecastFinishWeek : null,
+    forecast,
   };
 }
 
@@ -735,7 +795,7 @@ export interface NarrativeParts {
   status: string;
   /** What is holding it back. Null when nothing is behind. */
   laggards: string | null;
-  /** Where the current pace lands it. */
+  /** Where the schedule lands it, and what that rests on. */
   forecast: string;
 }
 
@@ -801,26 +861,44 @@ function laggardSentence(laggards: Laggard[]): string | null {
 }
 
 function forecastSentence(health: ProjectHealth): string {
-  const parts: string[] = [];
-  if (health.forecastFinishWeek !== null && health.weeksAgainstContract !== null) {
-    const early = health.weeksAgainstContract > 0;
-    const gap = Math.abs(Math.round(health.weeksAgainstContract));
+  const f = health.forecast;
+  if (health.forecastFinishWeek === null || health.weeksAgainstContract === null) {
+    return 'There is no schedule to forecast a completion date from yet.';
+  }
+  const gap = Math.round(health.weeksAgainstContract);
+  const against =
+    gap === 0
+      ? 'on the contract end'
+      : `${Math.abs(gap)} weeks ${gap > 0 ? 'before' : 'after'} the contract end`;
+  const date = f ? ` (${formatDateLong(new Date(`${f.finishDate}T00:00:00Z`))})` : '';
+  const parts = [
+    `Working through the schedule activity by activity, completion lands in week ${Math.round(
+      health.forecastFinishWeek
+    )}${date}, ${against}.`,
+  ];
+  if (!f || !f.path.length) return parts[0];
+  parts.push(
+    f.path.length === 1
+      ? ` It is set by ${f.path[0].name}.`
+      : ` The path that sets it: ${f.path.map((p) => p.name).join(' → ')}.`
+  );
+  const assumed = f.path.filter((p) => p.basis === 'plan').length;
+  if (assumed > 0) {
     parts.push(
-      `Velocity over the last ${VELOCITY_WINDOW} weeks is ${fmtPct(
-        health.velocityPerWeek
-      )} per week, while the remaining plan demands ${fmtPct(health.requiredVelocity)} per week`
-    );
-    parts.push(
-      `; at this rate completion lands in week ${Math.round(
-        health.forecastFinishWeek
-      )}${gap > 0 ? `, ${gap} weeks ${early ? 'earlier' : 'later'} than the contract end` : ', exactly on the contract end'}.`
-    );
-  } else {
-    parts.push(
-      'The last four weeks do not give enough velocity to forecast a completion date.'
+      ` ${assumed} of ${f.path.length} on that path ${assumed === 1 ? 'follows' : 'follow'} the plan dates; no vendor, site or client date has been given for ${assumed === 1 ? 'it' : 'them'}.`
     );
   }
-
+  if (f.earnedSchedule && f.disagreement) {
+    const items = f.disagreement.items.map((i) => `${i.name} (${fmtNum(Math.abs(i.share), 2)} points)`);
+    parts.push(
+      ` Earned Schedule puts it at week ${Math.round(f.earnedSchedule.finishWeek)}, because the ${fmtNum(
+        Math.abs(health.deviationPct),
+        2
+      )} point ${f.disagreement.direction} sits ${f.disagreement.mostly ? 'mostly' : 'partly'} in ${items.join(
+        ' and '
+      )}, which ${items.length > 1 ? 'are' : 'is'} not on that path.`
+    );
+  }
   return parts.join('');
 }
 
