@@ -425,7 +425,7 @@ export default function OverallMap({
           </div>
         )}
 
-        {forecast && <ForecastStrip view={forecast} onOpen={setActiveId} />}
+        {forecast && <ForecastStrip view={forecast} projectId={projectId} onOpen={setActiveId} />}
 
         <input
           value={query}

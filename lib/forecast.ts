@@ -166,7 +166,13 @@ export function forecastProject(inputs: ForecastLeafInput[], statusDate: string)
         day = D + Math.ceil((leaf.qty.total - leaf.qty.done) / rate);
         basis = 'measured';
       } else {
-        day = D + Math.round((1 - leaf.pct / 100) * duration);
+        // Never earlier than the plan on the plan's word alone. A ticked rung
+        // is a step of fixed weight, not a pace: 3.3 on PHSS Samberah had
+        // "Material on site" ticked in week 38 and read "finishes week 41"
+        // against a plan of W59 to W62, whose installation had not started
+        // (27 Sep 2026). Earlier needs evidence: a date somebody gave, or a
+        // measured quantity rate, both handled above. Later stays automatic.
+        day = Math.max(PF, D + Math.round((1 - leaf.pct / 100) * duration));
         basis = 'plan';
       }
       if (push > 0) day = Math.max(day, PF + push);

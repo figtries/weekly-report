@@ -30,6 +30,8 @@ import { readLeafLog } from './week-log-read';
 import { and, eq } from 'drizzle-orm';
 import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
 import { deleteUploadedPhoto } from './upload';
+import { buildProjectDashboardData } from './dashboard-db';
+import { unansweredLinks } from './forecast-epc';
 import { BUILT_IN_KINDS, type Shape } from './work-kind';
 import { ladderFor } from './work-kind-apply';
 import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
@@ -269,6 +271,21 @@ export async function setLeafForecastAction(
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => setLeafForecastSqlite(projectId, leafId, value, week));
   return NO_PROJECT_OPEN;
+}
+
+/**
+ * Every activity nobody has answered yet takes the links EPC order offers, in
+ * one press over the map. Worked out here from the stored rows, never taken
+ * from the client; rows already answered are left as they are.
+ */
+export async function linkEpcOrderAction(forProject?: string | null): Promise<ActionResult> {
+  const projectId = await sqliteProject(forProject);
+  if (!projectId) return NO_PROJECT_OPEN;
+  return sqliteWrite(() => {
+    const data = buildProjectDashboardData(projectId);
+    if (!data) throw new Error('That project is not here any more');
+    for (const [leafId, ids] of unansweredLinks(data.db.wbsItems)) setWaitsForSqlite(projectId, leafId, ids);
+  });
 }
 
 /** What an activity waits for, as a person confirmed it. */

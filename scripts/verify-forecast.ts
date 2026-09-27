@@ -22,6 +22,7 @@ import {
   rungsNamedBy,
   subjectOf,
   suggestWaitsFor,
+  unansweredLinks,
 } from '../lib/forecast-epc.ts';
 import { disagreement, earnedSchedule, forecastProject, weekContaining, type ForecastLeafInput } from '../lib/forecast.ts';
 import type { Database, LeafSnapshot, WbsItem, WeeklyMeta } from '../lib/types.ts';
@@ -198,6 +199,13 @@ const leaf = (id: string, order: number, s: string, f: string, extra: Partial<Fo
   check('a loop in the links does not hang or throw', loop !== null && loop.leaves.size === 2);
   const late = forecastProject([leaf('S', 1, '2026-01-01', '2026-01-10')], '2026-02-01')!;
   check('a start that should have happened lands today', late.finish === '2026-02-11', late.finish);
+  // The three cases of the 27 Sep 2026 brainstorm, status 17 Sep 26.
+  const early = forecastProject([leaf('E', 1, '2027-02-09', '2027-03-02', { pct: 15 })], '2026-09-17')!;
+  check('a rung ticked early does not pull the finish before the plan', early.finish === '2027-03-02' && early.leaves.get('E')!.basis === 'plan', early.finish);
+  const ahead = forecastProject([leaf('W', 1, '2026-09-04', '2026-10-29', { pct: 65 })], '2026-09-17')!;
+  check('ahead inside its window, still the plan without a date', ahead.finish === '2026-10-29', ahead.finish);
+  const over = forecastProject([leaf('O', 1, '2026-07-31', '2026-09-17', { pct: 65 })], '2026-09-17')!;
+  check('past its plan, the rest is counted from the status date', over.finish === '2026-10-04', over.finish);
 }
 check('week containing a date', weekContaining('2026-01-05', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 2);
 check('past the last week, counted on in whole weeks', weekContaining('2026-01-20', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 4);
@@ -303,6 +311,31 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   check('the path and the finish ride along', v.path.map((p) => p.code).join() === '4.1' && v.finishWeek === 72 && v.lastWeek === 72);
   check('bulk weeks ride along', v.bulkWeeks.join() === '26,36', v.bulkWeeks.join());
   check('it is plain data', JSON.parse(JSON.stringify(v)).leaves[nid('3.1')].issues.length === 1);
+
+  // The one-card panel and the one-press Link (27 Sep 2026).
+  check('nobody answered, so Link has rows to fill', v.unlinked === unansweredLinks(buildFixture().wbsItems).size && v.unlinked > 0, String(v.unlinked));
+  const l33 = v.leaves[nid('3.3')];
+  check('an unstarted row on plan says it follows the plan', l33.reason.kind === 'plan' && l33.finishWeek === l33.planFinishWeek, JSON.stringify(l33.reason));
+  check('the bars get the plan start', l33.planStartWeek <= l33.planFinishWeek && !!l33.planStart, `${l33.planStartWeek} ${l33.planStart}`);
+  check('a finished row says so', v.leaves[nid('2.2')].reason.kind === 'done');
+}
+{
+  // Link fills only what nobody answered: a row set to nothing keeps nothing.
+  const db = buildFixture();
+  const offers = unansweredLinks(db.wbsItems);
+  const [first] = [...offers.keys()];
+  db.wbsItems.find((i) => i.id === first)!.waitsFor = [];
+  const after = unansweredLinks(db.wbsItems);
+  check('a row answered "nothing" is not offered again', !after.has(first) && after.size === offers.size - 1, `${offers.size} -> ${after.size}`);
+  for (const [id, ids] of after) db.wbsItems.find((i) => i.id === id)!.waitsFor = ids;
+  check('after Link nothing is left to fill', unansweredLinks(db.wbsItems).size === 0 && buildForecastView(db, 38)!.unlinked === 0);
+  // With the links in, a late shipment names itself on what waits for it.
+  db.wbsItems.find((i) => i.id === nid('2.5'))!.forecast = { date: '2027-07-31', source: 'vendor', rungId: null, week: 38 };
+  const v = buildForecastView(db, 38)!;
+  const l33 = v.leaves[nid('3.3')];
+  const w25 = l33.waitsFor.find((l) => l.code === '2.5');
+  check('the late link carries its weeks', !!w25 && w25.lateWeeks > 0, JSON.stringify(l33.waitsFor));
+  check('and what waits for it says it was pushed by it', l33.reason.kind === 'pushed' && l33.reason.by.code === '2.5' && l33.reason.weeks === l33.finishWeek - l33.planFinishWeek, JSON.stringify(l33.reason));
 }
 
 // ---- summary ----

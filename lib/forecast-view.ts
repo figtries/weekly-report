@@ -11,7 +11,7 @@
  */
 import { dayOf, isoOf, weekContaining, type ForecastSource, type StepBasis } from './forecast';
 import { forecastChecks } from './forecast-checks';
-import { profileRowsOf, suggestWaitsFor } from './forecast-epc';
+import { profileRowsOf, suggestWaitsFor, unansweredLinks } from './forecast-epc';
 import { forecastFromDb } from './forecast-read';
 import { r2 } from './figures';
 import { resolveLeafProgress } from './progress';
@@ -25,6 +25,24 @@ export interface LinkRef {
   code: string;
   name: string;
 }
+
+/** A link, with how far that activity's own forecast runs past its plan. */
+export interface WaitRef extends LinkRef {
+  /** Whole weeks late; 0 when it is done, on plan or early. */
+  lateWeeks: number;
+}
+
+/**
+ * Why the finish is what it is, in the terms the panel says it in. Worked out
+ * here so the sentence and the figure cannot disagree.
+ */
+export type ForecastReason =
+  | { kind: 'done' }
+  | { kind: 'typed' }
+  | { kind: 'measured' }
+  | { kind: 'pushed'; by: LinkRef; weeks: number }
+  | { kind: 'behind'; weeks: number }
+  | { kind: 'plan' };
 
 export type ForecastIssue =
   | {
@@ -44,17 +62,20 @@ export type ForecastIssue =
 export interface ForecastLeafView {
   finish: string;
   finishWeek: number;
+  planStart: string;
+  planStartWeek: number;
   planFinish: string;
   planFinishWeek: number;
   basis: StepBasis;
   source: ForecastSource | null;
+  reason: ForecastReason;
   /** On the path that sets the project's finish. */
   onPath: boolean;
   /** The one date question this activity deserves now; null when it is done or measured by quantity. */
   next: { rungId: string | null; label: string; planDate: string } | null;
   typed: { date: string; source: ForecastSource; rungId: string | null; week: number; label: string } | null;
-  waitsFor: LinkRef[];
-  /** EPC order's offer, shown for confirming. Empty once links are confirmed. */
+  waitsFor: WaitRef[];
+  /** EPC order's offer, for a row nobody has answered. Empty once it has been. */
   suggested: LinkRef[];
   issues: ForecastIssue[];
 }
@@ -72,6 +93,8 @@ export interface ForecastView {
   options: LinkRef[];
   /** Weeks where progress arrived in bulk after weeks of nothing. */
   bulkWeeks: number[];
+  /** Activities EPC order has links for that nobody has answered: what "Link" fills. */
+  unlinked: number;
 }
 
 const kindLabel = (id: string | null | undefined) => BUILT_IN_KINDS.find((k) => k.id === id)?.label ?? null;
@@ -103,6 +126,14 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
   const dates = new Map((db.schedule ?? []).map((s) => [s.leafId, s]));
   const { forecast } = read;
   const onPath = new Set(forecast.chain);
+  const weekOf = (iso: string) => weekContaining(iso, weekEnds);
+  /** Whole weeks an activity's own forecast runs past its plan; 0 when done. */
+  const lateWeeks = (id: string) => {
+    const lf = forecast.leaves.get(id);
+    const s = dates.get(id);
+    if (!lf || !s?.finishDate || lf.basis === 'done') return 0;
+    return Math.max(0, weekOf(lf.finish) - weekOf(s.finishDate));
+  };
 
   // The project's actual, week by week, for the bulk-entry check.
   const actualByWeek: number[] = [];
@@ -153,19 +184,37 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
           }
         : null;
     const confirmed = (item.waitsFor ?? []).filter((id) => forecast.leaves.has(id));
+    const finishWeek = weekOf(lf.finish);
+    const planFinishWeek = weekOf(s.finishDate!);
+    const over = finishWeek - planFinishWeek;
+    const reason: ForecastReason =
+      lf.basis === 'done'
+        ? { kind: 'done' }
+        : lf.basis === 'typed'
+          ? { kind: 'typed' }
+          : lf.basis === 'measured'
+            ? { kind: 'measured' }
+            : over > 0 && lf.push > 0 && lf.drivenBy
+              ? { kind: 'pushed', by: ref(lf.drivenBy), weeks: over }
+              : over > 0
+                ? { kind: 'behind', weeks: over }
+                : { kind: 'plan' };
 
     leaves[item.id] = {
       finish: lf.finish,
-      finishWeek: weekContaining(lf.finish, weekEnds),
+      finishWeek,
+      planStart: s.startDate!,
+      planStartWeek: weekOf(s.startDate!),
       planFinish: s.finishDate!,
-      planFinishWeek: weekContaining(s.finishDate!, weekEnds),
+      planFinishWeek,
       basis: lf.basis,
       source: lf.source,
+      reason,
       onPath: onPath.has(item.id),
       next,
       typed,
-      waitsFor: confirmed.map(ref),
-      suggested: confirmed.length ? [] : (suggestions.get(item.id) ?? []).map(ref),
+      waitsFor: confirmed.map((id) => ({ ...ref(id), lateWeeks: lateWeeks(id) })),
+      suggested: item.waitsFor === undefined ? (suggestions.get(item.id) ?? []).map(ref) : [],
       issues: [],
     };
   }
@@ -227,5 +276,6 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
     leaves,
     options: ordered.map((i) => ref(i.id)),
     bulkWeeks: checks.flatMap((c) => (c.kind === 'bulk-entry' ? [c.week] : [])),
+    unlinked: unansweredLinks(db.wbsItems).size,
   };
 }

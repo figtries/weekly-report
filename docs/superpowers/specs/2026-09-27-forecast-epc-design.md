@@ -186,3 +186,26 @@ three change together.
 Industry picker and the other energy sectors (remind the user when this
 ships); Monte Carlo P50/P80; delays from daily reports; the pace figure
 elsewhere; baseline versioning (board 18).
+
+## Addendum, 27 Sep 2026: simpler to use, sharper figure
+
+Asked for after seeing the first panel: "ditambah dikit aja biar forecastnya
+tajam, tapi jangan ribet". Three changes, and nothing else.
+
+1. **No earlier than plan without evidence.** A started activity with no
+   typed date and no measured quantity rate finishes at
+   `max(plan finish, status + remaining share × duration)`. A ticked rung is
+   a step of fixed weight, not a pace: Samberah's 3.3 had "Material on site"
+   ticked in W38 and read W41 against a plan of W59 to W62. Later stays
+   automatic; earlier needs a date from the vendor, the site or the client,
+   or a quantity rate. Project finish unchanged at W72.
+2. **Links in one press.** The per-activity Confirm is gone. "Link" in the
+   forecast strip over the map takes EPC order's offer for every activity
+   nobody has answered (`unansweredLinks`). `waits_for` stores `[]` for
+   "waits for nothing", so NULL means only "never asked" and a cleared row
+   is not relinked.
+3. **One card in the panel.** Finish (big), blue forecast over thin red plan
+   on one scale, one sentence saying why (`ForecastReason`: done, typed,
+   measured, pushed by a named late link, behind, plan), then the next
+   stage's date and what it waits for, each late link carrying its own
+   "N wk late". Proof: `scripts/verify-forecast.ts`.

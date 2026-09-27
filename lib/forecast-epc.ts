@@ -201,3 +201,16 @@ export function suggestWaitsFor(rows: ProfileRow[]): Map<string, string[]> {
   }
   return out;
 }
+
+/**
+ * The links EPC order offers for activities nobody has answered yet. A row
+ * whose `waitsFor` is set, even to nothing, has been answered and is left
+ * alone: "Link" over the map fills only the gaps, so pressing it twice, or
+ * after somebody cleared one row on purpose, changes nothing already decided.
+ */
+export function unansweredLinks(items: WbsItem[]): Map<string, string[]> {
+  const asked = new Set(items.filter((i) => i.waitsFor !== undefined).map((i) => i.id));
+  const out = new Map<string, string[]>();
+  for (const [id, preds] of suggestWaitsFor(profileRowsOf(items))) if (!asked.has(id)) out.set(id, preds);
+  return out;
+}
