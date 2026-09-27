@@ -13,6 +13,7 @@
 import { computeHealth, narrativeParts } from '../lib/analysis.ts';
 import { forecastChecks } from '../lib/forecast-checks.ts';
 import { forecastFromDb } from '../lib/forecast-read.ts';
+import { buildForecastView } from '../lib/forecast-view.ts';
 import { leafPlanFraction } from '../lib/plan-curve.ts';
 import {
   PROCUREMENT_STEPS,
@@ -283,6 +284,25 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   check('C4: progress entered in bulk', bulk === 'W26 W36', bulk);
   const needs = of('needs-date').map((c) => (c.kind === 'needs-date' ? codeOf(c.leafId) : '')).join(' ');
   check('C5: the path still running on plan dates', needs === '2.4 2.5 3.3 4.1', needs);
+}
+
+/* ---------------------------------------- 6. what Data Overall is handed */
+
+{
+  const v = buildForecastView(buildFixture(), 38)!;
+  const listed = v.toCheck.map((t) => t.leaf.code).join(' ');
+  check('the strip lists what the checks found', listed === '2.1 2.2 2.3 2.4 2.5 3.1 3.3 4.1', listed);
+  check('2.1 carries both of its findings', v.toCheck[0].reasons.length === 2, JSON.stringify(v.toCheck[0].reasons));
+  const n24 = v.leaves[nid('2.4')].next;
+  check('a typed-percent row is asked for its finish', n24?.rungId === null && n24?.label === 'Finish' && n24?.planDate === '2027-03-14', JSON.stringify(n24));
+  check('a ladder row is asked for its next stage', v.leaves[nid('2.3')].next?.rungId === `${nid('2.3')}:po`, JSON.stringify(v.leaves[nid('2.3')].next));
+  check('a finished row is asked nothing', v.leaves[nid('2.2')].next === null);
+  const fix = v.leaves[nid('3.1')].issues.find((i) => i.kind === 'kind-vs-heading');
+  check('the kind fix says what the figure becomes', fix?.kind === 'kind-vs-heading' && fix.suggested === 'construction' && fix.afterPct === 15, JSON.stringify(fix && { s: fix.suggested, a: fix.afterPct }));
+  check('links are offered, not applied', v.leaves[nid('3.3')].suggested.map((l) => l.code).join() === '2.3,2.5' && v.leaves[nid('3.3')].waitsFor.length === 0);
+  check('the path and the finish ride along', v.path.map((p) => p.code).join() === '4.1' && v.finishWeek === 72 && v.lastWeek === 72);
+  check('bulk weeks ride along', v.bulkWeeks.join() === '26,36', v.bulkWeeks.join());
+  check('it is plain data', JSON.parse(JSON.stringify(v)).leaves[nid('3.1')].issues.length === 1);
 }
 
 // ---- summary ----
