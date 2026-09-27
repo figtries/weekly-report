@@ -394,13 +394,6 @@ export default function WeightsWorkbench({
         />
       ) : (
         <>
-          {!screen.hasUnits && screen.units.length > 0 && (
-            <p className="px-1 text-[13px] text-muted-foreground">
-              No work package marked yet, so the top level of the WBS stands in. Mark one in the
-              planner to give it its own section in the report.
-            </p>
-          )}
-
           {screen.units.map((u) => (
             <UnitCard
               key={u.id}

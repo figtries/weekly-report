@@ -51,19 +51,8 @@ async function WeightsPageBody({ params }: { params: Promise<{ week: string }> }
           section="Data Overall"
           title="Weights"
           className="mb-0 animate-enter"
-          descriptionClassName="text-pretty md:max-w-[50%]"
           action={<SectionSwitch week={week} to="report" />}
-        >
-          {/* Both promises, said once, at the top, in the words that remove the
-              two fears. Nobody arrives with a complete BOQ, and believing you
-              need one is what stops a project getting set up at all. And nobody
-              on a site can answer "what percent is this now" — the workbook
-              this replaces asked them 176 times a week and got guesses. */}
-          <span className="font-semibold text-foreground">
-            Give each work package its budget, then each activity its budget or its share of the
-            heading. The weights add up from there.
-          </span>
-        </PageHeader>
+        />
 
         <Reveal delay={MOTION.stagger}>
           {screen ? (
