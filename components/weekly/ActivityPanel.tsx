@@ -240,8 +240,8 @@ function PanelBody({
    * data alone, so the first Save closed the question for good: a row measured
    * the wrong way could only be corrected through a disclosure that spoke a
    * different language, and a row answered by accident could not be corrected
-   * at all. Now the question is a place the panel can go back to, and Cancel
-   * returns from it having changed nothing.
+   * at all. Now the question is a place the panel can go back to, and Save on
+   * the same answer returns from it having changed nothing.
    */
   const [picking, setPicking] = useState(false);
   const answered = Boolean(node.workKind) || Boolean(kindOverride);
@@ -625,7 +625,7 @@ function PanelBody({
                       plain text, which read as a heading: nobody pressed it to
                       change the kind of work, because nothing on it said it
                       could (23 Sep 2026). Now it is a bordered row, the same
-                      surface as the picker's own Cancel, naming what it holds
+                      surface as the picker's own answers, naming what it holds
                       and carrying the word "Change".
   
                       ONLY "CHANGE" IS THE BUTTON. The row used to be the button

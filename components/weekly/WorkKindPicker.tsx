@@ -81,11 +81,11 @@ export default function WorkKindPicker({
   peers: WorkKindPeer[];
   /**
    * The kind this row already carries, when this was opened to change an
-   * answer rather than to give one. Its presence is also what puts Cancel on
-   * screen: there is only something to go back to once an answer exists.
+   * answer rather than to give one.
    */
   current: string | null;
   onPick: (kindId: string, shape: Shape, milestones: Milestone[]) => void;
+  /** Save with the answer unchanged: go back having written nothing. */
   onCancel?: () => void;
 }) {
   const suggestion = useMemo<Suggestion | null>(() => {
@@ -115,6 +115,13 @@ export default function WorkKindPicker({
 
   function save() {
     if (!kindId) return;
+    // There is no Cancel (27 Sep 2026): Save on the same answer is the way
+    // back. It must write nothing, because a pick rebuilds the milestone
+    // ladder and would overwrite one somebody had already adjusted.
+    if (current && kindId === current) {
+      onCancel?.();
+      return;
+    }
     const kind = BUILT_IN_KINDS.find((k) => k.id === kindId);
     if (!kind) return;
     // The peer's own shape wins for the kind it actually suggested; any other
@@ -152,36 +159,18 @@ export default function WorkKindPicker({
         ))}
       </div>
 
-      {/* The SAME grid as the four answers above, so Cancel and Save sit
-          exactly under their columns. A flex row with `flex-1` on both made
-          Cancel wider than Save, because its border and padding are added on
-          top of an equal share, and the two rows visibly missed each other.
-          Same height and corner as the answers too: one block, not a form
-          with a button bar bolted on. */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {onCancel && (
-          <m.button
-            {...pressMotion}
-            type="button"
-            onClick={onCancel}
-            className="min-h-14 rounded-2xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
-          >
-            Cancel
-          </m.button>
-        )}
-        <m.button
-          {...pressMotion}
-          type="button"
-          onClick={save}
-          disabled={!kindId}
-          className={cn(
-            'btn-primary min-h-14 rounded-2xl px-3 text-sm font-medium disabled:opacity-40',
-            !onCancel && 'col-span-2'
-          )}
-        >
-          Save
-        </m.button>
-      </div>
+      {/* ONE button, the full width of the grid above. Same height and
+          corner as the answers: one block, not a form with a button bar
+          bolted on. */}
+      <m.button
+        {...pressMotion}
+        type="button"
+        onClick={save}
+        disabled={!kindId}
+        className="btn-primary mt-3 min-h-14 w-full rounded-2xl px-3 text-sm font-medium disabled:opacity-40"
+      >
+        Save
+      </m.button>
     </div>
   );
 }
