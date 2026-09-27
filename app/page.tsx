@@ -328,12 +328,12 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   const unreported = reportedWeek > 0 && week > reportedWeek;
 
   return (
-    // No bottom padding beside the sidebar: the sidebar runs to the foot of the
-    // screen, so the last card (Priority Actions) does too, and the two end on
-    // one line instead of the card stopping 32px short (27 Sep 2026). Phones
-    // keep theirs: no sidebar sits beside the card there, and Safari's toolbar
-    // floats over the foot of the screen.
-    <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8 lg:pb-0">
+    // Beside the sidebar the page ends one card-gap (16px, the `space-y-4`
+    // between every card) below the last card. 32px read as a strip left
+    // empty, and 0 put the card against the foot of the screen (both 27 Sep
+    // 2026). Phones keep their padding: Safari's toolbar floats over the foot
+    // of the screen there.
+    <div className="mx-auto max-w-6xl space-y-4 px-3 py-5 sm:p-6 lg:p-8 lg:pb-4">
       <DashboardHeader
         name={db.project.name}
         customer={db.project.customer}
