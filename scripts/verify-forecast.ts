@@ -19,6 +19,7 @@ import {
   subjectOf,
   suggestWaitsFor,
 } from '../lib/forecast-epc.ts';
+import { forecastProject, weekContaining, type ForecastLeafInput } from '../lib/forecast.ts';
 import type { Database, LeafSnapshot, WbsItem, WeeklyMeta } from '../lib/types.ts';
 
 let failed = 0;
@@ -157,6 +158,45 @@ check(
   const want = '2.2<-2.1 2.3<-2.2 2.5<-2.4 3.1<-2.3+2.5 3.2<-2.3+2.5 3.3<-2.3+2.5 4.1<-3.1+3.2+3.3';
   check('suggested links follow EPC order', got === want, got);
 }
+
+/* --------------------------------------------------------- 2. the engine */
+
+const leaf = (id: string, order: number, s: string, f: string, extra: Partial<ForecastLeafInput> = {}): ForecastLeafInput => ({
+  id, order, planStart: s, planFinish: f, pct: 0, rungs: [], qty: null, finishedAt: null, typed: null, waitsFor: [], ...extra,
+});
+{
+  const B = leaf('B', 2, '2027-01-20', '2027-01-30', { waitsFor: ['A'] });
+  const inGap = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { typed: { date: '2027-01-15', source: 'vendor', rungId: null } }), B], '2026-12-31')!;
+  check('a slip inside a planned gap moves nothing', inGap.leaves.get('B')!.finish === '2027-01-30' && inGap.leaves.get('B')!.push === 0, inGap.leaves.get('B')!.finish);
+  check('a predecessor with float is not the path', inGap.chain.join() === 'B', inGap.chain.join());
+  const past = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { typed: { date: '2027-01-25', source: 'vendor', rungId: null } }), B], '2026-12-31')!;
+  check('a slip past the gap pushes by what is left of it', past.leaves.get('B')!.finish === '2027-02-05' && past.leaves.get('B')!.push === 6, past.leaves.get('B')!.finish);
+  check('the pushing predecessor is on the path', past.chain.join() === 'A,B', past.chain.join());
+  const overlap = forecastProject(
+    [leaf('A', 1, '2027-01-01', '2027-01-31', { typed: { date: '2027-02-07', source: 'site', rungId: null } }), leaf('B', 2, '2027-01-20', '2027-02-10', { waitsFor: ['A'] })],
+    '2026-12-31'
+  )!;
+  check('a planned overlap keeps its offset', overlap.leaves.get('B')!.finish === '2027-02-17', overlap.leaves.get('B')!.finish);
+}
+{
+  const q = forecastProject([leaf('Q', 1, '2026-01-01', '2026-12-31', { pct: 40, qty: { total: 100, done: 40, firstMovedWeekEnd: '2026-06-07' } })], '2026-07-05')!;
+  check('quantity rows finish at their measured rate', q.finish === '2026-08-27' && q.leaves.get('Q')!.basis === 'measured', q.finish);
+  const l = forecastProject([leaf('L', 1, '2026-01-01', '2026-01-10', { pct: 50 })], '2026-01-05')!;
+  check('an opinion row keeps its planned rate', l.finish === '2026-01-10' && l.leaves.get('L')!.basis === 'plan', l.finish);
+  const rungs = [{ id: 'r1', weight: 50, done: true }, { id: 'r2', weight: 30, done: false }, { id: 'r3', weight: 20, done: false }];
+  const t = forecastProject([leaf('M', 1, '2027-01-01', '2027-04-10', { pct: 50, rungs, typed: { date: '2027-03-01', source: 'vendor', rungId: 'r2' } })], '2027-01-15')!;
+  check('a typed rung carries the rungs after it at their planned share', t.finish === '2027-03-21' && t.leaves.get('M')!.source === 'vendor', t.finish);
+  const stale = forecastProject([leaf('M', 1, '2027-01-01', '2027-04-10', { pct: 50, rungs, typed: { date: '2027-03-01', source: 'vendor', rungId: 'r1' } })], '2027-01-15')!;
+  check('a typed date on a rung already ticked is ignored', stale.leaves.get('M')!.basis === 'plan', stale.leaves.get('M')!.basis);
+  const done = forecastProject([leaf('X', 1, '2026-01-01', '2026-06-30', { pct: 100, finishedAt: '2026-03-01' })], '2026-07-05')!;
+  check('a finished activity finished when it did', done.finish === '2026-03-01' && done.leaves.get('X')!.basis === 'done');
+  const loop = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { waitsFor: ['B'] }), leaf('B', 2, '2027-01-11', '2027-01-20', { waitsFor: ['A'] })], '2026-12-31');
+  check('a loop in the links does not hang or throw', loop !== null && loop.leaves.size === 2);
+  const late = forecastProject([leaf('S', 1, '2026-01-01', '2026-01-10')], '2026-02-01')!;
+  check('a start that should have happened lands today', late.finish === '2026-02-11', late.finish);
+}
+check('week containing a date', weekContaining('2026-01-05', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 2);
+check('past the last week, counted on in whole weeks', weekContaining('2026-01-20', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 4);
 
 // ---- summary ----
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
