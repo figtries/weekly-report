@@ -11,6 +11,7 @@
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-forecast.ts
  */
 import { computeHealth, narrativeParts } from '../lib/analysis.ts';
+import { forecastChecks } from '../lib/forecast-checks.ts';
 import { forecastFromDb } from '../lib/forecast-read.ts';
 import { leafPlanFraction } from '../lib/plan-curve.ts';
 import {
@@ -248,6 +249,38 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const late = forecastFromDb(db, 38)!;
   check('a vendor date 4 weeks late moves the finish to week 76', late.finishWeek === 76 && late.forecast.finish === '2027-06-11', `${late.finishWeek} ${late.forecast.finish}`);
   check('and says it is the vendor', late.forecast.leaves.get(nid('2.4'))!.basis === 'typed' && late.forecast.leaves.get(nid('2.4'))!.source === 'vendor');
+}
+
+/* ------------------------------------------ 5. what the app finds by itself */
+
+{
+  const db = buildFixture();
+  const links = suggestWaitsFor(profileRowsOf(db.wbsItems));
+  for (const item of db.wbsItems) item.waitsFor = links.get(item.id);
+  const read = forecastFromDb(db, 38)!;
+  const actualByWeek = Array.from({ length: 38 }, (_, i) => computeHealth(db, i + 1)!.actualPct);
+  const found = forecastChecks({
+    items: db.wbsItems,
+    leafData: db.weeks[37].leafData,
+    actualByWeek,
+    chain: read.forecast.chain,
+    leaves: read.forecast.leaves,
+  });
+  const of = (kind: string) => found.filter((c) => c.kind === kind);
+  const kinds = of('kind-vs-heading').map((c) => (c.kind === 'kind-vs-heading' ? `${codeOf(c.leafId)}:${c.current ?? '-'}>${c.suggested}` : '')).join(' ');
+  check(
+    'C1: kinds that disagree with their heading',
+    kinds === '2.2:->procurement 2.4:->procurement 2.5:->procurement 3.1:engineering>construction 3.3:engineering>construction 4.1:procurement>commissioning',
+    kinds
+  );
+  const ladders = of('ladder-repeats').map((c) => (c.kind === 'ladder-repeats' ? `${codeOf(c.leafId)}:${c.keep.join('+')}` : '')).join(' ');
+  check('C2: rows repeating a ladder their siblings split', ladders === '2.1:po 2.3:onsite', ladders);
+  const typed = of('typed-vs-ladder').map((c) => (c.kind === 'typed-vs-ladder' ? `${codeOf(c.leafId)}:${c.typedPct}/${c.ladderPct}` : '')).join(' ');
+  check('C3: a typed percent against its own ladder', typed === '2.1:99/75', typed);
+  const bulk = of('bulk-entry').map((c) => (c.kind === 'bulk-entry' ? `W${c.week}` : '')).join(' ');
+  check('C4: progress entered in bulk', bulk === 'W26 W36', bulk);
+  const needs = of('needs-date').map((c) => (c.kind === 'needs-date' ? codeOf(c.leafId) : '')).join(' ');
+  check('C5: the path still running on plan dates', needs === '2.4 2.5 3.3 4.1', needs);
 }
 
 // ---- summary ----
