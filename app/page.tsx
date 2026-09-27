@@ -20,6 +20,7 @@ import {
   fmtPct,
   validateWeek,
   weekMovers,
+  type ForecastSummary,
 } from '@/lib/analysis';
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, promoteNestedSpkContracts, summariseUnits, summaryTitle } from '@/lib/rollup';
@@ -623,6 +624,12 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                           }`}
                     </Badge>
                   )}
+                  {/* WHY THAT WEEK, in the app's own words: the activity that
+                      sets it, the second opinion when it disagrees, and what
+                      the forecast is still assuming (lib/forecast.ts). */}
+                  {health.forecast && health.forecast.path.length > 0 && (
+                    <ForecastWhy forecast={health.forecast} week={health.week} />
+                  )}
                   {/* Pinned to the bottom: the card is stretched to its
                       neighbour's height. The track fills what was a hole the
                       height of a hand, with the distance the badge states. */}
@@ -728,6 +735,46 @@ function DashboardHeader({
 }
 
 /** One cell of the hero's rail. Label above, figure below, divider between. */
+/**
+ * What the Forecast card's week rests on. Three lines at most, each one only
+ * when it has something to say: the activity that sets the finish (with the
+ * path to it), Earned Schedule when it lands two or more weeks away and the
+ * lead or lag behind that sits off the path, and how many steps on the path
+ * are still the plan's dates, which is a press into Data Overall.
+ */
+function ForecastWhy({ forecast, week }: { forecast: ForecastSummary; week: number }) {
+  const path = forecast.path;
+  const setter = path[path.length - 1];
+  const assumed = path.filter((p) => p.basis === 'plan').length;
+  const es = forecast.earnedSchedule;
+  const why = forecast.disagreement;
+  return (
+    <div className="mt-3 space-y-1.5 text-[13px] leading-snug">
+      <p className="text-muted-foreground">
+        Set by{' '}
+        <span className="font-medium text-foreground">
+          {setter.wbsCode} {setter.name}
+        </span>
+        {path.length > 1 && <> through {path.slice(0, -1).map((p) => p.wbsCode).join(' → ')}</>}
+      </p>
+      {es && why && (
+        <p className="text-muted-foreground">
+          Earned Schedule says week {Math.round(es.finishWeek)}: the {why.direction} sits{' '}
+          {why.mostly ? 'mostly' : 'partly'} in {why.items.map((i) => i.name).join(' and ')}, off this path.
+        </p>
+      )}
+      {assumed > 0 && (
+        <Link
+          href={`/weekly/${week}/overall`}
+          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+        >
+          {assumed} of {path.length} on the path still on plan dates. Add dates ›
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     // The rail is three fixed 1fr columns, so a figure that outgrows its

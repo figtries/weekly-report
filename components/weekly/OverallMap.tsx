@@ -5,6 +5,8 @@ import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'r
 import { Clock, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
+import ForecastStrip from '@/components/weekly/ForecastStrip';
+import type { ForecastView } from '@/lib/forecast-view';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
 import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
@@ -143,6 +145,7 @@ export default function OverallMap({
   initialLens = null,
   blockingIds = [],
   initialItem = null,
+  forecast = null,
 }: {
   map: MapModel;
   week: number;
@@ -163,6 +166,8 @@ export default function OverallMap({
   blockingIds?: string[];
   /** Arrived via `?item=` (or the first blocking item): its panel opens on arrival. */
   initialItem?: string | null;
+  /** The forecast and what it needs looked at; null until the weights close. */
+  forecast?: ForecastView | null;
 }) {
   // The path down to the item the Check screen pointed at is opened for you,
   // so closing its panel leaves the row itself on screen, not four collapsed
@@ -420,6 +425,8 @@ export default function OverallMap({
           </div>
         )}
 
+        {forecast && <ForecastStrip view={forecast} onOpen={setActiveId} />}
+
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -463,6 +470,8 @@ export default function OverallMap({
         projectHref={projectHref}
         currency={currency}
         peers={peers}
+        forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
+        forecastOptions={forecast?.options}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />

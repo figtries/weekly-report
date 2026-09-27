@@ -20,6 +20,7 @@ import { formatMoney } from '@/lib/currency';
 import { blockingIds, validateWeek } from '@/lib/analysis';
 import { r2 } from '@/lib/figures';
 import { weightGate } from '@/lib/weight-gate';
+import { buildForecastView } from '@/lib/forecast-view';
 
 export const unstable_instant = {
   prefetch: 'runtime',
@@ -143,6 +144,9 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // reports are actually built on, so this card, the dashboard, the sidebar
   // and Check can never disagree about whether figures exist this week.
   const gate = weightGate(db.wbsItems);
+  // The forecast is a figure like the four below, so it waits for the same
+  // gate. What it needs looked at rides with it (lib/forecast-view.ts).
+  const forecast = gate.ok ? buildForecastView(db, week) : null;
   const overrun = money && money.overrun.branches > 0
     ? ` ${money.overrun.branches} headings hand out more than they hold, ${formatMoney(money.overrun.amount, money.currency)} over between them.`
     : '';
@@ -298,6 +302,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           initialLens={initialLens}
           blockingIds={blocking}
           initialItem={initialItem}
+          forecast={forecast}
         />
       </Reveal>
     </div>
