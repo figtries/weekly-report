@@ -19,7 +19,7 @@ import {
   subjectOf,
   suggestWaitsFor,
 } from '../lib/forecast-epc.ts';
-import { forecastProject, weekContaining, type ForecastLeafInput } from '../lib/forecast.ts';
+import { disagreement, earnedSchedule, forecastProject, weekContaining, type ForecastLeafInput } from '../lib/forecast.ts';
 import type { Database, LeafSnapshot, WbsItem, WeeklyMeta } from '../lib/types.ts';
 
 let failed = 0;
@@ -197,6 +197,23 @@ const leaf = (id: string, order: number, s: string, f: string, extra: Partial<Fo
 }
 check('week containing a date', weekContaining('2026-01-05', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 2);
 check('past the last week, counted on in whole weeks', weekContaining('2026-01-20', [{ week: 1, end: '2026-01-04' }, { week: 2, end: '2026-01-11' }]) === 4);
+
+/* --------------------------------------------- 3. Earned Schedule, and why */
+
+{
+  const es = earnedSchedule([10, 20, 30, 40], 25, 2)!;
+  check('earned schedule interpolates inside a week', Math.abs(es.es - 2.5) < 1e-9 && Math.abs(es.spiT - 1.25) < 1e-9 && Math.abs(es.finishWeek - 3.2) < 1e-9, JSON.stringify(es));
+  check('nothing earned, no earned schedule', earnedSchedule([10, 20], 0, 2) === null);
+  const d = disagreement(
+    [{ id: 'a', name: 'A', share: 10 }, { id: 'b', name: 'B', share: 3 }, { id: 'c', name: 'C', share: -1 }],
+    ['b'],
+    12
+  )!;
+  check('the lead off the path is named', d.direction === 'lead' && d.items.map((i) => i.id).join() === 'a' && d.mostly, JSON.stringify(d));
+  const lag = disagreement([{ id: 'a', name: 'A', share: -1 }, { id: 'b', name: 'B', share: -5 }], ['b'], -6)!;
+  check('a lag mostly on the path is only partly off it', lag.direction === 'lag' && lag.items.map((i) => i.id).join() === 'a' && !lag.mostly, JSON.stringify(lag));
+  check('everything on the path, nothing to explain', disagreement([{ id: 'b', name: 'B', share: 4 }], ['b'], 4) === null);
+}
 
 // ---- summary ----
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

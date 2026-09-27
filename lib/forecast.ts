@@ -210,3 +210,73 @@ export function weekContaining(iso: string, weekEnds: { week: number; end: strin
   const last = weekEnds[weekEnds.length - 1];
   return last.week + Math.ceil((dayOf(iso) - dayOf(last.end)) / 7);
 }
+
+export interface EarnedSchedule {
+  /** The week, fractional, at which the plan stood where the actual stands now. */
+  es: number;
+  /** es / week. Above 1 is ahead. */
+  spiT: number;
+  /** The contract length divided by spiT: where this performance lands the finish. */
+  finishWeek: number;
+}
+
+/**
+ * Earned Schedule (Lipke), the top-down second opinion. It reads the S-curve's
+ * SHAPE, which the old pace forecast did not, but it still assumes the lead or
+ * lag carries on into every phase, which is why it is never the forecast.
+ * `planPct[i]` is the cumulative plan at the end of week i + 1.
+ */
+export function earnedSchedule(planPct: number[], actualPct: number, week: number): EarnedSchedule | null {
+  if (week <= 0 || actualPct <= 0 || !planPct.length) return null;
+  const lastWeek = planPct.length;
+  let es = lastWeek;
+  for (let i = 0; i < planPct.length; i++) {
+    if (planPct[i] >= actualPct) {
+      const before = i === 0 ? 0 : planPct[i - 1];
+      const step = planPct[i] - before;
+      es = i + (step > 0 ? (actualPct - before) / step : 1);
+      break;
+    }
+  }
+  if (es <= 0) return null;
+  const spiT = es / week;
+  return { es, spiT, finishWeek: lastWeek / spiT };
+}
+
+export interface ShareItem {
+  id: string;
+  name: string;
+  /** This activity's part of the deviation, in project points (apportioned). */
+  share: number;
+}
+
+export interface Disagreement {
+  direction: 'lead' | 'lag';
+  /** The two biggest parts of the deviation that are NOT on the path. */
+  items: ShareItem[];
+  /** Whether the off-path part is at least half the deviation. */
+  mostly: boolean;
+}
+
+/**
+ * Why Earned Schedule and the schedule disagree: the deviation sits in
+ * activities that do not decide the finish. On PHSS Samberah the 15-point lead
+ * is Engineering by Solar and the Solar fabrication, and the finish waits on
+ * the consumable retrofit and commissioning. Null when nothing off the path
+ * explains it.
+ */
+export function disagreement(shares: ShareItem[], chain: string[], deviationPct: number): Disagreement | null {
+  if (Math.abs(deviationPct) < 0.005) return null;
+  const ahead = deviationPct > 0;
+  const onPath = new Set(chain);
+  const off = shares
+    .filter((s) => !onPath.has(s.id) && (ahead ? s.share > 0 : s.share < 0))
+    .sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
+  if (!off.length) return null;
+  const offSum = off.reduce((s, x) => s + Math.abs(x.share), 0);
+  return {
+    direction: ahead ? 'lead' : 'lag',
+    items: off.slice(0, 2),
+    mostly: offSum >= Math.abs(deviationPct) / 2,
+  };
+}
