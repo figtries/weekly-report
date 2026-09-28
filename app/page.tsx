@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { tidyName } from '@/lib/tidy-name';
 
 // Spelled out, NOT left to the root layout's title template: a template only
 // reaches CHILD segments, and this page sits in the root segment beside the
@@ -699,7 +700,7 @@ function DashboardHeader({
     <header className="animate-enter flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="w-full min-w-0 sm:w-auto sm:flex-1">
         <h1 className="line-clamp-2 text-xl font-semibold tracking-tight sm:text-2xl">
-          {name}
+          {tidyName(name)}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {customer || 'No customer set'}

@@ -427,7 +427,7 @@ export function WeekStory({
           </div>
           <p className={cn('mt-1.5 whitespace-nowrap', TYPE.meta)}>
             <span className="font-medium text-red-600">
-              plan {signed(planAddedPct, fmtPct(planAddedPct))}
+              Plan {signed(planAddedPct, fmtPct(planAddedPct))}
             </span>
           </p>
         </div>

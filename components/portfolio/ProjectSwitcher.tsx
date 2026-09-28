@@ -9,6 +9,7 @@ import PlanActualBar from '@/components/ui/PlanActualBar';
 import type { OpenProjectStatus } from '@/lib/data';
 import { shownDiff } from '@/lib/figures';
 import type { ProjectCard } from '@/lib/projects';
+import { tidyName } from '@/lib/tidy-name';
 
 /**
  * Which project you are looking at, how far along it is — and the way to the
@@ -116,7 +117,7 @@ export default function ProjectSwitcher({
       </span>
 
       <span className="mt-2.5 block text-[13px] font-semibold leading-snug text-foreground">
-        {active.name}
+        {tidyName(active.name)}
       </span>
       {active.clientName && (
         <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
