@@ -351,7 +351,7 @@ export default function OverallMap({
                   ? 'Nothing is scheduled this week'
                   : weekDone
                     ? `This week · All ${map.due} filled in`
-                    : `This week · ${map.filled} of ${map.due} filled in`}
+                    : `This week · Filled in ${map.filled} of ${map.due}`}
             </p>
             {map.due > 0 && (
               <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-foreground/8">
@@ -486,10 +486,10 @@ export default function OverallMap({
 }
 
 const REMINDER_LABEL: Record<NonNullable<Reminder>, string> = {
-  late: 'late',
-  soon: 'ending soon',
-  slip: 'will slip',
-  check: 'to check',
+  late: 'Late',
+  soon: 'Ending soon',
+  slip: 'Will slip',
+  check: 'To check',
 };
 
 const REMINDER_ICON = { late: TriangleAlert, soon: Clock, slip: CalendarClock, check: ListChecks } as const;

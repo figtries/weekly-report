@@ -230,7 +230,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
       tone: 'text-deviation',
       // One word, not a sentence: the figure above already says how much, and
       // the sign is the one thing about it a newcomer reads wrong.
-      sub: grandTotal.deviationPct < 0 ? 'behind plan' : grandTotal.deviationPct > 0 ? 'ahead of plan' : 'on plan',
+      sub: grandTotal.deviationPct < 0 ? 'Behind plan' : grandTotal.deviationPct > 0 ? 'Ahead of plan' : 'On plan',
     },
   ];
 
