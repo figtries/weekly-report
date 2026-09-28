@@ -496,8 +496,9 @@ const REMINDER_ICON = { late: TriangleAlert, soon: Clock, slip: CalendarClock, c
 
 /**
  * One tone per reminder, used by its button and by the list it opens. Amber
- * late, blue ending soon, red will slip, and "to check" in the page's own ink:
- * it is a question about the data, not a verdict on the work.
+ * late, blue ending soon, red will slip, violet to check: four buttons, four
+ * hues, none mistaken for another. "To check" shipped white first and read as
+ * nothing to look at (28 Sep 2026).
  */
 const REMINDER_TONE: Record<NonNullable<Reminder>, { idle: string; on: string; box: string; text: string; row: string }> = {
   late: {
@@ -522,11 +523,11 @@ const REMINDER_TONE: Record<NonNullable<Reminder>, { idle: string; on: string; b
     row: 'border-bad/15 hover:bg-bad/10',
   },
   check: {
-    idle: 'border-input bg-card text-foreground hover:bg-muted/60',
-    on: 'border-foreground bg-foreground text-card',
-    box: 'border-input bg-card',
-    text: 'text-foreground',
-    row: 'border-border hover:bg-muted/60',
+    idle: 'border-check/30 bg-check-soft text-check hover:bg-check/15',
+    on: 'border-check bg-check text-white',
+    box: 'border-check/25 bg-check-soft',
+    text: 'text-check',
+    row: 'border-check/15 hover:bg-check/10',
   },
 };
 

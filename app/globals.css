@@ -123,6 +123,13 @@
   --meta: #4338ca;        /* indigo-700 — the word */
   --meta-strong: #312e81; /* indigo-900 — the figure, which is what is read */
   --meta-soft: #eef2ff;   /* indigo-50  — its ground */
+  /* TO CHECK — the fourth reminder over Data Overall's map, beside late
+     (amber), ending soon (blue) and will slip (red): data somebody has to
+     look at. Violet because the three beside it are spoken for and a white
+     button read as nothing to see; picked from rendered variants on 28 Sep
+     2026, the one hue added to this file since the note above. */
+  --check: #6d28d9;      /* violet-700 */
+  --check-soft: #ede9fe; /* violet-100 */
   /* IDENTITY, NOT VERDICT. The weekly stat row colours its four figures so they
      are told apart at a glance instead of read one label at a time; Plan and
      Actual reuse --chart-2/--chart-1 so that row teaches the same pair as the
@@ -182,6 +189,8 @@
   --color-meta: var(--meta);
   --color-meta-strong: var(--meta-strong);
   --color-meta-soft: var(--meta-soft);
+  --color-check: var(--check);
+  --color-check-soft: var(--check-soft);
   --color-deviation: var(--deviation);
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -1550,6 +1559,8 @@ a:active {
   --meta: #a5b4fc;
   --meta-strong: #e0e7ff;
   --meta-soft: color-mix(in oklab, #818cf8 18%, transparent);
+  --check: #c4b5fd;
+  --check-soft: color-mix(in oklab, #a78bfa 18%, transparent);
   /* Free to be the bright yellow here: on the dark card this is 9.5:1, where
      the same hue on white was 1.5:1. */
   --deviation: #facc15;

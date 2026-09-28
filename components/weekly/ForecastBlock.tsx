@@ -60,6 +60,8 @@ function againstPlan(date: string, plan: string) {
   return `${wk(Math.abs(weeks))} ${weeks > 0 ? 'after' : 'before'} plan`;
 }
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** "W59 to W62", or one week when it starts and ends in it. */
 const span = (from: number, to: number) => (to > from ? `W${from} to W${to}` : `W${to}`);
 
@@ -195,13 +197,15 @@ export default function ForecastBlock({
               <CalendarClock className="h-[18px] w-[18px] shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-muted-foreground">{next.rungId ? `Next: ${next.label}` : 'Finish'}</p>
+                {/* The plan's own date is not shown at rest: the Schedule tile
+                    below already says it, and on its own it read as a second
+                    schedule. It is the comparison once somebody gives a date,
+                    and the starting value of the date field. */}
                 <p className="mt-0.5 text-[14px] font-medium text-foreground">
-                  {typedHere ? `${SAYS[typedHere.source]} ${shortDate(typedHere.date)}` : `Plan ${shortDate(next.planDate)}`}
+                  {typedHere ? `${SAYS[typedHere.source]} ${shortDate(typedHere.date)}` : 'No date yet'}
                 </p>
                 {typedHere && (
-                  <p className="mt-0.5 text-[12px] text-muted-foreground">
-                    Plan {shortDate(next.planDate)} · {againstPlan(typedHere.date, next.planDate)}
-                  </p>
+                  <p className="mt-0.5 text-[12px] text-muted-foreground">{capitalize(againstPlan(typedHere.date, next.planDate))}</p>
                 )}
               </div>
               {editing !== 'date' && (
