@@ -6,6 +6,7 @@ import PlanActualBar from '@/components/ui/PlanActualBar';
 import type { PriorityAction, PriorityActions, PriorityLevel } from '@/lib/priority-actions';
 import { TYPE } from '@/lib/design';
 import { cn } from '@/lib/utils';
+import { tidyName } from '@/lib/tidy-name';
 
 /**
  * PRIORITY ACTIONS: what has to be done in the next three weeks.
@@ -88,7 +89,7 @@ function Row({ a }: { a: PriorityAction }) {
         {labelOf(a)}
       </span>
       <div className="min-w-0">
-        <p className={cn('truncate', TYPE.row)}>{a.node.deskripsi}</p>
+        <p className={cn('truncate', TYPE.row)}>{tidyName(a.node.deskripsi)}</p>
         {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
       </div>
       <div className="col-span-2 flex items-center gap-3 sm:col-span-1 sm:contents">
@@ -186,7 +187,7 @@ export default function PriorityActionsCard({
             <p className="mt-1 text-sm text-muted-foreground">
               {next ? (
                 <>
-                  Next up: <span className="font-semibold text-foreground">{next.node.deskripsi}</span>{' '}
+                  Next up: <span className="font-semibold text-foreground">{tidyName(next.node.deskripsi)}</span>{' '}
                   {next.kind === 'start' ? 'starts' : 'finishes'} W{next.week}
                 </>
               ) : (
@@ -202,7 +203,7 @@ export default function PriorityActionsCard({
               </span>
               <span className="text-sm text-muted-foreground">
                 {actions.length === 1 ? 'needs' : 'need'} action by W{horizonWeek}
-                {actions.length > ROWS && ` · the ${ROWS} most urgent`}
+                {actions.length > ROWS && ` · The ${ROWS} most urgent`}
               </span>
             </p>
             <ul className="flex flex-col gap-5">

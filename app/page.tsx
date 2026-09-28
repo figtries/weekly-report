@@ -713,7 +713,7 @@ function DashboardHeader({
               calendar says we are in", which is never zero. Leaving it here would
               have retired this line permanently. Only the REPORTED week can say
               whether anything has been reported. */}
-          {reportedWeek > 0 ? '' : ' · nothing reported yet'}
+          {reportedWeek > 0 ? '' : ' · Nothing reported yet'}
         </p>
       </div>
       {/* Data Overall's row is 285px at desktop and the screen's width on a

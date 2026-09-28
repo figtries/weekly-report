@@ -350,7 +350,7 @@ export default function OverallMap({
                 : map.due === 0
                   ? 'Nothing is scheduled this week'
                   : weekDone
-                    ? `This week · all ${map.due} filled in`
+                    ? `This week · All ${map.due} filled in`
                     : `This week · ${map.filled} of ${map.due} filled in`}
             </p>
             {map.due > 0 && (
@@ -568,8 +568,8 @@ function reminderRows(kind: NonNullable<Reminder>, units: MapNode[], forecast: F
       name,
       lines: [
         kind === 'late'
-          ? `Plan ended W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${weeks(n.lateBy ?? 0)} late`
-          : `Plan ends W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${n.dueIn === 0 ? 'ends this week' : `ends in ${weeks(n.dueIn ?? 0)}`}`,
+          ? `Plan ended W${n.finishWeek} · Done ${fmt1(n.actualPct)}% · ${weeks(n.lateBy ?? 0)} late`
+          : `Plan ends W${n.finishWeek} · Done ${fmt1(n.actualPct)}% · ${n.dueIn === 0 ? 'Ends this week' : `Ends in ${weeks(n.dueIn ?? 0)}`}`,
       ],
     };
   });

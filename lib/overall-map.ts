@@ -2,6 +2,7 @@ import type { RollupNode } from './rollup';
 import type { ChangeLogEntry, LeafSnapshot, Milestone, ProgressMethod, ScheduleItem } from './types';
 import type { Worklist } from './worklist';
 import { methodOf, totalQty } from './progress';
+import { tidyName } from './tidy-name';
 
 /**
  * The project as a MAP, which is the third answer to board item 12 and the
@@ -234,7 +235,7 @@ export function buildOverallMap({
     const base: MapNode = {
       id: node.id,
       code: node.wbsCode,
-      name: node.deskripsi,
+      name: tidyName(node.deskripsi),
       kind: depth === 0 ? 'unit' : isLeaf ? 'leaf' : 'group',
       depth,
       weight: round2(node.bobot),

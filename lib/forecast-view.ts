@@ -23,6 +23,7 @@ import { forecastFromDb, slippingOf } from './forecast-read';
 import { r2 } from './figures';
 import { resolveLeafProgress } from './progress';
 import { computeGrandTotal, computeRollup, promoteNestedSpkContracts } from './rollup';
+import { tidyName } from './tidy-name';
 import { BUILT_IN_KINDS } from './work-kind';
 import type { Database, Milestone } from './types';
 
@@ -117,7 +118,7 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
   const byId = new Map(db.wbsItems.map((i) => [i.id, i]));
   const ref = (id: string): LinkRef => {
     const i = byId.get(id);
-    return { id, code: i?.wbsCode ?? '', name: i?.deskripsi ?? '' };
+    return { id, code: i?.wbsCode ?? '', name: tidyName(i?.deskripsi ?? '') };
   };
   const dates = new Map((db.schedule ?? []).map((s) => [s.leafId, s]));
   const { forecast } = read;
@@ -225,8 +226,8 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
       say(
         c.leafId,
         currentLabel
-          ? `Set as ${currentLabel}, but it sits under ${c.heading}`
-          : `No kind of work yet; it sits under ${c.heading}`
+          ? `Set as ${currentLabel}, but it sits under ${tidyName(c.heading)}`
+          : `No kind of work yet; it sits under ${tidyName(c.heading)}`
       );
     } else if (c.kind === 'material-early') {
       const first = ref(c.waiting[0].id);
@@ -247,7 +248,7 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
       const weeks = slips[i.id];
       const finishWeek = leaves[i.id].finishWeek;
       // The plan week is the forecast less the slip, so the line recomputes.
-      return { leaf: ref(i.id), weeks, line: `Plan ends W${finishWeek - weeks} · forecast W${finishWeek} · ${weeksWord(weeks)} late` };
+      return { leaf: ref(i.id), weeks, line: `Plan ends W${finishWeek - weeks} · Forecast W${finishWeek} · ${weeksWord(weeks)} late` };
     })
     .sort((a, b) => b.weeks - a.weeks);
 

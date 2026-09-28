@@ -5,6 +5,7 @@ import CodeChip from '@/components/ui/CodeChip';
 import { fmtPct } from '@/lib/analysis';
 import { formatMoney } from '@/lib/currency';
 import { cn } from '@/lib/utils';
+import { tidyName } from '@/lib/tidy-name';
 import type { WeightGate } from '@/lib/weight-gate';
 
 /**
@@ -85,7 +86,7 @@ export default function WeightGateNotice({
               {gate.unbudgeted.slice(0, 6).map((u) => (
                 <li key={u.id} className="flex min-w-0 items-baseline gap-2 py-1.5 text-sm">
                   {u.code && <CodeChip>{u.code}</CodeChip>}
-                  <span className="truncate">{u.name}</span>
+                  <span className="truncate">{tidyName(u.name)}</span>
                 </li>
               ))}
             </ul>

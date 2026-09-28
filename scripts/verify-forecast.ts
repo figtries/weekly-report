@@ -364,7 +364,7 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const viewed = Object.fromEntries(v.slipping.map((s) => [s.leaf.id, s.weeks]));
   check('will slip names the same rows as the dashboard', JSON.stringify(viewed, Object.keys(viewed).sort()) === JSON.stringify(health, Object.keys(health).sort()) && v.slipping.length > 0, `${JSON.stringify(viewed)} vs ${JSON.stringify(health)}`);
   const s33 = v.slipping.find((s) => s.leaf.id === nid('3.3'));
-  check('and its line recomputes: forecast less plan is the weeks late', !!s33 && s33.line === `Plan ends W${l33.planFinishWeek} · forecast W${l33.finishWeek} · ${s33.weeks} ${s33.weeks === 1 ? 'week' : 'weeks'} late` && s33.weeks === l33.finishWeek - l33.planFinishWeek, s33?.line);
+  check('and its line recomputes: forecast less plan is the weeks late', !!s33 && s33.line === `Plan ends W${l33.planFinishWeek} · Forecast W${l33.finishWeek} · ${s33.weeks} ${s33.weeks === 1 ? 'week' : 'weeks'} late` && s33.weeks === l33.finishWeek - l33.planFinishWeek, s33?.line);
   check('most weeks first', v.slipping.every((s, i, a) => i === 0 || a[i - 1].weeks >= s.weeks), v.slipping.map((s) => s.weeks).join());
 }
 

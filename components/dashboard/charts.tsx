@@ -9,6 +9,7 @@ import { TYPE, signed, verdictChip, verdictOf, type Verdict } from '@/lib/design
 import type { Contribution, Mover } from '@/lib/analysis';
 import type { SummaryRow } from '@/lib/rollup';
 import type { SCurveRow } from '@/lib/scurve';
+import { tidyName } from '@/lib/tidy-name';
 
 /**
  * The dashboard's visuals, all server-rendered SVG and divs.
@@ -55,9 +56,9 @@ function MeasureCaption({ actual, plan, right }: { actual: number; plan: number;
   return (
     <p className={cn('mt-1.5 flex items-baseline justify-between gap-3 whitespace-nowrap', TYPE.meta)}>
       <span>
-        <span className="font-medium text-blue-600">{fmtPct(actual)} done</span>
+        <span className="font-medium text-blue-600">Done {fmtPct(actual)}</span>
         {' · '}
-        <span className="font-medium text-red-600">plan {fmtPct(plan)}</span>
+        <span className="font-medium text-red-600">Plan {fmtPct(plan)}</span>
       </span>
       {right && <span>{right}</span>}
     </p>
@@ -118,7 +119,7 @@ export function UnitBreakdown({
         // Strip the "(SPK-###)" tag out of the label and show it as its own
         // chip. A unit or a section carries no tag in its name, so it hands
         // over its WBS code instead.
-        const { tag, name } = splitCode(r.deskripsi);
+        const { tag, name } = splitCode(tidyName(r.deskripsi));
         const chip = tag ?? r.code;
 
         return (
@@ -189,7 +190,7 @@ export function ContributionList({ rows, limit = 3 }: { rows: Contribution[]; li
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
               <RowBadge code={c.wbsCode} />
-              <p className={cn('truncate', TYPE.row)}>{c.deskripsi}</p>
+              <p className={cn('truncate', TYPE.row)}>{tidyName(c.deskripsi)}</p>
             </div>
             <VerdictPill verdict={c.share < 0 ? 'behind' : 'ahead'}>
               {signed(c.share, fmtNum(c.share, 2))}
@@ -488,7 +489,7 @@ export function WeekStory({
             // share carries a % like "Added this week" it adds up to.
             <li key={m.id} className="py-2.5 last:pb-0">
               <div className="flex items-baseline justify-between gap-3">
-                <p className={cn('min-w-0 truncate', TYPE.row)}>{m.deskripsi}</p>
+                <p className={cn('min-w-0 truncate', TYPE.row)}>{tidyName(m.deskripsi)}</p>
                 <span
                   className={cn(
                     'shrink-0 text-sm font-semibold tabular-nums',
