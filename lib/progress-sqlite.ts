@@ -471,7 +471,7 @@ export function setLeafForecastSqlite(
 /**
  * What this activity waits for, as a person confirmed it. Empty is stored as
  * `[]`, not NULL: "waits for nothing" is an answer, and NULL means nobody was
- * asked, which is what "Link" over the map fills in (`unansweredLinks`).
+ * asked yet, which is when the panel offers EPC order's guess (`unansweredLinks`).
  */
 export function setWaitsForSqlite(projectId: string, nodeId: string, ids: string[]): void {
   leafOfProject(projectId, nodeId);

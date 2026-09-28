@@ -328,34 +328,36 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   check('a typed-percent row is asked for its finish', n24?.rungId === null && n24?.label === 'Finish' && n24?.planDate === '2027-03-14', JSON.stringify(n24));
   check('a ladder row is asked for its next stage', v.leaves[nid('2.3')].next?.rungId === `${nid('2.3')}:po`, JSON.stringify(v.leaves[nid('2.3')].next));
   check('a finished row is asked nothing', v.leaves[nid('2.2')].next === null);
-  const offer33 = unansweredLinks(buildFixture().wbsItems).get(nid('3.3')) ?? [];
-  check('links are offered, not applied', offer33.map(codeOf).join() === '2.3,2.5' && buildFixture().wbsItems.find((i) => i.id === nid('3.3'))!.waitsFor === undefined, offer33.map(codeOf).join());
+  const l33v = v.leaves[nid('3.3')];
+  check('links are suggested, not applied', l33v.suggested.map((l) => l.code).join() === '2.3,2.5' && l33v.waitsFor.length === 0 && !l33v.answered, JSON.stringify(l33v.suggested));
   check('the path and the finish ride along', v.path.map((p) => p.code).join() === '4.1' && v.finishWeek === 72 && v.lastWeek === 72);
   check('bulk weeks ride along', v.bulkWeeks.join() === '26,36', v.bulkWeeks.join());
   check('it is plain data', JSON.parse(JSON.stringify(v)).leaves[nid('3.1')].reason.kind === v.leaves[nid('3.1')].reason.kind);
   check('nothing slips on plan dates alone', v.slipping.length === 0, JSON.stringify(v.slipping));
 
-  // The one-card panel and the one-press Link (27 Sep 2026).
-  check('nobody answered, so Link has rows to fill', v.unlinked === unansweredLinks(buildFixture().wbsItems).size && v.unlinked > 0, String(v.unlinked));
+  // The one-card panel (27 Sep 2026); links are the planner's, per activity (28 Sep 2026).
+  check('every scheduled activity is offered in the picker', v.options.length === Object.keys(v.leaves).length && v.options.length > 0, String(v.options.length));
   const l33 = v.leaves[nid('3.3')];
   check('an unstarted row on plan says it follows the plan', l33.reason.kind === 'plan' && l33.finishWeek === l33.planFinishWeek, JSON.stringify(l33.reason));
   check('the bars get the plan start', l33.planStartWeek <= l33.planFinishWeek && !!l33.planStart, `${l33.planStartWeek} ${l33.planStart}`);
   check('a finished row says so', v.leaves[nid('2.2')].reason.kind === 'done');
 }
 {
-  // Link fills only what nobody answered: a row set to nothing keeps nothing.
+  // A row answered "nothing" is answered: its suggestion stays for the picker, but is no longer offered.
   const db = buildFixture();
   const offers = unansweredLinks(db.wbsItems);
   const [first] = [...offers.keys()];
   db.wbsItems.find((i) => i.id === first)!.waitsFor = [];
-  const after = unansweredLinks(db.wbsItems);
-  check('a row answered "nothing" is not offered again', !after.has(first) && after.size === offers.size - 1, `${offers.size} -> ${after.size}`);
-  for (const [id, ids] of after) db.wbsItems.find((i) => i.id === id)!.waitsFor = ids;
-  check('after Link nothing is left to fill', unansweredLinks(db.wbsItems).size === 0 && buildForecastView(db, 38)!.unlinked === 0);
+  const nothing = buildForecastView(db, 38)!.leaves[first];
+  check('a row answered "nothing" reads as answered, with no links', nothing.answered && nothing.waitsFor.length === 0 && nothing.suggested.length > 0, JSON.stringify({ a: nothing.answered, s: nothing.suggested.length }));
+  // The planner takes every suggestion, one activity at a time.
+  for (const [id, ids] of offers) if (id !== first) db.wbsItems.find((i) => i.id === id)!.waitsFor = ids;
   // With the links in, a late shipment names itself on what waits for it.
   db.wbsItems.find((i) => i.id === nid('2.5'))!.forecast = { date: '2027-07-31', source: 'vendor', rungId: null, week: 38 };
   const v = buildForecastView(db, 38)!;
   const l33 = v.leaves[nid('3.3')];
+  const w25 = l33.waitsFor.find((l) => l.code === '2.5');
+  check('the late link carries its weeks', w25?.state === 'late' && w25.lateWeeks > 0 && l33.answered, JSON.stringify(l33.waitsFor));
   check('and what waits for it says it was pushed by it', l33.reason.kind === 'pushed' && l33.reason.by.code === '2.5' && l33.reason.weeks === l33.finishWeek - l33.planFinishWeek, JSON.stringify(l33.reason));
   // "Will slip" over the map names exactly the rows Priority Actions calls "Slips N wk".
   const health = computeHealth(db, 38)!.forecast!.slipping;

@@ -1,11 +1,10 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { memo, useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
+import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
-import { linkEpcOrderAction } from '@/lib/actions';
 import type { ForecastView } from '@/lib/forecast-view';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
 import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
@@ -383,12 +382,6 @@ export default function OverallMap({
           )}
         </div>
 
-        {/* Link, once for the whole plan: EPC order offers what each activity
-            waits for, and one press takes every offer nobody has answered, so a
-            late delivery moves what comes after it. The row leaves once it is
-            done. It is the only place links are made. */}
-        {forecast && forecast.unlinked > 0 && <LinkRow projectId={projectId} />}
-
         {/* THE REMINDERS, as buttons. This was one sentence pointing at the
             Check screen, which told you how many and sent you somewhere else
             to find out which. Pressing one now lists them right here, each
@@ -399,7 +392,7 @@ export default function OverallMap({
             "Will slip" and "to check" joined late and ending soon on 28 Sep
             2026, in place of a forecast strip over the map: the forecast is the
             dashboard's, and what Data Overall keeps of it is only what somebody
-            has to answer. An odd one out spans the row, so the grid keeps both
+            has to answer. Links are set in each activity's panel. An odd one out spans the row, so the grid keeps both
             edges. */}
         {reminderKinds.length > 0 && (
           <div className="mt-3">
@@ -484,6 +477,7 @@ export default function OverallMap({
         currency={currency}
         peers={peers}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
+        forecastOptions={forecast?.options}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />
@@ -682,43 +676,6 @@ function ReminderLens({
     >
       {children}
     </m.button>
-  );
-}
-
-/**
- * "Link", the one press that fills every link EPC order offers and nobody
- * has answered (lib/forecast-epc.ts `unansweredLinks`). Until 27 Sep 2026 that
- * was a Confirm on every activity's panel, which nobody was going to press
- * eleven times, so the forecast ran without its links.
- */
-function LinkRow({ projectId }: { projectId: string | null }) {
-  const [linking, startLinking] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const link = () => {
-    setError(null);
-    startLinking(async () => {
-      const res = await linkEpcOrderAction(projectId);
-      if (!res.ok) setError(res.error ?? 'Could not link them');
-    });
-  };
-  return (
-    <div className="mt-3 rounded-xl border border-input bg-card px-3.5 py-2.5">
-      <div className="flex items-center gap-3">
-        <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground">
-          Link activities, so a late delivery moves what waits for it
-        </p>
-        <m.button
-          {...pressMotion}
-          type="button"
-          disabled={linking}
-          onClick={link}
-          className="flex min-h-11 shrink-0 items-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors duration-200 ease-ios hover:bg-primary/90 disabled:opacity-60"
-        >
-          {linking ? 'Linking…' : 'Link'}
-        </m.button>
-      </div>
-      {error && <p className="mt-2 text-[12.5px] text-bad">{error}</p>}
-    </div>
   );
 }
 

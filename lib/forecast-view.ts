@@ -2,22 +2,23 @@
  * Everything Data Overall shows about the forecast, worked out on the server
  * and handed to the client as plain data: which activities will slip, what
  * the app found in the data that somebody can answer (lib/forecast-checks.ts),
- * whether "Link" still has rows to fill, and per activity its finish and the
- * one date question it deserves.
+ * and per activity its finish, the one date question it deserves, and what
+ * it waits for.
  *
  * The forecast itself is the dashboard's. Over the map it is two reminder
  * buttons beside "late" and "ending soon", not a figure of its own: a strip
- * with the finish, the setter, the checks and Link, plus up to four warning
- * boxes and a "waits for" editor in every panel, read as too much to take in
- * (28 Sep 2026).
+ * with the finish, the setter, the checks and a one-press Link, plus up to
+ * four warning boxes in every panel, read as too much to take in (28 Sep
+ * 2026). Links are the planner's, one activity at a time: EPC order only
+ * suggests.
  *
- * It decides nothing of its own. The finish is lib/forecast.ts's, the links
- * lib/forecast-epc.ts's, the slips `slippingOf`'s (the same rows Priority
- * Actions names), the percentages lib/progress.ts's.
+ * It decides nothing of its own. The finish is lib/forecast.ts's, the
+ * suggestions lib/forecast-epc.ts's, the slips `slippingOf`'s (the same
+ * rows Priority Actions names), the percentages lib/progress.ts's.
  */
 import { dayOf, isoOf, weekContaining, type ForecastSource, type StepBasis } from './forecast';
 import { forecastChecks } from './forecast-checks';
-import { unansweredLinks } from './forecast-epc';
+import { profileRowsOf, suggestWaitsFor } from './forecast-epc';
 import { forecastFromDb, slippingOf } from './forecast-read';
 import { r2 } from './figures';
 import { resolveLeafProgress } from './progress';
@@ -29,6 +30,13 @@ export interface LinkRef {
   id: string;
   code: string;
   name: string;
+}
+
+/** Something an activity waits for, with where that one stands against its plan. */
+export interface WaitRef extends LinkRef {
+  state: 'done' | 'on-plan' | 'late';
+  /** Whole weeks its own forecast runs past its plan; 0 unless late. */
+  lateWeeks: number;
 }
 
 /**
@@ -58,6 +66,14 @@ export interface ForecastLeafView {
   /** The one date question this activity deserves now; null when it is done or measured by quantity. */
   next: { rungId: string | null; label: string; planDate: string } | null;
   typed: { date: string; source: ForecastSource; rungId: string | null; week: number; label: string } | null;
+  /**
+   * What it waits for, as the planner set it. NULL on the row (nobody asked
+   * yet) and [] (asked: nothing) both arrive empty; `answered` tells them apart.
+   */
+  waitsFor: WaitRef[];
+  answered: boolean;
+  /** EPC order's guess. Offered to press while nobody has answered; marked in the picker after. */
+  suggested: LinkRef[];
 }
 
 export interface ForecastView {
@@ -71,10 +87,10 @@ export interface ForecastView {
   /** Activities with a finding somebody can answer, in plan order, with why ("to check"). */
   toCheck: { leaf: LinkRef; reasons: string[] }[];
   leaves: Record<string, ForecastLeafView>;
+  /** Every scheduled activity, in plan order, for "What has to finish before this one?". */
+  options: LinkRef[];
   /** Weeks where progress arrived in bulk after weeks of nothing. */
   bulkWeeks: number[];
-  /** Activities EPC order has links for that nobody has answered: what "Link" fills. */
-  unlinked: number;
 }
 
 const kindLabel = (id: string | null | undefined) => BUILT_IN_KINDS.find((k) => k.id === id)?.label ?? null;
@@ -107,6 +123,13 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
   const { forecast } = read;
   const onPath = new Set(forecast.chain);
   const weekOf = (iso: string) => weekContaining(iso, weekEnds);
+  const waitRef = (id: string): WaitRef => {
+    const lf = forecast.leaves.get(id)!;
+    const s = dates.get(id);
+    const late = lf.basis === 'done' || !s?.finishDate ? 0 : Math.max(0, weekOf(lf.finish) - weekOf(s.finishDate));
+    return { ...ref(id), state: lf.basis === 'done' ? 'done' : late > 0 ? 'late' : 'on-plan', lateWeeks: late };
+  };
+  const guesses = suggestWaitsFor(profileRowsOf(db.wbsItems));
 
   // The project's actual, week by week, for the bulk-entry check.
   const actualByWeek: number[] = [];
@@ -184,6 +207,9 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
       onPath: onPath.has(item.id),
       next,
       typed,
+      waitsFor: (item.waitsFor ?? []).filter((id) => forecast.leaves.has(id)).map(waitRef),
+      answered: item.waitsFor !== undefined,
+      suggested: (guesses.get(item.id) ?? []).filter((id) => forecast.leaves.has(id)).map(ref),
     };
   }
 
@@ -234,7 +260,7 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
     slipping,
     toCheck: ordered.filter((i) => reasons.has(i.id)).map((i) => ({ leaf: ref(i.id), reasons: reasons.get(i.id)! })),
     leaves,
+    options: ordered.map((i) => ref(i.id)),
     bulkWeeks: checks.flatMap((c) => (c.kind === 'bulk-entry' ? [c.week] : [])),
-    unlinked: unansweredLinks(db.wbsItems).size,
   };
 }

@@ -443,13 +443,17 @@ alone never make a slip (`ForecastSummary.slipping`).
 **Data Overall keeps only what somebody has to answer about the forecast**
 (28 Sep 2026). The forecast is the dashboard's. Over the map there is no
 forecast strip: "will slip" and "to check" sit beside "late" and "ending
-soon" as reminder buttons, and "Link" is one row until pressed. "Will slip"
+soon" as reminder buttons. "Will slip"
 and "Slips N wk" both read `slippingOf` in `lib/forecast-read.ts`, so the two
 screens name the same rows. "To check" lists only findings the panel can
 answer (kind vs heading, material ticked before delivery, the path without a
 date); a repeated ladder and typed-vs-ticks are still found but not listed
-until a history-safe restatement exists. The panel shows the forecast card
-and the next stage's date, and nothing else: no warning boxes, no "waits for".
+until a history-safe restatement exists. The panel shows the forecast card,
+the next stage's date, and "What has to finish before this one?", and no
+warning boxes. LINKS ARE THE PLANNER'S, one activity at a time: EPC order
+only suggests ("Use these" is still a press, and the picker marks the
+suggestion). A one-press "Link" for the whole plan was shipped and removed
+the same day, because once it had run nothing on screen showed what it did.
 
 # Progress has one origin
 

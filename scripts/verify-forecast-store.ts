@@ -63,7 +63,8 @@ setLeafForecastSqlite(projectId, a.id, null, 39);
 setWaitsForSqlite(projectId, b.id, []);
 const cleared = buildProjectDashboardData(projectId)!.db.wbsItems;
 check('back to plan clears the date', cleared.find((i) => i.id === a.id)!.forecast === undefined);
-check('no links clears the links', cleared.find((i) => i.id === b.id)!.waitsFor === undefined);
+// [] is an answer, "waits for nothing"; only NULL means nobody was asked (27 Sep 2026).
+check('no links is stored as an answer: waits for nothing', JSON.stringify(cleared.find((i) => i.id === b.id)!.waitsFor) === '[]', JSON.stringify(cleared.find((i) => i.id === b.id)!.waitsFor));
 
 check('refuses a date that is not one', refuses(() => setLeafForecastSqlite(projectId, a.id, { date: '11/04/2027', source: 'vendor', rungId: null }, 38)));
 check('refuses a source that is not vendor, site or client', refuses(() => setLeafForecastSqlite(projectId, a.id, { date: '2027-04-11', source: 'rumour', rungId: null }, 38)));
