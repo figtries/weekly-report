@@ -15,12 +15,11 @@ import { weightGate } from './weight-gate';
 import {
   disagreement,
   earnedSchedule,
-  weekContaining,
   type Disagreement,
   type EarnedSchedule,
   type StepBasis,
 } from './forecast';
-import { forecastFromDb } from './forecast-read';
+import { forecastFromDb, slippingOf } from './forecast-read';
 
 /**
  * The reading layer.
@@ -169,16 +168,7 @@ export function computeHealth(db: Database, week: number): ProjectHealth | null 
         share: c.share,
       }));
       const byId = new Map(db.wbsItems.map((i) => [i.id, i]));
-      const weekEnds = [...db.weeks].sort((a, b) => a.week - b.week).map((w) => ({ week: w.week, end: w.periodEnd }));
-      const planFinish = new Map((db.schedule ?? []).map((s) => [s.leafId, s.finishWeek]));
-      const slipping: Record<string, number> = {};
-      for (const [id, lf] of read.forecast.leaves) {
-        const onEvidence = lf.basis !== 'done' && (lf.basis === 'typed' || lf.basis === 'measured' || lf.push > 0);
-        const plannedWeek = planFinish.get(id);
-        if (!onEvidence || plannedWeek === undefined) continue;
-        const weeks = weekContaining(lf.finish, weekEnds) - plannedWeek;
-        if (weeks >= 1) slipping[id] = weeks;
-      }
+      const slipping = slippingOf(db, read.forecast);
       forecast = {
         finishDate: read.forecast.finish,
         path: read.forecast.chain.map((id) => ({

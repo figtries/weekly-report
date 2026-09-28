@@ -440,6 +440,17 @@ rate, or a late activity it waits for), P1 if it sets the project finish,
 P2 otherwise, and the only ground that reaches past the window. Plan dates
 alone never make a slip (`ForecastSummary.slipping`).
 
+**Data Overall keeps only what somebody has to answer about the forecast**
+(28 Sep 2026). The forecast is the dashboard's. Over the map there is no
+forecast strip: "will slip" and "to check" sit beside "late" and "ending
+soon" as reminder buttons, and "Link" is one row until pressed. "Will slip"
+and "Slips N wk" both read `slippingOf` in `lib/forecast-read.ts`, so the two
+screens name the same rows. "To check" lists only findings the panel can
+answer (kind vs heading, material ticked before delivery, the path without a
+date); a repeated ladder and typed-vs-ticks are still found but not listed
+until a history-safe restatement exists. The panel shows the forecast card
+and the next stage's date, and nothing else: no warning boxes, no "waits for".
+
 # Progress has one origin
 
 **`lib/progress.ts` decides every leaf percentage, and `lib/rollup.ts` calls it

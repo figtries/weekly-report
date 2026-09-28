@@ -277,11 +277,10 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const w38 = db.weeks.find((w) => w.week === 38)!;
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [`${row.id}:material`] };
   const v = buildForecastView(db, 38)!;
-  const early = v.leaves[row.id].issues.find((i) => i.kind === 'material-early');
-  check('C6: material ticked before the delivery is flagged', early?.kind === 'material-early' && early.waiting.map((w) => w.code).join() === '2.3,2.5', JSON.stringify(early));
-  check('C6: and the strip says why', v.toCheck.find((t) => t.leaf.id === row.id)?.reasons.some((r) => r.startsWith('Material on site ticked, but 2.3')) === true, JSON.stringify(v.toCheck.find((t) => t.leaf.id === row.id)?.reasons));
+  const said = v.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? [];
+  check('C6: material ticked before the delivery is listed to check, with why', said.some((r) => r.startsWith('Material on site ticked, but 2.3') && r.endsWith('and 1 more')), JSON.stringify(said));
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [] };
-  check('C6: nothing ticked, nothing flagged', !buildForecastView(db, 38)!.leaves[row.id].issues.some((i) => i.kind === 'material-early'));
+  check('C6: nothing ticked, nothing flagged', !(buildForecastView(db, 38)!.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? []).some((r) => r.startsWith('Material on site')));
 }
 
 /* ------------------------------------------ 5. what the app finds by itself */
@@ -321,18 +320,20 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
 {
   const v = buildForecastView(buildFixture(), 38)!;
   const listed = v.toCheck.map((t) => t.leaf.code).join(' ');
-  check('the strip lists what the checks found', listed === '2.1 2.2 2.3 2.4 2.5 3.1 3.3 4.1', listed);
-  check('2.1 carries both of its findings', v.toCheck[0].reasons.length === 2, JSON.stringify(v.toCheck[0].reasons));
+  // Only what the panel can answer: C2 (2.1, 2.3) and C3 (2.1) are found but not listed.
+  check('to check lists what somebody can answer', listed === '2.2 2.4 2.5 3.1 3.3 4.1', listed);
+  const r41 = v.toCheck.find((t) => t.leaf.code === '4.1')?.reasons ?? [];
+  check('4.1 carries both of its findings, a kind and a date', r41.length === 2, JSON.stringify(r41));
   const n24 = v.leaves[nid('2.4')].next;
   check('a typed-percent row is asked for its finish', n24?.rungId === null && n24?.label === 'Finish' && n24?.planDate === '2027-03-14', JSON.stringify(n24));
   check('a ladder row is asked for its next stage', v.leaves[nid('2.3')].next?.rungId === `${nid('2.3')}:po`, JSON.stringify(v.leaves[nid('2.3')].next));
   check('a finished row is asked nothing', v.leaves[nid('2.2')].next === null);
-  const fix = v.leaves[nid('3.1')].issues.find((i) => i.kind === 'kind-vs-heading');
-  check('the kind fix says what the figure becomes', fix?.kind === 'kind-vs-heading' && fix.suggested === 'construction' && fix.afterPct === 15, JSON.stringify(fix && { s: fix.suggested, a: fix.afterPct }));
-  check('links are offered, not applied', v.leaves[nid('3.3')].suggested.map((l) => l.code).join() === '2.3,2.5' && v.leaves[nid('3.3')].waitsFor.length === 0);
+  const offer33 = unansweredLinks(buildFixture().wbsItems).get(nid('3.3')) ?? [];
+  check('links are offered, not applied', offer33.map(codeOf).join() === '2.3,2.5' && buildFixture().wbsItems.find((i) => i.id === nid('3.3'))!.waitsFor === undefined, offer33.map(codeOf).join());
   check('the path and the finish ride along', v.path.map((p) => p.code).join() === '4.1' && v.finishWeek === 72 && v.lastWeek === 72);
   check('bulk weeks ride along', v.bulkWeeks.join() === '26,36', v.bulkWeeks.join());
-  check('it is plain data', JSON.parse(JSON.stringify(v)).leaves[nid('3.1')].issues.length === 1);
+  check('it is plain data', JSON.parse(JSON.stringify(v)).leaves[nid('3.1')].reason.kind === v.leaves[nid('3.1')].reason.kind);
+  check('nothing slips on plan dates alone', v.slipping.length === 0, JSON.stringify(v.slipping));
 
   // The one-card panel and the one-press Link (27 Sep 2026).
   check('nobody answered, so Link has rows to fill', v.unlinked === unansweredLinks(buildFixture().wbsItems).size && v.unlinked > 0, String(v.unlinked));
@@ -355,9 +356,14 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   db.wbsItems.find((i) => i.id === nid('2.5'))!.forecast = { date: '2027-07-31', source: 'vendor', rungId: null, week: 38 };
   const v = buildForecastView(db, 38)!;
   const l33 = v.leaves[nid('3.3')];
-  const w25 = l33.waitsFor.find((l) => l.code === '2.5');
-  check('the late link carries its weeks', !!w25 && w25.lateWeeks > 0, JSON.stringify(l33.waitsFor));
   check('and what waits for it says it was pushed by it', l33.reason.kind === 'pushed' && l33.reason.by.code === '2.5' && l33.reason.weeks === l33.finishWeek - l33.planFinishWeek, JSON.stringify(l33.reason));
+  // "Will slip" over the map names exactly the rows Priority Actions calls "Slips N wk".
+  const health = computeHealth(db, 38)!.forecast!.slipping;
+  const viewed = Object.fromEntries(v.slipping.map((s) => [s.leaf.id, s.weeks]));
+  check('will slip names the same rows as the dashboard', JSON.stringify(viewed, Object.keys(viewed).sort()) === JSON.stringify(health, Object.keys(health).sort()) && v.slipping.length > 0, `${JSON.stringify(viewed)} vs ${JSON.stringify(health)}`);
+  const s33 = v.slipping.find((s) => s.leaf.id === nid('3.3'));
+  check('and its line recomputes: forecast less plan is the weeks late', !!s33 && s33.line === `Plan ends W${l33.planFinishWeek} · forecast W${l33.finishWeek} · ${s33.weeks} ${s33.weeks === 1 ? 'week' : 'weeks'} late` && s33.weeks === l33.finishWeek - l33.planFinishWeek, s33?.line);
+  check('most weeks first', v.slipping.every((s, i, a) => i === 0 || a[i - 1].weeks >= s.weeks), v.slipping.map((s) => s.weeks).join());
 }
 
 // ---- summary ----

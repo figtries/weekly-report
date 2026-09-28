@@ -2,14 +2,11 @@
 
 import { m } from 'framer-motion';
 import { useState, useTransition } from 'react';
-import { CalendarClock, Link2, TriangleAlert } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 
-import { setLeafForecastAction, setWaitsForAction } from '@/lib/actions';
-import type { ForecastLeafView, LinkRef } from '@/lib/forecast-view';
-import type { Milestone } from '@/lib/types';
-import type { Shape } from '@/lib/work-kind';
+import { setLeafForecastAction } from '@/lib/actions';
+import type { ForecastLeafView } from '@/lib/forecast-view';
 import DateField from '@/components/ui/DateField';
-import CodeChip from '@/components/ui/CodeChip';
 import { pressMotion } from '@/components/motion/Press';
 import { cn } from '@/lib/utils';
 
@@ -17,20 +14,19 @@ import { cn } from '@/lib/utils';
  * The forecast, for ONE activity, inside its panel. One card: when it
  * finishes, drawn as the app draws every figure (blue forecast over a thin red
  * plan, on one scale) so late or early reads before a word does; one sentence
- * saying why; then the two things only a person can tell it, the next stage's
- * date and what it waits for.
+ * saying why; then the one thing only a person can tell it, the next stage's
+ * date.
  *
- * It was three cards until 27 Sep 2026, and a "Waits for" that had to be
- * confirmed on every activity. Linking now happens once, over the map
- * (ForecastStrip), and this card only shows and changes.
+ * Nothing else, on purpose (28 Sep 2026). Up to four warning boxes above the
+ * card and a "Waits for" editor inside it made the panel hard going for
+ * somebody who came to fill in a figure. The findings are listed once, over
+ * the map ("to check"), and links are made once for the whole plan there too.
  *
  * Every figure here was worked out on the server (lib/forecast-view.ts). This
  * component decides nothing; it shows, and it asks. Nothing changes without a
- * press: each row is read-only until "Add date" or "Change", then Save or
+ * press: the date is read-only until "Add date" or "Change", then Save or
  * Cancel, the same way a budget is changed, and the panel's own Save at the
  * foot is left to the progress figure it has always meant.
- *
- * Native inputs in the link list: it can run to every activity in the plan.
  */
 
 type Source = 'vendor' | 'site' | 'client';
@@ -95,30 +91,23 @@ const chip = 'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabula
 export default function ForecastBlock({
   leafId,
   view,
-  options,
   week,
   projectId,
-  onUseKind,
 }: {
   leafId: string;
   view: ForecastLeafView;
-  options: LinkRef[];
   week: number;
   projectId: string | null;
-  /** The panel's own kind change, so a fix from here is the picker's fix. */
-  onUseKind: (kindId: string, shape: Shape, ladder: Milestone[]) => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // One editor open at a time; `null` is reading.
-  const [editing, setEditing] = useState<'date' | 'links' | null>(null);
+  const [editing, setEditing] = useState<'date' | null>(null);
   const next = view.next;
   const typedHere = view.typed && next && view.typed.rungId === next.rungId ? view.typed : null;
   const [date, setDate] = useState(typedHere?.date ?? next?.planDate ?? '');
   const [source, setSource] = useState<Source>(typedHere?.source ?? 'vendor');
-  const shownLinks = view.waitsFor.length ? view.waitsFor : view.suggested;
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(shownLinks.map((l) => l.id)));
 
   function run(write: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -132,7 +121,6 @@ export default function ForecastBlock({
   const saveDate = () =>
     next && date && run(() => setLeafForecastAction(leafId, { date, source, rungId: next.rungId }, week, projectId));
   const backToPlan = () => run(() => setLeafForecastAction(leafId, null, week, projectId));
-  const saveLinks = (ids: string[]) => run(() => setWaitsForAction(leafId, ids, projectId));
 
   // Blue forecast over a thin red plan, on one scale: from whichever comes
   // first to whichever ends last.
@@ -155,67 +143,6 @@ export default function ForecastBlock({
 
   return (
     <section aria-label="Forecast" className="mt-5 space-y-3">
-      {/* A row with NO kind yet is already being asked, by the picker at the
-          top of this panel ("Looks like Procurement"); a second box saying the
-          same thing is the question twice. Only a kind that is set and wrong
-          gets one here. */}
-      {view.issues
-        .filter((issue) => issue.kind !== 'kind-vs-heading' || issue.currentLabel !== null)
-        .map((issue, i) => (
-        <div key={i} className="flex gap-3 rounded-2xl border border-warn/30 bg-warn-soft px-4 py-3.5">
-          <TriangleAlert className="mt-0.5 h-[18px] w-[18px] shrink-0 text-warn" strokeWidth={2} aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            {issue.kind === 'kind-vs-heading' && (
-              <>
-                <p className="text-[13px] font-semibold text-warn">
-                  {issue.currentLabel ? `Set as ${issue.currentLabel}, the heading says ${issue.suggestedLabel}` : `The heading says ${issue.suggestedLabel}`}
-                </p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-warn">
-                  It sits under {issue.heading}. As {issue.suggestedLabel} its figure would read {issue.afterPct.toFixed(1)}%.
-                </p>
-                <m.button
-                  {...pressMotion}
-                  type="button"
-                  onClick={() => onUseKind(issue.suggested, issue.shape, issue.ladder)}
-                  className="mt-3 flex min-h-11 items-center rounded-full bg-warn/10 px-4 text-[13px] font-semibold text-warn transition-colors duration-200 ease-ios hover:bg-warn hover:text-card"
-                >
-                  Use {issue.suggestedLabel}
-                </m.button>
-              </>
-            )}
-            {issue.kind === 'ladder-repeats' && (
-              <>
-                <p className="text-[13px] font-semibold text-warn">This row repeats stages the rows beside it hold</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-warn">
-                  It carries every {issue.kindLabel.toLowerCase()} stage, while{' '}
-                  {issue.siblings.map((s) => `${s.code} ${s.name}`).join(' and ')} already hold some of them. By its name it is
-                  only {issue.keepLabels.join(' and ')}. Changing that would restate its past weeks, so it is not done from here yet.
-                </p>
-              </>
-            )}
-            {issue.kind === 'material-early' && (
-              <>
-                <p className="text-[13px] font-semibold text-warn">{issue.rungLabel} is ticked, but the delivery is not in</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-warn">
-                  {issue.waiting.map((w) => `${w.code} ${w.name} is at ${w.pct.toFixed(1)}%`).join(', ')}. One of the two is
-                  wrong: untick {issue.rungLabel} here, or bring the delivery to 100%.
-                </p>
-              </>
-            )}
-            {issue.kind === 'typed-vs-ladder' && (
-              <>
-                <p className="text-[13px] font-semibold text-warn">
-                  Typed {issue.typedPct.toFixed(1)}%, the ticked stages say {issue.ladderPct.toFixed(1)}%
-                </p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-warn">
-                  The typed figure is the one reported. Tick the stages instead if they are right.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      ))}
-
       <div className="rounded-2xl border border-input bg-card px-4 py-4">
         {/* The finish. */}
         <div className="flex items-center gap-2">
@@ -324,86 +251,6 @@ export default function ForecastBlock({
           </div>
         )}
 
-        {/* What it waits for. Linked for the whole plan at once over the map;
-            here it is only read and, when it is wrong, changed. */}
-        <div className="mt-4 border-t border-border/60 pt-4">
-          <div className="flex items-start gap-3">
-            <Link2 className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] text-muted-foreground">Waits for</p>
-              {view.waitsFor.length ? (
-                <ul className="mt-1.5 space-y-2">
-                  {view.waitsFor.map((l) => (
-                    <li key={l.id} className="flex items-center gap-2 text-[13px] leading-snug text-foreground">
-                      {l.code && <CodeChip>{l.code}</CodeChip>}
-                      <span className="line-clamp-2 min-w-0 break-words">{l.name}</span>
-                      {l.lateWeeks > 0 && <span className={cn(chip, 'bg-red-100 text-red-700')}>{l.lateWeeks} wk late</span>}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-0.5 text-[14px] font-medium text-foreground">{view.suggested.length ? 'Not linked yet' : 'Nothing'}</p>
-              )}
-            </div>
-            {editing !== 'links' && (
-              <m.button
-                {...pressMotion}
-                type="button"
-                onClick={() => {
-                  setPicked(new Set(shownLinks.map((l) => l.id)));
-                  setEditing('links');
-                }}
-                className={pillPrimary}
-              >
-                {view.waitsFor.length ? 'Change' : 'Add'}
-              </m.button>
-            )}
-          </div>
-
-          {editing === 'links' && (
-            <div className="mt-4">
-              <ul className="max-h-60 space-y-0.5 overflow-y-auto rounded-xl border border-border/60 p-1">
-                {options
-                  .filter((o) => o.id !== leafId)
-                  .map((o) => (
-                    <li key={o.id}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 hover:bg-muted/60">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-[var(--chart-1)]"
-                          checked={picked.has(o.id)}
-                          onChange={(e) =>
-                            setPicked((prev) => {
-                              const nextSet = new Set(prev);
-                              if (e.target.checked) nextSet.add(o.id);
-                              else nextSet.delete(o.id);
-                              return nextSet;
-                            })
-                          }
-                        />
-                        {o.code && <CodeChip>{o.code}</CodeChip>}
-                        <span className="min-w-0 truncate text-[13px] text-foreground">{o.name}</span>
-                      </label>
-                    </li>
-                  ))}
-              </ul>
-              <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setEditing(null)} className={pillQuiet}>
-                  Cancel
-                </button>
-                <m.button
-                  {...pressMotion}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => saveLinks(options.filter((o) => picked.has(o.id)).map((o) => o.id))}
-                  className={cn(pillPrimary, 'disabled:opacity-40')}
-                >
-                  {pending ? 'Saving…' : 'Save'}
-                </m.button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {error && <p className="animate-fade-in-up rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">{error}</p>}

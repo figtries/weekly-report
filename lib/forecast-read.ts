@@ -66,3 +66,27 @@ export function forecastFromDb(db: Database, week: number): ForecastRead | null 
   const weekEnds = weeks.map((w) => ({ week: w.week, end: w.periodEnd }));
   return { forecast, finishWeek: weekContaining(forecast.finish, weekEnds) };
 }
+
+/**
+ * Activities the forecast finishes a week or more after their plan, ON
+ * EVIDENCE: a date somebody gave, a measured quantity rate, or a late activity
+ * they wait for. Leaf id → whole weeks. A late start or an overrun on the
+ * plan's word alone is left out: the worklist already calls those late.
+ *
+ * One function because two screens name these rows, the dashboard's Priority
+ * Actions ("Slips N wk") and Data Overall's "will slip", and they must name
+ * the same ones.
+ */
+export function slippingOf(db: Database, forecast: ProjectForecast): Record<string, number> {
+  const weekEnds = [...db.weeks].sort((a, b) => a.week - b.week).map((w) => ({ week: w.week, end: w.periodEnd }));
+  const planFinish = new Map((db.schedule ?? []).map((s) => [s.leafId, s.finishWeek]));
+  const slipping: Record<string, number> = {};
+  for (const [id, lf] of forecast.leaves) {
+    const onEvidence = lf.basis !== 'done' && (lf.basis === 'typed' || lf.basis === 'measured' || lf.push > 0);
+    const plannedWeek = planFinish.get(id);
+    if (!onEvidence || plannedWeek === undefined) continue;
+    const weeks = weekContaining(lf.finish, weekEnds) - plannedWeek;
+    if (weeks >= 1) slipping[id] = weeks;
+  }
+  return slipping;
+}

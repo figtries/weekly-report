@@ -23,7 +23,7 @@ import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
 import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
 import ForecastBlock from './ForecastBlock';
-import type { ForecastLeafView, LinkRef } from '@/lib/forecast-view';
+import type { ForecastLeafView } from '@/lib/forecast-view';
 import { formatMoney } from '@/lib/currency';
 
 /**
@@ -129,7 +129,6 @@ export default function ActivityPanel({
   currency,
   peers,
   forecast = null,
-  forecastOptions = [],
   onClose,
   onSaved,
 }: {
@@ -150,8 +149,6 @@ export default function ActivityPanel({
   peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
-  /** Every scheduled activity, for "waits for". */
-  forecastOptions?: LinkRef[];
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
@@ -172,7 +169,6 @@ export default function ActivityPanel({
         currency={currency}
         peers={peers}
         forecast={forecast}
-        forecastOptions={forecastOptions}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -197,7 +193,6 @@ function PanelBody({
   currency,
   peers,
   forecast = null,
-  forecastOptions = [],
   onClose,
   onSaved,
 }: {
@@ -211,8 +206,6 @@ function PanelBody({
   peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
-  /** Every scheduled activity, for "waits for". */
-  forecastOptions?: LinkRef[];
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
@@ -754,16 +747,14 @@ function PanelBody({
   
             <FinishNotice node={node} />
 
-            {/* When it finishes, what that rests on, and the two things only a
-                person can tell the forecast. See ForecastBlock. */}
+            {/* When it finishes, what that rests on, and the date only a person
+                can tell the forecast. See ForecastBlock. */}
             {forecast && (
               <ForecastBlock
                 leafId={node.id}
                 view={forecast}
-                options={forecastOptions}
                 week={week}
                 projectId={projectId}
-                onUseKind={pickKind}
               />
             )}
   

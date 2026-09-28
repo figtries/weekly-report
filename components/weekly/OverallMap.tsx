@@ -1,11 +1,11 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Clock, TriangleAlert } from 'lucide-react';
+import { memo, useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
+import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
-import ForecastStrip from '@/components/weekly/ForecastStrip';
+import { linkEpcOrderAction } from '@/lib/actions';
 import type { ForecastView } from '@/lib/forecast-view';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
 import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
@@ -128,9 +128,10 @@ type Lens = 'due' | 'manual' | 'blocking' | null;
  * within the next few weeks and still short — the worklist's answers, carried
  * onto the row as `lateBy` / `dueIn`. They open a LIST, not a filter: the
  * first cut filtered the map, and "3 late" pressed read as a button that did
- * nothing, because a filtered map says which rows and never why.
+ * nothing, because a filtered map says which rows and never why. Will slip
+ * and to check (28 Sep 2026) are the forecast's, from lib/forecast-view.ts.
  */
-type Reminder = 'late' | 'soon' | null;
+type Reminder = 'late' | 'soon' | 'slip' | 'check' | null;
 
 /** How many reminder rows show before "Show all". */
 const REMINDER_ROWS = 6;
@@ -241,6 +242,16 @@ export default function OverallMap({
     map.units.forEach(walk);
     return out;
   }, [map.units]);
+
+  /** The reminder buttons that have anything to list, in reading order. */
+  const reminderKinds = (
+    [
+      { kind: 'late', n: map.stuck },
+      { kind: 'soon', n: map.soon },
+      { kind: 'slip', n: forecast?.slipping.length ?? 0 },
+      { kind: 'check', n: forecast?.toCheck.length ?? 0 },
+    ] as const
+  ).filter((r) => r.n > 0);
 
   const needle = query.trim().toLowerCase();
   const filter = useMemo(() => {
@@ -372,47 +383,51 @@ export default function OverallMap({
           )}
         </div>
 
+        {/* Link, once for the whole plan: EPC order offers what each activity
+            waits for, and one press takes every offer nobody has answered, so a
+            late delivery moves what comes after it. The row leaves once it is
+            done. It is the only place links are made. */}
+        {forecast && forecast.unlinked > 0 && <LinkRow projectId={projectId} />}
+
         {/* THE REMINDERS, as buttons. This was one sentence pointing at the
             Check screen, which told you how many and sent you somewhere else
             to find out which. Pressing one now lists them right here, each
             with the reason and a way straight into its panel. Tinted at rest
             so a phone, which has no hover, still sees a button; solid when
-            its list is open. */}
-        {(map.stuck > 0 || map.soon > 0) && (
+            its list is open.
+
+            "Will slip" and "to check" joined late and ending soon on 28 Sep
+            2026, in place of a forecast strip over the map: the forecast is the
+            dashboard's, and what Data Overall keeps of it is only what somebody
+            has to answer. An odd one out spans the row, so the grid keeps both
+            edges. */}
+        {reminderKinds.length > 0 && (
           <div className="mt-3">
-            <div className="flex gap-2">
-              {map.stuck > 0 && (
-                <ReminderLens
-                  tone="warn"
-                  on={reminder === 'late'}
-                  onPress={() => {
-                    setAllReminders(false);
-                    setReminder((v) => (v === 'late' ? null : 'late'));
-                  }}
-                >
-                  <TriangleAlert className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-                  {map.stuck} late
-                </ReminderLens>
-              )}
-              {map.soon > 0 && (
-                <ReminderLens
-                  tone="due"
-                  on={reminder === 'soon'}
-                  onPress={() => {
-                    setAllReminders(false);
-                    setReminder((v) => (v === 'soon' ? null : 'soon'));
-                  }}
-                >
-                  <Clock className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-                  {map.soon} ending soon
-                </ReminderLens>
-              )}
+            <div className={cn('grid gap-2', reminderKinds.length > 1 && 'grid-cols-2')}>
+              {reminderKinds.map(({ kind, n }, i) => {
+                const Icon = REMINDER_ICON[kind];
+                return (
+                  <ReminderLens
+                    key={kind}
+                    kind={kind}
+                    on={reminder === kind}
+                    wide={reminderKinds.length > 1 && reminderKinds.length % 2 === 1 && i === reminderKinds.length - 1}
+                    onPress={() => {
+                      setAllReminders(false);
+                      setReminder((v) => (v === kind ? null : kind));
+                    }}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                    {n} {REMINDER_LABEL[kind]}
+                  </ReminderLens>
+                );
+              })}
             </div>
             <Expand open={reminder !== null}>
               {reminder && (
                 <ReminderList
                   kind={reminder}
-                  units={units}
+                  rows={reminderRows(reminder, units, forecast)}
                   all={allReminders}
                   onShowAll={() => setAllReminders(true)}
                   onOpen={setActiveId}
@@ -424,8 +439,6 @@ export default function OverallMap({
             </p>
           </div>
         )}
-
-        {forecast && <ForecastStrip view={forecast} projectId={projectId} onOpen={setActiveId} />}
 
         <input
           value={query}
@@ -471,12 +484,100 @@ export default function OverallMap({
         currency={currency}
         peers={peers}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
-        forecastOptions={forecast?.options}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />
     </div>
   );
+}
+
+const REMINDER_LABEL: Record<NonNullable<Reminder>, string> = {
+  late: 'late',
+  soon: 'ending soon',
+  slip: 'will slip',
+  check: 'to check',
+};
+
+const REMINDER_ICON = { late: TriangleAlert, soon: Clock, slip: CalendarClock, check: ListChecks } as const;
+
+/**
+ * One tone per reminder, used by its button and by the list it opens. Amber
+ * late, blue ending soon, red will slip, and "to check" in the page's own ink:
+ * it is a question about the data, not a verdict on the work.
+ */
+const REMINDER_TONE: Record<NonNullable<Reminder>, { idle: string; on: string; box: string; text: string; row: string }> = {
+  late: {
+    idle: 'border-warn/30 bg-warn-soft text-warn hover:bg-warn/15',
+    on: 'border-warn bg-warn text-card',
+    box: 'border-warn/30 bg-warn-soft',
+    text: 'text-warn',
+    row: 'border-warn/20 hover:bg-warn/10',
+  },
+  soon: {
+    idle: 'border-chart-1/30 bg-chart-1/10 text-chart-1 hover:bg-chart-1/15',
+    on: 'border-chart-1 bg-chart-1 text-white',
+    box: 'border-chart-1/25 bg-chart-1/8',
+    text: 'text-chart-1',
+    row: 'border-chart-1/15 hover:bg-chart-1/10',
+  },
+  slip: {
+    idle: 'border-bad/30 bg-bad-soft text-bad hover:bg-bad/15',
+    on: 'border-bad bg-bad text-white',
+    box: 'border-bad/25 bg-bad-soft',
+    text: 'text-bad',
+    row: 'border-bad/15 hover:bg-bad/10',
+  },
+  check: {
+    idle: 'border-input bg-card text-foreground hover:bg-muted/60',
+    on: 'border-foreground bg-foreground text-card',
+    box: 'border-input bg-card',
+    text: 'text-foreground',
+    row: 'border-border hover:bg-muted/60',
+  },
+};
+
+interface ReminderRow {
+  id: string;
+  tag: string | null;
+  name: string;
+  lines: string[];
+}
+
+/**
+ * The rows a reminder lists, each with WHY in words. Late and ending soon are
+ * the worklist's, carried on the map's own rows; will slip and to check were
+ * worked out on the server (lib/forecast-view.ts) and only named here.
+ */
+function reminderRows(kind: NonNullable<Reminder>, units: MapNode[], forecast: ForecastView | null): ReminderRow[] {
+  if (kind === 'slip') {
+    return (forecast?.slipping ?? []).map(({ leaf, line }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: [line] }));
+  }
+  if (kind === 'check') {
+    return (forecast?.toCheck ?? []).map(({ leaf, reasons }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: reasons }));
+  }
+  const out: MapNode[] = [];
+  const walk = (n: MapNode) => {
+    if (kind === 'late' ? n.lateBy !== undefined : n.dueIn !== undefined) out.push(n);
+    n.children.forEach(walk);
+  };
+  units.forEach(walk);
+  if (kind === 'late') out.sort((a, b) => (b.lateBy ?? 0) - (a.lateBy ?? 0) || b.weight - a.weight);
+  else out.sort((a, b) => (a.dueIn ?? 0) - (b.dueIn ?? 0) || b.weight - a.weight);
+
+  const weeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
+  return out.map((n) => {
+    const { tag, name } = splitCode(n.name);
+    return {
+      id: n.id,
+      tag,
+      name,
+      lines: [
+        kind === 'late'
+          ? `Plan ended W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${weeks(n.lateBy ?? 0)} late`
+          : `Plan ends W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${n.dueIn === 0 ? 'ends this week' : `ends in ${weeks(n.dueIn ?? 0)}`}`,
+      ],
+    };
+  });
 }
 
 /**
@@ -485,112 +586,88 @@ export default function OverallMap({
  * Each line says what the plan said, where the activity actually is, and by
  * how much the two are apart, in words, so nobody has to open three panels to
  * find out what "late" was measured against. "Open" goes straight to the
- * activity's panel, where its week-by-week log is the thing to fix it in.
- * Native buttons, like the map's own rows: this can run to forty lines.
+ * activity's panel, where the fix is. Native buttons, like the map's own rows:
+ * this can run to forty lines.
  */
 function ReminderList({
   kind,
-  units,
+  rows,
   all,
   onShowAll,
   onOpen,
 }: {
-  kind: 'late' | 'soon';
-  units: MapNode[];
+  kind: NonNullable<Reminder>;
+  rows: ReminderRow[];
   all: boolean;
   onShowAll: () => void;
   onOpen: (id: string) => void;
 }) {
-  const entries = useMemo(() => {
-    const out: MapNode[] = [];
-    const walk = (n: MapNode) => {
-      if (kind === 'late' ? n.lateBy !== undefined : n.dueIn !== undefined) out.push(n);
-      n.children.forEach(walk);
-    };
-    units.forEach(walk);
-    return kind === 'late'
-      ? out.sort((a, b) => (b.lateBy ?? 0) - (a.lateBy ?? 0) || b.weight - a.weight)
-      : out.sort((a, b) => (a.dueIn ?? 0) - (b.dueIn ?? 0) || b.weight - a.weight);
-  }, [kind, units]);
-
-  const weeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
-  const late = kind === 'late';
-  const shown = all ? entries : entries.slice(0, REMINDER_ROWS);
+  const tone = REMINDER_TONE[kind];
+  const shown = all ? rows : rows.slice(0, REMINDER_ROWS);
+  const n = rows.length;
+  const one = n === 1;
+  const title = {
+    late: `${n} ${one ? 'activity has' : 'activities have'} passed the plan and ${one ? 'is' : 'are'} not finished`,
+    soon: `${n} ${one ? 'activity ends' : 'activities end'} within 3 weeks and ${one ? 'is' : 'are'} not finished`,
+    slip: `${n} ${one ? 'activity' : 'activities'} will finish after the plan`,
+    check: `${n} ${one ? 'activity needs' : 'activities need'} a look`,
+  }[kind];
 
   return (
-    <div
-      className={cn(
-        'mt-3 overflow-hidden rounded-xl border',
-        late ? 'border-warn/30 bg-warn-soft' : 'border-chart-1/25 bg-chart-1/8'
-      )}
-    >
-      <p className={cn('px-3.5 pb-2 pt-3 text-[13px] font-semibold', late ? 'text-warn' : 'text-chart-1')}>
-        {late
-          ? `${entries.length} ${entries.length === 1 ? 'activity has' : 'activities have'} passed the plan and ${entries.length === 1 ? 'is' : 'are'} not finished`
-          : `${entries.length} ${entries.length === 1 ? 'activity ends' : 'activities end'} within 3 weeks and ${entries.length === 1 ? 'is' : 'are'} not finished`}
-      </p>
+    <div className={cn('mt-3 overflow-hidden rounded-xl border', tone.box)}>
+      <p className={cn('px-3.5 pb-2 pt-3 text-[13px] font-semibold', tone.text)}>{title}</p>
       <ul>
-        {shown.map((n) => {
-          const { tag, name } = splitCode(n.name);
-          return (
-            <li key={n.id}>
-              <button
-                type="button"
-                onClick={() => onOpen(n.id)}
-                className={cn(
-                  'flex min-h-12 w-full items-center gap-3 border-t px-3.5 py-2.5 text-left transition-colors duration-200 ease-ios',
-                  late ? 'border-warn/20 hover:bg-warn/10' : 'border-chart-1/15 hover:bg-chart-1/10'
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    {tag && <CodeChip>{tag}</CodeChip>}
-                    <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{name}</span>
-                  </span>
-                  <span className={cn('mt-0.5 block text-[12px] tabular-nums', late ? 'text-warn' : 'text-chart-1')}>
-                    {late
-                      ? `Plan ended W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${weeks(n.lateBy ?? 0)} late`
-                      : `Plan ends W${n.finishWeek} · ${fmt1(n.actualPct)}% done · ${
-                          n.dueIn === 0 ? 'ends this week' : `ends in ${weeks(n.dueIn ?? 0)}`
-                        }`}
-                  </span>
+        {shown.map((r) => (
+          <li key={r.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(r.id)}
+              className={cn('flex min-h-12 w-full items-center gap-3 border-t px-3.5 py-2.5 text-left transition-colors duration-200 ease-ios', tone.row)}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  {r.tag && <CodeChip>{r.tag}</CodeChip>}
+                  <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{r.name}</span>
                 </span>
-                <span className={cn('shrink-0 text-[13px] font-semibold', late ? 'text-warn' : 'text-chart-1')}>
-                  Open ›
-                </span>
-              </button>
-            </li>
-          );
-        })}
+                {r.lines.map((line) => (
+                  <span key={line} className={cn('mt-0.5 block text-[12px] tabular-nums', tone.text)}>
+                    {line}
+                  </span>
+                ))}
+              </span>
+              <span className={cn('shrink-0 text-[13px] font-semibold', tone.text)}>Open ›</span>
+            </button>
+          </li>
+        ))}
       </ul>
-      {!all && entries.length > REMINDER_ROWS && (
+      {!all && n > REMINDER_ROWS && (
         <button
           type="button"
           onClick={onShowAll}
-          className={cn(
-            'flex min-h-11 w-full items-center justify-center border-t text-[13px] font-semibold transition-colors duration-200 ease-ios',
-            late ? 'border-warn/20 text-warn hover:bg-warn/10' : 'border-chart-1/15 text-chart-1 hover:bg-chart-1/10'
-          )}
+          className={cn('flex min-h-11 w-full items-center justify-center border-t text-[13px] font-semibold transition-colors duration-200 ease-ios', tone.row, tone.text)}
         >
-          Show all {entries.length}
+          Show all {n}
         </button>
       )}
     </div>
   );
 }
 
-/** One of the two reminder counts above the map; it opens the list of them. */
+/** One of the reminder counts above the map; it opens the list of them. */
 function ReminderLens({
-  tone,
+  kind,
   on,
+  wide,
   onPress,
   children,
 }: {
-  tone: 'warn' | 'due';
+  kind: NonNullable<Reminder>;
   on: boolean;
+  wide: boolean;
   onPress: () => void;
   children: ReactNode;
 }) {
+  const tone = REMINDER_TONE[kind];
   return (
     <m.button
       {...pressMotion}
@@ -598,18 +675,50 @@ function ReminderLens({
       onClick={onPress}
       aria-pressed={on}
       className={cn(
-        'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-[13px] font-semibold tabular-nums transition-colors duration-200 ease-ios',
-        tone === 'warn'
-          ? on
-            ? 'border-warn bg-warn text-card'
-            : 'border-warn/30 bg-warn-soft text-warn hover:bg-warn/15'
-          : on
-            ? 'border-chart-1 bg-chart-1 text-white'
-            : 'border-chart-1/30 bg-chart-1/10 text-chart-1 hover:bg-chart-1/15'
+        'flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-3 text-[13px] font-semibold tabular-nums transition-colors duration-200 ease-ios',
+        wide && 'col-span-2',
+        on ? tone.on : tone.idle
       )}
     >
       {children}
     </m.button>
+  );
+}
+
+/**
+ * "Link", the one press that fills every link EPC order offers and nobody
+ * has answered (lib/forecast-epc.ts `unansweredLinks`). Until 27 Sep 2026 that
+ * was a Confirm on every activity's panel, which nobody was going to press
+ * eleven times, so the forecast ran without its links.
+ */
+function LinkRow({ projectId }: { projectId: string | null }) {
+  const [linking, startLinking] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const link = () => {
+    setError(null);
+    startLinking(async () => {
+      const res = await linkEpcOrderAction(projectId);
+      if (!res.ok) setError(res.error ?? 'Could not link them');
+    });
+  };
+  return (
+    <div className="mt-3 rounded-xl border border-input bg-card px-3.5 py-2.5">
+      <div className="flex items-center gap-3">
+        <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground">
+          Link activities, so a late delivery moves what waits for it
+        </p>
+        <m.button
+          {...pressMotion}
+          type="button"
+          disabled={linking}
+          onClick={link}
+          className="flex min-h-11 shrink-0 items-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors duration-200 ease-ios hover:bg-primary/90 disabled:opacity-60"
+        >
+          {linking ? 'Linking…' : 'Link'}
+        </m.button>
+      </div>
+      {error && <p className="mt-2 text-[12.5px] text-bad">{error}</p>}
+    </div>
   );
 }
 
