@@ -15,7 +15,12 @@ export default function PhotosSection({ report, state, open, onToggle, onOpen }:
       onToggle={onToggle}
       actions={n === 0 ? <RowButton onClick={onOpen}>Add photo</RowButton> : undefined}
     >
-      <PhotoUploadGrid compact photos={report.photos} uploadUrl={`/api/daily/${report.date}/photos`} />
+      <PhotoUploadGrid
+        compact
+        refreshServer={false}
+        photos={report.photos}
+        uploadUrl={`/api/daily/${report.date}/photos`}
+      />
     </SectionRow>
   );
 }

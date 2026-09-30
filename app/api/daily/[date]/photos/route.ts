@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
+import { after, connection } from 'next/server';
 import { mutateOpenDb } from '@/lib/db';
 import { deleteUploadedPhoto, preparePhotoUpload } from '@/lib/upload';
 
 const PAGE_SIZE = 6;
+
+// Warm-up: PhotoUploadGrid pings this when the photos appear and when Add is
+// pressed, so a cold instance boots while the file picker is open instead of
+// after a photo is chosen. Same file, so the same Vercel function as POST.
+export async function GET() {
+  await connection();
+  return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+}
 
 export async function POST(
   request: NextRequest,

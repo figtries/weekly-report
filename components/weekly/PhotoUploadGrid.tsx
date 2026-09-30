@@ -21,6 +21,22 @@ const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.82;
 const SKIP_BELOW_BYTES = 350 * 1024;
 
+// An upload route nobody has used for a few minutes is a cold Vercel function.
+// On 30 Sep 2026 the two daily uploads waited 4.6 s and 2.7 s before the
+// handler read a byte (boot, plus instrumentation.ts pulling the 2 MB database
+// snapshot), for a request that answers in 0.1-0.4 s warm. So the route is
+// pinged when the grid appears, when the tab comes back and when Add is
+// pressed: the boot happens while the file picker is open. Per url, throttled.
+const REWARM_MS = 60_000;
+const lastWarmAt = new Map<string, number>();
+
+function warmUploadRoute(url: string) {
+  const last = lastWarmAt.get(url) ?? -Infinity;
+  if (Date.now() - last < REWARM_MS) return;
+  lastWarmAt.set(url, Date.now());
+  fetch(url, { cache: 'no-store' }).catch(() => undefined);
+}
+
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
   try {
@@ -75,9 +91,17 @@ export default function PhotoUploadGrid({
   photos,
   uploadUrl,
   compact = false,
+  refreshServer = true,
 }: {
   photos: (string | null)[];
   uploadUrl: string;
+  /**
+   * Re-render the page on the server after each write. The daily screen turns it
+   * off: it keeps its own copy (the `photos-updated` event), and a full re-render
+   * per photo cost a page render plus ~60 prefetches, and held Back and Save
+   * behind the router's action queue until it landed.
+   */
+  refreshServer?: boolean;
   /**
    * The daily report's light version: three across, no "Page N" headings (until there
    * is more than one page), quiet dashed slots, and "Add 6 more slots" as a text link.
@@ -86,10 +110,51 @@ export default function PhotoUploadGrid({
    */
   compact?: boolean;
 }) {
-  const [busySlot, setBusySlot] = useState<number | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<number>>(() => new Set());
   const [pageBusy, setPageBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  function markBusy(slot: number, on: boolean) {
+    setBusy((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(slot);
+      else next.delete(slot);
+      return next;
+    });
+  }
+
+  // Every write to this list goes through ONE queue. The route rewrites the
+  // whole record, so two uploads landing on two instances at once would each
+  // save the list without the other's photo. Queued, the next photo can be
+  // picked the moment the last one shows, and none is lost.
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = queueRef.current.then(task);
+    queueRef.current = run.catch(() => undefined);
+    return run;
+  }
+
+  useEffect(() => {
+    warmUploadRoute(uploadUrl);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') warmUploadRoute(uploadUrl);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [uploadUrl]);
+
+  // A photo is on screen before it is stored; closing the tab in between would
+  // lose it, so the browser asks first while anything is still uploading.
+  useEffect(() => {
+    if (busy.size === 0) return;
+    const guard = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [busy]);
 
   // Local mirror of the photo list so successful uploads/removals show up
   // instantly from the API response instead of waiting for a server re-render.
@@ -140,38 +205,40 @@ export default function PhotoUploadGrid({
     // Keep the server tree (and the print sheet) in sync in the background.
     // Done through a Server Action (not router.refresh) so the re-render runs
     // in a request where the expired 'db' tag is guaranteed visible.
-    refreshDbAction().catch(() => undefined);
+    if (refreshServer) refreshDbAction().catch(() => undefined);
   }
 
   async function handleFile(slot: number, file: File) {
-    setBusySlot(slot);
+    markBusy(slot, true);
     setError(null);
     let ok = false;
     try {
       const compressed = await compressImage(file);
       // Show the photo right away — the network round trip happens behind it.
       setPreview(slot, URL.createObjectURL(compressed));
-      const formData = new FormData();
-      formData.append('slot', String(slot));
-      formData.append('file', compressed);
-      const res = await fetch(uploadUrl, { method: 'POST', body: formData });
-      const body = await readJsonSafe(res);
-      if (!res.ok) {
-        setError(errorFromResponse(body, res, 'Upload failed'));
-        return;
-      }
-      ok = true;
-      applyResponse(body);
+      ok = await enqueue(async () => {
+        const formData = new FormData();
+        formData.append('slot', String(slot));
+        formData.append('file', compressed);
+        const res = await fetch(uploadUrl, { method: 'POST', body: formData });
+        const body = await readJsonSafe(res);
+        if (!res.ok) {
+          setError(errorFromResponse(body, res, 'Upload failed'));
+          return false;
+        }
+        applyResponse(body);
+        return true;
+      });
     } catch {
       setError('Upload failed. Check your connection and try again.');
     } finally {
       if (!ok) setPreview(slot, null);
-      setBusySlot(null);
+      markBusy(slot, false);
     }
   }
 
   async function handleRemove(slot: number) {
-    setBusySlot(slot);
+    markBusy(slot, true);
     setError(null);
     // Optimistic: clear the slot immediately, put the photo back on failure.
     const previous = localPhotos[slot] ?? null;
@@ -179,19 +246,21 @@ export default function PhotoUploadGrid({
     setLocalPhotos((prev) => prev.map((p, i) => (i === slot ? null : p)));
     let ok = false;
     try {
-      const res = await fetch(`${uploadUrl}?slot=${slot}`, { method: 'DELETE' });
-      const body = await readJsonSafe(res);
-      if (!res.ok) {
-        setError(errorFromResponse(body, res, 'Could not remove photo'));
-        return;
-      }
-      ok = true;
-      applyResponse(body);
+      ok = await enqueue(async () => {
+        const res = await fetch(`${uploadUrl}?slot=${slot}`, { method: 'DELETE' });
+        const body = await readJsonSafe(res);
+        if (!res.ok) {
+          setError(errorFromResponse(body, res, 'Could not remove photo'));
+          return false;
+        }
+        applyResponse(body);
+        return true;
+      });
     } catch {
       setError('Could not remove photo. Check your connection and try again.');
     } finally {
       if (!ok) setLocalPhotos((prev) => prev.map((p, i) => (i === slot ? previous : p)));
-      setBusySlot(null);
+      markBusy(slot, false);
     }
   }
 
@@ -200,17 +269,19 @@ export default function PhotoUploadGrid({
     setPageBusy(true);
     setError(null);
     try {
-      const res = await fetch(uploadUrl, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+      await enqueue(async () => {
+        const res = await fetch(uploadUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const body = await readJsonSafe(res);
+        if (!res.ok) {
+          setError(errorFromResponse(body, res, 'Action failed'));
+          return;
+        }
+        applyResponse(body);
       });
-      const body = await readJsonSafe(res);
-      if (!res.ok) {
-        setError(errorFromResponse(body, res, 'Action failed'));
-        return;
-      }
-      applyResponse(body);
     } catch {
       setError('Action failed. Check your connection and try again.');
     } finally {
@@ -269,7 +340,7 @@ export default function PhotoUploadGrid({
               const slot = pageIndex * PAGE_SIZE + i;
               const preview = previews[slot] ?? null;
               const displayed = preview ?? photo;
-              const uploading = busySlot === slot && preview !== null;
+              const uploading = busy.has(slot) && preview !== null;
               return (
                 <Reveal key={slot} delay={compact ? 0 : MOTION.stagger * i}>
                   <div
@@ -314,7 +385,7 @@ export default function PhotoUploadGrid({
                           <span className="hidden text-xs font-medium text-white sm:inline">Photo {slot + 1}</span>
                           <button
                             onClick={() => handleRemove(slot)}
-                            disabled={busySlot === slot}
+                            disabled={busy.has(slot)}
                             className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-bad transition-colors hover:bg-white disabled:opacity-60"
                           >
                             Remove
@@ -324,8 +395,11 @@ export default function PhotoUploadGrid({
                     </>
                   ) : (
                     <button
-                      onClick={() => inputRefs.current[slot]?.click()}
-                      disabled={busySlot === slot}
+                      onClick={() => {
+                        warmUploadRoute(uploadUrl);
+                        inputRefs.current[slot]?.click();
+                      }}
+                      disabled={busy.has(slot)}
                       aria-label={`Add photo ${slot + 1}`}
                       className={
                         compact
@@ -333,7 +407,7 @@ export default function PhotoUploadGrid({
                           : 'flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground transition-all duration-300 ease-ios hover:bg-accent hover:text-foreground active:scale-[0.98]'
                       }
                     >
-                      {busySlot === slot ? (
+                      {busy.has(slot) ? (
                         <svg className="h-6 w-6 animate-spin text-chart-1" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -342,7 +416,7 @@ export default function PhotoUploadGrid({
                         <span className="text-2xl leading-none">+</span>
                       )}
                       <span className="text-xs font-medium">
-                        {busySlot === slot ? 'Working…' : compact ? 'Add' : `Add photo ${slot + 1}`}
+                        {busy.has(slot) ? 'Working…' : compact ? 'Add' : `Add photo ${slot + 1}`}
                       </span>
                     </button>
                   )}

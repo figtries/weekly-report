@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
+import { after, connection } from 'next/server';
 import { mutateProjectDb } from '@/lib/db';
 import { getActiveProjectId } from '@/lib/projects';
 import type { Database } from '@/lib/types';
@@ -27,6 +27,13 @@ function slotsFor(db: Database, week: number): (string | null)[] {
 
 const reply = (week: number, documentation: (string | null)[]) =>
   NextResponse.json({ week, documentation });
+
+// Warm-up ping from PhotoUploadGrid, same as the daily route's: the instance
+// boots while the file picker is open.
+export async function GET() {
+  await connection();
+  return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+}
 
 export async function POST(
   request: NextRequest,
