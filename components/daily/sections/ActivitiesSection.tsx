@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { Check, X } from 'lucide-react';
+import { Check, TriangleAlert, X } from 'lucide-react';
 import { useState } from 'react';
 import { pressMotion } from '@/components/motion/Press';
 import { activityStrings, todayItemsOf, tomorrowItemsOf } from '@/lib/daily-items';
@@ -9,26 +9,46 @@ import type { ActivityItem } from '@/lib/types';
 import { CAPACITY } from '@/lib/xlsx/daily-cells';
 import { cn } from '@/lib/utils';
 import { INPUT_CLS, TextField } from '../fields';
-import { CapacityNote, RowButton, SectionRow, sameHint, type SectionProps } from '../SectionRow';
+import { CapacityNote, RowButton, SectionRow, type SectionProps } from '../SectionRow';
 import { newId, type LogDraft } from '../useDailyReport';
 
 const has = (items: ActivityItem[], text: string) =>
   items.some((i) => i.text.trim().toLowerCase() === text.trim().toLowerCase());
 
+/** An amber line under a list that is still missing something: said where it is fixed. */
+function Warn({ children }: { children: string }) {
+  return (
+    <p role="alert" className="animate-fade-in-up mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] font-medium leading-snug text-amber-700">
+      <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+      {children}
+    </p>
+  );
+}
+
 /**
- * Two lists and nothing else. "Tomorrow" is the plan: the next report opens with it as its
- * "Today", unticked (`applyCreateDaily`), so a plan is typed once and ticked the day after.
+ * Two lists. "Tomorrow" is the plan: the next report shows it as its "Today", unticked,
+ * whichever of the two days was made first (`withPlan`). No Confirm: the part is ready
+ * when something done today is ticked and tomorrow has a plan, and says what is missing.
  */
-export default function ActivitiesSection({ report, commit, state, open, onToggle, onOpen, hasPredecessor }: SectionProps) {
+export default function ActivitiesSection({ report, commit, state, open, onToggle }: SectionProps) {
   const today = todayItemsOf(report);
   const tomorrow = tomorrowItemsOf(report);
   const [todayDraft, setTodayDraft] = useState('');
   const [tomorrowDraft, setTomorrowDraft] = useState('');
-  const unticked = today.filter((i) => !i.done).length;
-  const done = today.length - unticked;
+  const done = today.filter((i) => i.done).length;
+  const declined = report.declinedPlan ?? [];
 
-  const save = (t: ActivityItem[], next: ActivityItem[], log?: LogDraft) =>
-    commit({ todayItems: t, tomorrowItems: next, ...activityStrings(t, next) }, log);
+  const save = (t: ActivityItem[], next: ActivityItem[], log?: LogDraft, decline?: string) =>
+    commit(
+      {
+        todayItems: t,
+        tomorrowItems: next,
+        ...activityStrings(t, next),
+        // A planned item taken off today stays off: the plan would otherwise put it back.
+        ...(decline ? { declinedPlan: [...declined, decline] } : {}),
+      },
+      log
+    );
 
   // What is added during the day is something DONE; what came from yesterday's plan waits to be ticked.
   const addToday = (text: string) => {
@@ -49,6 +69,19 @@ export default function ActivitiesSection({ report, commit, state, open, onToggl
       tomorrow,
       it.done ? undefined : { kind: 'activity', text: it.text }
     );
+
+  const todayWarn =
+    today.length === 0
+      ? 'Nothing added for today yet. Type what was done and press Add.'
+      : done === 0
+        ? 'Nothing ticked yet. Tick what was done today: only ticked work goes in the report.'
+        : null;
+  const tomorrowWarn = tomorrow.length === 0 ? "No plan for tomorrow yet. Type it and press Add." : null;
+
+  const missing = [
+    today.length === 0 ? 'Nothing added for today' : done === 0 ? 'Nothing ticked yet' : '',
+    tomorrow.length === 0 ? 'No plan for tomorrow' : '',
+  ].filter(Boolean);
 
   const list = (items: ActivityItem[], isToday: boolean) => (
     <div>
@@ -85,9 +118,10 @@ export default function ActivitiesSection({ report, commit, state, open, onToggl
               value={it.text}
               className={cn('text-[14px] leading-snug', isToday && it.done && 'text-muted-foreground')}
               onCommit={(v) => {
-                const edit = (arr: ActivityItem[]) => arr.map((x) => (x.id === it.id ? { ...x, text: v } : x));
-                if (isToday) save(edit(today), tomorrow);
-                else save(today, edit(tomorrow));
+                if (!isToday) return save(today, tomorrow.map((x) => (x.id === it.id ? { ...x, text: v } : x)));
+                // Rewording a planned item makes it this day's own, and the old wording stays off.
+                const edited = today.map((x) => (x.id === it.id ? { ...x, text: v, fromPlan: undefined } : x));
+                save(edited, tomorrow, undefined, it.fromPlan ? it.text : undefined);
               }}
             />
           </div>
@@ -96,7 +130,9 @@ export default function ActivitiesSection({ report, commit, state, open, onToggl
             {...pressMotion}
             aria-label={`Remove ${it.text}`}
             onClick={() =>
-              isToday ? save(today.filter((x) => x.id !== it.id), tomorrow) : save(today, tomorrow.filter((x) => x.id !== it.id))
+              isToday
+                ? save(today.filter((x) => x.id !== it.id), tomorrow, undefined, it.fromPlan ? it.text : undefined)
+                : save(today, tomorrow.filter((x) => x.id !== it.id))
             }
             className="flex size-11 shrink-0 items-center justify-center rounded-lg text-gray-300 transition-colors duration-200 hover:text-bad sm:size-9"
           >
@@ -107,15 +143,24 @@ export default function ActivitiesSection({ report, commit, state, open, onToggl
     </div>
   );
 
-  const adder = (value: string, set: (v: string) => void, add: (v: string) => void, placeholder: string, label: string, primary: boolean) => (
+  const adder = (
+    value: string,
+    set: (v: string) => void,
+    add: (v: string) => void,
+    placeholder: string,
+    label: string,
+    primary: boolean,
+    warn: boolean
+  ) => (
     <div className="mt-2 flex gap-2">
       <input
         aria-label={label}
+        aria-invalid={warn || undefined}
         value={value}
         onChange={(e) => set(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && add(value)}
         placeholder={placeholder}
-        className={INPUT_CLS}
+        className={cn(INPUT_CLS, warn && !value && 'border-amber-400 bg-amber-50/40')}
       />
       <RowButton primary={primary} className="h-11 px-4 sm:h-9" onClick={() => add(value)}>
         Add
@@ -128,33 +173,30 @@ export default function ActivitiesSection({ report, commit, state, open, onToggl
       id="activities"
       title="Daily activities"
       summary={
-        today.length || tomorrow.length
-          ? `${done} of ${today.length} done · ${tomorrow.length} planned for tomorrow`
-          : 'Nothing planned yet'
+        state === 'look'
+          ? missing.join(' · ')
+          : `${done} of ${today.length} done · ${tomorrow.length} planned for tomorrow`
       }
-      hint={state === 'same' ? (unticked > 0 ? `${unticked} to tick` : sameHint(hasPredecessor)) : undefined}
       state={state}
       open={open}
       onToggle={onToggle}
-      actions={
-        state === 'same' ? (
-          <RowButton onClick={() => commit({ confirmed: { activities: true } })}>Confirm</RowButton>
-        ) : state === 'empty' ? (
-          <RowButton onClick={onOpen}>Add</RowButton>
-        ) : undefined
-      }
     >
       <p className="mb-1 text-[12px] font-medium text-muted-foreground">Today</p>
       {list(today, true)}
-      {adder(todayDraft, setTodayDraft, addToday, 'Add what was done…', 'Add a today activity', true)}
+      {adder(todayDraft, setTodayDraft, addToday, 'Add what was done…', 'Add a today activity', true, today.length === 0)}
+      {todayWarn && <Warn>{todayWarn}</Warn>}
       <CapacityNote count={done} capacity={CAPACITY.activities} what="lines of what was done" />
 
       <p className="mb-1 mt-5 text-[12px] font-medium text-muted-foreground">Tomorrow</p>
       {list(tomorrow, false)}
-      {adder(tomorrowDraft, setTomorrowDraft, addTomorrow, "Add tomorrow's plan…", 'Add a tomorrow activity', false)}
-      <p className="mt-2 text-[12px] leading-snug text-gray-400">
-        Tomorrow&apos;s report opens with this plan as its Today list, ready to tick.
-      </p>
+      {adder(tomorrowDraft, setTomorrowDraft, addTomorrow, "Add tomorrow's plan…", 'Add a tomorrow activity', false, !!tomorrowWarn)}
+      {tomorrowWarn ? (
+        <Warn>{tomorrowWarn}</Warn>
+      ) : (
+        <p className="mt-2 text-[12px] leading-snug text-gray-400">
+          Tomorrow&apos;s report shows this plan as its Today list, ready to tick.
+        </p>
+      )}
       <CapacityNote count={tomorrow.length} capacity={CAPACITY.activities} what="lines of tomorrow's plan" />
     </SectionRow>
   );

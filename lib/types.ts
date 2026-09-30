@@ -131,6 +131,8 @@ export interface ActivityItem {
   text: string;
   /** Today's list: it was done. Tomorrow's list: unused, always false. */
   done: boolean;
+  /** Today's list: it came from the previous report's Tomorrow and follows that plan until it is ticked or edited. */
+  fromPlan?: boolean;
 }
 
 export interface AocRow {
@@ -269,6 +271,8 @@ export interface DailyReport {
   /** The fill-in screen's lists. Absent on older reports: read them through `todayItemsOf` / `tomorrowItemsOf`. */
   todayItems?: ActivityItem[];
   tomorrowItems?: ActivityItem[];
+  /** Items of the previous day's plan that a person took off this day's Today, so the plan does not put them back. */
+  declinedPlan?: string[];
   aoc?: AocRow[];
   aocNone?: boolean;
   log?: LogEntry[];

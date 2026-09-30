@@ -66,3 +66,63 @@ export function suggestActivities(reports: DailyReport[], taken: string[], limit
   }
   return out;
 }
+
+const itemKey = (s: string) => s.trim().toLowerCase();
+
+/**
+ * Today's list with the previous report's "Tomorrow" folded in: what was planned
+ * yesterday is on today's list, unticked, without anybody typing it twice.
+ *
+ * A planned item follows the plan while it is only a plan: taken off yesterday's
+ * Tomorrow, it leaves today's list too. Once ticked it is a fact and stays. An item
+ * the person removed from today (`declined`) is not put back, and their own items are
+ * never touched. The same input always gives the same list (ids come from the text),
+ * so running it on every read and every write converges instead of piling up.
+ */
+export function planInto(plan: ActivityItem[], today: ActivityItem[], declined: string[] = []): ActivityItem[] {
+  const planned = new Set(plan.map((p) => itemKey(p.text)).filter(Boolean));
+  const kept = today.filter((it) => !it.fromPlan || it.done || planned.has(itemKey(it.text)));
+  const have = new Set(kept.map((it) => itemKey(it.text)));
+  const no = new Set(declined.map(itemKey));
+  const added: ActivityItem[] = [];
+  for (const p of plan) {
+    const k = itemKey(p.text);
+    if (!k || have.has(k) || no.has(k)) continue;
+    have.add(k);
+    added.push({ id: `plan-${k}`, text: p.text.trim(), done: false, fromPlan: true });
+  }
+  return [...kept, ...added];
+}
+
+export function sameItems(a: ActivityItem[], b: ActivityItem[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((x, i) => x.id === b[i].id && x.text === b[i].text && x.done === b[i].done && !!x.fromPlan === !!b[i].fromPlan)
+  );
+}
+
+/** The latest report before `date`, and the earliest after it: a gap (a weekend) is still "the day before". */
+export function reportBefore(reports: DailyReport[], date: string): DailyReport | undefined {
+  let best: DailyReport | undefined;
+  for (const r of reports) if (r.date < date && (!best || r.date > best.date)) best = r;
+  return best;
+}
+
+export function reportAfter(reports: DailyReport[], date: string): DailyReport | undefined {
+  let best: DailyReport | undefined;
+  for (const r of reports) if (r.date > date && (!best || r.date < best.date)) best = r;
+  return best;
+}
+
+/**
+ * The report with the day before's plan on its Today list. Returns the SAME object when
+ * nothing changes, so a caller can tell. Read by the report page (a day made before the
+ * plan was typed still shows it) and by every write (so the store catches up).
+ */
+export function withPlan(reports: DailyReport[], report: DailyReport): DailyReport {
+  const prev = reportBefore(reports, report.date);
+  if (!prev) return report;
+  const today = todayItemsOf(report);
+  const merged = planInto(tomorrowItemsOf(prev), today, report.declinedPlan);
+  return sameItems(today, merged) ? report : { ...report, todayItems: merged };
+}

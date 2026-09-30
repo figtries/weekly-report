@@ -485,10 +485,23 @@ from `Panel.tsx`, with `contain: layout paint`;** measured under 4x CPU throttle
 draws a frame every 17-33 ms open and close at 390 and 1440, so keep it that way
 (`AnimatePresence initial={false}`, one ease, no per-row layout animation).
 
-**Tomorrow is the plan, and the next report opens with it as Today** (1 Oct 2026). No
+**Tomorrow is the plan, and the next report shows it as Today, whichever day was made
+first** (1 Oct 2026). Carrying it only at creation failed in use: the 25th had been made
+before the 24th's plan was typed, so the plan never reached it. `withPlan` /
+`planInto` (`lib/daily-items.ts`) fold the day before's Tomorrow into Today on EVERY read
+(the report page's `initial`) and EVERY write (`applyPatchDaily` pulls into the day it
+writes, and pushes a changed Tomorrow into the next report if it exists). Planned items
+are `fromPlan`: they follow the plan until ticked (a ticked one is a fact and stays) or
+reworded; one the person removes goes into `declinedPlan` so the plan never puts it back.
+Deterministic ids (`plan-<text>`), so a merge run twice changes nothing. The done set is
+never touched, so the Excel "what was done" block cannot change behind anyone's back. No
 suggestions: a list of yesterday's sentences with Add and dismiss was built and rejected
-the same day ("bukan suggestion"). `applyCreateDaily` reads the day BEFORE the new date,
-never a later report, so a back-filled day cannot inherit the future's plan.
+the same day. It reads the day BEFORE, never a later report.
+
+**Work has no Confirm** (`activitiesGap` in `lib/daily-status.ts`): ready when something
+is TICKED today and tomorrow has a plan, otherwise amber with the gap named on the row and
+an amber line under the box that fixes it. Ticked, not merely listed, because the sheet
+prints only what was done and a carried plan is not that.
 
 **Save changes finishes a report**: it retries a failed batch, waits for every write
 (`flush`), then goes back to the list, beside Export Excel at the same size, solid where

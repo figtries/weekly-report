@@ -1,5 +1,5 @@
 import { getCatalogs, type CatalogKey } from './catalogs';
-import { inferHoursEach, tomorrowItemsOf } from './daily-items';
+import { inferHoursEach, planInto, reportAfter, tomorrowItemsOf, withPlan } from './daily-items';
 import { defaultWeather } from './defaults';
 import {
   defaultMilestones,
@@ -91,9 +91,7 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
   // What the day before planned for "Tomorrow" is today's list, unticked: nobody types
   // the plan twice. Only from a day that IS before, never from a later report. Weather,
   // photos, the log and every confirmation start empty on purpose.
-  const todayItems: ActivityItem[] = before
-    ? tomorrowItemsOf(before).map((it, i) => ({ id: `${date}-a${i + 1}`, text: it.text, done: false }))
-    : [];
+  const todayItems: ActivityItem[] = before ? planInto(tomorrowItemsOf(before), []) : [];
 
   const report: DailyReport = {
     date,
@@ -138,6 +136,17 @@ export function applyPatchDaily(
   // The log entries ride in the SAME write as the changes they describe, so the
   // timeline can never show something the report does not hold.
   if (logs.length) report.log = [...(report.log ?? []), ...logs];
+  // The plan links two days, whichever was made first. This day takes the day before's
+  // Tomorrow; a change to this day's Tomorrow reaches the next report if it already
+  // exists. Creating the next day only covered a plan typed BEFORE the next day was made
+  // (24 and 25 Sep 2026: the 25th was made first and never saw the 24th's plan).
+  const pulled = withPlan(db.daily, report);
+  if (pulled !== report) report.todayItems = pulled.todayItems;
+  if (rest.tomorrowItems !== undefined || rest.activitiesTomorrow !== undefined) {
+    const next = reportAfter(db.daily, date);
+    const n = next && withPlan(db.daily, next);
+    if (next && n && n !== next) next.todayItems = n.todayItems;
+  }
   return report;
 }
 

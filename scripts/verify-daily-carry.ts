@@ -9,6 +9,8 @@
 import assert from 'node:assert/strict';
 import {
   activityStrings,
+  planInto,
+  withPlan,
   hoursEachOf,
   inferHoursEach,
   joinItems,
@@ -117,6 +119,43 @@ function dbWith(...daily: DailyReport[]): Database {
   return { daily } as unknown as Database;
 }
 
+check('planInto: adds the plan, keeps own and ticked items, follows plan edits, respects declined', () => {
+  const plan = [{ id: 'a', text: 'Grouting', done: false }, { id: 'b', text: ' grouting ', done: false }, { id: 'c', text: 'Painting', done: false }];
+  const first = planInto(plan, [{ id: 'own', text: 'Own work', done: true }]);
+  assert.deepEqual(first.map((i) => [i.text, i.done, !!i.fromPlan]), [['Own work', true, false], ['Grouting', false, true], ['Painting', false, true]]);
+  assert.deepEqual(planInto(plan, first), first, 'running it again changes nothing');
+  const ticked = first.map((i) => (i.text === 'Painting' ? { ...i, done: true } : i));
+  const after = planInto([{ id: 'x', text: 'Welding', done: false }], ticked);
+  assert.deepEqual(after.map((i) => i.text), ['Own work', 'Painting', 'Welding'], 'unticked Grouting left with the plan, ticked Painting stayed');
+  assert.deepEqual(planInto(plan, [], ['GROUTING']).map((i) => i.text), ['Painting']);
+});
+
+check('the 24/25 Sep case: the next day made FIRST still gets the plan typed after', () => {
+  const d24 = report({ date: '2026-09-24', todayItems: [], tomorrowItems: [] });
+  const db = dbWith(d24);
+  const d25 = applyCreateDaily(db, '2026-09-25');
+  assert.equal(d25.todayItems?.length, 0);
+  const plan = [{ id: 'k', text: 'kuy', done: false }, { id: 'b', text: 'bhuy', done: false }];
+  applyPatchDaily(db, '2026-09-24', { tomorrowItems: plan, ...activityStrings([], plan) });
+  assert.deepEqual(d25.todayItems?.map((i) => [i.text, i.done]), [['kuy', false], ['bhuy', false]]);
+  // Taken off the plan on the 24th: gone from the 25th, unless it was ticked there.
+  d25.todayItems = d25.todayItems!.map((i) => (i.text === 'bhuy' ? { ...i, done: true } : i));
+  applyPatchDaily(db, '2026-09-24', { tomorrowItems: [], ...activityStrings([], []) });
+  assert.deepEqual(d25.todayItems?.map((i) => i.text), ['bhuy']);
+});
+
+check('a day already stored without the plan shows it on read and stores it on its next write', () => {
+  const d24 = report({ date: '2026-09-24', todayItems: [], tomorrowItems: [{ id: 'k', text: 'kuy', done: false }] });
+  const d25 = report({ date: '2026-09-25', todayItems: [], tomorrowItems: [] });
+  const db = dbWith(d24, d25);
+  assert.deepEqual(withPlan(db.daily, d25).todayItems?.map((i) => i.text), ['kuy']);
+  assert.equal(withPlan(db.daily, d24), d24, 'nothing to add: the same object');
+  applyPatchDaily(db, '2026-09-25', { hariKe: 7 });
+  assert.deepEqual(d25.todayItems?.map((i) => i.text), ['kuy']);
+  applyPatchDaily(db, '2026-09-25', { todayItems: [], declinedPlan: ['kuy'] });
+  assert.deepEqual(d25.todayItems, [], 'removed by the person, not put back');
+});
+
 check("today opens with the day BEFORE's tomorrow list, never a later report's", () => {
   const mon = report({ date: '2026-03-09', tomorrowItems: [{ id: 'm', text: 'Grouting baut angkur', done: false }] });
   const wed = report({ date: '2026-03-11', tomorrowItems: [{ id: 'w', text: 'Pengecatan', done: false }] });
@@ -194,7 +233,7 @@ check('a freshly created day: nothing is ready that nobody said, crew and permit
   assert.equal(s.manHours, 'same');
   assert.equal(s.ptw, 'look');
   assert.equal(s.hse, 'same');
-  assert.equal(s.activities, 'same');
+  assert.equal(s.activities, 'look', 'carried plan, nothing ticked: a warning, not a Confirm');
   assert.equal(s.aoc, 'empty');
   assert.equal(s.photos, 'empty');
   assert.equal(readyCount(s), 0);
@@ -202,7 +241,9 @@ check('a freshly created day: nothing is ready that nobody said, crew and permit
 
 check('confirming and entering move sections to ready', () => {
   const r = applyCreateDaily(dbWith(report()), '2026-03-12');
-  r.confirmed = { manHours: true, hse: true, activities: true, ptw: true };
+  r.confirmed = { manHours: true, hse: true, ptw: true };
+  r.todayItems = r.todayItems!.map((i) => ({ ...i, done: true }));
+  r.tomorrowItems = [{ id: 'm', text: 'Next plan', done: false }];
   r.ptw = r.ptw.map((p) => ({ ...p, status: 'CLOSED' }));
   r.weather.cerahTerang = true;
   r.aocNone = true;

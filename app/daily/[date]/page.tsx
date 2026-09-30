@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
+import { withPlan } from '@/lib/daily-items';
 import { weekAndDay } from '@/lib/daily-week';
 import { getOpenJsonDb, getOpenProjectStatus, getWorkspace } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
@@ -100,7 +101,9 @@ async function DailyDetail({ date }: { date: string }) {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <DailyReportScreen
-        initial={report}
+        // The day before's Tomorrow on this day's Today, even when this day was made
+        // first; the first write stores it (applyPatchDaily runs the same merge).
+        initial={withPlan(db.daily, report)}
         project={{ name: db.project.name, location: db.project.workLocation }}
         weatherLabels={labels}
         hasPredecessor={db.daily.some((d) => d.date < date)}
