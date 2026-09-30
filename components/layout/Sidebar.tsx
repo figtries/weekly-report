@@ -1,26 +1,31 @@
 'use client';
 
-import { Suspense, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  Suspense,
+  useEffect,
+  useId,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
-import {
-  Activity,
-  CalendarDays,
-  ChevronDown,
-  ClipboardList,
-  FileText,
-  Files,
-  LayoutDashboard,
-  Menu,
-  FolderKanban,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronDown, Menu, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  DailyReportsIcon,
+  DashboardIcon,
+  DataOverallIcon,
+  DocumentControlIcon,
+  ProjectsIcon,
+  ReportsIcon,
+  WeeklyReportsIcon,
+} from './NavIcons';
 
 /**
  * Six destinations, not twelve.
@@ -35,9 +40,12 @@ import { cn } from '@/lib/utils';
  * `match` decides highlighting, so a destination stays lit while the user moves
  * between its own tabs.
  */
+/** Ours (`NavIcons`) and lucide's both fit: all that is asked of an icon is a className. */
+type NavIconComponent = ComponentType<{ className?: string }>;
+
 interface Destination {
   label: string;
-  icon: LucideIcon;
+  icon: NavIconComponent;
   href: (week: number | null) => string;
   match: (pathname: string) => boolean;
 }
@@ -49,7 +57,7 @@ interface Destination {
  */
 interface Group {
   label: string;
-  icon: LucideIcon;
+  icon: NavIconComponent;
   items: Destination[];
 }
 
@@ -62,23 +70,23 @@ const WEEKLY_PROGRESS = ['summary', 'detail', 'scurve', 'documentation', 'print'
 
 const REPORTS: Group = {
   label: 'Reports',
-  icon: ClipboardList,
-  // The icons on the two rows are placeholders until the real set is supplied.
+  icon: ReportsIcon,
+  // Weekly first, Daily second: the order of the design mock (30 Sep 2026).
   items: [
     {
-      label: 'Daily Reports',
-      icon: CalendarDays,
-      href: () => '/daily',
-      match: (p) => p.startsWith('/daily'),
-    },
-    {
       label: 'Weekly Reports',
-      icon: FileText,
+      icon: WeeklyReportsIcon,
       href: (w) => (w ? `/weekly/${w}/summary` : '/weekly/summary'),
       // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
       // named `summary` and `detail` too, so a bare endsWith lit this entry as well
       // on every /dokumen page — two destinations highlighted at once.
       match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
+    },
+    {
+      label: 'Daily Reports',
+      icon: DailyReportsIcon,
+      href: () => '/daily',
+      match: (p) => p.startsWith('/daily'),
     },
   ],
 };
@@ -86,20 +94,20 @@ const REPORTS: Group = {
 const DESTINATIONS: Entry[] = [
   {
     label: 'Dashboard',
-    icon: LayoutDashboard,
+    icon: DashboardIcon,
     href: () => '/',
     match: (p) => p === '/',
   },
   {
     label: 'Data Overall',
-    icon: Activity,
+    icon: DataOverallIcon,
     href: (w) => (w ? `/weekly/${w}/overall` : '/weekly'),
     match: (p) => DATA_OVERALL.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
   REPORTS,
   {
     label: 'Document Control',
-    icon: Files,
+    icon: DocumentControlIcon,
     href: (w) => (w ? `/dokumen/${w}/summary` : '/dokumen'),
     match: (p) => p.startsWith('/dokumen'),
   },
@@ -107,7 +115,7 @@ const DESTINATIONS: Entry[] = [
     // Where a project is kept, created and planned. It is the app's first
     // screen: everything below reads whichever project is open here.
     label: 'Projects',
-    icon: FolderKanban,
+    icon: ProjectsIcon,
     href: () => '/projects',
     match: (p) => p.startsWith('/projects') || p.startsWith('/portfolio'),
   },
@@ -166,7 +174,11 @@ function NavGroup({ group, week, pathname }: { group: Group; week: number | null
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (childActive) setOpen(true);
+    if (!childActive) return;
+    // A frame later, so the list is painted shut first and the height has
+    // something to ease FROM.
+    const id = requestAnimationFrame(() => setOpen(true));
+    return () => cancelAnimationFrame(id);
   }, [childActive]);
 
   return (
@@ -177,7 +189,7 @@ function NavGroup({ group, week, pathname }: { group: Group; week: number | null
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={listId}
-        className={cn(itemClass(childActive && !open), 'w-full text-left', open && 'text-foreground')}
+        className={cn(itemClass(childActive && !open), 'w-full text-left')}
       >
         <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
         <span>{group.label}</span>
@@ -201,7 +213,10 @@ function NavGroup({ group, week, pathname }: { group: Group; week: number | null
         )}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="space-y-1 pl-4 pt-1">
+          {/* pl-[30px]: the row's own padding (12) + 18px icon + 12px gap puts the
+              parent's label at 54px; 12 + 30 + 12 puts a child's ICON at that
+              same 54px, so the rows hang from the label as in the design mock. */}
+          <div className="space-y-1 pl-[30px] pt-1">
             {group.items.map((dest) => (
               <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
             ))}
