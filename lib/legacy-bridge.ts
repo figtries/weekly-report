@@ -1,5 +1,5 @@
 /**
- * Where a project's db.json record lives, and the one guard left on db.json.
+ * Where a project's db.json record lives.
  *
  * This file used to answer "does the open project have v1 data?" — whether it
  * was the imported project, Gundih, whose weekly figures lived in db.json while
@@ -67,20 +67,4 @@ export function jsonSeedFor(projectId: string): Database {
     seeded.project.contractor = p.contractorName ?? '';
   }
   return seeded;
-}
-
-/**
- * Guard for the write path. `mutateDb` edits whatever `db.json` calls active,
- * which is not the project on screen — so while a project is open it refuses,
- * rather than writing that project's data into another one's record. No
- * project reads its weekly figures from db.json any more, so nothing open can
- * use `mutateDb` legitimately.
- */
-export async function assertLegacyWritable(): Promise<void> {
-  const open = await getOpenProject();
-  if (open) {
-    throw new Error(
-      `"${open.name}" keeps its weekly figures in the project database, and saving here would write them into another project's record.`
-    );
-  }
 }

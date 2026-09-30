@@ -257,8 +257,15 @@ export interface Database {
   catalogs?: ProjectCatalogs;
   baselines?: Baseline[];
   approvals?: Approval[];
-  /** Keyed by the photo path stored in DailyReport.photos / WeeklyMeta.documentation. */
+  /** Keyed by the photo path stored in DailyReport.photos / Database.weeklyPhotos. */
   photoMeta?: Record<string, PhotoRecord>;
+  /**
+   * A project's weekly documentation photos, keyed by week number. Lives in the
+   * project's own JSON record because `weeks[].documentation` is empty for every
+   * SQLite project (lib/dashboard-db.ts builds the weeks from the database).
+   * Read it through `weeklyPhotosOf` in lib/weekly-photos.ts.
+   */
+  weeklyPhotos?: Record<string, (string | null)[]>;
 }
 
 // ---------------------------------------------------------------------------

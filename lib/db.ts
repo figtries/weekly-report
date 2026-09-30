@@ -4,9 +4,9 @@ import path from 'path';
 import { gzipSync, gunzipSync } from 'zlib';
 import { revalidateTag } from 'next/cache';
 import { redisConfigured, redisGet, redisSet } from './storage';
-import { activeProject, migrate, type StoredShape, type Workspace } from './workspace';
+import { migrate, type StoredShape, type Workspace } from './workspace';
 import type { Database } from './types';
-import { assertLegacyWritable, jsonKeyFor, jsonSeedFor } from './legacy-bridge';
+import { jsonKeyFor, jsonSeedFor } from './legacy-bridge';
 import { getActiveProjectId } from './projects';
 
 const SOURCE_PATH = path.join(process.cwd(), 'data', 'db.json');
@@ -90,12 +90,10 @@ export async function readOpenDb(): Promise<Database | null> {
 /**
  * Mutate the OPEN project's record, creating it on the first write.
  *
- * This is what `mutateDb` could never be. `mutateDb` edits whatever the FILE
- * calls active, so it had to be guarded (`assertLegacyWritable`) to stop a
- * daily report being filed under Gundih — the guard was correct and the price
- * was that no other project could keep a daily report at all. Here the project
- * decides the record, so there is nothing to guard against: each one writes
- * into its own.
+ * The project decides the record, so each one writes into its own: daily
+ * reports, catalogs and weekly photos. (`mutateDb`, which edited whatever the
+ * FILE calls active, was removed when the weekly photo route — its last
+ * caller — moved here.)
  */
 export async function mutateOpenDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
   const id = await getActiveProjectId();
@@ -129,21 +127,6 @@ export async function mutateProjectDb<T>(
     }
     return mutator(project);
   });
-}
-
-/**
- * Mutate whatever `db.json` itself calls active — NOT the project on screen.
- *
- * Its one remaining caller is the weekly photo route, which predates projects.
- * The guard is AWAITED now: it was called without `await` for months, so its
- * refusal became an unhandled rejection while the write went ahead, and weekly
- * photos uploaded from an app-made project were filed under the imported
- * project (Gundih, removed 26 Sep 2026). Refusing is the honest answer until
- * weekly photos get a per-project home.
- */
-export async function mutateDb<T>(mutator: (db: Database) => T | Promise<T>): Promise<T> {
-  await assertLegacyWritable();
-  return mutateWorkspace(async (ws) => mutator(activeProject(ws)));
 }
 
 /** Mutate across projects — switching, creating, deleting, portfolio-wide edits. */

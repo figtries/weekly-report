@@ -1,16 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
-import { mutateDb } from '@/lib/db';
+import { mutateProjectDb } from '@/lib/db';
+import { getActiveProjectId } from '@/lib/projects';
+import type { Database } from '@/lib/types';
 import { deleteUploadedPhoto, preparePhotoUpload } from '@/lib/upload';
+import { WEEKLY_PHOTO_PAGE_SIZE as PAGE_SIZE, weeklyPhotosOf } from '@/lib/weekly-photos';
 
-const PAGE_SIZE = 6;
+// A week's photos belong to the OPEN project's own record (Database.weeklyPhotos),
+// the same home its daily reports have. They used to go through `mutateDb`, which
+// edits whatever db.json calls active and so refuses while any project is open:
+// no project could save a weekly photo.
+
+async function openProject(weekParam: string) {
+  const week = Number(weekParam);
+  if (!Number.isInteger(week) || week < 1) throw new Error('Invalid week');
+  const projectId = await getActiveProjectId();
+  if (!projectId) throw new Error('No project is open.');
+  return { week, projectId };
+}
+
+/** The week's slots inside the record, created on first use. Edits go straight through. */
+function slotsFor(db: Database, week: number): (string | null)[] {
+  db.weeklyPhotos ??= {};
+  return (db.weeklyPhotos[String(week)] ??= weeklyPhotosOf(db, week));
+}
+
+const reply = (week: number, documentation: (string | null)[]) =>
+  NextResponse.json({ week, documentation });
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ week: string }> }
 ) {
   const { week: weekParam } = await params;
-  const week = Number(weekParam);
   const formData = await request.formData();
   const slot = Number(formData.get('slot'));
   const file = formData.get('file');
@@ -20,23 +42,23 @@ export async function POST(
   }
 
   try {
-    // Named photoExif, not meta: the mutation below already binds `meta` to the
-    // WeeklyMeta record, and the inner scope would silently shadow this one.
+    const { week, projectId } = await openProject(weekParam);
+    // Named photoExif, not meta: keeps clear of any record the mutation binds.
+    // The project id is in the folder so two projects' week 48 never share one.
     const { relPath, meta: photoExif, persist } = await preparePhotoUpload(
       file,
       'weekly',
-      String(week),
+      `${projectId}/${week}`,
       slot
     );
     let previousPath: string | null = null;
     // Photo write and db mutation run concurrently — neither needs the
     // other's result, only the precomputed path.
-    const [updated] = await Promise.all([
-      mutateDb((db) => {
-        const meta = db.weeks.find((w) => w.week === week);
-        if (!meta) throw new Error(`Week ${week} not found`);
-        if (slot >= meta.documentation.length) throw new Error(`Slot ${slot} out of range`);
-        previousPath = meta.documentation[slot] ?? null;
+    const [documentation] = await Promise.all([
+      mutateProjectDb(projectId, (db) => {
+        const slots = slotsFor(db, week);
+        if (slot >= slots.length) throw new Error(`Slot ${slot} out of range`);
+        previousPath = slots[slot] ?? null;
 
         db.photoMeta ??= {};
         db.photoMeta[relPath] = {
@@ -49,15 +71,15 @@ export async function POST(
           verified: !!photoExif.takenAt,
         };
         if (previousPath && db.photoMeta[previousPath]) delete db.photoMeta[previousPath];
-        meta.documentation[slot] = relPath;
-        return meta;
+        slots[slot] = relPath;
+        return [...slots];
       }),
       persist(),
     ]);
     // Replaced photo is unreachable once the db points elsewhere — clean it
     // up after the response instead of making the client wait for it.
     after(() => deleteUploadedPhoto(previousPath).catch(() => undefined));
-    return NextResponse.json(updated);
+    return reply(week, documentation);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
@@ -68,20 +90,19 @@ export async function DELETE(
   { params }: { params: Promise<{ week: string }> }
 ) {
   const { week: weekParam } = await params;
-  const week = Number(weekParam);
   const slot = Number(new URL(request.url).searchParams.get('slot'));
 
   try {
+    const { week, projectId } = await openProject(weekParam);
     let removedPath: string | null = null;
-    const updated = await mutateDb((db) => {
-      const meta = db.weeks.find((w) => w.week === week);
-      if (!meta) throw new Error(`Week ${week} not found`);
-      removedPath = meta.documentation[slot] ?? null;
-      meta.documentation[slot] = null;
-      return meta;
+    const documentation = await mutateProjectDb(projectId, (db) => {
+      const slots = slotsFor(db, week);
+      removedPath = slots[slot] ?? null;
+      slots[slot] = null;
+      return [...slots];
     });
     after(() => deleteUploadedPhoto(removedPath).catch(() => undefined));
-    return NextResponse.json(updated);
+    return reply(week, documentation);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
@@ -92,26 +113,25 @@ export async function PATCH(
   { params }: { params: Promise<{ week: string }> }
 ) {
   const { week: weekParam } = await params;
-  const week = Number(weekParam);
   const { action } = (await request.json()) as { action?: string };
 
   try {
-    const updated = await mutateDb((db) => {
-      const meta = db.weeks.find((w) => w.week === week);
-      if (!meta) throw new Error(`Week ${week} not found`);
+    const { week, projectId } = await openProject(weekParam);
+    const documentation = await mutateProjectDb(projectId, (db) => {
+      const slots = slotsFor(db, week);
       if (action === 'addPage') {
-        meta.documentation.push(...Array<string | null>(PAGE_SIZE).fill(null));
+        slots.push(...Array<string | null>(PAGE_SIZE).fill(null));
       } else if (action === 'removePage') {
-        if (meta.documentation.length <= PAGE_SIZE) throw new Error('Cannot remove the first page');
-        const lastPage = meta.documentation.slice(-PAGE_SIZE);
+        if (slots.length <= PAGE_SIZE) throw new Error('Cannot remove the first page');
+        const lastPage = slots.slice(-PAGE_SIZE);
         if (lastPage.some((p) => p !== null)) throw new Error('Last page still has photos');
-        meta.documentation.length -= PAGE_SIZE;
+        slots.length -= PAGE_SIZE;
       } else {
         throw new Error('Unknown action');
       }
-      return meta;
+      return [...slots];
     });
-    return NextResponse.json(updated);
+    return reply(week, documentation);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }

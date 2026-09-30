@@ -657,11 +657,15 @@ projects; `jsonKeyFor()` in `lib/legacy-bridge.ts` names each project's record
 already holds. Read through `getOpenJsonDb()` / `getPrintJsonDb()`, write
 through `mutateOpenDb()`. On the deployment that map lives in Redis
 (`weekly-report:db`), not in the file. `mutateDb()` — whatever the FILE calls
-active — has one caller left, the weekly photo route, and its guard refuses
-while a project is open. **Weekly photos therefore do not save for any
-project**: they never did for an app-made one (the guard was called without
-`await` and the upload was filed under Gundih; `dashboard-db` returns no
-documentation), and they need a per-project home before that screen works.
+active — is gone: its last caller was the weekly photo route, which refused
+every save while a project was open, so no project could keep a weekly photo
+(`dashboard-db` builds each week with an empty `documentation`). **Weekly
+photos now live in the project's own JSON record**, `Database.weeklyPhotos`
+keyed by week number (`lib/weekly-photos.ts`), written through
+`mutateProjectDb` by `app/api/weeks/[week]/photos/route.ts`, read by the
+Documentation page and the weekly PDF through `getOpenJsonDb()` /
+`getPrintJsonDb()`. The file lands under `/uploads/weekly/<projectId>/<week>/`
+so two projects' week 48 never share a folder.
 
 **An index route that redirects must resolve the project behind `<Suspense>`.**
 `/weekly` and `/dokumen` send you to a week number, and reading db.json's sent a

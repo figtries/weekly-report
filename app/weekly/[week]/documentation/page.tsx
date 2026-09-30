@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { getOpenDb, getWeekMeta } from '@/lib/data';
+import { getOpenDb, getOpenJsonDb, getWeekMeta } from '@/lib/data';
+import { weeklyPhotosOf } from '@/lib/weekly-photos';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import PageHeader from '@/components/layout/PageHeader';
 import SectionSwitch from '@/components/weekly/SectionSwitch';
@@ -34,6 +35,9 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
   const db = await getOpenDb();
   const meta = getWeekMeta(db, week);
   if (!meta) notFound();
+  // The photos are the project's own (lib/weekly-photos.ts); `meta.documentation`
+  // is empty for every project whose weeks are built from the database.
+  const photos = weeklyPhotosOf(await getOpenJsonDb(), week);
 
   return (
     <RouteTransition id="weekly-documentation">
@@ -52,7 +56,7 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
         {/* One step behind the header, exactly as Detail Progress does it. The
             grid pages its own slots, so nothing inside needs a per-slot delay. */}
         <div className="animate-enter stagger-1">
-          <PhotoUploadGrid photos={meta.documentation} uploadUrl={`/api/weeks/${week}/photos`} />
+          <PhotoUploadGrid photos={photos} uploadUrl={`/api/weeks/${week}/photos`} />
         </div>
       </div>
     </RouteTransition>

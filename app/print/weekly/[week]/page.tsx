@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { getPrintDb, getPrintWeekRollup } from '@/lib/data';
+import { getPrintDb, getPrintJsonDb, getPrintWeekRollup } from '@/lib/data';
+import { weeklyPhotosOf } from '@/lib/weekly-photos';
 import { getSummaryRows } from '@/lib/rollup';
 import { buildSCurveSeries } from '@/lib/scurve';
 import WeeklyPrintSummary from '@/components/print/WeeklyPrintSummary';
@@ -59,6 +60,10 @@ async function WeeklyPrintBody({ params, searchParams }: Props) {
   const figures = gate.ok;
   const show = (key: ReportKey) => (!only || only === key) && (figures || key === 'documentation');
   const held = !figures && (!only || only !== 'documentation');
+  // The project's own photos, not `meta.documentation` (empty for these projects).
+  const documentation = show('documentation')
+    ? weeklyPhotosOf(await getPrintJsonDb(projectId), week)
+    : [];
 
   return (
     <div className="bg-gray-100 min-h-full overflow-x-auto print:overflow-visible">
@@ -95,7 +100,9 @@ async function WeeklyPrintBody({ params, searchParams }: Props) {
             </p>
           </div>
         )}
-        {show('documentation') && <WeeklyPrintDocumentation project={db.project} meta={meta} />}
+        {show('documentation') && (
+          <WeeklyPrintDocumentation project={db.project} meta={{ ...meta, documentation }} />
+        )}
       </div>
     </div>
   );
