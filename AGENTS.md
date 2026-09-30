@@ -485,14 +485,17 @@ from `Panel.tsx`, with `contain: layout paint`;** measured under 4x CPU throttle
 draws a frame every 17-33 ms open and close at 390 and 1440, so keep it that way
 (`AnimatePresence initial={false}`, one ease, no per-row layout animation).
 
-**Activities offer yesterday's sentences, to take or to turn down** (1 Oct 2026).
-`previousActivities` (`lib/daily-items.ts`) is the latest EARLIER report that says what it
-did, and each of Today and Tomorrow shows those sentences as suggestions with Add and a
-dismiss. Not the project's whole history (the old chips were that, and read as a search
-box). Tomorrow also offers what is still open today, first and tagged. A suggestion taken
-from Today is added DONE, like the typing box; tapping one never clears a half-typed
-sentence. A turned-down one is stored on the report (`dismissedSuggestions`, per list) or
-it would be back after a reload; a new day starts with none.
+**Tomorrow is the plan, and the next report opens with it as Today** (1 Oct 2026). No
+suggestions: a list of yesterday's sentences with Add and dismiss was built and rejected
+the same day ("bukan suggestion"). `applyCreateDaily` reads the day BEFORE the new date,
+never a later report, so a back-filled day cannot inherit the future's plan.
+
+**Save changes finishes a report**: it retries a failed batch, waits for every write
+(`flush`), then goes back to the list, beside Export Excel at the same size, solid where
+that one is outline. **The New Daily Report dialog closes in the same transition as its
+navigation.** It used to close from an effect, but the router keeps `/daily` hidden
+(`display: none`) behind the report and a hidden tree runs no effects, so the dialog stayed
+open behind the report and came back on Back (measured: its DOM was on the report page).
 
 **There is no progress on the daily screen or list.** It is the weekly report's job:
 `lib/daily-progress.ts` stays only because the Excel export fills the sheet's progress

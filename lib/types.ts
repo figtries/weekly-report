@@ -269,8 +269,6 @@ export interface DailyReport {
   /** The fill-in screen's lists. Absent on older reports: read them through `todayItemsOf` / `tomorrowItemsOf`. */
   todayItems?: ActivityItem[];
   tomorrowItems?: ActivityItem[];
-  /** Suggestions from the previous report that a person turned down on this day, so they do not come back. */
-  dismissedSuggestions?: { today: string[]; tomorrow: string[] };
   aoc?: AocRow[];
   aocNone?: boolean;
   log?: LogEntry[];

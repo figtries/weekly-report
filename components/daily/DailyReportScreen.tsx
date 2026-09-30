@@ -8,6 +8,7 @@ import SavePdfButton from '@/components/print/SavePdfButton';
 import { readyCount, sectionStates } from '@/lib/daily-status';
 import type { DailyReport, DailySectionKey } from '@/lib/types';
 import DailyHeader from './DailyHeader';
+import SaveChangesButton from './SaveChangesButton';
 import { GroupCard } from './SectionRow';
 import ActivitiesSection from './sections/ActivitiesSection';
 import AocSection from './sections/AocSection';
@@ -24,8 +25,6 @@ export interface DailyScreenProps {
   project: { name: string; location: string };
   weatherLabels: Record<string, string>;
   hasPredecessor: boolean;
-  /** The latest earlier report that says what it did: what the activities offer as "same as yesterday". */
-  previous: { date: string; items: string[] } | null;
   /** Photo path to the instant it was taken (or uploaded), for "Today so far". */
   photoTimes: Record<string, string>;
   /** Week and day of the project for this date, computed from the plan; null with none. */
@@ -33,7 +32,7 @@ export interface DailyScreenProps {
 }
 
 export default function DailyReportScreen(props: DailyScreenProps) {
-  const { initial, project, weatherLabels, hasPredecessor, previous, weekDay } = props;
+  const { initial, project, weatherLabels, hasPredecessor, weekDay } = props;
   const router = useRouter();
   const { report, commit, retry, failed, pending, setPhotos, flush } = useDailyReport(initial);
   const [open, setOpen] = useState<DailySectionKey | null>(null);
@@ -110,9 +109,10 @@ export default function DailyReportScreen(props: DailyScreenProps) {
 
   return (
     <div>
-      {/* The way out and the way to the client's file share one row: the Excel button
-          used to wrap under a long date and sit alone as a box with an icon. */}
-      <div className="mb-4 flex items-center justify-between gap-3">
+      {/* Back on the left, the two ways a report leaves on the right: Export Excel and Save
+          changes, one size and differing only in colour. On a phone the pair takes a row of
+          its own at half the width each, so neither shrinks to an icon. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <PressLink
         {...pressMotion}
         href="/daily"
@@ -137,8 +137,11 @@ export default function DailyReportScreen(props: DailyScreenProps) {
       </PressLink>
       {/* The daily report leaves as the client's own Excel workbook, not as a PDF. The
           same button walk (prepare, count, save) serves it; it waits for autosave first. */}
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
       <SavePdfButton
         variant="outline"
+        labelAlways
+        className="sm:w-44"
         url={`/api/xlsx/daily/${report.date}`}
         filename={`DAILY PROGRESS REPORT ${report.date.slice(8, 10)}${report.date.slice(5, 7)}${report.date.slice(0, 4)}.xlsx`}
         ariaLabel="Export the daily report as Excel"
@@ -148,6 +151,8 @@ export default function DailyReportScreen(props: DailyScreenProps) {
         warm={false}
         beforeDownload={flush}
       />
+      <SaveChangesButton flush={flush} retry={retry} href="/daily" className="sm:w-44" />
+      </div>
       </div>
 
       <DailyHeader
@@ -170,7 +175,7 @@ export default function DailyReportScreen(props: DailyScreenProps) {
             <ManHoursSection {...shared('manHours')} />
           </GroupCard>
           <GroupCard title="Work" className="animate-enter stagger-2">
-            <ActivitiesSection {...shared('activities')} previous={previous} />
+            <ActivitiesSection {...shared('activities')} />
             <PhotosSection {...shared('photos')} />
           </GroupCard>
           <GroupCard title="Safety" className="animate-enter stagger-3">

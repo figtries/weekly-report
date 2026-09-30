@@ -1,11 +1,10 @@
 'use client';
 
-import { AnimatePresence, m } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { pressMotion } from '@/components/motion/Press';
 import { activityStrings, todayItemsOf, tomorrowItemsOf } from '@/lib/daily-items';
-import { MOTION } from '@/lib/design';
 import type { ActivityItem } from '@/lib/types';
 import { CAPACITY } from '@/lib/xlsx/daily-cells';
 import { cn } from '@/lib/utils';
@@ -13,107 +12,14 @@ import { INPUT_CLS, TextField } from '../fields';
 import { CapacityNote, RowButton, SectionRow, sameHint, type SectionProps } from '../SectionRow';
 import { newId, type LogDraft } from '../useDailyReport';
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const has = (items: ActivityItem[], text: string) => items.some((i) => same(i.text, text));
-
-interface Offer {
-  text: string;
-  /** Why it is offered when it is not simply from the previous report. */
-  tag?: string;
-}
-
-/** "yesterday" when the earlier report is the day before, otherwise its date: a gap is not yesterday. */
-function whenLabel(previousDate: string, date: string): string {
-  const before = new Date(`${date}T00:00:00Z`);
-  before.setUTCDate(before.getUTCDate() - 1);
-  if (before.toISOString().slice(0, 10) === previousDate) return 'yesterday';
-  return new Date(`${previousDate}T00:00:00Z`).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
-
-const FADE = { duration: MOTION.duration * 0.7, ease: [...MOTION.ease] } as const;
+const has = (items: ActivityItem[], text: string) =>
+  items.some((i) => i.text.trim().toLowerCase() === text.trim().toLowerCase());
 
 /**
- * Sentences the previous report used, each one press from being taken or turned down:
- * an activity that repeats costs a tap instead of typing it again. A row leaves with a
- * short fade whichever way it goes, and the whole box folds away when the last one has.
+ * Two lists and nothing else. "Tomorrow" is the plan: the next report opens with it as its
+ * "Today", unticked (`applyCreateDaily`), so a plan is typed once and ticked the day after.
  */
-function Offers({
-  which,
-  label,
-  offers,
-  onAdd,
-  onDismiss,
-}: {
-  which: 'today' | 'tomorrow';
-  label: string;
-  offers: Offer[];
-  onAdd: (text: string) => void;
-  onDismiss: (text: string) => void;
-}) {
-  return (
-    <AnimatePresence initial={false}>
-      {offers.length > 0 && (
-        <m.div
-          key="offers"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={FADE}
-          style={{ overflow: 'hidden' }}
-        >
-          <div data-offers={which} className="mt-3 rounded-xl border border-dashed border-border bg-muted/30 px-3 pb-1 pt-2.5">
-            <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
-            <AnimatePresence initial={false}>
-              {offers.map((o) => (
-                <m.div
-                  key={o.text.toLowerCase()}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={FADE}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <div className="flex items-center gap-2 border-t border-border/70 py-2 first:border-t-0">
-                    <p className="min-w-0 flex-1 text-[13.5px] leading-snug text-foreground">
-                      {o.text}
-                      {o.tag && <span className="text-amber-700"> · {o.tag}</span>}
-                    </p>
-                    <RowButton aria-label={`Add ${o.text} to ${which}`} onClick={() => onAdd(o.text)}>
-                      Add
-                    </RowButton>
-                    <m.button
-                      type="button"
-                      {...pressMotion}
-                      aria-label={`Dismiss ${o.text} from ${which} suggestions`}
-                      onClick={() => onDismiss(o.text)}
-                      className="flex size-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors duration-200 hover:bg-muted hover:text-foreground sm:size-8"
-                    >
-                      <X className="size-4" />
-                    </m.button>
-                  </div>
-                </m.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </m.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-export default function ActivitiesSection({
-  report,
-  commit,
-  state,
-  open,
-  onToggle,
-  onOpen,
-  hasPredecessor,
-  previous,
-}: SectionProps & { previous: { date: string; items: string[] } | null }) {
+export default function ActivitiesSection({ report, commit, state, open, onToggle, onOpen, hasPredecessor }: SectionProps) {
   const today = todayItemsOf(report);
   const tomorrow = tomorrowItemsOf(report);
   const [todayDraft, setTodayDraft] = useState('');
@@ -125,18 +31,17 @@ export default function ActivitiesSection({
     commit({ todayItems: t, tomorrowItems: next, ...activityStrings(t, next) }, log);
 
   // What is added during the day is something DONE; what came from yesterday's plan waits to be ticked.
-  // `fromDraft` clears the typing box: tapping a suggestion must not wipe half a sentence being typed.
-  const addToday = (text: string, fromDraft = false) => {
+  const addToday = (text: string) => {
     const v = text.trim();
     if (!v || has(today, v)) return;
     save([...today, { id: newId('at'), text: v, done: true }], tomorrow, { kind: 'activity', text: v });
-    if (fromDraft) setTodayDraft('');
+    setTodayDraft('');
   };
-  const addTomorrow = (text: string, fromDraft = false) => {
+  const addTomorrow = (text: string) => {
     const v = text.trim();
     if (!v || has(tomorrow, v)) return;
     save(today, [...tomorrow, { id: newId('am'), text: v, done: false }]);
-    if (fromDraft) setTomorrowDraft('');
+    setTomorrowDraft('');
   };
   const tick = (it: ActivityItem) =>
     save(
@@ -144,31 +49,6 @@ export default function ActivitiesSection({
       tomorrow,
       it.done ? undefined : { kind: 'activity', text: it.text }
     );
-
-  // A turned-down suggestion is remembered on the report, or it would be back after a reload.
-  const dismissed = report.dismissedSuggestions ?? { today: [], tomorrow: [] };
-  const turnedDown = (list: string[], text: string) => list.some((d) => same(d, text));
-  const dismiss = (which: 'today' | 'tomorrow', text: string) =>
-    commit({ dismissedSuggestions: { ...dismissed, [which]: [...dismissed[which], text] } });
-
-  const fromPrevious = previous?.items ?? [];
-  const todayOffers: Offer[] = fromPrevious
-    .filter((s) => !has(today, s) && !turnedDown(dismissed.today, s))
-    .map((text) => ({ text }));
-  // Tomorrow: what is still open today comes first (it does not stop being work at midnight),
-  // then what the previous report did.
-  const openToday: Offer[] = today
-    .filter((i) => !i.done && !has(tomorrow, i.text) && !turnedDown(dismissed.tomorrow, i.text))
-    .map((i) => ({ text: i.text, tag: 'not done today' }));
-  const tomorrowOffers: Offer[] = [
-    ...openToday,
-    ...fromPrevious
-      .filter((s) => !has(tomorrow, s) && !turnedDown(dismissed.tomorrow, s) && !openToday.some((o) => same(o.text, s)))
-      .map((text) => ({ text })),
-  ];
-  const when = previous ? whenLabel(previous.date, report.date) : '';
-  const offerLabel = (offers: Offer[]) =>
-    when && offers.some((o) => !o.tag) ? `Suggestions · same as ${when}` : 'Suggestions';
 
   const list = (items: ActivityItem[], isToday: boolean) => (
     <div>
@@ -227,17 +107,17 @@ export default function ActivitiesSection({
     </div>
   );
 
-  const adder = (value: string, set: (v: string) => void, add: (v: string, fromDraft: boolean) => void, placeholder: string, label: string, primary: boolean) => (
+  const adder = (value: string, set: (v: string) => void, add: (v: string) => void, placeholder: string, label: string, primary: boolean) => (
     <div className="mt-2 flex gap-2">
       <input
         aria-label={label}
         value={value}
         onChange={(e) => set(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && add(value, true)}
+        onKeyDown={(e) => e.key === 'Enter' && add(value)}
         placeholder={placeholder}
         className={INPUT_CLS}
       />
-      <RowButton primary={primary} className="h-11 px-4 sm:h-9" onClick={() => add(value, true)}>
+      <RowButton primary={primary} className="h-11 px-4 sm:h-9" onClick={() => add(value)}>
         Add
       </RowButton>
     </div>
@@ -266,14 +146,15 @@ export default function ActivitiesSection({
     >
       <p className="mb-1 text-[12px] font-medium text-muted-foreground">Today</p>
       {list(today, true)}
-      <Offers which="today" label={offerLabel(todayOffers)} offers={todayOffers} onAdd={(t) => addToday(t)} onDismiss={(t) => dismiss('today', t)} />
       {adder(todayDraft, setTodayDraft, addToday, 'Add what was done…', 'Add a today activity', true)}
       <CapacityNote count={done} capacity={CAPACITY.activities} what="lines of what was done" />
 
       <p className="mb-1 mt-5 text-[12px] font-medium text-muted-foreground">Tomorrow</p>
       {list(tomorrow, false)}
-      <Offers which="tomorrow" label={offerLabel(tomorrowOffers)} offers={tomorrowOffers} onAdd={(t) => addTomorrow(t)} onDismiss={(t) => dismiss('tomorrow', t)} />
       {adder(tomorrowDraft, setTomorrowDraft, addTomorrow, "Add tomorrow's plan…", 'Add a tomorrow activity', false)}
+      <p className="mt-2 text-[12px] leading-snug text-gray-400">
+        Tomorrow&apos;s report opens with this plan as its Today list, ready to tick.
+      </p>
       <CapacityNote count={tomorrow.length} capacity={CAPACITY.activities} what="lines of tomorrow's plan" />
     </SectionRow>
   );

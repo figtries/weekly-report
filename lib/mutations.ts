@@ -39,7 +39,10 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
     throw new Error(`Daily report for ${date} already exists`);
   }
   const sorted = [...db.daily].sort((a, b) => a.date.localeCompare(b.date));
-  const last = sorted[sorted.length - 1] as DailyReport | undefined;
+  // The day BEFORE this one is what it opens as. Only a report written ahead of every
+  // other (a back-filled first day) falls back to the latest, for the crew's names.
+  const before = sorted.filter((d) => d.date < date).pop();
+  const last = before ?? (sorted[sorted.length - 1] as DailyReport | undefined);
 
   const carryCounters = <T extends { previous: number; today: number }>(rows: T[]): T[] =>
     rows.map((r) => ({ ...r, previous: r.previous + r.today, today: 0 }));
@@ -85,10 +88,11 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
   const ptw: PtwRow[] = last
     ? last.ptw.filter((p) => p.status.trim().toUpperCase() === 'OPEN').map((p) => ({ ...p }))
     : [];
-  // What yesterday planned for today is today's list, unticked. Weather,
+  // What the day before planned for "Tomorrow" is today's list, unticked: nobody types
+  // the plan twice. Only from a day that IS before, never from a later report. Weather,
   // photos, the log and every confirmation start empty on purpose.
-  const todayItems: ActivityItem[] = last
-    ? tomorrowItemsOf(last).map((it, i) => ({ id: `${date}-a${i + 1}`, text: it.text, done: false }))
+  const todayItems: ActivityItem[] = before
+    ? tomorrowItemsOf(before).map((it, i) => ({ id: `${date}-a${i + 1}`, text: it.text, done: false }))
     : [];
 
   const report: DailyReport = {

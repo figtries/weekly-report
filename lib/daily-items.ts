@@ -66,26 +66,3 @@ export function suggestActivities(reports: DailyReport[], taken: string[], limit
   }
   return out;
 }
-
-/**
- * What "same as yesterday" offers: the sentences of the latest EARLIER report that says
- * what it did (a report made and never filled in is skipped), deduplicated. Not the
- * project's whole history: yesterday's work is what repeats, and a long list of old
- * sentences is a search box, not a suggestion.
- */
-export function previousActivities(reports: DailyReport[], date: string): { date: string; items: string[] } | null {
-  const earlier = reports.filter((r) => r.date < date).sort((a, b) => b.date.localeCompare(a.date));
-  for (const r of earlier) {
-    const seen = new Set<string>();
-    const items: string[] = [];
-    for (const it of todayItemsOf(r)) {
-      const text = it.text.trim();
-      const key = text.toLowerCase();
-      if (!text || seen.has(key)) continue;
-      seen.add(key);
-      items.push(text);
-    }
-    if (items.length) return { date: r.date, items };
-  }
-  return null;
-}

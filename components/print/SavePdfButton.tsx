@@ -76,6 +76,8 @@ export default function SavePdfButton({
   mime = 'pdf',
   warm = true,
   variant = 'solid',
+  labelAlways = false,
+  className = '',
 }: {
   url: string;
   filename: string;
@@ -94,6 +96,9 @@ export default function SavePdfButton({
   warm?: boolean;
   /** 'outline' is the quiet door beside a page title (the weekly "Report" button); 'solid' is the default. */
   variant?: 'solid' | 'outline';
+  /** Show the words on a phone too (the icon-only square is the default there), at the width the parent gives it. */
+  labelAlways?: boolean;
+  className?: string;
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
   // null while the server is still rendering (nothing to count yet); a number
@@ -179,17 +184,17 @@ export default function SavePdfButton({
       disabled={phase === 'busy'}
       aria-label={ariaLabel}
       title={ariaLabel}
-      className={`inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors duration-300 ease-ios disabled:cursor-progress sm:w-auto sm:px-4 sm:py-2 ${palette}`}
+      className={`inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium shadow-sm transition-colors duration-300 ease-ios disabled:cursor-progress ${labelAlways ? 'w-full px-3 sm:px-4' : 'w-11 sm:w-auto sm:px-4 sm:py-2'} ${palette} ${className}`}
     >
       {phase === 'busy' ? (
         <>
           {/* on the icon-only (mobile) button the counting percent replaces
               the spinner once bytes flow — that count is the whole feedback */}
           <span
-            className={`h-4 w-4 shrink-0 animate-spin rounded-full border-2 ${spin} ${progress !== null ? 'hidden sm:inline-block' : ''}`}
+            className={`h-4 w-4 shrink-0 animate-spin rounded-full border-2 ${spin} ${progress !== null && !labelAlways ? 'hidden sm:inline-block' : ''}`}
             aria-hidden="true"
           />
-          {progress !== null && (
+          {progress !== null && !labelAlways && (
             <span className="text-[11px] font-bold leading-none tabular-nums sm:hidden" aria-hidden="true">
               {progress}%
             </span>
@@ -217,7 +222,7 @@ export default function SavePdfButton({
           <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
         </svg>
       )}
-      <span className="hidden sm:inline">
+      <span className={labelAlways ? '' : 'hidden sm:inline'}>
         {phase === 'busy'
           ? progress !== null
             ? `Downloading… ${progress}%`

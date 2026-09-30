@@ -4,7 +4,7 @@ import { pressMotion } from '@/components/motion/Press';
 
 import { m } from 'framer-motion';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
@@ -58,32 +58,23 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
       // Navigate client-side instead of redirecting inside the action: the
       // destination's loading skeleton appears immediately, so the wait reads
       // as "the page is being prepared" rather than a frozen dialog.
-      created.current = true;
-      router.push(`/daily/${date}`);
+      //
+      // The dialog closes in the SAME transition as the navigation, so it goes
+      // off screen in the commit that shows the report, not before (no frozen
+      // gap) and not after. It used to close from an effect once `creating`
+      // turned false, but by then this list is kept hidden (display: none) by
+      // the router, and a hidden tree runs no effects: the dialog stayed open
+      // behind the report and came back on Back until the effect caught up.
+      // Measured 1 Oct 2026: the dialog's DOM was still there, hidden, on the
+      // report page. After an `await` a state update is no longer part of the
+      // transition, hence the second `startTransition`.
+      startTransition(() => {
+        setOpen(false);
+        setClosing(false);
+        router.push(`/daily/${date}`);
+      });
     });
   }
-
-  /**
-   * Close it once the navigation has landed, and NOT before.
-   *
-   * This dialog used to be left open on success, on the reasoning that the new
-   * report's page takes the screen anyway. It does — but pressing Back on that
-   * report returns to this list with the dialog still standing, so finishing a
-   * report put you back at the start of making one. That is the "Back goes to
-   * the previous modal instead of the list" this fixes.
-   *
-   * The wait matters: closing inside `create()` would take the progress state
-   * off screen for the seconds the destination needs, which is the frozen-
-   * dialog problem the client-side push was written to avoid. `creating` turns
-   * false only when the transition — action AND navigation — is done.
-   */
-  const created = useRef(false);
-  useEffect(() => {
-    if (creating || !created.current) return;
-    created.current = false;
-    setOpen(false);
-    setClosing(false);
-  }, [creating]);
 
   return (
     <>
