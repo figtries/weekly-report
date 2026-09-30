@@ -1,23 +1,26 @@
-import { parseAddr } from './addr';
-import { CELLS } from './daily-cells';
+import { parseAddr, parseRange } from './addr';
+import { CELLS, PHOTOS_PER_PAGE } from './daily-cells';
 import type { SheetXml } from './sheet-xml';
 
 /**
- * The day's photos, placed in the client's six photo boxes.
+ * The day's photos, placed in the client's photo boxes: six to a page, and a copy of the
+ * photo page below for every six more.
  *
- * Each picture is a `twoCellAnchor` spanning its box, a few pixels in from the border
- * so the box's own lines stay visible, and COVER-cropped with `a:srcRect` to the box's
- * shape: the crop the app's preview shows, so nobody frames a photo against a shape the
- * report never uses. The crop is DrawingML's, not ours, so the whole image is still in
- * the file and Excel's Crop tool can move it.
+ * Each picture is a `twoCellAnchor` spanning its box, inset from the border so the photo
+ * has room to breathe, and COVER-cropped with `a:srcRect` to that shape: the crop the
+ * app's preview shows, so nobody frames a photo against a shape the report never uses.
+ * The crop is DrawingML's, not ours, so the whole image is still in the file and Excel's
+ * Crop tool can move it.
  *
- * Pure: it takes the template's drawing and its relationships as text and returns them
- * with the pictures added, plus the media parts to write (`daily-export.ts` zips them).
+ * Pure: it edits a `SheetXml` and takes the template's drawing and its relationships as
+ * text, returning them with the pictures added plus the media parts to write
+ * (`daily-export.ts` zips them).
  */
 
 const EMU_PER_PX = 9525;
 const EMU_PER_PT = 12700;
-const INSET_PX = 3;
+/** White space between a photo and its box, every side. 3 px read as jammed against the lines. */
+const INSET_PX = 18;
 /** Drawing object ids; the four weather checkboxes hold 1025-1028. */
 const FIRST_ID = 2001;
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -81,21 +84,54 @@ export function coverCrop(imgW: number, imgH: number, boxW: number, boxH: number
   return ` t="${cut}" b="${cut}"`;
 }
 
+const PAGE_ROWS = CELLS.photoPage.last - CELLS.photoPage.first + 1;
+
+/**
+ * Copies of the form's photo page below it until there are `pages`, each after a page
+ * break of its own: rows (styles, heights, the frame), their merges, the breaks and the
+ * used range. Returns the last row the print area has to reach.
+ */
+export function addPhotoPages(sheet: SheetXml, pages: number): number {
+  const { first, last } = CELLS.photoPage;
+  if (pages <= 1) return last;
+  const end = last + (pages - 1) * PAGE_ROWS;
+  for (let p = 1; p < pages; p++) sheet.copyRows(first, last, first + p * PAGE_ROWS);
+
+  const rowsOf = (m: string) => parseRange(m);
+  const own = sheet.merges().filter((m) => rowsOf(m).r1 >= first && rowsOf(m).r2 <= last);
+  const kept = sheet.merges().filter((m) => rowsOf(m).r2 <= last || rowsOf(m).r1 > end);
+  const shift = (m: string, by: number) => m.replace(/\d+/g, (n) => String(Number(n) + by));
+  const copies = Array.from({ length: pages - 1 }, (_, i) => own.map((m) => shift(m, (i + 1) * PAGE_ROWS))).flat();
+  sheet.setMerges([...kept, ...copies]);
+
+  // The form's own break before the photo page, then one before every copy.
+  const breaks = sheet.rowBreaks().filter((b) => b < first);
+  for (let p = 1; p < pages; p++) breaks.push(last + (p - 1) * PAGE_ROWS);
+  sheet.setRowBreaks(breaks);
+  sheet.extendDimension(end);
+  return end;
+}
+
 export interface PlacedPhotos {
   drawing: string;
   rels: string;
   media: Array<{ path: string; bytes: Buffer }>;
   /** Photos that went into a box. */
   placed: number;
+  /** The sheet's last printed row, past the form's own when pages were added. */
+  lastRow: number;
 }
 
-/** Up to six photos, in order, into the boxes; files that are not a JPEG or PNG are passed over. */
+/**
+ * Every photo, in order, six to a page, adding the pages the sheet needs first. Files
+ * that are not a JPEG or PNG are passed over.
+ */
 export function placePhotos(sheet: SheetXml, drawing: string, rels: string, photos: Buffer[]): PlacedPhotos {
   const usable = photos
     .map((bytes) => ({ bytes, info: imageInfo(bytes) }))
-    .filter((p): p is { bytes: Buffer; info: PhotoImage } => p.info !== null)
-    .slice(0, CELLS.photos.length);
-  if (usable.length === 0) return { drawing, rels, media: [], placed: 0 };
+    .filter((p): p is { bytes: Buffer; info: PhotoImage } => p.info !== null);
+  if (usable.length === 0) return { drawing, rels, media: [], placed: 0, lastRow: CELLS.photoPage.last };
+  const lastRow = addPhotoPages(sheet, Math.ceil(usable.length / PHOTOS_PER_PAGE));
 
   const inset = INSET_PX * EMU_PER_PX;
   const media: PlacedPhotos['media'] = [];
@@ -103,14 +139,20 @@ export function placePhotos(sheet: SheetXml, drawing: string, rels: string, phot
   const links: string[] = [];
 
   usable.forEach(({ bytes, info }, i) => {
-    const from = parseAddr(CELLS.photos[i].from);
-    const to = parseAddr(CELLS.photos[i].to);
+    const down = Math.floor(i / PHOTOS_PER_PAGE) * PAGE_ROWS;
+    const box = CELLS.photos[i % PHOTOS_PER_PAGE];
+    const from = parseAddr(box.from);
+    const to = parseAddr(box.to);
+    from.row += down;
+    to.row += down;
     let wPx = 0;
     for (let c = from.colNum; c <= to.colNum; c++) wPx += colPx(sheet.colWidth(c));
     let hPt = 0;
     for (let r = from.row; r <= to.row; r++) hPt += sheet.rowHeight(r) ?? 13.2;
     const innerW = wPx - 2 * INSET_PX;
     const innerH = (hPt * 96) / 72 - 2 * INSET_PX;
+    // Only the columns spread; the inset is a fixed offset.
+    const drawnW = wPx * WIDTH_SPREAD - 2 * INSET_PX;
 
     const rid = `rIdPhoto${i + 1}`;
     const name = `image${i + 1}.${info.ext}`;
@@ -125,7 +167,7 @@ export function placePhotos(sheet: SheetXml, drawing: string, rels: string, phot
         `<xdr:to><xdr:col>${to.colNum - 1}</xdr:col><xdr:colOff>${toColOff}</xdr:colOff><xdr:row>${to.row - 1}</xdr:row><xdr:rowOff>${toRowOff}</xdr:rowOff></xdr:to>` +
         '<xdr:pic>' +
         `<xdr:nvPicPr><xdr:cNvPr id="${FIRST_ID + i}" name="Photo ${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>` +
-        `<xdr:blipFill><a:blip r:embed="${rid}"/><a:srcRect${coverCrop(info.width, info.height, innerW * WIDTH_SPREAD, innerH)}/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
+        `<xdr:blipFill><a:blip r:embed="${rid}"/><a:srcRect${coverCrop(info.width, info.height, drawnW, innerH)}/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
         `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${Math.round(innerW * EMU_PER_PX)}" cy="${Math.round(innerH * EMU_PER_PX)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>` +
         '</xdr:pic><xdr:clientData/></xdr:twoCellAnchor>'
     );
@@ -141,5 +183,6 @@ export function placePhotos(sheet: SheetXml, drawing: string, rels: string, phot
     rels: rels.replace('</Relationships>', `${links.join('')}</Relationships>`),
     media,
     placed: usable.length,
+    lastRow,
   };
 }

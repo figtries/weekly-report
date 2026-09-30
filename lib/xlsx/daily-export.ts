@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { CAPACITY, CELLS } from './daily-cells';
+import { CELLS } from './daily-cells';
 import { fillDailySheet, type Condition, type DailyExportInput, type Overflow } from './daily-fill';
 import { placePhotos } from './daily-photos';
 import { DAILY_TEMPLATE_B64 } from './daily-template';
@@ -9,6 +9,7 @@ const SHEET = 'xl/worksheets/sheet1.xml';
 const VML = 'xl/drawings/vmlDrawing1.vml';
 const DRAWING = 'xl/drawings/drawing1.xml';
 const DRAWING_RELS = 'xl/drawings/_rels/drawing1.xml.rels';
+const WORKBOOK = 'xl/workbook.xml';
 
 export interface DailyWorkbook {
   bytes: Buffer;
@@ -26,14 +27,11 @@ export interface DailyWorkbook {
 export async function buildDailyWorkbook(
   input: DailyExportInput,
   /** The report's stored photos, in slot order with the empty slots left out. */
-  photos: Buffer[] = [],
-  /** How many photos the report holds, which can be more than were read. */
-  photoCount = photos.length
+  photos: Buffer[] = []
 ): Promise<DailyWorkbook> {
   const zip = await JSZip.loadAsync(Buffer.from(DAILY_TEMPLATE_B64, 'base64'));
   const sheet = SheetXml.parse((await zip.file(SHEET)!.async('string')) as string);
   const { overflow, weather } = fillDailySheet(sheet, input);
-  zip.file(SHEET, sheet.serialize());
   await tickWeather(zip, weather);
 
   if (photos.length > 0) {
@@ -46,8 +44,15 @@ export async function buildDailyWorkbook(
     zip.file(DRAWING, placed.drawing);
     zip.file(DRAWING_RELS, placed.rels);
     for (const m of placed.media) zip.file(m.path, m.bytes);
+    // Pages of photos past the form's own: the print area reaches down to them.
+    if (placed.lastRow > CELLS.photoPage.last) {
+      const wb = (await zip.file(WORKBOOK)!.async('string')) as string;
+      const area = /(<definedName name="_xlnm\.Print_Area" localSheetId="0">[^<]*?\$[A-Z]+\$)(\d+)(<\/definedName>)/;
+      if (!area.test(wb)) throw new Error('The template has no print area to extend');
+      zip.file(WORKBOOK, wb.replace(area, `$1${placed.lastRow}$3`));
+    }
   }
-  if (photoCount > CAPACITY.photos) overflow.push({ block: 'photos', total: photoCount, capacity: CAPACITY.photos });
+  zip.file(SHEET, sheet.serialize());
   const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { bytes, overflow };
 }

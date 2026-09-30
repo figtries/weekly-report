@@ -59,6 +59,12 @@ function cellXml(c: Cell): string {
   return c.inner === null || c.inner === '' ? `<c${a}/>` : `<c${a}>${c.inner}</c>`;
 }
 
+function rowXml(r: Row): string {
+  if (r.raw !== null) return r.raw;
+  const inner = r.cells.map(cellXml).join('');
+  return inner ? `<row ${r.attrs.trim()}>${inner}</row>` : `<row ${r.attrs.trim()}/>`;
+}
+
 export class SheetXml {
   private pre: string;
   private rows: Row[];
@@ -97,14 +103,7 @@ export class SheetXml {
   }
 
   serialize(): string {
-    const body = this.rows
-      .map((r) => {
-        if (r.raw !== null) return r.raw;
-        const inner = r.cells.map(cellXml).join('');
-        return inner ? `<row ${r.attrs.trim()}>${inner}</row>` : `<row ${r.attrs.trim()}/>`;
-      })
-      .join('');
-    return this.pre + body + this.post;
+    return this.pre + this.rows.map(rowXml).join('') + this.post;
   }
 
   /* ------------------------------------------------------------- lookup */
@@ -295,6 +294,46 @@ export class SheetXml {
     if (!r) return;
     r.attrs = /\bhidden="[^"]*"/.test(r.attrs) ? r.attrs.replace(/\bhidden="[^"]*"/, 'hidden="1"') : `${r.attrs} hidden="1"`;
     r.raw = null;
+  }
+
+  /**
+   * Copies rows `first`..`last` to start at row `to`, cells and all (styles, heights,
+   * borders), replacing whatever rows were there. Merges are the caller's. A formula is
+   * refused: its references would need moving too, and a silent copy would point back.
+   */
+  copyRows(first: number, last: number, to: number): void {
+    const shift = to - first;
+    const xml = this.rows.filter((r) => r.num >= first && r.num <= last).map(rowXml).join('');
+    if (/<f\b/.test(xml)) throw new Error(`rows ${first}-${last} hold a formula; a copy would not move its references`);
+    const moved = xml
+      .replace(/<row\b([^>]*?)\br="(\d+)"/g, (_, a: string, n: string) => `<row${a}r="${Number(n) + shift}"`)
+      .replace(/<c\b([^>]*?)\br="([A-Z]+)(\d+)"/g, (_, a: string, col: string, n: string) => `<c${a}r="${col}${Number(n) + shift}"`);
+    const copies = SheetXml.parse(`<sheetData>${moved}</sheetData>`).rows;
+    const end = to + (last - first);
+    this.rows = this.rows.filter((r) => r.num < to || r.num > end);
+    const at = this.rows.findIndex((r) => r.num > end);
+    this.rows.splice(at < 0 ? this.rows.length : at, 0, ...copies);
+  }
+
+  /** The rows a manual page break follows. */
+  rowBreaks(): number[] {
+    return [...this.post.matchAll(/<brk\b[^>]*?\bid="(\d+)"/g)].map((m) => Number(m[1]));
+  }
+
+  /** Replaces the manual page breaks, keeping the column extent (`max`) the sheet's own breaks use. */
+  setRowBreaks(ids: number[]): void {
+    const max = /<brk\b[^>]*?\bmax="(\d+)"/.exec(this.post)?.[1] ?? '16383';
+    const xml = `<rowBreaks count="${ids.length}" manualBreakCount="${ids.length}">${ids.map((id) => `<brk id="${id}" max="${max}" man="1"/>`).join('')}</rowBreaks>`;
+    this.post = /<rowBreaks\b[\s\S]*?<\/rowBreaks>/.test(this.post)
+      ? this.post.replace(/<rowBreaks\b[\s\S]*?<\/rowBreaks>/, xml)
+      : this.post.replace(/(<drawing\b|<legacyDrawing\b|<\/worksheet>)/, `${xml}$1`);
+  }
+
+  /** Stretches the used-range record (`<dimension>`) down to `row` when the sheet grew past it. */
+  extendDimension(row: number): void {
+    this.pre = this.pre.replace(/(<dimension ref="[A-Z]+\d+:[A-Z]+)(\d+)"/, (m, head: string, n: string) =>
+      Number(n) >= row ? m : `${head}${row}"`
+    );
   }
 
   /* ------------------------------------------------------ columns, merges */

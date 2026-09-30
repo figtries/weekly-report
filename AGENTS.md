@@ -553,17 +553,21 @@ Progress Summary" (rows 46-56) is HIDDEN, not deleted, so no row, merge, formula
 break below it moves; its cells are left empty (the deviation formula caches 0) and "7.
 Progress Photograph" is written as "6." so the numbering does not jump.
 
-**Photos go into the six boxes, left then right** (`CELLS.photos`: C71:K90, L71:R90, ...,
-L113:R132; rows 91, 112 and 133 between them are captions), the first six stored in slot
-order with the empty slots skipped, the rest reported as `photos` overflow and named on the
-Photos card. `lib/xlsx/daily-photos.ts` adds a media part, a relationship and a
-`twoCellAnchor` per photo to the template's `drawing1.xml`, which until then held only the
-four checkboxes (its root declares no `r:`, so the export adds it). A photo FILLS its box,
-the crop being `a:srcRect` so the whole image stays in the file. The anchor stretches the
-picture to the box as Excel really draws it, and a column is not one width: on this
-template the box is 2.4% wider on screen than the 96-dpi formula and 6.6% wider printed
-to PDF, so the crop aims between the two (`WIDTH_SPREAD`). Cropped for the formula alone,
-every printed photo came out 7% too wide.
+**Every photo goes in, six to a page, left then right** (`CELLS.photos`: C71:K90, L71:R90,
+..., L113:R132; rows 91, 112 and 133 between them are captions), in slot order with the
+empty slots skipped. Past six, `addPhotoPages` copies the form's photo page (rows 67-134,
+the page after the break at 66) below itself for every six more: rows with their styles,
+heights and frame, their merges, a page break before each copy, the used range, and the
+print area in `workbook.xml`. The sheet prints at a fixed scale 45% (no fit-to-page) and
+repeats rows 2-9 on every page, so a copy is a real extra page with the form's header.
+`lib/xlsx/daily-photos.ts` adds a media part, a relationship and a `twoCellAnchor` per
+photo to the template's `drawing1.xml`, which until then held only the four checkboxes
+(its root declares no `r:`, so the export adds it). A photo FILLS its box less an 18 px
+margin (3 px read as jammed against the lines), the crop being `a:srcRect` so the whole
+image stays in the file. The anchor stretches the picture to the box as Excel really
+draws it, and a column is not one width: on this template the box is 2.4% wider on screen
+than the 96-dpi formula and 6.6% wider printed to PDF, so the crop aims between the two
+(`WIDTH_SPREAD`). Cropped for the formula alone, every printed photo came out 7% too wide.
 
 **Never write it through ExcelJS.** A read then write of the sample lost the four weather
 checkboxes (form controls), the VML drawing and the printer settings, and turned 5,533

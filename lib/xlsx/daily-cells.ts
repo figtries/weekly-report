@@ -41,7 +41,12 @@ export const CELLS = {
    */
   progress: { date: 'D50', plan: 'D51', actual: 'D52', dev: 'D53', rows: [46, 56] },
   photoTitle: { addr: 'B67', text: '6. Progress Photograph' },
-  /** The six photo boxes, left then right, top to bottom. Rows 91, 112 and 133 between them are captions. */
+  /**
+   * The photo page: everything after the manual break at row 66 up to the print area's
+   * last row. Six more photos add a copy of it below, after a break of its own.
+   */
+  photoPage: { first: 67, last: 134 },
+  /** The six photo boxes of a page, left then right, top to bottom. Rows 91, 112 and 133 between them are captions. */
   photos: [
     { from: 'C71', to: 'K90' },
     { from: 'L71', to: 'R90' },
@@ -62,8 +67,10 @@ export const CAPACITY = {
   hse: CELLS.hse.rows.length,
   activities: CELLS.activities.rows.length,
   aoc: CELLS.aoc.rows.length,
-  photos: CELLS.photos.length,
 } as const;
+
+/** Photos per photo page; there is no cap, a page is added for every six more. */
+export const PHOTOS_PER_PAGE = CELLS.photos.length;
 
 /** The sample's date-formatted style of S4, and the plain-number copy of it the template adds. */
 export const DAY_NO_STYLE = { from: '12', to: '423' } as const;

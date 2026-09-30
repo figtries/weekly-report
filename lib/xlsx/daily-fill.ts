@@ -28,7 +28,7 @@ export interface DailyExportInput {
   dayNo: number | null;
 }
 
-export type OverflowBlock = 'crew' | 'nonEffective' | 'ptw' | 'hse' | 'activitiesToday' | 'activitiesTomorrow' | 'aoc' | 'photos';
+export type OverflowBlock = 'crew' | 'nonEffective' | 'ptw' | 'hse' | 'activitiesToday' | 'activitiesTomorrow' | 'aoc';
 
 export interface Overflow {
   block: OverflowBlock;

@@ -72,24 +72,19 @@ export function CapacityNote({
   capacity,
   what,
   fold,
-  firstOnly,
 }: {
   count: number;
   capacity: number;
   what: string;
   /** Numeric tables fold the overflow into a last "Lainnya" row instead of cutting it. */
   fold?: boolean;
-  /** Photos have no "+N lagi" line: the sheet takes the first N and the rest stay in the app. */
-  firstOnly?: boolean;
 }) {
   // Silent until it matters: a limit printed under every list made the screen read as the
   // form it exports to. It speaks only when the sheet will not hold what is here.
   if (count <= capacity) return null;
   return (
     <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-medium leading-snug text-amber-700">
-      {firstOnly
-        ? `The Excel sheet holds ${capacity} ${what}: it takes the first ${capacity} and leaves out the other ${count - capacity}. Nothing is lost here.`
-        : fold
+      {fold
         ? `The Excel sheet holds ${capacity} ${what}: the first ${capacity - 1} are listed and the other ${count - (capacity - 1)} are added up on the last line. Nothing is lost here.`
         : `The Excel sheet holds ${capacity} ${what}: it shows the first ${capacity - 1} and a "+${count - (capacity - 1)} lagi" line. Nothing is lost here.`}
     </p>

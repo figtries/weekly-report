@@ -547,21 +547,33 @@ await check('cover crop: centred, only on the side that is too long', () => {
   assert.equal(coverCrop(400, 300, 800, 600), '');
 });
 
-await check('eight photos: the first six go into the six boxes, in order, and two are reported as left out', async () => {
+await check('eight photos: six on the form\'s photo page, two on a copy of it below, none left out', async () => {
   // DAILY_WRITE_PHOTOS=<path> saves this export so a person can open it in Excel.
-  const { bytes, overflow } = await buildDailyWorkbook(EMPTY, PHOTOS, PHOTOS.length);
+  const { bytes, overflow } = await buildDailyWorkbook(EMPTY, PHOTOS);
   if (process.env.DAILY_WRITE_PHOTOS) fs.writeFileSync(process.env.DAILY_WRITE_PHOTOS, bytes);
-  assert.deepEqual(overflow, [{ block: 'photos', total: 8, capacity: 6 }]);
+  assert.deepEqual(overflow, []);
   const out = await packageIsSound(bytes);
   const tpl = await partsOf(TEMPLATE);
   const added = [...out.keys()].filter((n) => !tpl.has(n)).sort();
-  assert.deepEqual(added, ['xl/media/image1.jpeg', 'xl/media/image2.jpeg', 'xl/media/image3.jpeg', 'xl/media/image4.png', 'xl/media/image5.jpeg', 'xl/media/image6.jpeg']);
+  assert.deepEqual(added, [1, 2, 3, 4, 5, 6, 7, 8].map((i) => `xl/media/image${i}.${i % 4 === 0 ? 'png' : 'jpeg'}`));
   assert.ok(out.get('xl/media/image2.jpeg')!.equals(portrait), 'the photo is stored as uploaded');
   const changed = [...tpl.keys()].filter((n) => !out.get(n)!.equals(tpl.get(n)!));
   const allowed = (n: string) =>
-    ['xl/worksheets/sheet1.xml', 'xl/drawings/vmlDrawing1.vml', 'xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels'].includes(n) ||
+    ['xl/worksheets/sheet1.xml', 'xl/workbook.xml', 'xl/drawings/vmlDrawing1.vml', 'xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels'].includes(n) ||
     /^xl\/ctrlProps\/ctrlProp\d\.xml$/.test(n);
   assert.deepEqual(changed.filter((n) => !allowed(n)), []);
+
+  // The copied page: rows 135-202 are rows 67-134 moved down, title, merges and frame included.
+  const sheet = SheetXml.parse(out.get('xl/worksheets/sheet1.xml')!.toString('utf8'));
+  const base = SheetXml.parse(tpl.get('xl/worksheets/sheet1.xml')!.toString('utf8'));
+  assert.equal(sheet.inlineText('B135'), '6. Progress Photograph');
+  for (const [a, b] of [['C139', 'C71'], ['S150', 'S82'], ['B202', 'B134'], ['L159', 'L91']]) assert.equal(sheet.style(a), base.style(b), `${a} styled as ${b}`);
+  for (const r of [135, 139, 158, 159, 202]) assert.equal(sheet.rowHeight(r), base.rowHeight(r - 68), `row ${r} height`);
+  for (const m of ['C138:R138', 'C159:K159', 'L159:R159', 'C201:K201', 'L201:R201']) assert.ok(sheet.merges().includes(m), m);
+  assert.equal(sheet.merges().length, new Set(sheet.merges()).size, 'no duplicate merges');
+  assert.deepEqual(sheet.rowBreaks(), [66, 134]);
+  assert.match(out.get('xl/workbook.xml')!.toString('utf8'), /name="_xlnm\.Print_Area" localSheetId="0">'1\. DAR Overall'!\$A\$1:\$S\$202</);
+  assert.equal(sheet.addresses().filter((a) => /^[A-Z]+20[3-9]$/.test(a)).length, 0, 'nothing below the last page');
 
   const drawing = out.get('xl/drawings/drawing1.xml')!.toString('utf8');
   assert.equal((drawing.match(/Check Box \d/g) ?? []).length, 4, 'the weather checkboxes are still there');
@@ -570,10 +582,11 @@ await check('eight photos: the first six go into the six boxes, in order, and tw
     .split('</xdr:twoCellAnchor>')
     .filter((a) => a.includes('<xdr:pic>'))
     .map((a) => /<xdr:from><xdr:col>(\d+)<\/xdr:col><xdr:colOff>\d+<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row>[\s\S]*?<xdr:to><xdr:col>(\d+)<\/xdr:col><xdr:colOff>\d+<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row>[\s\S]*?r:embed="([^"]+)"\/><a:srcRect([^/]*)\/>/.exec(a)!);
-  assert.equal(pics.length, 6);
-  // Zero-based: C71:K90, L71:R90, C92:K111, L92:R111, C113:K132, L113:R132.
+  assert.equal(pics.length, 8);
+  // Zero-based: C71:K90, L71:R90, C92:K111, L92:R111, C113:K132, L113:R132, then 68 rows down.
   assert.deepEqual(pics.map((m) => [m[1], m[2], m[3], m[4]].map(Number)), [
     [2, 70, 10, 89], [11, 70, 17, 89], [2, 91, 10, 110], [11, 91, 17, 110], [2, 112, 10, 131], [11, 112, 17, 131],
+    [2, 138, 10, 157], [11, 138, 17, 157],
   ]);
   const rels = out.get('xl/drawings/_rels/drawing1.xml.rels')!.toString('utf8');
   pics.forEach((m, i) => assert.match(rels, new RegExp(`Id="${m[5]}"[^>]*Target="\\.\\./media/image${i + 1}\\.`)));
@@ -585,10 +598,29 @@ await check('eight photos: the first six go into the six boxes, in order, and tw
 });
 
 await check('no photos: the drawing and its relationships are the template\'s, byte for byte', async () => {
-  const out = await partsOf((await buildDailyWorkbook(EMPTY, [], 0)).bytes);
+  const out = await partsOf((await buildDailyWorkbook(EMPTY, [])).bytes);
   const tpl = await partsOf(TEMPLATE);
-  for (const n of ['xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels']) assert.ok(out.get(n)!.equals(tpl.get(n)!), n);
+  for (const n of ['xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels', 'xl/workbook.xml']) assert.ok(out.get(n)!.equals(tpl.get(n)!), n);
   assert.ok(![...out.keys()].some((n) => n.startsWith('xl/media/')));
+});
+
+await check('six photos fill the form\'s own page: no page is added, the print area and breaks are the form\'s', async () => {
+  const { bytes } = await buildDailyWorkbook(EMPTY, PHOTOS.slice(0, 6));
+  const out = await partsOf(bytes);
+  const sheet = SheetXml.parse(out.get('xl/worksheets/sheet1.xml')!.toString('utf8'));
+  assert.deepEqual(sheet.rowBreaks(), [66]);
+  assert.equal(sheet.inlineText('B135'), null);
+  assert.ok(out.get('xl/workbook.xml')!.equals((await partsOf(TEMPLATE)).get('xl/workbook.xml')!));
+});
+
+await check('thirteen photos: three photo pages, breaks before each', async () => {
+  const { bytes } = await buildDailyWorkbook(EMPTY, [...PHOTOS, ...PHOTOS.slice(0, 5)]);
+  const out = await packageIsSound(bytes);
+  const sheet = SheetXml.parse(out.get('xl/worksheets/sheet1.xml')!.toString('utf8'));
+  assert.deepEqual(sheet.rowBreaks(), [66, 134, 202]);
+  assert.equal(sheet.inlineText('B203'), '6. Progress Photograph');
+  assert.match(out.get('xl/workbook.xml')!.toString('utf8'), /\$A\$1:\$S\$270</);
+  assert.equal((out.get('xl/drawings/drawing1.xml')!.toString('utf8').match(/<xdr:pic>/g) ?? []).length, 13);
 });
 
 await check('weather: rain picked takes the working hours; unpicked slots keep the template\'s zeros', async () => {
