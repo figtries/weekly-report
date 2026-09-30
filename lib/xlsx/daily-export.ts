@@ -1,11 +1,14 @@
 import JSZip from 'jszip';
-import { CELLS } from './daily-cells';
+import { CAPACITY, CELLS } from './daily-cells';
 import { fillDailySheet, type Condition, type DailyExportInput, type Overflow } from './daily-fill';
+import { placePhotos } from './daily-photos';
 import { DAILY_TEMPLATE_B64 } from './daily-template';
 import { SheetXml } from './sheet-xml';
 
 const SHEET = 'xl/worksheets/sheet1.xml';
 const VML = 'xl/drawings/vmlDrawing1.vml';
+const DRAWING = 'xl/drawings/drawing1.xml';
+const DRAWING_RELS = 'xl/drawings/_rels/drawing1.xml.rels';
 
 export interface DailyWorkbook {
   bytes: Buffer;
@@ -20,12 +23,31 @@ export interface DailyWorkbook {
  * point of patching the package instead of building a sheet: merges, styles, widths,
  * conditional formats, page setup and the form controls stay exactly the client's.
  */
-export async function buildDailyWorkbook(input: DailyExportInput): Promise<DailyWorkbook> {
+export async function buildDailyWorkbook(
+  input: DailyExportInput,
+  /** The report's stored photos, in slot order with the empty slots left out. */
+  photos: Buffer[] = [],
+  /** How many photos the report holds, which can be more than were read. */
+  photoCount = photos.length
+): Promise<DailyWorkbook> {
   const zip = await JSZip.loadAsync(Buffer.from(DAILY_TEMPLATE_B64, 'base64'));
   const sheet = SheetXml.parse((await zip.file(SHEET)!.async('string')) as string);
   const { overflow, weather } = fillDailySheet(sheet, input);
   zip.file(SHEET, sheet.serialize());
   await tickWeather(zip, weather);
+
+  if (photos.length > 0) {
+    const placed = placePhotos(
+      sheet,
+      (await zip.file(DRAWING)!.async('string')) as string,
+      (await zip.file(DRAWING_RELS)!.async('string')) as string,
+      photos
+    );
+    zip.file(DRAWING, placed.drawing);
+    zip.file(DRAWING_RELS, placed.rels);
+    for (const m of placed.media) zip.file(m.path, m.bytes);
+  }
+  if (photoCount > CAPACITY.photos) overflow.push({ block: 'photos', total: photoCount, capacity: CAPACITY.photos });
   const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { bytes, overflow };
 }

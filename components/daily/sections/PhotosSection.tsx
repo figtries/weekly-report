@@ -1,7 +1,8 @@
 'use client';
 
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
-import { RowButton, SectionRow, type SectionProps } from '../SectionRow';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
+import { CapacityNote, RowButton, SectionRow, type SectionProps } from '../SectionRow';
 
 export default function PhotosSection({ report, state, open, onToggle, onOpen }: SectionProps) {
   const n = report.photos.filter(Boolean).length;
@@ -21,6 +22,7 @@ export default function PhotosSection({ report, state, open, onToggle, onOpen }:
         photos={report.photos}
         uploadUrl={`/api/daily/${report.date}/photos`}
       />
+      <CapacityNote count={n} capacity={CAPACITY.photos} what="photos" firstOnly />
     </SectionRow>
   );
 }

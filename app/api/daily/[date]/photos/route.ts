@@ -91,14 +91,16 @@ export async function PATCH(
   { params }: { params: Promise<{ date: string }> }
 ) {
   const { date } = await params;
-  const { action } = (await request.json()) as { action?: string };
+  const { action, pages } = (await request.json()) as { action?: string; pages?: number };
+  // More than one page at once when a multi-photo pick needs more room than is left.
+  const count = Math.min(Math.max(Math.floor(Number(pages) || 1), 1), 20);
 
   try {
     const updated = await mutateOpenDb((db) => {
       const report = db.daily.find((d) => d.date === date);
       if (!report) throw new Error(`Daily report for ${date} not found`);
       if (action === 'addPage') {
-        report.photos.push(...Array<string | null>(PAGE_SIZE).fill(null));
+        report.photos.push(...Array<string | null>(PAGE_SIZE * count).fill(null));
       } else if (action === 'removePage') {
         if (report.photos.length <= PAGE_SIZE) throw new Error('Cannot remove the first page');
         const lastPage = report.photos.slice(-PAGE_SIZE);

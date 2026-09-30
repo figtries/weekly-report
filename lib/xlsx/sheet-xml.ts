@@ -285,6 +285,18 @@ export class SheetXml {
     r.raw = null;
   }
 
+  rowHidden(row: number): boolean {
+    return /\bhidden="(1|true)"/.test(this.rowOf(row)?.attrs ?? '');
+  }
+
+  /** Excel's own `hidden="1"`: the row's cells, height and every reference to it stay as they are. */
+  setRowHidden(row: number): void {
+    const r = this.rowOf(row);
+    if (!r) return;
+    r.attrs = /\bhidden="[^"]*"/.test(r.attrs) ? r.attrs.replace(/\bhidden="[^"]*"/, 'hidden="1"') : `${r.attrs} hidden="1"`;
+    r.raw = null;
+  }
+
   /* ------------------------------------------------------ columns, merges */
 
   /** Width in characters of each column, from <cols>; the sheet default elsewhere. */

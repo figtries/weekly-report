@@ -1,5 +1,4 @@
 import { hoursEachOf, todayItemsOf, tomorrowItemsOf } from '../daily-items';
-import type { DailyProgress } from '../daily-progress';
 import type { DailyReport, HseRow, ManHourRow, NonEffectiveRow } from '../types';
 import { excelSerial } from './addr';
 import { CELLS, CHARS_PER_UNIT, LINE_PT } from './daily-cells';
@@ -27,11 +26,9 @@ export interface DailyExportInput {
   report: DailyReport;
   /** The day of the project, counted from week one's first day. Null when the project has no plan. */
   dayNo: number | null;
-  /** The weekly figures for this day's week (lib/daily-progress.ts). */
-  progress: DailyProgress | null;
 }
 
-export type OverflowBlock = 'crew' | 'nonEffective' | 'ptw' | 'hse' | 'activitiesToday' | 'activitiesTomorrow' | 'aoc';
+export type OverflowBlock = 'crew' | 'nonEffective' | 'ptw' | 'hse' | 'activitiesToday' | 'activitiesTomorrow' | 'aoc' | 'photos';
 
 export interface Overflow {
   block: OverflowBlock;
@@ -319,25 +316,15 @@ export function fillDailySheet(sheet: SheetXml, input: DailyExportInput): FillRe
     });
   }
 
-  /* progress: the weekly figure; empty while the weights do not close */
+  /* "6. Progress Summary" is left out: progress is the weekly report's job. The rows are
+     hidden, their cells stay empty (the deviation formula reads 0, not the sample's
+     leftover), and the photographs below take the number 6. */
   {
     const cfg = CELLS.progress;
-    putDate(sheet, cfg.date, report.date);
-    const p = input.progress;
-    if (p && p.state === 'ready') {
-      // Fractions the cells format as percent. Rounded to the 6 decimals a percent to two places
-      // needs: 34.49 / 100 in floating point is 0.34490000000000004, which is not a number to leave in a client's file.
-      const frac = (pct: number) => Number((pct / 100).toFixed(6));
-      const plan = frac(p.plan);
-      const actual = frac(p.actual);
-      sheet.setNumber(cfg.plan, plan);
-      sheet.setNumber(cfg.actual, actual);
-      sheet.setCached(cfg.dev, Number((actual - plan).toFixed(6)));
-    } else {
-      sheet.clear(cfg.plan);
-      sheet.clear(cfg.actual);
-      sheet.clear(cfg.dev);
-    }
+    for (const a of [cfg.date, cfg.plan, cfg.actual]) sheet.clear(a);
+    sheet.setCached(cfg.dev, 0);
+    for (let r = cfg.rows[0]; r <= cfg.rows[1]; r++) sheet.setRowHidden(r);
+    sheet.setText(CELLS.photoTitle.addr, CELLS.photoTitle.text);
   }
 
   /* signatures: "Dibuat Oleh" (left) is the contractor, "Disetujui Oleh" (right) the client */

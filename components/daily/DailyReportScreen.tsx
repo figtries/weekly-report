@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import SavePdfButton from '@/components/print/SavePdfButton';
+import { whenPhotosSaved } from '@/components/weekly/PhotoUploadGrid';
 import { readyCount, sectionStates } from '@/lib/daily-status';
 import type { DailyReport, DailySectionKey } from '@/lib/types';
 import DailyHeader from './DailyHeader';
@@ -149,7 +150,11 @@ export default function DailyReportScreen(props: DailyScreenProps) {
         noun="Excel"
         mime="spreadsheetml"
         warm={false}
-        beforeDownload={flush}
+        // The sheet carries the photos too, so the ones still uploading are waited for as well.
+        beforeDownload={async () => {
+          await whenPhotosSaved(`/api/daily/${report.date}/photos`);
+          return flush();
+        }}
       />
       <SaveChangesButton flush={flush} retry={retry} href="/daily" className="sm:w-44" />
       </div>

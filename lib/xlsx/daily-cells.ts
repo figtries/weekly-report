@@ -34,7 +34,22 @@ export const CELLS = {
   activities: { rows: [32, 33, 34, 35, 36, 37, 38, 39], todayNo: 'B', todayText: 'C', tomorrowNo: 'L', tomorrowText: 'M' },
   aoc: { rows: [43, 44, 45], no: 'B', type: 'C', desc: 'E', date: 'P', by: 'Q', status: 'S' },
 
-  progress: { date: 'D50', plan: 'D51', actual: 'D52', dev: 'D53' },
+  /**
+   * "6. Progress Summary". Left out of the export since 30 Sep 2026 (progress is the
+   * weekly report's job): its rows are HIDDEN rather than deleted, so no cell below
+   * moves, and the photographs take its number.
+   */
+  progress: { date: 'D50', plan: 'D51', actual: 'D52', dev: 'D53', rows: [46, 56] },
+  photoTitle: { addr: 'B67', text: '6. Progress Photograph' },
+  /** The six photo boxes, left then right, top to bottom. Rows 91, 112 and 133 between them are captions. */
+  photos: [
+    { from: 'C71', to: 'K90' },
+    { from: 'L71', to: 'R90' },
+    { from: 'C92', to: 'K111' },
+    { from: 'L92', to: 'R111' },
+    { from: 'C113', to: 'K132' },
+    { from: 'L113', to: 'R132' },
+  ],
   /** The daily sheet reads "Dibuat Oleh" (made by, the contractor) on the left and "Disetujui Oleh" (approved, the client) on the right. */
   sign: { leftCompany: 'C60', leftName: 'C65', rightCompany: 'N60', rightName: 'N65' },
 } as const;
@@ -47,6 +62,7 @@ export const CAPACITY = {
   hse: CELLS.hse.rows.length,
   activities: CELLS.activities.rows.length,
   aoc: CELLS.aoc.rows.length,
+  photos: CELLS.photos.length,
 } as const;
 
 /** The sample's date-formatted style of S4, and the plain-number copy of it the template adds. */

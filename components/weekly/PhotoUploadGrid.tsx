@@ -37,6 +37,26 @@ function warmUploadRoute(url: string) {
   fetch(url, { cache: 'no-store' }).catch(() => undefined);
 }
 
+// Writes still on their way, per upload url. Module-level so a button elsewhere on the
+// screen (the daily Export Excel) can wait for the photos just picked to be stored.
+const inFlight = new Map<string, Set<Promise<unknown>>>();
+
+function track<T>(url: string, work: Promise<T>): Promise<T> {
+  let set = inFlight.get(url);
+  if (!set) inFlight.set(url, (set = new Set()));
+  set.add(work);
+  const done = () => set.delete(work);
+  work.then(done, done);
+  return work;
+}
+
+/** Resolves once every photo picked, removed or paged on this url has reached the server. */
+export async function whenPhotosSaved(url: string): Promise<void> {
+  for (let set = inFlight.get(url); set && set.size > 0; set = inFlight.get(url)) {
+    await Promise.allSettled([...set]);
+  }
+}
+
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
   try {
@@ -113,7 +133,10 @@ export default function PhotoUploadGrid({
   const [busy, setBusy] = useState<ReadonlySet<number>>(() => new Set());
   const [pageBusy, setPageBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // ONE picker for the whole grid, opened from whichever slot was pressed, and
+  // it takes several photos at once (see handleFiles).
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const pickFromRef = useRef(0);
 
   function markBusy(slot: number, on: boolean) {
     setBusy((prev) => {
@@ -208,14 +231,48 @@ export default function PhotoUploadGrid({
     if (refreshServer) refreshDbAction().catch(() => undefined);
   }
 
-  async function handleFile(slot: number, file: File) {
-    markBusy(slot, true);
+  function openPicker(slot: number) {
+    warmUploadRoute(uploadUrl);
+    pickFromRef.current = slot;
+    inputRef.current?.click();
+  }
+
+  // Several photos picked at once fill the empty slots from the pressed one on,
+  // then the ones before it; more than fit first adds the pages they need.
+  // Compression runs one photo at a time (six 12 MP decodes at once is how an
+  // iPhone tab gets killed) and each upload joins the queue the moment its
+  // photo is ready, so the first is on its way while the rest still compress.
+  async function handleFiles(start: number, files: File[]) {
+    if (files.length === 0) return;
     setError(null);
+    const isFree = (i: number) => !localPhotos[i] && !previewsRef.current[i] && !busy.has(i);
+    const all = [...localPhotos.keys()];
+    const targets = [...all.filter((i) => i >= start && isFree(i)), ...all.filter((i) => i < start && isFree(i))];
+    const short = files.length - targets.length;
+    if (short > 0) {
+      const pagesNeeded = Math.min(Math.ceil(short / PAGE_SIZE), 20);
+      // No optimistic slots: the new page appears when the server has it, so a
+      // response still in the queue cannot shrink the grid under a preview.
+      enqueue(() => pageRequest('addPage', pagesNeeded)).catch(() =>
+        setError('Action failed. Check your connection and try again.')
+      );
+      for (let i = 0; i < pagesNeeded * PAGE_SIZE; i++) targets.push(localPhotos.length + i);
+    }
+    const slots = targets.slice(0, files.length);
+    slots.forEach((s) => markBusy(s, true));
+    const uploads: Promise<void>[] = [];
+    for (let i = 0; i < slots.length; i++) {
+      const compressed = await compressImage(files[i]);
+      // Show the photo right away — the network round trip happens behind it.
+      setPreview(slots[i], URL.createObjectURL(compressed));
+      uploads.push(uploadTo(slots[i], compressed));
+    }
+    await Promise.all(uploads);
+  }
+
+  async function uploadTo(slot: number, compressed: File) {
     let ok = false;
     try {
-      const compressed = await compressImage(file);
-      // Show the photo right away — the network round trip happens behind it.
-      setPreview(slot, URL.createObjectURL(compressed));
       ok = await enqueue(async () => {
         const formData = new FormData();
         formData.append('slot', String(slot));
@@ -264,24 +321,26 @@ export default function PhotoUploadGrid({
     }
   }
 
+  async function pageRequest(action: 'addPage' | 'removePage', pages = 1) {
+    const res = await fetch(uploadUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, pages }),
+    });
+    const body = await readJsonSafe(res);
+    if (!res.ok) {
+      setError(errorFromResponse(body, res, 'Action failed'));
+      return;
+    }
+    applyResponse(body);
+  }
+
   async function handlePageAction(action: 'addPage' | 'removePage') {
     const startedAt = performance.now();
     setPageBusy(true);
     setError(null);
     try {
-      await enqueue(async () => {
-        const res = await fetch(uploadUrl, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        });
-        const body = await readJsonSafe(res);
-        if (!res.ok) {
-          setError(errorFromResponse(body, res, 'Action failed'));
-          return;
-        }
-        applyResponse(body);
-      });
+      await enqueue(() => pageRequest(action));
     } catch {
       setError('Action failed. Check your connection and try again.');
     } finally {
@@ -293,6 +352,18 @@ export default function PhotoUploadGrid({
 
   return (
     <div className={compact ? 'space-y-4' : 'space-y-10'}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = '';
+          void track(uploadUrl, handleFiles(pickFromRef.current, files));
+        }}
+      />
       {error && (
         <Reveal>
           <div className="flex items-start justify-between gap-3 rounded-lg bg-bad-soft px-4 py-3 text-sm text-bad ring-1 ring-bad/25">
@@ -319,7 +390,7 @@ export default function PhotoUploadGrid({
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => handlePageAction('removePage')}
+                onClick={() => void track(uploadUrl, handlePageAction('removePage'))}
                 disabled={pageBusy}
               >
                 Remove page
@@ -384,7 +455,7 @@ export default function PhotoUploadGrid({
                         <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity duration-300 ease-ios group-hover:opacity-100 max-sm:opacity-100">
                           <span className="hidden text-xs font-medium text-white sm:inline">Photo {slot + 1}</span>
                           <button
-                            onClick={() => handleRemove(slot)}
+                            onClick={() => void track(uploadUrl, handleRemove(slot))}
                             disabled={busy.has(slot)}
                             className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-bad transition-colors hover:bg-white disabled:opacity-60"
                           >
@@ -395,10 +466,7 @@ export default function PhotoUploadGrid({
                     </>
                   ) : (
                     <button
-                      onClick={() => {
-                        warmUploadRoute(uploadUrl);
-                        inputRefs.current[slot]?.click();
-                      }}
+                      onClick={() => openPicker(slot)}
                       disabled={busy.has(slot)}
                       aria-label={`Add photo ${slot + 1}`}
                       className={
@@ -420,19 +488,6 @@ export default function PhotoUploadGrid({
                       </span>
                     </button>
                   )}
-                  <input
-                    ref={(el) => {
-                      inputRefs.current[slot] = el;
-                    }}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFile(slot, file);
-                      e.target.value = '';
-                    }}
-                  />
                   </div>
                 </Reveal>
               );
@@ -443,7 +498,7 @@ export default function PhotoUploadGrid({
       {compact ? (
         <button
           type="button"
-          onClick={() => handlePageAction('addPage')}
+          onClick={() => void track(uploadUrl, handlePageAction('addPage'))}
           disabled={pageBusy}
           className="min-h-11 text-[13px] font-medium text-chart-1 transition-opacity duration-200 hover:opacity-80 disabled:opacity-50 sm:min-h-0"
         >
@@ -452,7 +507,7 @@ export default function PhotoUploadGrid({
       ) : (
       <Button
         variant="outline"
-        onClick={() => handlePageAction('addPage')}
+        onClick={() => void track(uploadUrl, handlePageAction('addPage'))}
         disabled={pageBusy}
         className="h-auto w-full border-2 border-dashed py-4 text-sm font-medium text-muted-foreground transition-all duration-300 ease-ios hover:text-foreground"
       >

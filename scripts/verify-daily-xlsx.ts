@@ -236,7 +236,6 @@ const EMPTY: DailyExportInput = {
     planPct: 0, actualPct: 0, photos: [null, null, null, null, null, null],
   } as DailyReport,
   dayNo: 74,
-  progress: { state: 'ready', week: 11, actual: 44, plan: 42.29, variance: 1.71, weightsTotal: 100 },
 };
 
 await check('an export is a sound package; only sheet1, the ctrlProps and the VML differ from the template', async () => {
@@ -311,7 +310,6 @@ if (haveSample) {
       planPct: 0, actualPct: 0, photos: [null, null, null, null, null, null],
     } as DailyReport,
     dayNo: 74,
-    progress: { state: 'ready', week: 11, actual: num('D52') * 100, plan: num('D51') * 100, variance: 0, weightsTotal: 100 },
   };
 
   const { bytes, overflow } = await buildDailyWorkbook(input);
@@ -396,12 +394,14 @@ if (haveSample) {
     assert.equal(otxt('L39'), '8.');
   });
 
-  await check('12 March: progress is the weekly figure and the deviation stays a formula', () => {
-    assert.equal(onum('D51'), num('D51'));
-    assert.equal(onum('D52'), num('D52'));
-    assert.ok(Math.abs(onum('D53') - num('D53')) < 1e-9);
+  await check('12 March: the progress summary is hidden and empty, and the photographs are section 6', () => {
+    for (let r = 46; r <= 56; r++) assert.ok(out.getRow(r).hidden, `row ${r} hidden`);
+    for (const r of [45, 57, 59, 67]) assert.ok(!out.getRow(r).hidden, `row ${r} shown`);
+    for (const a of ['D50', 'D51', 'D52']) assert.equal(oval(a) ?? null, null, a);
+    assert.equal(onum('D53'), 0);
     assert.equal((out.getCell('D53').value as { formula?: string }).formula, 'D52-D51');
-    assert.equal((oval('D50') as Date).toISOString().slice(0, 10), '2026-03-12');
+    assert.equal(otxt('B67'), '6. Progress Photograph');
+    assert.equal(txt('B67'), '7. Progress Photograph');
   });
 } else {
   skip('12 March round trip', 'sample not found');
@@ -509,22 +509,86 @@ await check('row heights grow to fit long text and never shrink below the templa
   assert.equal(linesFor('x'.repeat(100), 10), 12);
 });
 
-await check('progress fractions carry no floating-point tail', async () => {
-  const { sheet } = await exportSheet({}, { progress: { state: 'ready', week: 33, actual: 40.69, plan: 34.49, variance: 6.2, weightsTotal: 100 } });
-  assert.equal(sheet.rawValue('D51'), '0.3449');
-  assert.equal(sheet.rawValue('D52'), '0.4069');
-  assert.equal(sheet.rawValue('D53'), '0.062');
+await check('no progress figure: rows 46-56 hidden, their cells empty, the deviation formula at 0, photographs renumbered', async () => {
+  const { sheet } = await exportSheet({});
+  for (let r = 44; r <= 58; r++) assert.equal(sheet.rowHidden(r), r >= 46 && r <= 56, `row ${r}`);
+  for (const a of ['D50', 'D51', 'D52']) assert.equal(sheet.rawValue(a), null, a);
+  assert.equal(sheet.formula('D53'), 'D52-D51');
+  assert.equal(sheet.rawValue('D53'), '0');
+  assert.equal(sheet.inlineText('B67'), '6. Progress Photograph');
+  const none = await exportSheet({}, { dayNo: null });
+  assert.equal(none.sheet.rawValue('S4'), null);
 });
 
-await check('progress held: plan, actual and deviation are empty and the deviation formula is gone', async () => {
-  const { sheet } = await exportSheet({}, { progress: { state: 'held', week: 11, actual: 0, plan: 0, variance: 0, weightsTotal: 70.79 } });
-  for (const a of ['D51', 'D52', 'D53']) {
-    assert.equal(sheet.rawValue(a), null, a);
-    assert.equal(sheet.formula(a), null, a);
-  }
-  const none = await exportSheet({}, { progress: null, dayNo: null });
-  assert.equal(none.sheet.rawValue('S4'), null);
-  assert.equal(none.sheet.rawValue('D51'), null);
+/* ------------------------------------------------------------------ photos */
+
+import sharp from 'sharp';
+import { coverCrop, imageInfo } from '../lib/xlsx/daily-photos.ts';
+
+const shot = (w: number, h: number, format: 'jpeg' | 'png', hue: number) =>
+  sharp({ create: { width: w, height: h, channels: 3, background: { r: hue, g: 120, b: 255 - hue } } })[format]().toBuffer();
+const landscape = await shot(1600, 1200, 'jpeg', 40);
+const portrait = await shot(1131, 1600, 'jpeg', 90);
+const wide = await shot(1920, 1080, 'jpeg', 140);
+const square = await shot(800, 800, 'png', 190);
+const PHOTOS = [landscape, portrait, wide, square, landscape, portrait, wide, square];
+
+await check('image headers: JPEG and PNG sizes are read, anything else is passed over', () => {
+  assert.deepEqual(imageInfo(landscape), { ext: 'jpeg', width: 1600, height: 1200 });
+  assert.deepEqual(imageInfo(portrait), { ext: 'jpeg', width: 1131, height: 1600 });
+  assert.deepEqual(imageInfo(square), { ext: 'png', width: 800, height: 800 });
+  assert.equal(imageInfo(Buffer.from('RIFF....WEBPVP8 ')), null);
+  assert.equal(imageInfo(Buffer.alloc(0)), null);
+});
+
+await check('cover crop: centred, only on the side that is too long', () => {
+  assert.equal(coverCrop(1600, 1200, 100, 50), ' t="16667" b="16667"'); // 4:3 into 2:1 loses a sixth top and bottom
+  assert.equal(coverCrop(1600, 800, 100, 100), ' l="25000" r="25000"'); // 2:1 into a square loses a quarter each side
+  assert.equal(coverCrop(400, 300, 800, 600), '');
+});
+
+await check('eight photos: the first six go into the six boxes, in order, and two are reported as left out', async () => {
+  // DAILY_WRITE_PHOTOS=<path> saves this export so a person can open it in Excel.
+  const { bytes, overflow } = await buildDailyWorkbook(EMPTY, PHOTOS, PHOTOS.length);
+  if (process.env.DAILY_WRITE_PHOTOS) fs.writeFileSync(process.env.DAILY_WRITE_PHOTOS, bytes);
+  assert.deepEqual(overflow, [{ block: 'photos', total: 8, capacity: 6 }]);
+  const out = await packageIsSound(bytes);
+  const tpl = await partsOf(TEMPLATE);
+  const added = [...out.keys()].filter((n) => !tpl.has(n)).sort();
+  assert.deepEqual(added, ['xl/media/image1.jpeg', 'xl/media/image2.jpeg', 'xl/media/image3.jpeg', 'xl/media/image4.png', 'xl/media/image5.jpeg', 'xl/media/image6.jpeg']);
+  assert.ok(out.get('xl/media/image2.jpeg')!.equals(portrait), 'the photo is stored as uploaded');
+  const changed = [...tpl.keys()].filter((n) => !out.get(n)!.equals(tpl.get(n)!));
+  const allowed = (n: string) =>
+    ['xl/worksheets/sheet1.xml', 'xl/drawings/vmlDrawing1.vml', 'xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels'].includes(n) ||
+    /^xl\/ctrlProps\/ctrlProp\d\.xml$/.test(n);
+  assert.deepEqual(changed.filter((n) => !allowed(n)), []);
+
+  const drawing = out.get('xl/drawings/drawing1.xml')!.toString('utf8');
+  assert.equal((drawing.match(/Check Box \d/g) ?? []).length, 4, 'the weather checkboxes are still there');
+  // One anchor at a time: the checkboxes are twoCellAnchors too.
+  const pics = drawing
+    .split('</xdr:twoCellAnchor>')
+    .filter((a) => a.includes('<xdr:pic>'))
+    .map((a) => /<xdr:from><xdr:col>(\d+)<\/xdr:col><xdr:colOff>\d+<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row>[\s\S]*?<xdr:to><xdr:col>(\d+)<\/xdr:col><xdr:colOff>\d+<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row>[\s\S]*?r:embed="([^"]+)"\/><a:srcRect([^/]*)\/>/.exec(a)!);
+  assert.equal(pics.length, 6);
+  // Zero-based: C71:K90, L71:R90, C92:K111, L92:R111, C113:K132, L113:R132.
+  assert.deepEqual(pics.map((m) => [m[1], m[2], m[3], m[4]].map(Number)), [
+    [2, 70, 10, 89], [11, 70, 17, 89], [2, 91, 10, 110], [11, 91, 17, 110], [2, 112, 10, 131], [11, 112, 17, 131],
+  ]);
+  const rels = out.get('xl/drawings/_rels/drawing1.xml.rels')!.toString('utf8');
+  pics.forEach((m, i) => assert.match(rels, new RegExp(`Id="${m[5]}"[^>]*Target="\\.\\./media/image${i + 1}\\.`)));
+  // The boxes are wider than tall (about 1.36 to 1.43): the portrait and the square lose top and bottom, the 16:9 its sides.
+  assert.match(pics[1][6], /^ t="\d+" b="\d+"$/);
+  assert.match(pics[2][6], /^ l="\d+" r="\d+"$/);
+  assert.match(pics[3][6], /^ t="\d+" b="\d+"$/);
+  assert.match(drawing.slice(0, drawing.indexOf('>', drawing.indexOf('<xdr:wsDr'))), /xmlns:r="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships"/);
+});
+
+await check('no photos: the drawing and its relationships are the template\'s, byte for byte', async () => {
+  const out = await partsOf((await buildDailyWorkbook(EMPTY, [], 0)).bytes);
+  const tpl = await partsOf(TEMPLATE);
+  for (const n of ['xl/drawings/drawing1.xml', 'xl/drawings/_rels/drawing1.xml.rels']) assert.ok(out.get(n)!.equals(tpl.get(n)!), n);
+  assert.ok(![...out.keys()].some((n) => n.startsWith('xl/media/')));
 });
 
 await check('weather: rain picked takes the working hours; unpicked slots keep the template\'s zeros', async () => {

@@ -120,14 +120,16 @@ export async function PATCH(
   { params }: { params: Promise<{ week: string }> }
 ) {
   const { week: weekParam } = await params;
-  const { action } = (await request.json()) as { action?: string };
+  const { action, pages } = (await request.json()) as { action?: string; pages?: number };
+  // More than one page at once when a multi-photo pick needs more room than is left.
+  const count = Math.min(Math.max(Math.floor(Number(pages) || 1), 1), 20);
 
   try {
     const { week, projectId } = await openProject(weekParam);
     const documentation = await mutateProjectDb(projectId, (db) => {
       const slots = slotsFor(db, week);
       if (action === 'addPage') {
-        slots.push(...Array<string | null>(PAGE_SIZE).fill(null));
+        slots.push(...Array<string | null>(PAGE_SIZE * count).fill(null));
       } else if (action === 'removePage') {
         if (slots.length <= PAGE_SIZE) throw new Error('Cannot remove the first page');
         const lastPage = slots.slice(-PAGE_SIZE);

@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server';
-import { dailyProgressFor } from '@/lib/daily-progress';
 import { dayOfProject } from '@/lib/daily-week';
-import { getOpenDb, getOpenProjectStatus } from '@/lib/data';
+import { getOpenDb } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
+import { readUploadedPhoto } from '@/lib/upload';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
 import { buildDailyWorkbook } from '@/lib/xlsx/daily-export';
 
 export const maxDuration = 60;
@@ -29,7 +30,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ dat
   if (!report) return new Response(`No daily report for ${date}`, { status: 404 });
 
   // After the cookie read inside readOpenDb, so the clock these read is allowed.
-  const [db, status] = await Promise.all([getOpenDb(), getOpenProjectStatus()]);
+  // The sheet holds six photos; only those are read, the rest are counted as overflow.
+  const stored = report.photos.filter((x): x is string => !!x);
+  const [db, loaded] = await Promise.all([
+    getOpenDb(),
+    Promise.all(stored.slice(0, CAPACITY.photos).map(readUploadedPhoto)),
+  ]);
+  const photos = loaded.filter((b): b is Buffer => b !== null);
   const p = db.project;
 
   let file: Awaited<ReturnType<typeof buildDailyWorkbook>>;
@@ -47,8 +54,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ dat
       },
       report,
       dayNo: dayOfProject(p.weekAnchorEndDate, date),
-      progress: dailyProgressFor(status, date),
-    });
+    }, photos, stored.length);
   } catch (error) {
     // Where curl and the function log can see it, as the PDF routes do.
     console.error('Excel export failed:', error);

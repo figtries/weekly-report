@@ -512,11 +512,22 @@ navigation.** It used to close from an effect, but the router keeps `/daily` hid
 (`display: none`) behind the report and a hidden tree runs no effects, so the dialog stayed
 open behind the report and came back on Back (measured: its DOM was on the report page).
 
-**There is no progress on the daily screen or list.** It is the weekly report's job:
-`lib/daily-progress.ts` stays only because the Excel export fills the sheet's progress
-cells from the week's figures (held while the weights do not close), and
-`DailyReport.planPct` / `actualPct` are no longer written. `DailySectionKey` has no
+**There is no progress on the daily screen, the list, or the Excel export.** It is the
+weekly report's job. Since 30 Sep 2026 the export leaves the sheet's "6. Progress Summary"
+out too (see below); `lib/daily-progress.ts` stays only for the unlinked daily print page,
+and `DailyReport.planPct` / `actualPct` are no longer written. `DailySectionKey` has no
 `'progress'`; do not add one back.
+
+**Photos: picked several at once, uploaded one at a time, and the route is warmed first.**
+`PhotoUploadGrid` has ONE `multiple` file input; a pick fills the empty slots from the
+pressed one on (adding the pages it needs in one `PATCH { pages }`), compresses one photo
+at a time (six 12 MP decodes at once is how an iPhone tab dies) and puts every write
+(upload, remove, page) through one queue, because each route rewrites the whole record and
+two instances writing at once drop a photo. The route is pinged (`GET`, 204) when the grid
+appears, when the tab comes back and when Add is pressed: on 30 Sep 2026 the photo route
+was a cold function every time and made two small uploads wait 4.6 s and 2.7 s before the
+handler read a byte. The daily grid does NOT `refreshDbAction()` (the screen owns its copy),
+and Export Excel waits for `whenPhotosSaved` as well as `flush`.
 
 **Autosave, with no Save button.** `useDailyReport` keeps the optimistic copy, one
 write is in flight at a time and whatever changes meanwhile merges into the next
@@ -534,8 +545,25 @@ when only the text is patched.
 Slice 2a, 30 Sep 2026; spec `docs/superpowers/specs/2026-09-30-daily-excel-export-design.md`.
 The daily report is exported as `PRGG-00-G0-RPT-003_DAILY PROGRESS REPORT`, exactly, and
 NOT as a PDF (the daily PDF button became "Export Excel"; the old route, print page and
-component are unlinked but still there). Pictures (logos, signatures, six photos) are
-slice 2b and import is slice 3.
+component are unlinked but still there). The six photos went in on 30 Sep 2026; logos and
+signatures are still slice 2b, and import is slice 3.
+
+**The export departs from the client's form in exactly one place, on purpose.** "6.
+Progress Summary" (rows 46-56) is HIDDEN, not deleted, so no row, merge, formula or print
+break below it moves; its cells are left empty (the deviation formula caches 0) and "7.
+Progress Photograph" is written as "6." so the numbering does not jump.
+
+**Photos go into the six boxes, left then right** (`CELLS.photos`: C71:K90, L71:R90, ...,
+L113:R132; rows 91, 112 and 133 between them are captions), the first six stored in slot
+order with the empty slots skipped, the rest reported as `photos` overflow and named on the
+Photos card. `lib/xlsx/daily-photos.ts` adds a media part, a relationship and a
+`twoCellAnchor` per photo to the template's `drawing1.xml`, which until then held only the
+four checkboxes (its root declares no `r:`, so the export adds it). A photo FILLS its box,
+the crop being `a:srcRect` so the whole image stays in the file. The anchor stretches the
+picture to the box as Excel really draws it, and a column is not one width: on this
+template the box is 2.4% wider on screen than the 96-dpi formula and 6.6% wider printed
+to PDF, so the crop aims between the two (`WIDTH_SPREAD`). Cropped for the formula alone,
+every printed photo came out 7% too wide.
 
 **Never write it through ExcelJS.** A read then write of the sample lost the four weather
 checkboxes (form controls), the VML drawing and the printer settings, and turned 5,533
@@ -568,9 +596,18 @@ grouped by week. The daily sheet reads the contractor on the left ("Dibuat Oleh"
 client on the right; the project stores them the other way round, so the export swaps them.
 
 Proof is `scripts/verify-daily-xlsx.ts`: package soundness, only the sheet, the ctrlProps and
-the VML differ from the template, and the client's own 12 March workbook rebuilt as an input
-comes out cell for cell equal (read back with ExcelJS as an independent parser). It cannot
-show a rendered page: the first exported file has to be opened in real Excel once.
+the VML differ from the template (plus the drawing, its relationships and the media when
+there are photos), and the client's own 12 March workbook rebuilt as an input comes out cell
+for cell equal (read back with ExcelJS as an independent parser).
+
+**Excel IS on the development machine** (Office 16), so a rendered page can be looked at.
+Its COM type library is broken (`New-Object -ComObject` fails with TYPE_E_ELEMENTNOTFOUND),
+so drive it late-bound: `cscript //nologo scripts/xlsx-to-pdf.vbs <dir> <name>` opens
+`<dir>\<name>.xlsx` read-only in a NEW hidden instance, lists its pictures with their cells
+and prints it to PDF, and `scripts/pdf-to-png.ps1 -Dir <dir> -Name <name>` renders the pages
+with Windows' own PDF renderer. The person's own Excel window is never touched; check with
+`Win32_Process` that no `/automation` instance is left behind. Measure a picture's shape from
+pixels (a drawn circle's width over height), never by eye.
 
 # Progress has one origin
 

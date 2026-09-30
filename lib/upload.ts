@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { readPhotoMeta, type PhotoMeta } from './exif';
-import { redisConfigured, redisSet, redisDel } from './storage';
+import { redisConfigured, redisGet, redisSet, redisDel } from './storage';
 
 const IS_VERCEL = !!process.env.VERCEL;
 const UPLOAD_ROOT = IS_VERCEL ? '/tmp/uploads' : path.join(process.cwd(), 'public', 'uploads');
@@ -60,6 +60,19 @@ export async function preparePhotoUpload(
       await fs.writeFile(path.join(dir, filename), buffer);
     },
   };
+}
+
+/** A stored photo's bytes, from wherever this deployment keeps them; null when it is gone. */
+export async function readUploadedPhoto(relativePath: string): Promise<Buffer | null> {
+  if (redisConfigured) {
+    const raw = await redisGet(photoRedisKey(relativePath)).catch(() => null);
+    if (!raw) return null;
+    return Buffer.from((JSON.parse(raw) as { data: string }).data, 'base64');
+  }
+  const abs = IS_VERCEL
+    ? path.join('/tmp', relativePath)
+    : path.join(process.cwd(), 'public', relativePath);
+  return fs.readFile(abs).catch(() => null);
 }
 
 export async function deleteUploadedPhoto(relativePath: string | null | undefined): Promise<void> {
