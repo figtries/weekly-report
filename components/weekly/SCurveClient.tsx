@@ -6,6 +6,8 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -59,6 +61,55 @@ import type { ProjectInfo } from '@/lib/types';
  * the card would run under them exactly on the device this app is tested on
  * first.
  */
+/**
+ * One line's figure at the cut-off: a dot on the line and a chip to its left
+ * ("Actual 51.42%"), above or below the dot. The chip is SVG because Recharts'
+ * plot is not stretched (unlike the dashboard curve's viewBox), so its text keeps
+ * its size. The plan dot is the larger of the two so it still shows as a rim if
+ * the actual lands on top of it.
+ */
+function EndMark({
+  cx,
+  cy,
+  name,
+  value,
+  color,
+  above,
+  delay,
+}: {
+  cx: number;
+  cy: number;
+  name: string;
+  value: number;
+  color: string;
+  above: boolean;
+  delay: string;
+}) {
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return <g />;
+  const text = `${name} ${value.toFixed(2)}%`;
+  const h = 24;
+  const w = text.length * 6.9 + 16;
+  const x = cx - 12 - w;
+  const y = above ? cy - 10 - h : cy + 10;
+  const plan = name === 'Plan';
+  return (
+    <g className="animate-fade-in-up" style={{ animationDelay: delay }} pointerEvents="none">
+      <circle cx={cx} cy={cy} r={plan ? 7 : 5} fill={color} stroke="var(--card)" strokeWidth={plan ? 0 : 2} />
+      <rect x={x} y={y} width={w} height={h} rx={6} fill="var(--card)" fillOpacity={0.94} stroke="var(--border)" />
+      <text
+        x={x + w / 2}
+        y={y + h / 2 + 4}
+        textAnchor="middle"
+        fontSize={12}
+        fontWeight={600}
+        fill={color}
+      >
+        {text}
+      </text>
+    </g>
+  );
+}
+
 export default function SCurveClient({
   series,
   currentWeek,
@@ -87,6 +138,24 @@ export default function SCurveClient({
 
   const axisTick = { fontSize: 12, fill: 'var(--muted-foreground)' };
 
+  // THE CUT-OFF: the last week each line was measured, where the report stops.
+  // Same idea as the dashboard's curve: a dot on each line at that week, and the
+  // figure written beside it, so the gap between the two is read off the chart.
+  const lastOf = (key: 'plan' | 'actual') => {
+    for (let i = chartData.length - 1; i > 0; i--) {
+      const value = chartData[i][key];
+      if (value !== null) return { label: chartData[i].week, value };
+    }
+    return null;
+  };
+  const endPlan = lastOf('plan');
+  const endActual = lastOf('actual');
+  const cutoff = endActual?.label ?? endPlan?.label ?? null;
+  // The higher of the two writes its chip ABOVE its dot and the lower BELOW, so
+  // the chips part however close the lines finish. Never by which is which: a
+  // project ahead of plan and one behind it need opposite sides.
+  const actualAbove = endActual && endPlan ? endActual.value >= endPlan.value : endActual !== null;
+
   return (
     <Reveal>
       <Card className="py-0">
@@ -101,7 +170,7 @@ export default function SCurveClient({
             style={{ height: 'clamp(220px, calc(100dvh - var(--plot-gap, 560px)), 460px)' }}
           >
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 12, right: 6, left: 8, bottom: 4 }}>
+              <ComposedChart data={chartData} margin={{ top: 32, right: 14, left: 8, bottom: 4 }}>
                 <defs>
                   <linearGradient id="actualFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.22} />
@@ -183,6 +252,53 @@ export default function SCurveClient({
                   animationBegin={150}
                   animationEasing="ease-out"
                 />
+                {/* Drawn after the lines so the dots sit on top, and after their
+                    900ms draw-in (0.95s delay in EndMark) so each lands on a line
+                    that has already arrived. */}
+                {cutoff && (
+                  <ReferenceLine
+                    x={cutoff}
+                    stroke="var(--muted-foreground)"
+                    strokeOpacity={0.4}
+                    strokeDasharray="3 3"
+                  />
+                )}
+                {endPlan && (
+                  <ReferenceDot
+                    x={endPlan.label}
+                    y={endPlan.value}
+                    ifOverflow="visible"
+                    shape={(p) => (
+                      <EndMark
+                        cx={Number(p.cx)}
+                        cy={Number(p.cy)}
+                        name="Plan"
+                        value={endPlan.value}
+                        color="var(--chart-2)"
+                        above={!actualAbove}
+                        delay="1.05s"
+                      />
+                    )}
+                  />
+                )}
+                {endActual && (
+                  <ReferenceDot
+                    x={endActual.label}
+                    y={endActual.value}
+                    ifOverflow="visible"
+                    shape={(p) => (
+                      <EndMark
+                        cx={Number(p.cx)}
+                        cy={Number(p.cy)}
+                        name="Actual"
+                        value={endActual.value}
+                        color="var(--chart-1)"
+                        above={actualAbove}
+                        delay="1.15s"
+                      />
+                    )}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
