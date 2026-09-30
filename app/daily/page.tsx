@@ -2,7 +2,8 @@ import { Suspense } from 'react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
-import { getOpenJsonDb } from '@/lib/data';
+import { dailyProgressFor } from '@/lib/daily-progress';
+import { getOpenJsonDb, getOpenProjectStatus } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
 
 function nextDateAfter(lastDate: string | undefined): string {
@@ -38,6 +39,9 @@ export default function DailyListPage() {
 async function DailyListBody() {
 
   const db = await getOpenJsonDb();
+  // Weekly is the source of a day's percentage (see lib/daily-progress.ts), so
+  // the list reads the same figures the report does. After the cookie read above.
+  const status = await getOpenProjectStatus();
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
@@ -48,12 +52,14 @@ async function DailyListBody() {
     <RouteTransition id="daily">
     <div className="p-4 sm:p-6 lg:p-8">
       <DailyReportsView
-        reports={sorted.map((d) => ({
-          date: d.date,
-          hariKe: d.hariKe,
-          planPct: d.planPct,
-          actualPct: d.actualPct,
-        }))}
+        reports={sorted.map((d) => {
+          const p = dailyProgressFor(status, d.date);
+          return {
+            date: d.date,
+            hariKe: d.hariKe,
+            progress: !p ? null : p.state === 'held' ? ('held' as const) : { plan: p.plan, actual: p.actual },
+          };
+        })}
         defaultDate={defaultDate}
       />
     </div>

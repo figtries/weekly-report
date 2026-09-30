@@ -2,7 +2,9 @@ import { Suspense } from 'react';
 import { weatherLabels } from '@/lib/catalogs';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import { getPrintJsonDb } from '@/lib/data';
+import { dailyProgressFor } from '@/lib/daily-progress';
+import { getPrintJsonDb, getProjectStatus } from '@/lib/data';
+import { getActiveProjectId } from '@/lib/projects';
 import { readJsonProject, readOpenDb } from '@/lib/db';
 import { jsonKeyFor } from '@/lib/legacy-bridge';
 import DailyPrintReport from '@/components/print/DailyPrintReport';
@@ -48,10 +50,14 @@ async function DailyPrintBody({ params, searchParams }: Props) {
   }
   if (!report) notFound();
 
+  // Named by the URL, like the report itself: headless Chromium has no cookie.
+  const statusId = projectId ?? (await getActiveProjectId());
+  const progress = dailyProgressFor(statusId ? await getProjectStatus(statusId) : null, date);
+
   return (
     <div className="bg-gray-100 min-h-full overflow-x-auto print:overflow-visible">
       <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:block print:w-auto print:min-w-0 print:gap-0 print:p-0">
-        <DailyPrintReport project={project} report={report} weatherLabels={labels} />
+        <DailyPrintReport project={project} report={report} weatherLabels={labels} progress={progress} />
       </div>
     </div>
   );

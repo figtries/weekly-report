@@ -32,7 +32,14 @@ import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } fr
 import { deleteUploadedPhoto } from './upload';
 import { BUILT_IN_KINDS, type Shape } from './work-kind';
 import { ladderFor } from './work-kind-apply';
-import type { CatalogEntry, DailyReport, LeafSnapshot, Milestone, ProgressMethod } from './types';
+import type {
+  CatalogEntry,
+  DailyPatch,
+  LeafSnapshot,
+  LogEntry,
+  Milestone,
+  ProgressMethod,
+} from './types';
 
 // Server Actions replace the old fetch('/api/...') + router.refresh() pattern:
 // one round trip that mutates, expires the 'db' cache tag (updateTag = read
@@ -168,14 +175,20 @@ export async function refreshDbAction(): Promise<void> {
   refresh();
 }
 
-export async function saveDailyAction(
+/**
+ * Autosave for the daily fill-in screen. It does NOT call `refresh()`: the
+ * screen owns its own optimistic copy, and re-rendering the whole page after
+ * every +1 tap is a second, staler source of truth (and the refreshed payload
+ * can land behind a newer tap on the deployment).
+ */
+export async function patchDailyAction(
   date: string,
-  patch: Partial<Omit<DailyReport, 'date'>>
+  patch: DailyPatch,
+  logs: LogEntry[] = []
 ): Promise<ActionResult> {
   try {
-    await mutateOpenDb((db) => applyPatchDaily(db, date, patch));
+    await mutateOpenDb((db) => applyPatchDaily(db, date, patch, logs));
     updateTag('db');
-    refresh();
     return { ok: true };
   } catch (err) {
     return fail(err);

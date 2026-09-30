@@ -455,6 +455,44 @@ only suggests ("Use these" is still a press, and the picker marks the
 suggestion). A one-press "Link" for the whole plan was shipped and removed
 the same day, because once it had run nothing on screen showed what it did.
 
+# Daily reports: today opens as yesterday
+
+Decided 30 Sep 2026; spec `docs/superpowers/specs/2026-09-30-daily-report-screen-design.md`,
+plan `docs/superpowers/plans/2026-09-30-daily-report-screen.md`. A daily report is
+about 90% the same as the day before, and the field engineer who owns it will not
+retype it, so `applyCreateDaily` opens each day as yesterday already filled in and
+a person only corrects what differs. Carried: the crew at their hours
+(`ManHourRow.hoursEach`, and `todayHours = pobQty × hoursEach`, the workbook's own
+formula), previous hours grown by yesterday's, the permits still OPEN, and
+yesterday's "tomorrow" list as today's unticked list. Weather, photos, the log and
+every confirmation start empty on purpose.
+
+**Section states live in ONE function** (`sectionStates` in `lib/daily-status.ts`):
+the hero count, every chip and `scripts/verify-daily-carry.ts` read it, so they
+cannot disagree. Nothing is `ready` until a person said so, except what they
+entered and what the app derives. A report written before the screen has no
+`confirmed` and counts its crew, permits, HSE and activities as confirmed.
+
+**Progress is weekly, never typed** (`lib/daily-progress.ts`): a day reads the week
+it falls in, clamped to the project's current week, and is held while the weights
+do not close. `DailyReport.planPct` / `actualPct` are no longer written; the
+screen, the list and the PDF all read the weekly figures.
+
+**Autosave, with no Save button.** `useDailyReport` keeps the optimistic copy, one
+write is in flight at a time and whatever changes meanwhile merges into the next
+write; `patchDailyAction` does NOT `refresh()`. Back and Save PDF wait for the queue
+(`flush`) and `beforeunload` guards while anything is unsaved: the first press test
+reloaded before the queue drained and lost four changes, which is what a person
+closing the tab would have done too. The "Today so far" log records what a person
+DID (a tap, an addition), never totals; photos join it by their `photoMeta` time.
+A writer that only knows the two activity strings (the PATCH route, and the Excel
+import to come) is not shadowed by stored items: `applyPatchDaily` drops the items
+when only the text is patched.
+
+Excel export and import of the supplied `PRGG-00-G0-RPT-003` workbook are slices 2
+and 3 and are not built: they fill that file as a template rather than redrawing
+it, so logos, merges and formulas stay the client's own.
+
 # Progress has one origin
 
 **`lib/progress.ts` decides every leaf percentage, and `lib/rollup.ts` calls it

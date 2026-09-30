@@ -1,4 +1,5 @@
 import { getCatalogs, type CatalogKey } from './catalogs';
+import { inferHoursEach, tomorrowItemsOf } from './daily-items';
 import { defaultWeather } from './defaults';
 import {
   defaultMilestones,
@@ -8,16 +9,20 @@ import {
   totalQty,
 } from './progress';
 import type {
+  ActivityItem,
   CatalogEntry,
   ChangeLogEntry,
+  DailyPatch,
   DailyReport,
   Database,
   HseRow,
   LeafSnapshot,
+  LogEntry,
   Milestone,
   ManHourRow,
   NonEffectiveRow,
   ProgressMethod,
+  PtwRow,
   WeeklyMeta,
 } from './types';
 
@@ -40,11 +45,16 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
     rows.map((r) => ({ ...r, previous: r.previous + r.today, today: 0 }));
 
   const manHours: ManHourRow[] = last
-    ? last.manHours.map((r) => ({
-        ...r,
-        previousHours: r.previousHours + r.todayHours,
-        todayHours: 0,
-      }))
+    ? last.manHours.map((r) => {
+        const hoursEach = r.hoursEach ?? inferHoursEach(r);
+        return {
+          ...r,
+          hoursEach,
+          previousHours: r.previousHours + r.todayHours,
+          // Today opens as yesterday did: the same people for the same hours.
+          todayHours: hoursEach !== undefined ? r.pobQty * hoursEach : 0,
+        };
+      })
     : getCatalogs(db).crew.map((c) => ({
         id: c.id,
         company: c.label,
@@ -71,16 +81,32 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
     ? carryCounters(last.hseInput)
     : cat.hse.map((c) => ({ id: c.id, activity: c.label, previous: 0, today: 0 }));
 
+  // A permit that is still OPEN does not stop being open at midnight.
+  const ptw: PtwRow[] = last
+    ? last.ptw.filter((p) => p.status.trim().toUpperCase() === 'OPEN').map((p) => ({ ...p }))
+    : [];
+  // What yesterday planned for today is today's list, unticked. Weather,
+  // photos, the log and every confirmation start empty on purpose.
+  const todayItems: ActivityItem[] = last
+    ? tomorrowItemsOf(last).map((it, i) => ({ id: `${date}-a${i + 1}`, text: it.text, done: false }))
+    : [];
+
   const report: DailyReport = {
     date,
     hariKe: last ? (last.hariKe ?? 0) + 1 : 1,
     weather: defaultWeather(),
     manHours,
     nonEffective,
-    ptw: [],
+    ptw,
     hseInput,
     activitiesToday: '',
     activitiesTomorrow: '',
+    todayItems,
+    tomorrowItems: [],
+    aoc: [],
+    log: [],
+    confirmed: {},
+    // No longer written: progress is read from weekly (lib/daily-progress.ts).
     planPct: 0,
     actualPct: 0,
     photos: [null, null, null, null, null, null],
@@ -92,11 +118,22 @@ export function applyCreateDaily(db: Database, date: string): DailyReport {
 export function applyPatchDaily(
   db: Database,
   date: string,
-  patch: Partial<Omit<DailyReport, 'date'>>
+  patch: DailyPatch,
+  logs: LogEntry[] = []
 ): DailyReport {
   const report = db.daily.find((d) => d.date === date);
   if (!report) throw new Error(`Daily report for ${date} not found`);
-  Object.assign(report, patch);
+  const { confirmed, ...rest } = patch;
+  Object.assign(report, rest);
+  // A writer that only knows the two text fields (the PATCH route, an old
+  // client) must not be shadowed by items it never saw: the text it wrote wins.
+  if (rest.activitiesToday !== undefined && rest.todayItems === undefined) delete report.todayItems;
+  if (rest.activitiesTomorrow !== undefined && rest.tomorrowItems === undefined) delete report.tomorrowItems;
+  // Confirmations merge, so two rapid writes cannot un-confirm each other.
+  if (confirmed) report.confirmed = { ...report.confirmed, ...confirmed };
+  // The log entries ride in the SAME write as the changes they describe, so the
+  // timeline can never show something the report does not hold.
+  if (logs.length) report.log = [...(report.log ?? []), ...logs];
   return report;
 }
 

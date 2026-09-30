@@ -1,13 +1,14 @@
-import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
-import { getOpenJsonDb, getWorkspace } from '@/lib/data';
+import { suggestActivities } from '@/lib/daily-items';
+import { dailyProgressFor } from '@/lib/daily-progress';
+import { getOpenJsonDb, getOpenProjectStatus, getWorkspace } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
-import DailyForm from '@/components/daily/DailyForm';
+import type { DailyReport, Database } from '@/lib/types';
 import CreateReportHere from '@/components/daily/CreateReportHere';
-import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
+import DailyReportScreen from '@/components/daily/DailyReportScreen';
 import DailyDetailLoading from './loading';
 
 // No unstable_instant here: with every date enumerated by generateStaticParams
@@ -31,6 +32,21 @@ export async function generateStaticParams() {
   const ws = await getWorkspace();
   const dates = [...new Set(Object.values(ws.projects).flatMap((p) => p.daily.map((d) => d.date)))];
   return dates.length ? dates.map((date) => ({ date })) : [{ date: '2026-01-01' }];
+}
+
+/**
+ * When each photo was taken, for "Today so far": the camera's time when it falls
+ * on the report's own date, otherwise the moment it was uploaded (a gallery photo
+ * from last week was not taken today).
+ */
+function photoTimesOf(db: Database, report: DailyReport): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of report.photos) {
+    const meta = p ? db.photoMeta?.[p] : undefined;
+    if (!p || !meta) continue;
+    out[p] = meta.takenAt && meta.takenAt.slice(0, 10) === report.date ? meta.takenAt : meta.uploadedAt;
+  }
+  return out;
 }
 
 async function DailyDetail({ date }: { date: string }) {
@@ -79,17 +95,20 @@ async function DailyDetail({ date }: { date: string }) {
     );
   }
 
+  // After getOpenJsonDb(), which read the project cookie: a request read has
+  // happened, so the clock `getOpenProjectStatus` reads is allowed here.
+  const status = await getOpenProjectStatus();
   return (
-    <div className="p-4 sm:p-6 lg:p-8 print:p-0">
-      <DailyForm report={report} weatherLabels={labels} />
-      {/* The last thing on the longest screen in the app: reached, not
-          animated on a delay two screens above it. */}
-      <ScrollReveal>
-      <section className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-6 shadow-sm print:hidden">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Documentation</h2>
-        <PhotoUploadGrid photos={report.photos} uploadUrl={`/api/daily/${date}/photos`} />
-      </section>
-      </ScrollReveal>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <DailyReportScreen
+        initial={report}
+        project={{ name: db.project.name, location: db.project.workLocation }}
+        weatherLabels={labels}
+        hasPredecessor={db.daily.some((d) => d.date < date)}
+        progress={dailyProgressFor(status, date)}
+        suggestions={suggestActivities(db.daily.filter((d) => d.date !== date), [], 24)}
+        photoTimes={photoTimesOf(db, report)}
+      />
     </div>
   );
 }

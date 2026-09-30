@@ -1,5 +1,6 @@
 import PrintHeader from './PrintHeader';
 import PrintFooter from './PrintFooter';
+import type { DailyProgress } from '@/lib/daily-progress';
 import type { DailyReport, ProjectInfo } from '@/lib/types';
 
 function weekdayLabel(date: string): string {
@@ -48,9 +49,12 @@ export default function DailyPrintReport({
   project,
   report,
   weatherLabels,
+  progress,
 }: {
   project: ProjectInfo;
   report: DailyReport;
+  /** The weekly figures for this day (lib/daily-progress.ts); null or held prints a dash. */
+  progress: DailyProgress | null;
   /** Keyed by WeatherInfo field name; the slots are fixed, the wording is per project. */
   weatherLabels: Record<string, string>;
 }) {
@@ -271,8 +275,8 @@ export default function DailyPrintReport({
           </thead>
           <tbody>
             <tr>
-              <td className="rpt-num">{report.planPct.toFixed(2)}%</td>
-              <td className="rpt-num">{report.actualPct.toFixed(2)}%</td>
+              <td className="rpt-num">{progress?.state === 'ready' ? `${progress.plan.toFixed(2)}%` : '-'}</td>
+              <td className="rpt-num">{progress?.state === 'ready' ? `${progress.actual.toFixed(2)}%` : '-'}</td>
             </tr>
           </tbody>
         </table>

@@ -13,8 +13,8 @@ import NewDailyButton from './NewDailyButton';
 export type DailyListItem = {
   date: string;
   hariKe: number | null;
-  planPct: number;
-  actualPct: number;
+  /** The weekly figures for the week this day falls in, 'held' while the weights do not close. */
+  progress: { plan: number; actual: number } | 'held' | null;
 };
 
 function monthKey(date: string): string {
@@ -182,7 +182,11 @@ export default function DailyReportsView({
                 <p className="text-sm text-muted-foreground">Day {d.hariKe ?? '-'}</p>
               </div>
               <p className="text-sm text-muted-foreground sm:pr-4">
-                Plan {d.planPct.toFixed(0)}% · Actual {d.actualPct.toFixed(0)}%
+                {d.progress === 'held'
+                  ? 'Figures held'
+                  : d.progress
+                    ? `Plan ${d.progress.plan.toFixed(0)}% · Actual ${d.progress.actual.toFixed(0)}%`
+                    : ''}
               </p>
             </Link>
             <div className="flex shrink-0 items-center gap-1">

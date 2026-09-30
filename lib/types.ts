@@ -89,6 +89,13 @@ export interface ManHourRow {
   id: string;
   company: string;
   pobQty: number;
+  /**
+   * Hours each person works per day. When it is set, `todayHours` is
+   * `pobQty × hoursEach` (the workbook's own formula: 8 for office, 12 for
+   * site), which is what lets a report be filled by counting heads. Absent on
+   * rows written before the fill-in screen: `hoursEachOf` infers it.
+   */
+  hoursEach?: number;
   previousHours: number;
   todayHours: number;
 }
@@ -118,6 +125,43 @@ export interface HseRow {
   previous: number;
   today: number;
 }
+
+export interface ActivityItem {
+  id: string;
+  text: string;
+  /** Today's list: it was done. Tomorrow's list: unused, always false. */
+  done: boolean;
+}
+
+export interface AocRow {
+  id: string;
+  type: 'AOC' | 'AFH';
+  description: string;
+  date: string;
+  actionBy: string;
+  status: string;
+}
+
+export type LogKind = 'activity' | 'hse' | 'ptw' | 'note';
+
+/** A timed line in "Today so far". Records what a person DID, not totals. */
+export interface LogEntry {
+  id: string;
+  /** ISO instant. */
+  at: string;
+  kind: LogKind;
+  text: string;
+}
+
+export type DailySectionKey =
+  | 'weather'
+  | 'manHours'
+  | 'ptw'
+  | 'hse'
+  | 'activities'
+  | 'aoc'
+  | 'progress'
+  | 'photos';
 
 export interface WeatherInfo {
   hujanDeras: boolean;
@@ -223,7 +267,17 @@ export interface DailyReport {
   planPct: number;
   actualPct: number;
   photos: (string | null)[];
+  /** The fill-in screen's lists. Absent on older reports: read them through `todayItemsOf` / `tomorrowItemsOf`. */
+  todayItems?: ActivityItem[];
+  tomorrowItems?: ActivityItem[];
+  aoc?: AocRow[];
+  aocNone?: boolean;
+  log?: LogEntry[];
+  /** Sections a person has said are right. Undefined means an older report, see `sectionStates`. */
+  confirmed?: Partial<Record<DailySectionKey, true>>;
 }
+
+export type DailyPatch = Partial<Omit<DailyReport, 'date'>>;
 
 export interface ChangeLogEntry {
   id: string;

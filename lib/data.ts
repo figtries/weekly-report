@@ -202,11 +202,22 @@ export interface OpenProjectStatus {
    * deployment, 28 Sep 2026). Empty while the weights do not close.
    */
   byWeek: Record<number, { actual: number; plan: number }>;
+  /** Week ONE's end date, so a day can find the week it falls in (`weekOfDate`). */
+  anchorEnd: string;
 }
 
 export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
+  return getProjectStatus(id);
+}
+
+/**
+ * The same, for a NAMED project: the daily PDF is told which project it is for
+ * and cannot ask. Reads the clock through `currentWeekOf`, so call it after a
+ * request read.
+ */
+export async function getProjectStatus(id: string): Promise<OpenProjectStatus | null> {
   const db = buildProjectDashboardData(id)?.db;
   if (!db || db.weeks.length === 0) return null;
 
@@ -217,7 +228,10 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
   if (!rollup || rollup.grandTotal.bobot <= 0) return null;
 
   const gate = weightGate(db.wbsItems);
-  if (!gate.ok) return { week, actual: 0, plan: 0, variance: 0, ready: false, weightsTotal: gate.total, byWeek: {} };
+  const anchorEnd = db.project.weekAnchorEndDate;
+  if (!gate.ok) {
+    return { week, actual: 0, plan: 0, variance: 0, ready: false, weightsTotal: gate.total, byWeek: {}, anchorEnd };
+  }
   // Plan as a share of the total weight, like actual — it read raw `targetWF`
   // and said "Plan 24.76% · 11.40% ahead" beside a dashboard saying 34.98% and
   // 16.11% for the same week (26 Sep 2026). Rounded as printed, so the three
@@ -229,7 +243,7 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
     const r = w.week === week ? rollup : getWeekRollup(db, w.week);
     if (r) byWeek[w.week] = { actual: r2(r.grandTotal.curProgressPct), plan: r2(r.grandTotal.planPct) };
   }
-  return { week, actual, plan, variance: shownDiff(actual, plan), ready: true, weightsTotal: gate.total, byWeek };
+  return { week, actual, plan, variance: shownDiff(actual, plan), ready: true, weightsTotal: gate.total, byWeek, anchorEnd };
 }
 
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
