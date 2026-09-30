@@ -233,7 +233,7 @@ check('a freshly created day: nothing is ready that nobody said, crew and permit
   assert.equal(s.manHours, 'same');
   assert.equal(s.ptw, 'look');
   assert.equal(s.hse, 'same');
-  assert.equal(s.activities, 'look', 'carried plan, nothing ticked: a warning, not a Confirm');
+  assert.equal(s.activities, 'empty', 'carried plan, nothing ticked: not ready, and no warning either');
   assert.equal(s.aoc, 'empty');
   assert.equal(s.photos, 'empty');
   assert.equal(readyCount(s), 0);

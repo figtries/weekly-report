@@ -44,24 +44,20 @@ export function sectionStates(report: DailyReport): Record<DailySectionKey, Sect
     manHours: c.manHours ? 'ready' : report.manHours.some((r) => r.pobQty > 0) ? 'same' : 'empty',
     ptw: lapsedPermits(report).length > 0 ? 'look' : c.ptw ? 'ready' : report.ptw.length > 0 ? 'same' : 'empty',
     hse: c.hse || report.hseInput.some((r) => r.today > 0) ? 'ready' : 'same',
-    activities: activitiesGap(report) ? 'look' : 'ready',
+    activities: activitiesDone(report) ? 'ready' : 'empty',
     aoc: c.aoc || report.aocNone || (report.aoc ?? []).length > 0 ? 'ready' : 'empty',
     photos: report.photos.some(Boolean) ? 'ready' : 'empty',
   };
 }
 
 /**
- * What the Work part is still missing, or null when it is complete. It has no Confirm
- * (1 Oct 2026): it is ready when something done today is ticked and tomorrow has a plan,
- * and says which is missing otherwise. A ticked item, not just a listed one, because the
- * sheet prints only what was DONE, and a list carried from yesterday's plan is not that.
+ * Work has no Confirm (1 Oct 2026): it is ready when something done today is ticked and
+ * tomorrow has a plan. Until then it is simply not ready yet, never a warning: a warning
+ * shown before anyone has done anything was rejected. The only warning is pressing Add
+ * on an empty box (ActivitiesSection).
  */
-export function activitiesGap(report: DailyReport): 'nothing' | 'unticked' | 'noPlan' | null {
-  const today = todayItemsOf(report);
-  if (today.length === 0) return 'nothing';
-  if (!today.some((i) => i.done)) return 'unticked';
-  if (tomorrowItemsOf(report).length === 0) return 'noPlan';
-  return null;
+export function activitiesDone(report: DailyReport): boolean {
+  return todayItemsOf(report).some((i) => i.done) && tomorrowItemsOf(report).length > 0;
 }
 
 export function readyCount(states: Record<DailySectionKey, SectionState>): number {

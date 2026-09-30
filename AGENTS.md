@@ -498,10 +498,12 @@ never touched, so the Excel "what was done" block cannot change behind anyone's 
 suggestions: a list of yesterday's sentences with Add and dismiss was built and rejected
 the same day. It reads the day BEFORE, never a later report.
 
-**Work has no Confirm** (`activitiesGap` in `lib/daily-status.ts`): ready when something
-is TICKED today and tomorrow has a plan, otherwise amber with the gap named on the row and
-an amber line under the box that fixes it. Ticked, not merely listed, because the sheet
-prints only what was done and a carried plan is not that.
+**Work has no Confirm and no standing warning** (`activitiesDone` in
+`lib/daily-status.ts`): ready when something is TICKED today and tomorrow has a plan,
+otherwise just not ready yet (the grey mark). The ONE warning is pressing Add (or Enter)
+on an empty box: that box turns red, says to type first, takes the cursor, and clears as
+soon as anything is typed. Warnings shown before anyone had done anything (amber lines
+under both boxes, an amber row) were shipped and rejected the same day.
 
 **Save changes finishes a report**: it retries a failed batch, waits for every write
 (`flush`), then goes back to the list, beside Export Excel at the same size, solid where
