@@ -16,8 +16,6 @@ export type DailyListItem = {
   /** The project's week and day this date falls in, computed from the plan; null with none. */
   week: number | null;
   day: number | null;
-  /** The weekly figures for the week this day falls in, 'held' while the weights do not close. */
-  progress: { plan: number; actual: number } | 'held' | null;
 };
 
 function monthKey(date: string): string {
@@ -123,7 +121,7 @@ export default function DailyReportsView({
       <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-1 sm:mb-2">Daily Reports</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Field man-hours, PTW, HSE and daily progress</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Field man-hours, permits, HSE and daily activities</p>
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <MonthDropdown
@@ -190,19 +188,12 @@ export default function DailyReportsView({
             >
             <Link
               href={`/daily/${d.date}`}
-              className="flex min-w-0 flex-1 flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4"
+              className="flex min-w-0 flex-1 flex-col gap-1 py-3 sm:py-4"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">{fullDateLabel(d.date)}</p>
                 <p className="text-sm text-muted-foreground">Day {d.day ?? d.hariKe ?? '-'}</p>
               </div>
-              <p className="text-sm text-muted-foreground sm:pr-4">
-                {d.progress === 'held'
-                  ? 'Figures held'
-                  : d.progress
-                    ? `Plan ${d.progress.plan.toFixed(0)}% · Actual ${d.progress.actual.toFixed(0)}%`
-                    : ''}
-              </p>
             </Link>
             <div className="flex shrink-0 items-center gap-1">
               <Link

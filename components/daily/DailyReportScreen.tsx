@@ -2,22 +2,20 @@
 
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import SavePdfButton from '@/components/print/SavePdfButton';
-import type { DailyProgress } from '@/lib/daily-progress';
-import { readyCount, sectionStates, SECTION_ORDER } from '@/lib/daily-status';
+import { readyCount, sectionStates } from '@/lib/daily-status';
 import type { DailyReport, DailySectionKey } from '@/lib/types';
-import { cn } from '@/lib/utils';
-import ActivitiesCard from './cards/ActivitiesCard';
-import AocCard from './cards/AocCard';
-import HseCard from './cards/HseCard';
-import ManHoursCard from './cards/ManHoursCard';
-import PhotosCard from './cards/PhotosCard';
-import ProgressCard from './cards/ProgressCard';
-import PtwCard from './cards/PtwCard';
-import WeatherCard from './cards/WeatherCard';
-import DailyHero from './DailyHero';
+import DailyHeader from './DailyHeader';
+import { GroupCard } from './SectionRow';
+import ActivitiesSection from './sections/ActivitiesSection';
+import AocSection from './sections/AocSection';
+import HseSection from './sections/HseSection';
+import ManHoursSection from './sections/ManHoursSection';
+import PhotosSection from './sections/PhotosSection';
+import PtwSection from './sections/PtwSection';
+import WeatherSection from './sections/WeatherSection';
 import TodayLog, { type LogRow } from './TodayLog';
 import { useDailyReport } from './useDailyReport';
 
@@ -26,7 +24,6 @@ export interface DailyScreenProps {
   project: { name: string; location: string };
   weatherLabels: Record<string, string>;
   hasPredecessor: boolean;
-  progress: DailyProgress | null;
   suggestions: string[];
   /** Photo path to the instant it was taken (or uploaded), for "Today so far". */
   photoTimes: Record<string, string>;
@@ -35,13 +32,13 @@ export interface DailyScreenProps {
 }
 
 export default function DailyReportScreen(props: DailyScreenProps) {
-  const { initial, project, weatherLabels, hasPredecessor, progress, suggestions, weekDay } = props;
+  const { initial, project, weatherLabels, hasPredecessor, suggestions, weekDay } = props;
   const router = useRouter();
   const { report, commit, retry, failed, pending, setPhotos, flush } = useDailyReport(initial);
   const [open, setOpen] = useState<DailySectionKey | null>(null);
   const [times, setTimes] = useState(props.photoTimes);
 
-  const states = useMemo(() => sectionStates(report, progress), [report, progress]);
+  const states = useMemo(() => sectionStates(report), [report]);
   const ready = readyCount(states);
 
   // An upload is written by its own route and announced on the window. Mirror
@@ -94,7 +91,12 @@ export default function DailyReportScreen(props: DailyScreenProps) {
     year: 'numeric',
     timeZone: 'UTC',
   });
+  const subtitle = [weekDay ? `Week ${weekDay.week} · Day ${weekDay.day}` : '', project.name, project.location]
+    .filter(Boolean)
+    .join(' · ');
 
+  // One part is open at a time: opening another closes the first, so the page never
+  // grows into a long form and the row you just pressed stays where your thumb is.
   const shared = (k: DailySectionKey) => ({
     report,
     commit,
@@ -105,19 +107,11 @@ export default function DailyReportScreen(props: DailyScreenProps) {
     hasPredecessor,
   });
 
-  const cards: Record<DailySectionKey, ReactNode> = {
-    weather: <WeatherCard {...shared('weather')} labels={weatherLabels} />,
-    manHours: <ManHoursCard {...shared('manHours')} />,
-    ptw: <PtwCard {...shared('ptw')} />,
-    hse: <HseCard {...shared('hse')} />,
-    activities: <ActivitiesCard {...shared('activities')} suggestions={suggestions} />,
-    aoc: <AocCard {...shared('aoc')} />,
-    progress: <ProgressCard {...shared('progress')} progress={progress} />,
-    photos: <PhotosCard {...shared('photos')} />,
-  };
-
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div>
+      {/* The way out and the way to the client's file share one row: the Excel button
+          used to wrap under a long date and sit alone as a box with an icon. */}
+      <div className="mb-4 flex items-center justify-between gap-3">
       <PressLink
         {...pressMotion}
         href="/daily"
@@ -140,45 +134,52 @@ export default function DailyReportScreen(props: DailyScreenProps) {
         <ArrowLeft className="size-5" />
         <span className="text-sm font-medium">Back</span>
       </PressLink>
+      {/* The daily report leaves as the client's own Excel workbook, not as a PDF. The
+          same button walk (prepare, count, save) serves it; it waits for autosave first. */}
+      <SavePdfButton
+        variant="outline"
+        url={`/api/xlsx/daily/${report.date}`}
+        filename={`DAILY PROGRESS REPORT ${report.date.slice(8, 10)}${report.date.slice(5, 7)}${report.date.slice(0, 4)}.xlsx`}
+        ariaLabel="Export the daily report as Excel"
+        label="Export Excel"
+        noun="Excel"
+        mime="spreadsheetml"
+        warm={false}
+        beforeDownload={flush}
+      />
+      </div>
 
-      <DailyHero
-        weekday={weekday}
-        subtitle={[project.name, project.location].filter(Boolean).join(' · ')}
+      <DailyHeader
+        title={weekday}
+        subtitle={subtitle}
         states={states}
         ready={ready}
-        weekDay={weekDay}
         pending={pending}
         failed={!!failed}
         onRetry={retry}
-        pdf={
-          // The daily report leaves as the client's own Excel workbook, not as a PDF. The
-          // same button walk (prepare, count, save) serves it; it waits for autosave first.
-          <SavePdfButton
-            url={`/api/xlsx/daily/${report.date}`}
-            filename={`DAILY PROGRESS REPORT ${report.date.slice(8, 10)}${report.date.slice(5, 7)}${report.date.slice(0, 4)}.xlsx`}
-            ariaLabel="Export the daily report as Excel"
-            label="Export Excel"
-            noun="Excel"
-            mime="spreadsheetml"
-            warm={false}
-            beforeDownload={flush}
-          />
-        }
       />
 
-      {/* `grid-cols-1` is minmax(0, 1fr): a bare grid's column is `auto`, and one
-          long unbreakable chip in an open card then widened the whole column
-          (and the log beside it) past the screen. */}
+      {/* `grid-cols-1` is minmax(0, 1fr): a bare grid's column is `auto`, and one long
+          unbreakable line in an open part then widened the whole column (and the log
+          beside it) past the screen. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="animate-enter stagger-1 min-w-0 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:self-start">
-          <TodayLog rows={rows} />
+        <div className="min-w-0 space-y-4 lg:col-start-1 lg:row-start-1">
+          <GroupCard title="On site" className="animate-enter stagger-1">
+            <WeatherSection {...shared('weather')} labels={weatherLabels} />
+            <ManHoursSection {...shared('manHours')} />
+          </GroupCard>
+          <GroupCard title="Work" className="animate-enter stagger-2">
+            <ActivitiesSection {...shared('activities')} suggestions={suggestions} />
+            <PhotosSection {...shared('photos')} />
+          </GroupCard>
+          <GroupCard title="Safety" className="animate-enter stagger-3">
+            <HseSection {...shared('hse')} />
+            <PtwSection {...shared('ptw')} />
+            <AocSection {...shared('aoc')} />
+          </GroupCard>
         </div>
-        <div className="grid min-w-0 grid-cols-1 content-start items-start gap-3 md:grid-cols-2 lg:col-start-1 lg:row-start-1">
-          {SECTION_ORDER.map((k, i) => (
-            <div key={k} className={cn('animate-enter', `stagger-${Math.min(i + 2, 8)}`, open === k && 'md:col-span-2')}>
-              {cards[k]}
-            </div>
-          ))}
+        <div className="animate-enter stagger-4 min-w-0 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:self-start">
+          <TodayLog rows={rows} />
         </div>
       </div>
     </div>

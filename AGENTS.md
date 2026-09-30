@@ -468,15 +468,28 @@ yesterday's "tomorrow" list as today's unticked list. Weather, photos, the log a
 every confirmation start empty on purpose.
 
 **Section states live in ONE function** (`sectionStates` in `lib/daily-status.ts`):
-the hero count, every chip and `scripts/verify-daily-carry.ts` read it, so they
-cannot disagree. Nothing is `ready` until a person said so, except what they
+the header's segments, every row's mark and `scripts/verify-daily-carry.ts` read it,
+so they cannot disagree. Nothing is `ready` until a person said so, except what they
 entered and what the app derives. A report written before the screen has no
 `confirmed` and counts its crew, permits, HSE and activities as confirmed.
 
-**Progress is weekly, never typed** (`lib/daily-progress.ts`): a day reads the week
-it falls in, clamped to the project's current week, and is held while the weights
-do not close. `DailyReport.planPct` / `actualPct` are no longer written; the
-screen, the list and the PDF all read the weekly figures.
+**The screen is rows, not the form** (redesigned 30 Sep 2026 after the first cut was
+called "too Excel"). Seven parts in three cards (On site: weather, man hours; Work:
+daily activities, photos; Safety: HSE, permit, area of concern), each a hairline row
+with a status mark, one line of summary and at most one or two quiet actions, opening
+into its own editor (`components/daily/sections/*`, built on `SectionRow`, `Marker`,
+`Panel`). ONE part is open at a time. Nothing on the screen mirrors the workbook's
+grid: the export does that, and the "Excel sheet holds N" note speaks ONLY when a
+list is over what the sheet can hold (`CapacityNote`). **The panel is height + opacity
+from `Panel.tsx`, with `contain: layout paint`;** measured under 4x CPU throttle it
+draws a frame every 17-33 ms open and close at 390 and 1440, so keep it that way
+(`AnimatePresence initial={false}`, one ease, no per-row layout animation).
+
+**There is no progress on the daily screen or list.** It is the weekly report's job:
+`lib/daily-progress.ts` stays only because the Excel export fills the sheet's progress
+cells from the week's figures (held while the weights do not close), and
+`DailyReport.planPct` / `actualPct` are no longer written. `DailySectionKey` has no
+`'progress'`; do not add one back.
 
 **Autosave, with no Save button.** `useDailyReport` keeps the optimistic copy, one
 write is in flight at a time and whatever changes meanwhile merges into the next

@@ -171,8 +171,6 @@ check('a text-only patch is not shadowed by stored items; the screen writes both
   assert.equal(r.activitiesTomorrow, '1. From the screen');
 });
 
-const READY_PROGRESS = { state: 'ready', week: 5, actual: 44, plan: 42.29, variance: 1.71, weightsTotal: 100 } as const;
-
 check('the workbook permit is 109 days past its validity', () => {
   const r = report({ date: '2026-03-12' });
   assert.deepEqual(lapsedPermits(r).map((p) => p.id), ['p1']);
@@ -182,16 +180,15 @@ check('the workbook permit is 109 days past its validity', () => {
 
 check('a freshly created day: nothing is ready that nobody said, crew and permits are "same"', () => {
   const r = applyCreateDaily(dbWith(report()), '2026-03-12');
-  const s = sectionStates(r, READY_PROGRESS);
+  const s = sectionStates(r);
   assert.equal(s.weather, 'look');
   assert.equal(s.manHours, 'same');
   assert.equal(s.ptw, 'look');
   assert.equal(s.hse, 'same');
   assert.equal(s.activities, 'same');
   assert.equal(s.aoc, 'empty');
-  assert.equal(s.progress, 'ready');
   assert.equal(s.photos, 'empty');
-  assert.equal(readyCount(s), 1);
+  assert.equal(readyCount(s), 0);
 });
 
 check('confirming and entering move sections to ready', () => {
@@ -201,21 +198,19 @@ check('confirming and entering move sections to ready', () => {
   r.weather.cerahTerang = true;
   r.aocNone = true;
   r.photos[0] = '/uploads/x.jpg';
-  const s = sectionStates(r, READY_PROGRESS);
-  assert.deepEqual(Object.values(s), ['ready', 'ready', 'ready', 'ready', 'ready', 'ready', 'ready', 'ready']);
-  assert.equal(readyCount(s), 8);
+  const s = sectionStates(r);
+  assert.deepEqual(Object.values(s), ['ready', 'ready', 'ready', 'ready', 'ready', 'ready', 'ready']);
+  assert.equal(readyCount(s), 7);
 });
 
 check('an HSE count entered today is ready without a confirm', () => {
   const r = applyCreateDaily(dbWith(report()), '2026-03-12');
   r.hseInput[0].today = 1;
-  assert.equal(sectionStates(r, null).hse, 'ready');
-  assert.equal(sectionStates(r, null).progress, 'empty');
-  assert.equal(sectionStates(r, { ...READY_PROGRESS, state: 'held' }).progress, 'held');
+  assert.equal(sectionStates(r).hse, 'ready');
 });
 
 check('an older report (no confirmed) counts its filled sections as confirmed, AOC excepted', () => {
-  const s = sectionStates(report({ date: '2025-11-20' }), READY_PROGRESS);
+  const s = sectionStates(report({ date: '2025-11-20' }));
   assert.equal(s.manHours, 'ready');
   assert.equal(s.hse, 'ready');
   assert.equal(s.activities, 'ready');

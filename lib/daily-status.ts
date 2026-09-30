@@ -1,12 +1,16 @@
 import { todayItemsOf } from './daily-items';
-import type { DailyProgress } from './daily-progress';
 import type { DailyReport, DailySectionKey, PtwRow } from './types';
 
-export type SectionState = 'ready' | 'same' | 'look' | 'empty' | 'held';
+export type SectionState = 'ready' | 'same' | 'look' | 'empty';
 
-/** The order on the sheet and in the hero meter. */
+/**
+ * The order the screen lists them in, which is the order somebody on site works
+ * through a day (where, what was done, what went wrong), not the order of the
+ * client's sheet. Progress is not here: the daily report does not carry a
+ * percentage, the weekly report does (the sheet still prints it, see lib/xlsx).
+ */
 export const SECTION_ORDER: DailySectionKey[] = [
-  'weather', 'manHours', 'ptw', 'hse', 'activities', 'aoc', 'progress', 'photos',
+  'weather', 'manHours', 'activities', 'photos', 'hse', 'ptw', 'aoc',
 ];
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,18 +28,14 @@ export function daysLapsed(validity: string, date: string): number {
 }
 
 /**
- * ONE answer per section, so the hero count, the chips and the proof cannot
- * disagree. Nothing is `ready` until a person said so, except what they entered
- * and what the app derives (progress).
+ * ONE answer per section, so the header count, the markers and the proof cannot
+ * disagree. Nothing is `ready` until a person said so, except what they entered.
  *
  * A report written before the fill-in screen has no `confirmed` at all: its
  * crew, permits, HSE and activities were typed by hand, so they count as
  * confirmed. AOC did not exist, so it is not.
  */
-export function sectionStates(
-  report: DailyReport,
-  progress: DailyProgress | null
-): Record<DailySectionKey, SectionState> {
+export function sectionStates(report: DailyReport): Record<DailySectionKey, SectionState> {
   const c = report.confirmed ?? { manHours: true, ptw: true, hse: true, activities: true };
   const w = report.weather;
   const anyWeather = w.hujanDeras || w.hujanSedang || w.berawanMendung || w.cerahTerang;
@@ -46,7 +46,6 @@ export function sectionStates(
     hse: c.hse || report.hseInput.some((r) => r.today > 0) ? 'ready' : 'same',
     activities: c.activities ? 'ready' : todayItemsOf(report).length > 0 ? 'same' : 'empty',
     aoc: c.aoc || report.aocNone || (report.aoc ?? []).length > 0 ? 'ready' : 'empty',
-    progress: !progress ? 'empty' : progress.state === 'ready' ? 'ready' : 'held',
     photos: report.photos.some(Boolean) ? 'ready' : 'empty',
   };
 }

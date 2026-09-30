@@ -160,7 +160,6 @@ export type DailySectionKey =
   | 'hse'
   | 'activities'
   | 'aoc'
-  | 'progress'
   | 'photos';
 
 export interface WeatherInfo {

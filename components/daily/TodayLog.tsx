@@ -33,18 +33,18 @@ export default function TodayLog({ rows }: { rows: LogRow[] }) {
   const shown = all ? sorted : sorted.slice(0, 3);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-3 shadow-sm sm:p-4">
+    <section className="rounded-xl border border-border bg-card px-4 pb-3 pt-3.5 shadow-sm sm:px-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Today so far</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Today so far</h2>
         <span className="text-[12px] font-medium tabular-nums text-gray-400">{rows.length} logged</span>
       </div>
 
       {rows.length === 0 ? (
-        <p className="mt-3 text-[13px] leading-snug text-muted-foreground">
+        <p className="mt-2.5 pb-1 text-[13px] leading-snug text-muted-foreground">
           Nothing logged yet. Photos, activities, HSE taps and permits added today appear here with their time.
         </p>
       ) : (
-        <ol className="ml-1.5 mt-3 border-l-2 border-blue-100 pl-4">
+        <ol className="ml-1 mt-3 border-l-2 border-blue-100 pl-4">
           <AnimatePresence initial={false}>
             {shown.map((r) => {
               const { label, Icon, dot } = KIND[r.kind];
@@ -56,14 +56,14 @@ export default function TodayLog({ rows }: { rows: LogRow[] }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={MOTION.spring}
-                  className="relative mb-2 flex items-center gap-3 rounded-lg border border-border p-2.5"
+                  className="relative flex items-center gap-3 py-2"
                 >
-                  <span className={`absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full border-2 border-card ${dot}`} />
+                  <span className={`absolute -left-[22px] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2 border-card ${dot}`} />
                   {r.thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.thumb} alt="" className="size-11 shrink-0 rounded-md object-cover" />
+                    <img src={r.thumb} alt="" className="size-10 shrink-0 rounded-lg object-cover" />
                   ) : (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-gray-500">
                       <Icon className="size-4" />
                     </span>
                   )}

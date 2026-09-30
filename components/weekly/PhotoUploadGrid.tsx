@@ -74,9 +74,17 @@ function errorFromResponse(body: unknown, res: Response, fallback: string): stri
 export default function PhotoUploadGrid({
   photos,
   uploadUrl,
+  compact = false,
 }: {
   photos: (string | null)[];
   uploadUrl: string;
+  /**
+   * The daily report's light version: three across, no "Page N" headings (until there
+   * is more than one page), quiet dashed slots, and "Add 6 more slots" as a text link.
+   * The upload, remove and page routes are exactly the same; the weekly pack keeps the
+   * default.
+   */
+  compact?: boolean;
 }) {
   const [busySlot, setBusySlot] = useState<number | null>(null);
   const [pageBusy, setPageBusy] = useState(false);
@@ -213,7 +221,7 @@ export default function PhotoUploadGrid({
   }
 
   return (
-    <div className="space-y-10">
+    <div className={compact ? 'space-y-4' : 'space-y-10'}>
       {error && (
         <Reveal>
           <div className="flex items-start justify-between gap-3 rounded-lg bg-bad-soft px-4 py-3 text-sm text-bad ring-1 ring-bad/25">
@@ -234,8 +242,8 @@ export default function PhotoUploadGrid({
       )}
       {pages.map((pagePhotos, pageIndex) => (
         <section key={pageIndex}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className={TYPE.cardTitle}>Page {pageIndex + 1}</h2>
+          <div className={compact && pages.length === 1 ? 'hidden' : 'mb-3 flex items-center justify-between'}>
+            <h2 className={compact ? 'text-[13px] font-semibold text-muted-foreground' : TYPE.cardTitle}>Page {pageIndex + 1}</h2>
             {pageIndex === pages.length - 1 && lastPageEmpty && (
               <Button
                 variant="destructive"
@@ -256,15 +264,21 @@ export default function PhotoUploadGrid({
               crops to the box, so the box on screen has to be the shape of the
               box that prints — a 16/9 preview would show a crop the report
               never uses, and someone would frame a photo against it. */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className={compact ? 'grid grid-cols-3 gap-2 sm:gap-3' : 'grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3'}>
             {pagePhotos.map((photo, i) => {
               const slot = pageIndex * PAGE_SIZE + i;
               const preview = previews[slot] ?? null;
               const displayed = preview ?? photo;
               const uploading = busySlot === slot && preview !== null;
               return (
-                <Reveal key={slot} delay={MOTION.stagger * i}>
-                  <div className="group relative aspect-[4/3] overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10 transition-all duration-500 ease-ios hover:-translate-y-0.5 hover:shadow-lg">
+                <Reveal key={slot} delay={compact ? 0 : MOTION.stagger * i}>
+                  <div
+                    className={
+                      compact
+                        ? 'group relative aspect-[4/3] overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10'
+                        : 'group relative aspect-[4/3] overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10 transition-all duration-500 ease-ios hover:-translate-y-0.5 hover:shadow-lg'
+                    }
+                  >
                   {displayed ? (
                     <>
                       {preview ? (
@@ -312,7 +326,12 @@ export default function PhotoUploadGrid({
                     <button
                       onClick={() => inputRefs.current[slot]?.click()}
                       disabled={busySlot === slot}
-                      className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground transition-all duration-300 ease-ios hover:bg-accent hover:text-foreground active:scale-[0.98]"
+                      aria-label={`Add photo ${slot + 1}`}
+                      className={
+                        compact
+                          ? 'flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-border bg-card text-muted-foreground transition-colors duration-200 ease-ios hover:border-chart-1/50 hover:bg-chart-1/5 hover:text-chart-1 active:scale-[0.98]'
+                          : 'flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground transition-all duration-300 ease-ios hover:bg-accent hover:text-foreground active:scale-[0.98]'
+                      }
                     >
                       {busySlot === slot ? (
                         <svg className="h-6 w-6 animate-spin text-chart-1" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -323,7 +342,7 @@ export default function PhotoUploadGrid({
                         <span className="text-2xl leading-none">+</span>
                       )}
                       <span className="text-xs font-medium">
-                        {busySlot === slot ? 'Working…' : `Add photo ${slot + 1}`}
+                        {busySlot === slot ? 'Working…' : compact ? 'Add' : `Add photo ${slot + 1}`}
                       </span>
                     </button>
                   )}
@@ -347,6 +366,16 @@ export default function PhotoUploadGrid({
           </div>
         </section>
       ))}
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => handlePageAction('addPage')}
+          disabled={pageBusy}
+          className="min-h-11 text-[13px] font-medium text-chart-1 transition-opacity duration-200 hover:opacity-80 disabled:opacity-50 sm:min-h-0"
+        >
+          {pageBusy ? 'Working…' : 'Add 6 more slots'}
+        </button>
+      ) : (
       <Button
         variant="outline"
         onClick={() => handlePageAction('addPage')}
@@ -377,6 +406,7 @@ export default function PhotoUploadGrid({
           </span>
         </span>
       </Button>
+      )}
     </div>
   );
 }

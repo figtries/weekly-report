@@ -75,6 +75,7 @@ export default function SavePdfButton({
   noun = 'PDF',
   mime = 'pdf',
   warm = true,
+  variant = 'solid',
 }: {
   url: string;
   filename: string;
@@ -91,6 +92,8 @@ export default function SavePdfButton({
   noun?: string;
   mime?: string;
   warm?: boolean;
+  /** 'outline' is the quiet door beside a page title (the weekly "Report" button); 'solid' is the default. */
+  variant?: 'solid' | 'outline';
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
   // null while the server is still rendering (nothing to count yet); a number
@@ -163,7 +166,11 @@ export default function SavePdfButton({
       ? 'bg-emerald-600 text-white shadow-md animate-success-bump'
       : phase === 'error'
         ? 'bg-rose-600 text-white hover:bg-rose-700'
-        : 'bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md';
+        : variant === 'outline'
+          ? 'border border-chart-1/40 bg-card font-semibold text-chart-1 hover:bg-chart-1/10'
+          : 'bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md';
+  // The spinner is white on a solid button and blue on an outline one.
+  const spin = variant === 'outline' && phase !== 'done' && phase !== 'error' ? 'border-chart-1/30 border-t-chart-1' : 'border-white/40 border-t-white';
 
   return (
     <m.button
@@ -179,7 +186,7 @@ export default function SavePdfButton({
           {/* on the icon-only (mobile) button the counting percent replaces
               the spinner once bytes flow — that count is the whole feedback */}
           <span
-            className={`h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white ${progress !== null ? 'hidden sm:inline-block' : ''}`}
+            className={`h-4 w-4 shrink-0 animate-spin rounded-full border-2 ${spin} ${progress !== null ? 'hidden sm:inline-block' : ''}`}
             aria-hidden="true"
           />
           {progress !== null && (

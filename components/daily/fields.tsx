@@ -63,6 +63,10 @@ export function NumField({
   );
 }
 
+/** A field that reads as plain text until it is touched: no box, no padding, a wash on hover. */
+const BARE_CLS =
+  'min-h-0 border-transparent bg-transparent px-0 py-1.5 hover:bg-muted/40 focus:border-chart-1 focus:bg-card focus:px-3 sm:min-h-0';
+
 /** Text that commits on blur (and Enter, when single-line). */
 export function TextField({
   value,
@@ -70,6 +74,7 @@ export function TextField({
   label,
   placeholder,
   multiline,
+  bare,
   className,
 }: {
   value: string;
@@ -77,6 +82,8 @@ export function TextField({
   label: string;
   placeholder?: string;
   multiline?: boolean;
+  /** Plain text until touched, for a list of sentences that should read as a list, not as a form. */
+  bare?: boolean;
   className?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -104,7 +111,7 @@ export function TextField({
         onChange={(e) => setDraft(e.target.value)}
         onInput={(e) => fit(e.currentTarget)}
         onBlur={finish}
-        className={cn(INPUT_CLS, 'resize-none overflow-hidden', className)}
+        className={cn(INPUT_CLS, 'resize-none overflow-hidden', bare && BARE_CLS, className)}
       />
     );
   }
@@ -118,7 +125,7 @@ export function TextField({
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur();
       }}
-      className={cn(INPUT_CLS, className)}
+      className={cn(INPUT_CLS, bare && BARE_CLS, className)}
     />
   );
 }
@@ -142,9 +149,22 @@ export function Labeled({
 }
 
 const STEP_BTN =
-  'flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-chart-1 transition-colors hover:bg-muted disabled:opacity-40';
+  'flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-chart-1 transition-colors duration-150 hover:bg-chart-1/10 disabled:opacity-40 sm:size-9';
 
-export function Stepper({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+/** People, or hours in halves: a count you press, not a number you type. */
+export function Stepper({
+  value,
+  onChange,
+  label,
+  step = 1,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  label: string;
+  step?: number;
+}) {
+  const shown = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  const set = (n: number) => onChange(Math.max(0, Math.round(n * 100) / 100));
   return (
     <div className="flex items-center" role="group" aria-label={label}>
       <m.button
@@ -153,17 +173,17 @@ export function Stepper({ value, onChange, label }: { value: number; onChange: (
         className={STEP_BTN}
         aria-label={`Decrease ${label}`}
         disabled={value <= 0}
-        onClick={() => onChange(Math.max(0, value - 1))}
+        onClick={() => set(value - step)}
       >
         <Minus className="size-4" />
       </m.button>
-      <span className="w-10 text-center text-lg font-semibold tabular-nums text-foreground">{value}</span>
+      <span className="w-9 text-center text-base font-semibold tabular-nums text-foreground">{shown}</span>
       <m.button
         type="button"
         {...pressMotion}
         className={STEP_BTN}
         aria-label={`Increase ${label}`}
-        onClick={() => onChange(value + 1)}
+        onClick={() => set(value + step)}
       >
         <Plus className="size-4" />
       </m.button>
