@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
-import { suggestActivities } from '@/lib/daily-items';
+import { previousActivities } from '@/lib/daily-items';
 import { weekAndDay } from '@/lib/daily-week';
 import { getOpenJsonDb, getOpenProjectStatus, getWorkspace } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
@@ -105,7 +105,7 @@ async function DailyDetail({ date }: { date: string }) {
         project={{ name: db.project.name, location: db.project.workLocation }}
         weatherLabels={labels}
         hasPredecessor={db.daily.some((d) => d.date < date)}
-        suggestions={suggestActivities(db.daily.filter((d) => d.date !== date), [], 24)}
+        previous={previousActivities(db.daily, date)}
         photoTimes={photoTimesOf(db, report)}
         weekDay={status ? weekAndDay(status.anchorEnd, date) : null}
       />

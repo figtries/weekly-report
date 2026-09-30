@@ -24,7 +24,8 @@ export interface DailyScreenProps {
   project: { name: string; location: string };
   weatherLabels: Record<string, string>;
   hasPredecessor: boolean;
-  suggestions: string[];
+  /** The latest earlier report that says what it did: what the activities offer as "same as yesterday". */
+  previous: { date: string; items: string[] } | null;
   /** Photo path to the instant it was taken (or uploaded), for "Today so far". */
   photoTimes: Record<string, string>;
   /** Week and day of the project for this date, computed from the plan; null with none. */
@@ -32,7 +33,7 @@ export interface DailyScreenProps {
 }
 
 export default function DailyReportScreen(props: DailyScreenProps) {
-  const { initial, project, weatherLabels, hasPredecessor, suggestions, weekDay } = props;
+  const { initial, project, weatherLabels, hasPredecessor, previous, weekDay } = props;
   const router = useRouter();
   const { report, commit, retry, failed, pending, setPhotos, flush } = useDailyReport(initial);
   const [open, setOpen] = useState<DailySectionKey | null>(null);
@@ -169,7 +170,7 @@ export default function DailyReportScreen(props: DailyScreenProps) {
             <ManHoursSection {...shared('manHours')} />
           </GroupCard>
           <GroupCard title="Work" className="animate-enter stagger-2">
-            <ActivitiesSection {...shared('activities')} suggestions={suggestions} />
+            <ActivitiesSection {...shared('activities')} previous={previous} />
             <PhotosSection {...shared('photos')} />
           </GroupCard>
           <GroupCard title="Safety" className="animate-enter stagger-3">

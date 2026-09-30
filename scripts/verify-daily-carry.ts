@@ -13,6 +13,7 @@ import {
   inferHoursEach,
   joinItems,
   parseLegacyItems,
+  previousActivities,
   suggestActivities,
   todayItemsOf,
   tomorrowItemsOf,
@@ -111,6 +112,17 @@ check('suggestActivities: newest first, deduplicated, skips what is taken', () =
   assert.ok(!got.map((g) => g.toLowerCase()).includes('leveling base skid'));
   assert.equal(new Set(got.map((g) => g.toLowerCase())).size, got.length);
   assert.equal(suggestActivities([newer], [], 1).length, 1);
+});
+
+check('previousActivities: latest earlier report that did something, deduplicated', () => {
+  const a = report({ date: '2026-03-09', activitiesToday: '1. Cleaning area' });
+  const b = report({ date: '2026-03-10', todayItems: [{ id: 'x', text: 'Lubang coring', done: true }, { id: 'y', text: ' lubang CORING ', done: false }, { id: 'z', text: 'Grouting', done: false }] });
+  const empty = report({ date: '2026-03-11', activitiesToday: '', todayItems: [] });
+  const got = previousActivities([a, b, empty], '2026-03-12');
+  assert.equal(got?.date, '2026-03-10');
+  assert.deepEqual(got?.items, ['Lubang coring', 'Grouting']);
+  assert.equal(previousActivities([a, b], '2026-03-09')?.date, undefined);
+  assert.equal(previousActivities([], '2026-03-12'), null);
 });
 
 function dbWith(...daily: DailyReport[]): Database {

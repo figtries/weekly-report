@@ -485,6 +485,15 @@ from `Panel.tsx`, with `contain: layout paint`;** measured under 4x CPU throttle
 draws a frame every 17-33 ms open and close at 390 and 1440, so keep it that way
 (`AnimatePresence initial={false}`, one ease, no per-row layout animation).
 
+**Activities offer yesterday's sentences, to take or to turn down** (1 Oct 2026).
+`previousActivities` (`lib/daily-items.ts`) is the latest EARLIER report that says what it
+did, and each of Today and Tomorrow shows those sentences as suggestions with Add and a
+dismiss. Not the project's whole history (the old chips were that, and read as a search
+box). Tomorrow also offers what is still open today, first and tagged. A suggestion taken
+from Today is added DONE, like the typing box; tapping one never clears a half-typed
+sentence. A turned-down one is stored on the report (`dismissedSuggestions`, per list) or
+it would be back after a reload; a new day starts with none.
+
 **There is no progress on the daily screen or list.** It is the weekly report's job:
 `lib/daily-progress.ts` stays only because the Excel export fills the sheet's progress
 cells from the week's figures (held while the weights do not close), and
