@@ -6,7 +6,8 @@ import { pressMotion } from '@/components/motion/Press';
 import { hoursEachOf } from '@/lib/daily-items';
 import type { ManHourRow, NonEffectiveRow } from '@/lib/types';
 import { NumField, Stepper, TextField } from '../fields';
-import { CardButton, SectionCard, sameLabel, type CardProps } from '../SectionCard';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
+import { CapacityNote, CardButton, SectionCard, sameLabel, type CardProps } from '../SectionCard';
 import { newId } from '../useDailyReport';
 
 const n0 = (n: number) => n.toLocaleString('en-US');
@@ -109,10 +110,12 @@ export default function ManHoursCard({ report, commit, state, open, onToggle, on
         <p className="text-[12px] font-medium text-muted-foreground">
           {pob} people · {n0(today)} h today · {n0(cumulative)} h so far
         </p>
+        <CapacityNote count={rows.length} capacity={CAPACITY.crew} what="companies" fold />
       </div>
 
       <h3 className="mb-2 mt-5 text-sm font-semibold text-foreground">Non Effective Working Hours</h3>
-      <div className="space-y-2">
+      <CapacityNote count={ne.length} capacity={CAPACITY.nonEffective} what="causes" fold />
+      <div className="mt-2 space-y-2">
         {ne.map((r) => (
           <div key={r.id} className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between gap-3">

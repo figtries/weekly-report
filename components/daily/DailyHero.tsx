@@ -6,7 +6,6 @@ import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { SECTION_ORDER, type SectionState } from '@/lib/daily-status';
 import { MOTION } from '@/lib/design';
 import type { DailySectionKey } from '@/lib/types';
-import { NumField } from './fields';
 
 // The raw colours STATUS_LEGEND draws its meter with (emerald-500, blue-500, amber-400, gray-200).
 const SEGMENT: Record<SectionState, string> = {
@@ -29,8 +28,7 @@ export default function DailyHero({
   subtitle,
   states,
   ready,
-  hariKe,
-  onHariKe,
+  weekDay,
   pending,
   failed,
   onRetry,
@@ -40,8 +38,8 @@ export default function DailyHero({
   subtitle: string;
   states: Record<DailySectionKey, SectionState>;
   ready: number;
-  hariKe: number | null;
-  onHariKe: (n: number) => void;
+  /** The week and day of the project this date falls in; nobody types either. Null with no plan. */
+  weekDay: { week: number; day: number } | null;
   pending: number;
   failed: boolean;
   onRetry: () => void;
@@ -96,10 +94,12 @@ export default function DailyHero({
         </div>
 
         <div className="flex items-center gap-3 md:flex-col md:items-end md:gap-2">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Day no.</span>
-            <NumField label="Day number" min={1} max={7} value={hariKe ?? 1} onCommit={onHariKe} className="w-16 text-center" />
-          </label>
+          {weekDay && (
+            <p className="text-sm text-muted-foreground">
+              Week <span className="font-semibold tabular-nums text-foreground">{weekDay.week}</span>
+              {' · '}Day <span className="font-semibold tabular-nums text-foreground">{weekDay.day}</span>
+            </p>
+          )}
           <p aria-live="polite" className="min-h-5 text-[12px] font-medium text-gray-400">
             {failed ? (
               <button type="button" onClick={onRetry} className="text-red-500 underline underline-offset-2">

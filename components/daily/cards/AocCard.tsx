@@ -6,7 +6,8 @@ import { pressMotion } from '@/components/motion/Press';
 import DateField from '@/components/ui/DateField';
 import type { AocRow } from '@/lib/types';
 import { INPUT_CLS, Labeled, TextField } from '../fields';
-import { CardButton, SectionCard, type CardProps } from '../SectionCard';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
+import { CapacityNote, CardButton, SectionCard, type CardProps } from '../SectionCard';
 import { newId } from '../useDailyReport';
 
 const DATE_CLS =
@@ -84,6 +85,7 @@ export default function AocCard({ report, commit, state, open, onToggle, onOpen 
         <CardButton className="w-full flex-none border-dashed text-chart-1" onClick={add}>
           Add area of concern
         </CardButton>
+        <CapacityNote count={rows.length} capacity={CAPACITY.aoc} what="lines" />
       </div>
     </SectionCard>
   );

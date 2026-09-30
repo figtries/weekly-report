@@ -18,6 +18,7 @@ import {
   tomorrowItemsOf,
 } from '../lib/daily-items.ts';
 import { dailyProgressFor } from '../lib/daily-progress.ts';
+import { dayOfProject, weekAndDay, weekRangeLabel } from '../lib/daily-week.ts';
 import { daysLapsed, lapsedPermits, readyCount, sectionStates } from '../lib/daily-status.ts';
 import { applyCreateDaily, applyPatchDaily } from '../lib/mutations.ts';
 import type { DailyReport, Database } from '../lib/types.ts';
@@ -248,6 +249,19 @@ check('progress: held while the weights do not close, null with no project', () 
   assert.equal(held?.state, 'held');
   assert.equal(held?.weightsTotal, 70.79);
   assert.equal(dailyProgressFor(null, '2025-12-01'), null);
+});
+
+check('day of the project counts week one\'s first day as day 1, and the week groups the days', () => {
+  // Week 1 ends 2025-10-30, so it runs 2025-10-24 to 2025-10-30.
+  assert.equal(dayOfProject('2025-10-30', '2025-10-24'), 1);
+  assert.equal(dayOfProject('2025-10-30', '2025-10-30'), 7);
+  assert.equal(dayOfProject('2025-10-30', '2025-10-31'), 8);
+  assert.equal(dayOfProject('2025-10-30', '2025-10-23'), null);
+  assert.equal(dayOfProject('', '2025-10-24'), null);
+  assert.deepEqual(weekAndDay('2025-10-30', '2025-10-31'), { week: 2, day: 8 });
+  assert.equal(weekAndDay('2025-10-30', '2025-10-24')?.week, 1);
+  assert.equal(weekRangeLabel('2025-10-30', 2), '31 Oct to 6 Nov');
+  assert.equal(weekRangeLabel('2025-10-30', 6), '28 Nov to 4 Dec');
 });
 
 // LATER TASKS APPEND CHECKS ABOVE THIS LINE.

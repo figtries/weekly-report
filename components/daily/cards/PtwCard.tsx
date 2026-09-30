@@ -7,7 +7,8 @@ import DateField from '@/components/ui/DateField';
 import { daysLapsed, lapsedPermits } from '@/lib/daily-status';
 import type { PtwRow } from '@/lib/types';
 import { Labeled, TextField } from '../fields';
-import { CardButton, SectionCard, sameLabel, type CardProps } from '../SectionCard';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
+import { CapacityNote, CardButton, SectionCard, sameLabel, type CardProps } from '../SectionCard';
 import { newId, type LogDraft } from '../useDailyReport';
 
 const DATE_CLS =
@@ -125,6 +126,7 @@ export default function PtwCard({ report, commit, state, open, onToggle, onOpen,
         <CardButton className="w-full flex-none border-dashed text-chart-1" onClick={add}>
           Add permit
         </CardButton>
+        <CapacityNote count={rows.length} capacity={CAPACITY.ptw} what="permits" />
       </div>
     </SectionCard>
   );

@@ -71,12 +71,26 @@ export default function SavePdfButton({
   filename,
   ariaLabel,
   beforeDownload,
+  label = 'Save as PDF',
+  noun = 'PDF',
+  mime = 'pdf',
+  warm = true,
 }: {
   url: string;
   filename: string;
   ariaLabel: string;
   /** Runs before the download; return false to abort (e.g. a failed save). */
   beforeDownload?: () => Promise<boolean>;
+  /**
+   * The same walk (prepare, count the bytes, save) serves the daily Excel export:
+   * `label` and `noun` rename it, `mime` is the substring a real answer's
+   * Content-Type must carry (an error page also arrives as a blob and must never be
+   * saved as the file), and `warm` is the Chromium warm-up, which only a PDF needs.
+   */
+  label?: string;
+  noun?: string;
+  mime?: string;
+  warm?: boolean;
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
   // null while the server is still rendering (nothing to count yet); a number
@@ -94,13 +108,14 @@ export default function SavePdfButton({
   }, []);
 
   useEffect(() => {
+    if (!warm) return;
     warmPdfRenderer(url);
     const onVisible = () => {
       if (document.visibilityState === 'visible') warmPdfRenderer(url);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [url]);
+  }, [url, warm]);
 
   function settle(next: Phase, after: number) {
     if (!mountedRef.current) return;
@@ -121,12 +136,12 @@ export default function SavePdfButton({
         return;
       }
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`PDF route answered ${res.status}`);
+      if (!res.ok) throw new Error(`${noun} route answered ${res.status}`);
       const blob = await readWithProgress(res, (pct) => {
         if (mountedRef.current) setProgress(pct);
       });
-      // A server error page still arrives as a blob — never save one as .pdf.
-      if (!blob.type.includes('pdf')) throw new Error(`Not a PDF: ${blob.type}`);
+      // A server error page still arrives as a blob — never save one as the file.
+      if (!blob.type.includes(mime)) throw new Error(`Not a ${noun}: ${blob.type}`);
       const href = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = href;
@@ -199,17 +214,17 @@ export default function SavePdfButton({
         {phase === 'busy'
           ? progress !== null
             ? `Downloading… ${progress}%`
-            : 'Preparing PDF…'
+            : `Preparing ${noun}…`
           : phase === 'done'
             ? 'Saved!'
             : phase === 'error'
               ? 'Failed — retry'
-              : 'Save as PDF'}
+              : label}
       </span>
       {/* phase-only announcements: a per-percent aria-live region would spam
           screen readers through the whole download */}
       <span className="sr-only" aria-live="polite">
-        {phase === 'busy' ? 'Preparing PDF' : phase === 'done' ? 'Saved' : phase === 'error' ? 'Failed, tap to retry' : ''}
+        {phase === 'busy' ? `Preparing ${noun}` : phase === 'done' ? 'Saved' : phase === 'error' ? 'Failed, tap to retry' : ''}
       </span>
     </m.button>
   );

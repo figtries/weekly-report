@@ -34,6 +34,35 @@ export interface CardProps {
   hasPredecessor: boolean;
 }
 
+/**
+ * The Excel sheet holds a fixed number of lines per block (the client's form; nobody has
+ * ever inserted a row in 348 reports). Past it the sheet shows the first ones and a
+ * "+N lagi" line, and this says so while it is still fixable. Nothing is lost in the app.
+ */
+export function CapacityNote({
+  count,
+  capacity,
+  what,
+  fold,
+}: {
+  count: number;
+  capacity: number;
+  what: string;
+  /** Numeric tables fold the overflow into a last "Lainnya" row instead of cutting it. */
+  fold?: boolean;
+}) {
+  const over = count > capacity;
+  return (
+    <p className={cn('mt-2 text-[12px] leading-snug', over ? 'font-medium text-amber-700' : 'text-muted-foreground')}>
+      {over
+        ? fold
+          ? `The Excel sheet holds ${capacity} ${what}: the first ${capacity - 1} are listed and the other ${count - (capacity - 1)} are added up on the last line. Nothing is lost here.`
+          : `The Excel sheet holds ${capacity} ${what}: it shows the first ${capacity - 1} and a "+${count - (capacity - 1)} lagi" line. Nothing is lost here.`
+        : `The Excel sheet holds ${capacity} ${what}.`}
+    </p>
+  );
+}
+
 export function CardButton({
   variant = 'outline',
   className,

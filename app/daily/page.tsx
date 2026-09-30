@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { dailyProgressFor } from '@/lib/daily-progress';
+import { weekAndDay, weekRangeLabel } from '@/lib/daily-week';
 import { getOpenJsonDb, getOpenProjectStatus } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
 
@@ -43,6 +44,22 @@ async function DailyListBody() {
   // the list reads the same figures the report does. After the cookie read above.
   const status = await getOpenProjectStatus();
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
+  // The days are grouped by the week they fall in ("Week 40, 28 Sep to 4 Oct"). Nobody
+  // types the day of the project either: both come from the plan's dates.
+  const anchor = status?.anchorEnd ?? '';
+  const rows = sorted.map((d) => {
+    const p = dailyProgressFor(status, d.date);
+    const wd = anchor ? weekAndDay(anchor, d.date) : null;
+    return {
+      date: d.date,
+      hariKe: d.hariKe,
+      week: wd?.week ?? null,
+      day: wd?.day ?? null,
+      progress: !p ? null : p.state === 'held' ? ('held' as const) : { plan: p.plan, actual: p.actual },
+    };
+  });
+  const weekLabels: Record<number, string> = {};
+  for (const r of rows) if (r.week !== null && !weekLabels[r.week]) weekLabels[r.week] = weekRangeLabel(anchor, r.week);
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
   // No entrance on the wrapper at all: the RouteTransition fades this whole
@@ -52,14 +69,8 @@ async function DailyListBody() {
     <RouteTransition id="daily">
     <div className="p-4 sm:p-6 lg:p-8">
       <DailyReportsView
-        reports={sorted.map((d) => {
-          const p = dailyProgressFor(status, d.date);
-          return {
-            date: d.date,
-            hariKe: d.hariKe,
-            progress: !p ? null : p.state === 'held' ? ('held' as const) : { plan: p.plan, actual: p.actual },
-          };
-        })}
+        reports={rows}
+        weekLabels={weekLabels}
         defaultDate={defaultDate}
       />
     </div>

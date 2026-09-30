@@ -8,7 +8,8 @@ import { activityStrings, todayItemsOf, tomorrowItemsOf } from '@/lib/daily-item
 import type { ActivityItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { INPUT_CLS, TextField } from '../fields';
-import { CardButton, SectionCard, type CardProps } from '../SectionCard';
+import { CAPACITY } from '@/lib/xlsx/daily-cells';
+import { CapacityNote, CardButton, SectionCard, type CardProps } from '../SectionCard';
 import { newId, type LogDraft } from '../useDailyReport';
 
 const has = (items: ActivityItem[], text: string) =>
@@ -151,6 +152,7 @@ export default function ActivitiesCard({
         Today
       </h3>
       {list(today, true)}
+      <CapacityNote count={done} capacity={CAPACITY.activities} what="lines of what was done" />
       <div className="mt-2 flex gap-2">
         <input
           aria-label="Add a today activity"
@@ -173,6 +175,7 @@ export default function ActivitiesCard({
         Tomorrow
       </h3>
       {list(tomorrow, false)}
+      <CapacityNote count={tomorrow.length} capacity={CAPACITY.activities} what="lines of tomorrow's plan" />
       <div className="mt-2 flex gap-2">
         <input
           aria-label="Add a tomorrow activity"

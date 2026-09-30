@@ -30,10 +30,12 @@ export interface DailyScreenProps {
   suggestions: string[];
   /** Photo path to the instant it was taken (or uploaded), for "Today so far". */
   photoTimes: Record<string, string>;
+  /** Week and day of the project for this date, computed from the plan; null with none. */
+  weekDay: { week: number; day: number } | null;
 }
 
 export default function DailyReportScreen(props: DailyScreenProps) {
-  const { initial, project, weatherLabels, hasPredecessor, progress, suggestions } = props;
+  const { initial, project, weatherLabels, hasPredecessor, progress, suggestions, weekDay } = props;
   const router = useRouter();
   const { report, commit, retry, failed, pending, setPhotos, flush } = useDailyReport(initial);
   const [open, setOpen] = useState<DailySectionKey | null>(null);
@@ -144,16 +146,21 @@ export default function DailyReportScreen(props: DailyScreenProps) {
         subtitle={[project.name, project.location].filter(Boolean).join(' · ')}
         states={states}
         ready={ready}
-        hariKe={report.hariKe}
-        onHariKe={(n) => commit({ hariKe: n })}
+        weekDay={weekDay}
         pending={pending}
         failed={!!failed}
         onRetry={retry}
         pdf={
+          // The daily report leaves as the client's own Excel workbook, not as a PDF. The
+          // same button walk (prepare, count, save) serves it; it waits for autosave first.
           <SavePdfButton
-            url={`/api/pdf/daily/${report.date}`}
-            filename={`Daily Report ${report.date}.pdf`}
-            ariaLabel="Save Daily Report as PDF"
+            url={`/api/xlsx/daily/${report.date}`}
+            filename={`DAILY PROGRESS REPORT ${report.date.slice(8, 10)}${report.date.slice(5, 7)}${report.date.slice(0, 4)}.xlsx`}
+            ariaLabel="Export the daily report as Excel"
+            label="Export Excel"
+            noun="Excel"
+            mime="spreadsheetml"
+            warm={false}
             beforeDownload={flush}
           />
         }
