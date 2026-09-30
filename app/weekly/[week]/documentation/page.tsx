@@ -39,7 +39,7 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
     <RouteTransition id="weekly-documentation">
       <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
         <PageHeader
-          section="Weekly Progress"
+          section="Weekly Reports"
           title="Documentation"
           className="animate-enter"
           action={<SectionSwitch week={week} to="data" />}

@@ -55,7 +55,7 @@ async function SCurvePageBody({ params }: { params: Promise<{ week: string }> })
           SCurveClient for why that had to go. */}
       <div className="px-3 py-4 sm:px-6 sm:py-6 lg:px-8 print:hidden">
         <PageHeader
-          section="Weekly Progress"
+          section="Weekly Reports"
           title="S-Curve"
           className="mb-4 animate-enter"
           action={<SectionSwitch week={week} to="data" />}

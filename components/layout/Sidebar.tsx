@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Suspense, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -10,6 +10,8 @@ import { PressLink, pressMotion } from '@/components/motion/Press';
 import {
   Activity,
   CalendarDays,
+  ChevronDown,
+  ClipboardList,
   FileText,
   Files,
   LayoutDashboard,
@@ -40,10 +42,48 @@ interface Destination {
   match: (pathname: string) => boolean;
 }
 
+/**
+ * A destination that opens a list instead of going anywhere. Reports holds the
+ * two things that leave the app as a report, Daily and Weekly; pressing it
+ * only opens or closes the list (28 Sep 2026 brief, 30 Sep 2026 build).
+ */
+interface Group {
+  label: string;
+  icon: LucideIcon;
+  items: Destination[];
+}
+
+type Entry = Destination | Group;
+
+const isGroup = (e: Entry): e is Group => 'items' in e;
+
 const DATA_OVERALL = ['overall', 'control'];
 const WEEKLY_PROGRESS = ['summary', 'detail', 'scurve', 'documentation', 'print'];
 
-const DESTINATIONS: Destination[] = [
+const REPORTS: Group = {
+  label: 'Reports',
+  icon: ClipboardList,
+  // The icons on the two rows are placeholders until the real set is supplied.
+  items: [
+    {
+      label: 'Daily Reports',
+      icon: CalendarDays,
+      href: () => '/daily',
+      match: (p) => p.startsWith('/daily'),
+    },
+    {
+      label: 'Weekly Reports',
+      icon: FileText,
+      href: (w) => (w ? `/weekly/${w}/summary` : '/weekly/summary'),
+      // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
+      // named `summary` and `detail` too, so a bare endsWith lit this entry as well
+      // on every /dokumen page — two destinations highlighted at once.
+      match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
+    },
+  ],
+};
+
+const DESTINATIONS: Entry[] = [
   {
     label: 'Dashboard',
     icon: LayoutDashboard,
@@ -56,21 +96,7 @@ const DESTINATIONS: Destination[] = [
     href: (w) => (w ? `/weekly/${w}/overall` : '/weekly'),
     match: (p) => DATA_OVERALL.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
-  {
-    label: 'Daily',
-    icon: CalendarDays,
-    href: () => '/daily',
-    match: (p) => p.startsWith('/daily'),
-  },
-  {
-    label: 'Weekly Progress',
-    icon: FileText,
-    href: (w) => (w ? `/weekly/${w}/summary` : '/weekly/summary'),
-    // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
-    // named `summary` and `detail` too, so a bare endsWith lit this entry as well
-    // on every /dokumen page — two destinations highlighted at once.
-    match: (p) => WEEKLY_PROGRESS.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
-  },
+  REPORTS,
   {
     label: 'Document Control',
     icon: Files,
@@ -122,7 +148,71 @@ function NavItem({ dest, week, pathname }: { dest: Destination; week: number | n
   );
 }
 
-function Links({ dests, pathname }: { dests: Destination[]; pathname: string | null }) {
+/**
+ * A parent that opens a list. Pressing it never navigates, so the mobile drawer
+ * (which closes when the pathname changes) stays put while the list slides.
+ *
+ * The list opens by ITSELF when the page you are on is one of its rows, and it
+ * does that from an effect rather than an initial state on purpose: the
+ * pathname only arrives after hydration (see `ActiveLinks`), and opening in an
+ * effect is what lets the height ease open instead of the menu below jumping.
+ * Once open it stays as you leave it: closing it by hand while on one of its
+ * pages lights the parent instead, so the place you are is never unmarked.
+ */
+function NavGroup({ group, week, pathname }: { group: Group; week: number | null; pathname: string | null }) {
+  const Icon = group.icon;
+  const listId = useId();
+  const childActive = pathname ? group.items.some((i) => i.match(pathname)) : false;
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  return (
+    <div>
+      <m.button
+        type="button"
+        {...pressMotion}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className={cn(itemClass(childActive && !open), 'w-full text-left', open && 'text-foreground')}
+      >
+        <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
+        <span>{group.label}</span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'ml-auto size-4 transition-transform duration-300 ease-ios motion-reduce:transition-none',
+            open && 'rotate-180'
+          )}
+        />
+      </m.button>
+
+      {/* 0fr → 1fr: the only way to animate to an unknown height in CSS. `inert`
+          keeps the closed rows out of the tab order and away from screen readers. */}
+      <div
+        id={listId}
+        inert={!open}
+        className={cn(
+          'grid transition-[grid-template-rows] duration-300 ease-ios motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="space-y-1 pl-4 pt-1">
+            {group.items.map((dest) => (
+              <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null }) {
   /*
    * Keep links on the week being viewed; when the path holds no week, send
    * them to the INDEX route rather than guess a number.
@@ -184,9 +274,13 @@ function Links({ dests, pathname }: { dests: Destination[]; pathname: string | n
 
   return (
     <>
-      {dests.map((dest) => (
-        <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
-      ))}
+      {dests.map((dest) =>
+        isGroup(dest) ? (
+          <NavGroup key={dest.label} group={dest} week={week} pathname={pathname} />
+        ) : (
+          <NavItem key={dest.label} dest={dest} week={week} pathname={pathname} />
+        )
+      )}
     </>
   );
 }
@@ -250,7 +344,7 @@ function NavList({ links, settings, card }: { links: ReactNode; settings: ReactN
  *
  * `scripts/verify-hydration.mjs` fails the moment a fourth boundary comes back.
  */
-function ActiveLinks({ dests }: { dests: Destination[] }) {
+function ActiveLinks({ dests }: { dests: Entry[] }) {
   // `useSyncExternalStore` rather than a mounted flag in an effect: it takes a
   // server snapshot and a client one directly, so there is no setState during
   // an effect and no extra render pass to get there.
@@ -267,7 +361,7 @@ function ActiveLinks({ dests }: { dests: Destination[] }) {
 }
 
 /** Mounted only after hydration, which is what keeps `usePathname()` off the prerender. */
-function LiveLinks({ dests }: { dests: Destination[] }) {
+function LiveLinks({ dests }: { dests: Entry[] }) {
   return <Links dests={dests} pathname={usePathname()} />;
 }
 

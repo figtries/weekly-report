@@ -66,7 +66,7 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
   return (
     <div className="px-3 py-4 sm:p-6 lg:p-8 print:hidden">
       <PageHeader
-        section="Weekly Progress"
+        section="Weekly Reports"
         title="Detail Progress"
         className="animate-enter"
         action={<SectionSwitch week={week} to="data" />}
