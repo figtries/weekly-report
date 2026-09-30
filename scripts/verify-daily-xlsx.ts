@@ -509,6 +509,13 @@ await check('row heights grow to fit long text and never shrink below the templa
   assert.equal(linesFor('x'.repeat(100), 10), 12);
 });
 
+await check('progress fractions carry no floating-point tail', async () => {
+  const { sheet } = await exportSheet({}, { progress: { state: 'ready', week: 33, actual: 40.69, plan: 34.49, variance: 6.2, weightsTotal: 100 } });
+  assert.equal(sheet.rawValue('D51'), '0.3449');
+  assert.equal(sheet.rawValue('D52'), '0.4069');
+  assert.equal(sheet.rawValue('D53'), '0.062');
+});
+
 await check('progress held: plan, actual and deviation are empty and the deviation formula is gone', async () => {
   const { sheet } = await exportSheet({}, { progress: { state: 'held', week: 11, actual: 0, plan: 0, variance: 0, weightsTotal: 70.79 } });
   for (const a of ['D51', 'D52', 'D53']) {

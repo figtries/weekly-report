@@ -325,11 +325,14 @@ export function fillDailySheet(sheet: SheetXml, input: DailyExportInput): FillRe
     putDate(sheet, cfg.date, report.date);
     const p = input.progress;
     if (p && p.state === 'ready') {
-      const plan = p.plan / 100;
-      const actual = p.actual / 100;
+      // Fractions the cells format as percent. Rounded to the 6 decimals a percent to two places
+      // needs: 34.49 / 100 in floating point is 0.34490000000000004, which is not a number to leave in a client's file.
+      const frac = (pct: number) => Number((pct / 100).toFixed(6));
+      const plan = frac(p.plan);
+      const actual = frac(p.actual);
       sheet.setNumber(cfg.plan, plan);
       sheet.setNumber(cfg.actual, actual);
-      sheet.setCached(cfg.dev, actual - plan);
+      sheet.setCached(cfg.dev, Number((actual - plan).toFixed(6)));
     } else {
       sheet.clear(cfg.plan);
       sheet.clear(cfg.actual);
