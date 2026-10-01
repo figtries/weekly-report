@@ -152,6 +152,15 @@ let access: 'private' | 'public' = 'private';
 let checkedAt = 0;
 let dirty = false;
 let scheduled = false;
+/**
+ * Whether this instance's bytes are the store's: it downloaded the image, or the
+ * store answered that it holds none. Until then the file is `data/seed.db`, and
+ * pushing it would REPLACE the database. 1 Oct 2026: the store was paused on the
+ * free tier, every pull answered 403, each lambda served the seed's two test
+ * projects, and the first write anywhere would have uploaded them over the real
+ * image. See `scripts/verify-snapshot-guard.ts`.
+ */
+let adopted = false;
 let queue: Promise<void> = Promise.resolve();
 
 /**
@@ -441,6 +450,12 @@ export function flushDbSnapshot(): Promise<void> {
     .then(async () => {
       if (!dirty || !connection) return;
       dirty = false;
+      if (!adopted) {
+        // The write stays on this instance and dies with it. Losing it is the
+        // price; uploading it would lose everything else.
+        note('upload', new Error('refused: this instance never read the stored database'));
+        return;
+      }
       const bytes = connection.serialize();
       try {
         etag = await upload(bytes);
@@ -489,8 +504,15 @@ async function applyRemote(conditional: boolean): Promise<boolean> {
   // Never pull over writes this instance has not pushed yet.
   if (dirty) await flushDbSnapshot();
   const bytes = await download(conditional);
-  if (!bytes) return false;
+  // Reaching here means the store ANSWERED: an image, a 304 on the one we hold,
+  // or no object at all (the first deploy, where the seed is the first image).
+  // A refusal throws and never gets here.
+  if (!bytes) {
+    adopted = true;
+    return false;
+  }
   adoptDbBytes(bytes);
+  adopted = true;
   return true;
 }
 /**
