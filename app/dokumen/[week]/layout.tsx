@@ -89,7 +89,14 @@ async function RegisterTabsForOpenProject({ week }: { week: number }) {
   const weeks = getRegisterWeeks(projectId).map((w) => w.weekNo);
   const db = await getOpenDb();
 
-  return <RegisterTabs weeks={weeks} selectedWeek={week} projectCurrentWeek={currentWeekOf(db)} />;
+  return (
+    <RegisterTabs
+      weeks={weeks}
+      selectedWeek={week}
+      projectCurrentWeek={currentWeekOf(db)}
+      anchorEnd={db.project.weekAnchorEndDate}
+    />
+  );
 }
 
 /** Held space, so the scroller below does not jump when the real row lands. */

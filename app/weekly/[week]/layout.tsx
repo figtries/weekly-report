@@ -71,6 +71,7 @@ async function WeeklyTabsFor({ week }: { week: number }) {
       weeks={weeks}
       selectedWeek={week}
       projectCurrentWeek={currentWeekOf(db)}
+      anchorEnd={db.project.weekAnchorEndDate}
       dueCount={dueCount}
       checkCount={validation.errors + validation.warnings}
     />

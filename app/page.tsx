@@ -248,6 +248,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           weeks={weeks}
           week={week}
           currentWeek={currentWeek}
+          anchorEnd={db.project.weekAnchorEndDate}
         />
         <WeightGateNotice
           gate={gate}
@@ -345,6 +346,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
         weeks={weeks}
         week={week}
         currentWeek={currentWeek}
+        anchorEnd={db.project.weekAnchorEndDate}
       />
 
       {unreported && (
@@ -669,6 +671,7 @@ function DashboardHeader({
   weeks,
   week,
   currentWeek,
+  anchorEnd,
 }: {
   name: string;
   customer: string | undefined;
@@ -676,6 +679,7 @@ function DashboardHeader({
   weeks: number[];
   week: number;
   currentWeek: number;
+  anchorEnd?: string;
 }) {
   return (
     <>
@@ -717,13 +721,14 @@ function DashboardHeader({
           {reportedWeek > 0 ? '' : ' · Nothing reported yet'}
         </p>
       </div>
-      {/* Data Overall's row is 285px at desktop and the screen's width on a
+      {/* Data Overall's row is 312px at desktop and the screen's width on a
           phone; this matches it so the seat is the same size in both. */}
-      <div className="w-full shrink-0 sm:w-72">
+      <div className="w-full shrink-0 sm:w-78">
         <DashboardWeekBar
           weeks={weeks}
           selectedWeek={week}
           projectCurrentWeek={currentWeek}
+          anchorEnd={anchorEnd}
         />
       </div>
     </header>

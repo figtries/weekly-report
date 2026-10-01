@@ -24,10 +24,12 @@ export default function DashboardWeekBar({
   weeks,
   selectedWeek,
   projectCurrentWeek,
+  anchorEnd,
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
+  anchorEnd?: string;
 }) {
   return (
     <WeekRow
@@ -39,6 +41,7 @@ export default function DashboardWeekBar({
       // OFF here for the same reason it always was: one prefetch is roughly
       // three segment requests and every dashboard week is a whole rollup.
       prefetch={false}
+      anchorEnd={anchorEnd}
     />
   );
 }

@@ -38,6 +38,7 @@ export default function WeekRow({
   basePath,
   hrefPattern,
   prefetch,
+  anchorEnd,
   children,
 }: {
   weeks: number[];
@@ -49,6 +50,8 @@ export default function WeekRow({
   /** Passed to the picker: the dashboard links weeks as `/?week={week}`. */
   hrefPattern?: string;
   prefetch?: boolean;
+  /** Week one's end date, for the dates under each week in the picker. */
+  anchorEnd?: string;
   /** Anything that ends the row, after the seat. */
   children?: ReactNode;
 }) {
@@ -81,6 +84,7 @@ export default function WeekRow({
         basePath={basePath}
         hrefPattern={hrefPattern}
         prefetch={prefetch}
+        anchorEnd={anchorEnd}
       />
       {isCurrent ? (
         <span className="inline-flex min-h-11 flex-1 animate-pop-in items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-ok-soft px-3.5 text-sm font-semibold text-ok">

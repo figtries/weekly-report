@@ -37,10 +37,12 @@ export function RegisterTabs({
   weeks,
   selectedWeek,
   projectCurrentWeek,
+  anchorEnd,
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
+  anchorEnd?: string;
 }) {
   const pathname = usePathname();
   const active = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'summary';
@@ -60,6 +62,7 @@ export function RegisterTabs({
           projectCurrentWeek={projectCurrentWeek}
           activeTab={active}
           basePath="/dokumen"
+          anchorEnd={anchorEnd}
         />
         <WeekSteps
           className="sm:w-full"

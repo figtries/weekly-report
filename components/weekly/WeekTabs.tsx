@@ -55,9 +55,12 @@ export default function WeekTabs({
   dueCount,
   checkCount,
   figuresReady = true,
+  anchorEnd,
 }: {
   weeks: number[];
   selectedWeek: number;
+  /** Week one's end date, for the dates under each week in the picker. */
+  anchorEnd?: string;
   /**
    * The week the project is in, by the one rule every project follows now —
    * `currentWeekOf` in `lib/current-week.ts`.
@@ -149,6 +152,7 @@ export default function WeekTabs({
           selectedWeek={selectedWeek}
           projectCurrentWeek={projectCurrentWeek}
           activeTab={activeTab}
+          anchorEnd={anchorEnd}
         >
           {/* In the row on a phone, where the bar is the screen's width and
               the row ends where the screen does. From `sm` it leaves the row

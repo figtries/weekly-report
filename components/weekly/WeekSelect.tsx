@@ -5,17 +5,19 @@ import { pressMotion } from '@/components/motion/Press';
 import { m } from 'framer-motion';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
+import { weekRangeLabel } from '@/lib/daily-week';
 
 export default function WeekSelect({
-  weeks,
+  weeks: weeksAsGiven,
   selectedWeek,
   projectCurrentWeek,
   activeTab,
   basePath = '/weekly',
   hrefPattern,
   prefetch = true,
+  anchorEnd,
 }: {
   weeks: number[];
   selectedWeek: number;
@@ -36,11 +38,16 @@ export default function WeekSelect({
    * project rollup — sixty of those speculatively is a storm, not a warm-up.
    */
   prefetch?: boolean;
+  /** Week one's end date, so each row can say which seven days it is. */
+  anchorEnd?: string;
 }) {
   const router = useRouter();
+  // Newest first, as the Daily Reports filter lists them, so every week list in the
+  // app reads the same way up.
+  const weeks = useMemo(() => [...weeksAsGiven].sort((a, b) => b - a), [weeksAsGiven]);
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(() => weeks.indexOf(selectedWeek));
+  const [activeIdx, setActiveIdx] = useState(-1);
   const [isPending, startTransition] = useTransition();
   // The picked week shows in the trigger immediately; the server render
   // catches up in the background (and selectedWeek takes over on arrival).
@@ -119,7 +126,7 @@ export default function WeekSelect({
     if (open) {
       close();
     } else {
-      setActiveIdx(weeks.indexOf(selectedWeek));
+      setActiveIdx(-1);
       // Measured BEFORE the panel mounts, so its first painted frame is
       // already in the right place rather than in the top-left corner.
       measure();
@@ -203,9 +210,21 @@ export default function WeekSelect({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  // Centre the selected/active row each time the panel opens or the cursor moves.
+  // Opens on the week being shown, in the middle and landing on a whole row (the
+  // Daily Reports filter does the same), then follows the keyboard cursor.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    const target = list?.querySelector<HTMLElement>(`[data-week="${selectedWeek}"]`);
+    if (!list || !target) return;
+    const row = target.offsetHeight;
+    const above = Math.floor((Math.floor(list.clientHeight / row) - 1) / 2);
+    list.scrollTop = target.offsetTop - list.offsetTop - above * row;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
-    if (!open || !listRef.current) return;
+    if (!open || !listRef.current || activeIdx < 0) return;
     const el = listRef.current.querySelector<HTMLElement>(`[data-idx="${activeIdx}"]`);
     el?.scrollIntoView({ block: 'nearest' });
   }, [open, activeIdx]);
@@ -223,10 +242,10 @@ export default function WeekSelect({
       close();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(weeks.length - 1, i + 1));
+      setActiveIdx((i) => (i < 0 ? Math.max(0, weeks.indexOf(selectedWeek)) : Math.min(weeks.length - 1, i + 1)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIdx((i) => Math.max(0, i - 1));
+      setActiveIdx((i) => (i < 0 ? Math.max(0, weeks.indexOf(selectedWeek)) : Math.max(0, i - 1)));
     } else if (e.key === 'Home') {
       e.preventDefault();
       setActiveIdx(0);
@@ -249,9 +268,13 @@ export default function WeekSelect({
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card py-2 pr-2.5 pl-3 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
-        <span>Week {displayedWeek}</span>
+        <svg className="h-4 w-4 shrink-0 text-muted-foreground" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M3 8h14M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <span className="whitespace-nowrap">Week {displayedWeek}</span>
         {isPending ? (
           <svg
             className="h-4 w-4 animate-spin text-chart-1"
@@ -301,7 +324,7 @@ export default function WeekSelect({
               left: anchor.left,
               top: anchor.top,
               bottom: anchor.bottom,
-              minWidth: anchor.width,
+              width: anchor.width,
               // Above the sidebar and the sticky headers, which stop at 50.
               zIndex: 70,
               transformOrigin: anchor.flip ? 'bottom left' : 'top left',
@@ -313,7 +336,7 @@ export default function WeekSelect({
             <div
               ref={listRef}
               style={{ maxHeight: anchor.maxHeight }}
-              className="scrollbar-none space-y-0.5 overflow-y-auto"
+              className="scrollbar-none overflow-y-auto"
             >
               {weeks.map((w, i) => {
                 const isSelected = w === selectedWeek;
@@ -328,21 +351,24 @@ export default function WeekSelect({
                     aria-selected={isSelected}
                     onClick={() => pick(w)}
                     onMouseEnter={() => setActiveIdx(i)}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm tabular-nums transition-colors duration-150 ${
-                      isCurrent
-                        ? 'bg-ok-soft font-semibold text-ok'
-                        : isSelected
-                          ? 'bg-chart-1/10 font-semibold text-chart-1'
-                          : isActive
-                            ? 'bg-muted text-foreground'
-                            : 'text-muted-foreground'
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm tabular-nums transition-colors duration-150 ${
+                      isCurrent ? 'bg-ok-soft text-ok' : isActive ? 'bg-muted text-foreground' : 'text-foreground'
                     }`}
                     title={isCurrent ? 'Current week' : undefined}
                   >
-                    <span>Week {w}</span>
-                    {isSelected && (
+                    {/* Two lines, as in the Daily Reports filter: the week, and its
+                        seven days under it so every date starts at the same edge. */}
+                    <span className="min-w-0 whitespace-nowrap">
+                      <span className={`block ${isCurrent ? 'font-semibold' : 'font-medium'}`}>Week {w}</span>
+                      {anchorEnd && (
+                        <span className={`mt-0.5 block text-xs ${isCurrent ? 'text-ok/80' : 'text-muted-foreground'}`}>
+                          {weekRangeLabel(anchorEnd, w)}
+                        </span>
+                      )}
+                    </span>
+                    {isCurrent && (
                       <svg
-                        className={`h-4 w-4 shrink-0 ${isCurrent ? 'text-ok' : 'text-chart-1'}`}
+                        className="h-4 w-4 shrink-0 text-ok"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
