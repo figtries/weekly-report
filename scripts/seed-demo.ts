@@ -100,7 +100,6 @@ interface LeafDef {
   w: number;
   s: number;
   f: number;
-  qty?: [number, string];
   /** Weeks behind (+) or ahead (−) of plan. */
   lag?: number;
   /** Pace against plan, 1 = on plan. */
@@ -191,7 +190,7 @@ const SPKS: SpkDef[] = [
           L('Access Road & Internal Road', 220, 9, 16),
         ]),
         G('Civil Works', [
-          L('Piling Works', 520, 12, 20, { qty: [420, 'titik'], lag: 2 }),
+          L('Piling Works', 520, 12, 20, { lag: 2 }),
           L('Equipment Foundations', 480, 16, 28, { lag: 1, eff: 0.9 }),
           L('Pipe Rack Foundations', 260, 16, 26),
           L('Drainage & Oily Water Sewer', 210, 22, 32),
@@ -210,16 +209,16 @@ const SPKS: SpkDef[] = [
           L('Compressor Package Setting & Alignment', 360, 40, 44),
         ]),
         G('Piping', [
-          L('Piping Prefabrication', 560, 22, 40, { qty: [6800, 'dia-inch'], eff: 0.9 }),
-          L('Piping Erection', 620, 28, 46, { qty: [6800, 'dia-inch'] }),
+          L('Piping Prefabrication', 560, 22, 40, { eff: 0.9 }),
+          L('Piping Erection', 620, 28, 46),
           L('Painting & Insulation', 260, 30, 47),
-          L('Hydrotest', 240, 38, 47, { qty: [42, 'test pack'] }),
+          L('Hydrotest', 240, 38, 47),
         ]),
         G('Electrical & Instrument', [
           L('Cable Tray & Cable Laying', 300, 34, 44),
           L('Instrument Installation', 260, 38, 46),
           L('Instrument Tubing & Hook-up', 180, 40, 47),
-          L('Loop Check', 160, 44, 48, { qty: [380, 'loop'] }),
+          L('Loop Check', 160, 44, 48),
         ]),
       ], 'cons'),
       G('Pre-Commissioning & Commissioning', [
@@ -257,15 +256,15 @@ const SPKS: SpkDef[] = [
       G('Construction', [
         G('ROW Preparation', [
           L('Land Acquisition Support & Permits', 180, 6, 16, { cap: 90, note: '3 bidang lahan di KP 12 masih negosiasi' }),
-          L('ROW Clearing & Grading', 520, 12, 22, { qty: [18.5, 'km'], lag: 1 }),
+          L('ROW Clearing & Grading', 520, 12, 22, { lag: 1 }),
         ]),
         G('Pipeline Installation', [
-          L('Stringing', 380, 18, 36, { qty: [24.7, 'km'], eff: 0.75 }),
-          L('Welding', 1100, 20, 40, { qty: [2060, 'joint'], eff: 0.85, lag: 1 }),
-          L('NDT Radiography', 260, 21, 41, { qty: [2060, 'joint'], eff: 0.85, lag: 1 }),
-          L('Field Joint Coating', 240, 22, 42, { qty: [2060, 'joint'], eff: 0.85, lag: 1 }),
-          L('Trenching', 520, 18, 38, { qty: [24.7, 'km'] }),
-          L('Lowering & Backfilling', 480, 24, 42, { qty: [24.7, 'km'], eff: 0.9 }),
+          L('Stringing', 380, 18, 36, { eff: 0.75 }),
+          L('Welding', 1100, 20, 40, { eff: 0.85, lag: 1 }),
+          L('NDT Radiography', 260, 21, 41, { eff: 0.85, lag: 1 }),
+          L('Field Joint Coating', 240, 22, 42, { eff: 0.85, lag: 1 }),
+          L('Trenching', 520, 18, 38),
+          L('Lowering & Backfilling', 480, 24, 42, { eff: 0.9 }),
           L('Tie-in Works', 220, 40, 44),
           L('Pipeline Marker & ROW Reinstatement', 160, 42, 46),
         ]),
@@ -315,7 +314,7 @@ const SPKS: SpkDef[] = [
       G('Construction', [
         L('Earthing Grid Installation', 160, 24, 34),
         L('Generator Foundation', 260, 20, 28),
-        L('Cable Trench & Cable Pulling', 420, 30, 42, { qty: [12400, 'm'] }),
+        L('Cable Trench & Cable Pulling', 420, 30, 42),
         L('Switchgear & Transformer Installation', 280, 32, 38),
         L('Generator Setting & Alignment', 300, 36, 40),
         L('Area Lighting & Small Power', 180, 36, 44),
@@ -529,17 +528,12 @@ syncDerivedWeights(PID);
 /* --------------------------------------------- 4. how each row is measured */
 
 const KIND = Object.fromEntries(BUILT_IN_KINDS.map((k) => [k.id, k]));
-const LADDER: Partial<Record<Phase, string>> = { eng: 'engineering', proc: 'procurement' };
+// Every activity is measured by its kind's own ladder, exactly as the template defines it.
+const LADDER: Partial<Record<Phase, string>> = { eng: 'engineering', proc: 'procurement', cons: 'construction', comm: 'commissioning' };
 for (const l of leaves) {
   if (l.phase === 'ms') continue;
-  if (l.phase === 'eng' || l.phase === 'proc') {
-    const kind = KIND[LADDER[l.phase]!];
-    setWorkKindSqlite(l.id, kind.id, 'milestone', { milestones: kind.steps });
-  } else if (l.qty) {
-    setWorkKindSqlite(l.id, 'construction', 'qty', { vol: l.qty[0], satuan: l.qty[1] });
-  } else {
-    setWorkKindSqlite(l.id, l.phase === 'comm' ? 'commissioning' : 'construction', 'lumpsum');
-  }
+  const kind = KIND[LADDER[l.phase]!];
+  setWorkKindSqlite(l.id, kind.id, 'milestone', { milestones: kind.steps });
 }
 
 /* ------------------------------------------------ 5. thirty weeks of site */
@@ -578,7 +572,7 @@ const rungsFor = (l: Leaf, pct: number): string[] => {
 const standing = new Map<string, number>();
 for (let w = 1; w <= CURRENT_WEEK; w += 1) {
   const lump: Record<string, { cumProgressPct: number; note?: string }> = {};
-  const field: { leafId: string; qtyDone?: number; milestonesDone?: string[]; note?: string }[] = [];
+  const field: { leafId: string; milestonesDone?: string[]; note?: string }[] = [];
   leaves.forEach((l, i) => {
     const prev = standing.get(l.id) ?? 0;
     if (prev >= 100) return; // finished: nothing more to report
@@ -588,17 +582,14 @@ for (let w = 1; w <= CURRENT_WEEK; w += 1) {
     let pct = pctOf(l, w, prev);
     if (pct === 0 && prev === 0 && utc(l.start) > utc(E(w))) return;
     const note = l.note && (l.cap !== undefined || l.eff! < 0.7) && pct > 0 && w >= LAST_FULL_WEEK - 2 ? l.note : undefined;
-    if (l.phase === 'eng' || l.phase === 'proc') {
+    if (l.phase === 'ms') {
+      lump[l.id] = { cumProgressPct: pct, ...(note ? { note } : {}) };
+    } else {
       const rungs = rungsFor(l, pct);
       const kind = KIND[LADDER[l.phase]!];
       for (const r of rungs) l.rungWeek[r] ??= w;
       pct = kind.steps.filter((s) => rungs.includes(s.id)).reduce((s, m) => s + m.weight, 0);
       field.push({ leafId: l.id, milestonesDone: rungs.map((r) => `${l.id}:${r}`), ...(note ? { note } : {}) });
-    } else if (l.qty) {
-      const q = l.qty[0];
-      field.push({ leafId: l.id, qtyDone: Math.round(((pct / 100) * q) * 10) / 10, ...(note ? { note } : {}) });
-    } else {
-      lump[l.id] = { cumProgressPct: pct, ...(note ? { note } : {}) };
     }
     standing.set(l.id, pct);
   });
