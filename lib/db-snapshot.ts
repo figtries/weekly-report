@@ -12,29 +12,41 @@
  * The fix keeps the database exactly as it is — one synchronous better-sqlite3
  * file, which is what lets every read prerender under `cacheComponents` (see
  * `lib/sqlite.ts`) — and gives that file ONE durable home outside the lambda:
- * a Vercel Blob object holding the whole ~2 MB image.
+ * two Redis keys, the gzipped image and a version string.
  *
- *   cold start  →  download the blob over the file, before the first query
+ *   cold start  →  download the image over the file, before the first query
  *   any write   →  serialize the database and upload it, inside `after()`
- *   any read    →  a conditional GET (ETag), at most once every 1.5 s
+ *   any read    →  read the version, at most once every 1.5 s; the image is
+ *                  downloaded only when the version moved
+ *
+ * IT WAS A VERCEL BLOB OBJECT UNTIL 1 OCT 2026. The read check was a
+ * conditional GET, and a 304 still counts as an operation: across every lambda
+ * that came to 10,000 in nineteen days, the Hobby store was suspended for 30
+ * days, downloads were refused even from the dashboard, and a new store cannot
+ * be created on a suspended account. Redis (Upstash, already attached for
+ * db.json) allows 500,000 commands a month, and a version read is one tiny
+ * command. The last Blob image is still in that store and has to be brought
+ * across by hand once it can be read.
  *
  * Three properties this relies on. `sqlite.serialize()` returns the complete
  * image including anything still in the WAL, so a snapshot is never half a
  * transaction. `after()` is backed by `waitUntil` on Vercel, so the instance
- * stays alive until the upload finishes rather than freezing mid-PUT. And the
- * conditional GET costs a 304 when nothing changed, which is the common case.
+ * stays alive until the upload finishes rather than freezing mid-upload. And
+ * MSET writes the image and its version in one atomic command, so a reader
+ * never pairs a new version with an old image.
  *
  * It is a single-writer design: two people editing different projects in the
  * same second can have one snapshot land on top of the other. That is the
  * honest shape of a file-level snapshot, and it is the trade for not rewriting
  * forty synchronous call sites onto an async driver.
  *
- * With no blob store attached this module does nothing at all, and the app
+ * With no Redis attached this module does nothing at all, and the app
  * behaves exactly as it did before — ephemeral, but working.
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 // The DRIVER, not the connection. This module must never import `./sqlite`
 // (that is what lets `instrumentation.ts` run it before any route module opens
@@ -44,9 +56,18 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import { DB_PATH, DB_IS_EPHEMERAL } from './db-path';
+import { redisConfigured, redisGet, redisMGet, redisMSet } from './storage';
 import { bobotWrites, deriveWeights, type WeightNode } from './weights';
 
+/** The image (gzip, base64) and the version a reader compares against. */
+const IMG_KEY = 'weekly-report:sqlite:img';
+const VER_KEY = 'weekly-report:sqlite:ver';
+
 /**
+ * THE OLD BLOB STORE, for `/api/health/db` only: nothing here reads or writes
+ * it any more (see the header). Kept so the health route can still say whether
+ * the suspended store answers and what it holds.
+ *
  * How this process proves it may use the store — and there are now two ways.
  *
  * `BLOB_READ_WRITE_TOKEN` is no longer what Vercel hands a project. Connecting
@@ -60,9 +81,7 @@ import { bobotWrites, deriveWeights, type WeightNode } from './weights';
  * never going to appear).
  *
  * A read-write token still wins when one exists, which is how local testing
- * and any older deployment keep working. `blobAuth()` is what every call
- * spreads: an explicit token, or nothing at all so the library reaches for the
- * OIDC identity itself.
+ * and any older deployment keep working.
  */
 function resolveTokenName(): string | null {
   if (process.env.BLOB_READ_WRITE_TOKEN) return 'BLOB_READ_WRITE_TOKEN';
@@ -95,11 +114,6 @@ const STORE_ID = (() => {
   return trimmed.startsWith('store_') ? trimmed.slice('store_'.length) : trimmed;
 })();
 
-/** What every @vercel/blob call spreads. Empty means "use the OIDC identity". */
-function blobAuth(): { token?: string } {
-  return TOKEN ? { token: TOKEN } : {};
-}
-
 export { STORE_ID as blobStoreId };
 
 const BUILD = process.env.NEXT_PHASE === 'phase-production-build';
@@ -110,33 +124,17 @@ const BUILD = process.env.NEXT_PHASE === 'phase-production-build';
  * even with credentials in the environment — `REPORT_DB_SNAPSHOT=1` is the
  * deliberate opt-in for testing this path locally.
  *
- * And never during the production build. `BLOB_STORE_ID` is set while the build
- * runs too, and on Vercel the repo ships no `data/report.db`, so gating on the
- * store rather than on a token is what first made this module live at BUILD
- * time: `restoreDbSnapshot()` from `instrumentation.ts`, then a conditional GET
- * behind every prerendered page. The push path was already guarded by `BUILD`;
- * the pull path was not, because until now it could never be reached. A build
- * has no runtime data to restore, so the whole module stays inert there.
+ * And never during the production build. The store's variables are set while
+ * the build runs too, and on Vercel the repo ships no `data/report.db`, so a
+ * store-gated module once went live at BUILD time: `restoreDbSnapshot()` from
+ * `instrumentation.ts`, then a remote read behind every prerendered page, and
+ * the Vercel build failed. A build has no runtime data to restore, so the whole
+ * module stays inert there.
  */
 export const snapshotConfigured =
-  Boolean(STORE_ID) &&
-  !BUILD &&
-  (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
+  redisConfigured && !BUILD && (DB_IS_EPHEMERAL || process.env.REPORT_DB_SNAPSHOT === '1');
 
-/**
- * Derived rather than fixed, so the object's path cannot be guessed from the
- * store URL alone. The seed is the STORE id, not the credential: a token can be
- * rotated and a deployment can move from a token to the OIDC identity, and
- * either would have renamed this object and left the database looking wiped.
- * Private access is asked for first and public is the fallback (see `attempt`),
- * because a store created before private blobs existed only answers to the
- * latter.
- */
-const PATHNAME = STORE_ID
-  ? `report-db/${createHash('sha256').update(STORE_ID).digest('hex').slice(0, 24)}/report.db`
-  : '';
-
-/** How long a downloaded image is trusted before the next conditional GET. */
+/** How long a downloaded image is trusted before the next version read. */
 const FRESH_MS = 1500;
 
 type Connection = {
@@ -147,8 +145,8 @@ type Connection = {
 };
 
 let connection: Connection | null = null;
+/** The version of the image this instance holds. */
 let etag: string | null = null;
-let access: 'private' | 'public' = 'private';
 let checkedAt = 0;
 let dirty = false;
 let scheduled = false;
@@ -353,90 +351,34 @@ function writeDbFile(bytes: Buffer): void {
 
 export { writeDbFile };
 
-async function attempt<T>(run: (mode: 'private' | 'public') => Promise<T>): Promise<T> {
-  try {
-    return await run(access);
-  } catch (err) {
-    const other = access === 'private' ? 'public' : 'private';
-    let result: T;
-    try {
-      result = await run(other);
-    } catch {
-      // The fallback failed too — the first error is the one worth reading.
-      throw err;
-    }
-    access = other;
-    return result;
-  }
-}
-
 /**
- * The remote image, or null when it is missing or unchanged.
+ * The remote image, or null when it is unchanged or there is none.
  *
- * `get` answers a wrong `access` with NULL, not with an error — and null is
- * also how it says "nothing has been written yet". `attempt` retries only on a
- * THROWN error, so it cannot tell those apart: one null from the wrong mode and
- * the store reads as empty, `applyRemote` reports no change, and the page 404s
- * on a project the blob already holds. Both modes are therefore tried on their
- * own here, and only two nulls mean the object is really absent.
- *
- * Defensive, not a post-mortem: this store answers to `private`, and the bug it
- * guards against has never fired here. It is written down because the failure
- * would be silent — no error, no log line, just an empty database — and that is
- * the expensive kind.
+ * Conditional: one GET of the version, and the image only when that moved.
+ * The pair is then read with one MGET, so the version returned is the version
+ * of these bytes even if a write lands between the two commands. The caller
+ * records it only once the bytes are ADOPTED: the health route downloads
+ * without adopting, and an instance that recorded a version it does not hold
+ * would skip the next real change.
  */
-async function download(conditional: boolean): Promise<Buffer | null> {
-  const { get, BlobNotFoundError } = await import('@vercel/blob');
-  const modes: Array<'private' | 'public'> =
-    access === 'private' ? ['private', 'public'] : ['public', 'private'];
-
-  let firstError: unknown = null;
-  for (const mode of modes) {
-    let res;
-    try {
-      res = await get(PATHNAME, {
-        access: mode,
-        ...blobAuth(),
-        // The CDN copy can be seconds behind, and seconds is exactly the
-        // window this whole module exists to close.
-        useCache: false,
-        ...(conditional && etag ? { ifNoneMatch: etag } : {}),
-      });
-    } catch (err) {
-      if (!(err instanceof BlobNotFoundError)) firstError ??= err;
-      continue;
-    }
-    // 304 is an object this instance already holds — which also confirms the
-    // mode, so remember it and stop.
-    if (res?.statusCode === 304) {
-      access = mode;
-      return null;
-    }
-    if (!res) continue;
-    access = mode;
-    const bytes = Buffer.from(await new Response(res.stream).arrayBuffer());
-    etag = res.blob.etag;
-    return bytes;
+async function download(conditional: boolean): Promise<{ bytes: Buffer; ver: string } | null> {
+  if (conditional && etag) {
+    const ver = await redisGet(VER_KEY);
+    if (ver === etag) return null;
   }
-
-  // Nothing answered. An error from either mode is worth more than silence.
-  if (firstError) throw firstError;
-  return null;
+  const [ver, img] = await redisMGet([VER_KEY, IMG_KEY]);
+  if (!ver || !img) return null;
+  return { bytes: gunzipSync(Buffer.from(img, 'base64')), ver };
 }
 
+/** Image and version in one MSET; the version is the image's own hash. */
 async function upload(bytes: Buffer): Promise<string> {
-  const { put } = await import('@vercel/blob');
-  const res = await attempt((mode) =>
-    put(PATHNAME, bytes, {
-      access: mode,
-      ...blobAuth(),
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'application/octet-stream',
-      cacheControlMaxAge: 0,
-    })
-  );
-  return res.etag;
+  const ver = createHash('sha256').update(bytes).digest('hex').slice(0, 24);
+  await redisMSet([
+    [IMG_KEY, gzipSync(bytes).toString('base64')],
+    [VER_KEY, ver],
+  ]);
+  return ver;
 }
 
 /**
@@ -503,21 +445,22 @@ export function adoptDbBytes(bytes: Buffer): void {
 async function applyRemote(conditional: boolean): Promise<boolean> {
   // Never pull over writes this instance has not pushed yet.
   if (dirty) await flushDbSnapshot();
-  const bytes = await download(conditional);
-  // Reaching here means the store ANSWERED: an image, a 304 on the one we hold,
+  const got = await download(conditional);
+  // Reaching here means the store ANSWERED: an image, the version we already hold,
   // or no object at all (the first deploy, where the seed is the first image).
   // A refusal throws and never gets here.
-  if (!bytes) {
+  if (!got) {
     adopted = true;
     return false;
   }
-  adoptDbBytes(bytes);
+  adoptDbBytes(got.bytes);
+  etag = got.ver;
   adopted = true;
   return true;
 }
 /**
  * Called before a read that must see writes made by another instance. Cheap by
- * design: a 304 at most every 1.5 s, and nothing at all when no store is
+ * design: one version read at most every 1.5 s, and nothing at all when no store is
  * attached.
  */
 export async function ensureFreshDb(force = false): Promise<boolean> {
@@ -554,7 +497,7 @@ export async function ensureFreshDb(force = false): Promise<boolean> {
  *
  * Unthrottled, unlike `ensureFreshDb`. A read answering from bytes 1.5 s old
  * shows a slightly old number; a write on bytes 1.5 s old can delete someone
- * else's project. The cost is one conditional GET per write, a 304 in the
+ * else's project. The cost is one version read per write, unchanged in the
  * common case.
  */
 export async function beforeWrite(): Promise<boolean> {
@@ -642,15 +585,14 @@ export async function snapshotDiagnostics(): Promise<Record<string, unknown>> {
   if (!snapshotConfigured) return { configured: false, lastFailure };
   const out: Record<string, unknown> = {
     configured: true,
-    pathname: PATHNAME,
-    accessMode: access,
+    keys: [IMG_KEY, VER_KEY],
     heldEtag: etag,
   };
   try {
-    const bytes = await download(false);
-    out.pull = bytes
-      ? { ok: true, bytes: bytes.length, accessMode: access, projects: await peekProjects(bytes) }
-      : { ok: true, bytes: 0, note: 'no object at that pathname', accessMode: access };
+    const got = await download(false);
+    out.pull = got
+      ? { ok: true, bytes: got.bytes.length, version: got.ver, projects: await peekProjects(got.bytes) }
+      : { ok: true, bytes: 0, note: 'no image stored yet' };
   } catch (err) {
     out.pull = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

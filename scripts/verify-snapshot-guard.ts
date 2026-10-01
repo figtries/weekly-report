@@ -7,8 +7,8 @@
  * path uploaded whatever the instance held, so the first write anywhere on the
  * deployment would have replaced it with the seed.
  *
- * Runs with a fake store id, so the pull fails exactly as a paused store does
- * (it throws; it does not answer "no object"). The probe is `serialize()`: the
+ * Runs against a Redis URL nothing listens on, so the pull fails exactly as a
+ * suspended store does (it throws; it does not answer "no image"). The probe is `serialize()`: the
  * upload path calls it before anything touches the network, so a guarded flush
  * never calls it at all.
  *
@@ -23,9 +23,8 @@ const work = path.join(os.tmpdir(), `snapshot-guard-${Date.now()}.db`);
 copyDbFixture(path.join(process.cwd(), 'data', 'seed.db'), work);
 process.env.REPORT_DB_PATH = work;
 process.env.REPORT_DB_SNAPSHOT = '1';
-process.env.BLOB_STORE_ID = 'store_fakeGuardProbe';
-delete process.env.BLOB_READ_WRITE_TOKEN;
-delete process.env.VERCEL_OIDC_TOKEN;
+process.env.KV_REST_API_URL = 'http://127.0.0.1:9';
+process.env.KV_REST_API_TOKEN = 'guard-probe';
 
 const snap = await import('../lib/db-snapshot.ts');
 

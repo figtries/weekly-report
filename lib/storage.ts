@@ -37,6 +37,15 @@ export function redisSet(key: string, value: string): Promise<'OK'> {
   return command<'OK'>(['SET', key, value]);
 }
 
+export function redisMGet(keys: string[]): Promise<Array<string | null>> {
+  return command<Array<string | null>>(['MGET', ...keys]);
+}
+
+/** Atomic: a reader never sees one key new and the other old. */
+export function redisMSet(pairs: Array<[string, string]>): Promise<'OK'> {
+  return command<'OK'>(['MSET', ...pairs.flat()]);
+}
+
 export function redisDel(key: string): Promise<number> {
   return command<number>(['DEL', key]);
 }

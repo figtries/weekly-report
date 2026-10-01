@@ -686,6 +686,20 @@ query, pushed after every write, and re-checked with a conditional GET before
 a read. The driver stays synchronous, which is the whole point — an async one
 would force `<Suspense>` around every read in the app.
 
+**The snapshot lives in REDIS since 1 Oct 2026, not Blob.** The read check was
+a conditional GET on the Blob object, and a 304 still counts: across every
+lambda that came to the Hobby store's 10,000 Simple Operations in nineteen
+days, the store was suspended for 30 days (no reads, no dashboard download, no
+replacement store), and every lambda served `data/seed.db`. The image and a
+version string now sit in two keys of the Upstash Redis already attached for
+db.json (`weekly-report:sqlite:img` gzipped, `weekly-report:sqlite:ver`); a
+read check is one GET of the version and the image moves only when it changed
+(`scripts/verify-snapshot-redis.ts`). And a push needs the store to have
+ANSWERED first (`adopted`): an instance whose pull failed holds the seed, and
+uploading it would replace the database (`scripts/verify-snapshot-guard.ts`).
+The last Blob image (1.99 MB, 1 Oct 03:53 UTC) is still in the suspended store
+and has to be merged in by hand once it can be read.
+
 Four things hold it together. Writes are detected in `lib/sqlite.ts` by
 patching the connection rather than by each of the fifty-odd server actions
 remembering, because `insert ... returning` runs through `.all()` and would
