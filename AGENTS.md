@@ -831,6 +831,17 @@ two-week project to week 36. The open project is a cookie, so the redirect lives
 in a child component with `connection()` and a `null` fallback — an uncached read
 in the page body fails the build.
 
+**A report tab must not wait for the server when it is pressed** (1 Oct 2026).
+`LegacyGate`'s `connection()` also ends a RUNTIME prefetch, so the router held
+only `SectionSkeleton` for Summary, Detail, S-Curve and Photos and every press
+showed grey blocks for a lambda round trip. Those four pass `prefetchable`,
+which makes the gate read the cookie instead, and the runtime prefetch then
+carries the finished page (measured at 300 ms latency: skeleton 330 ms → 0).
+Never pass it on a page that reads the clock: Check's `new Date()` fails the
+build under a runtime prefetch unless `connection()` came first. And do not
+reach for `<Link prefetch>` or `router.prefetch(href, { kind: 'full' })`:
+Next ignores a full prefetch on any route that exports `instant`.
+
 **Weight follows price, unless the weights are authoritative.** `weight_basis =
 'boq'` is the LOCK. Only the imported project ever carried it and that project
 is gone, so today no project does; the code path stays and

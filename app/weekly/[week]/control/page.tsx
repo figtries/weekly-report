@@ -88,7 +88,7 @@ async function CheckPageBody({ params }: { params: Promise<{ week: string }> }) 
           section="Data Overall"
           title="Check"
           className="mb-4 animate-enter"
-          action={<SectionSwitch week={week} to="report" />}
+          action={<SectionSwitch week={week} />}
         >
           <span className="font-semibold text-foreground">
             Week {week} · {weekPeriodShort(db.project.weekAnchorEndDate, week)}

@@ -3,7 +3,6 @@ import { getOpenWeekRollup } from '@/lib/data';
 import { summariseUnits } from '@/lib/rollup';
 import SummaryCards from '@/components/weekly/SummaryCards';
 import PageHeader from '@/components/layout/PageHeader';
-import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 import { weightGateView } from '@/components/weekly/WeightGateView';
@@ -48,7 +47,7 @@ export const unstable_instant = {
  */
 export default function SummaryPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports" planned>
+    <LegacyGate what="weekly reports" prefetchable planned>
       <SummaryPageBody params={params} />
     </LegacyGate>
   );
@@ -78,7 +77,6 @@ async function SummaryPageBody({ params }: { params: Promise<{ week: string }> }
           section="Weekly Reports"
           title="Overall Summary"
           className="animate-enter"
-          action={<SectionSwitch week={week} to="data" />}
         >
           <span className="font-medium text-foreground">Week {week}</span> · Progress per{' '}
           {basis === 'branch' ? 'section' : 'contract'}.

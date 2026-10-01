@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { getOpenDb, getWeekMeta, getOpenSCurveSeries } from '@/lib/data';
 import SCurveClient from '@/components/weekly/SCurveClient';
 import PageHeader from '@/components/layout/PageHeader';
-import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 import { weightGateView } from '@/components/weekly/WeightGateView';
@@ -22,7 +21,7 @@ export const unstable_instant = {
  */
 export default function SCurvePage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports" planned>
+    <LegacyGate what="weekly reports" prefetchable planned>
       <SCurvePageBody params={params} />
     </LegacyGate>
   );
@@ -58,7 +57,6 @@ async function SCurvePageBody({ params }: { params: Promise<{ week: string }> })
           section="Weekly Reports"
           title="S-Curve"
           className="mb-4 animate-enter"
-          action={<SectionSwitch week={week} to="data" />}
         >
           <span className="font-medium text-foreground">Week {week}</span> · Plan against actual,
           week by week.

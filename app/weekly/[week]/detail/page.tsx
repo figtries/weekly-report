@@ -3,7 +3,6 @@ import { getOpenDb, getOpenWeekRollup } from '@/lib/data';
 import { flattenTree } from '@/lib/rollup';
 import WbsTreeVisual from '@/components/weekly/WbsTreeVisual';
 import PageHeader from '@/components/layout/PageHeader';
-import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 import { weightGateView } from '@/components/weekly/WeightGateView';
@@ -34,7 +33,7 @@ export const unstable_instant = {
 export default function DetailProgressPage({ params }: { params: Promise<{ week: string }> }) {
   return (
     <RouteTransition id="weekly-detail">
-      <LegacyGate what="weekly reports" planned>
+      <LegacyGate what="weekly reports" prefetchable planned>
         <DetailProgressPageBody params={params} />
       </LegacyGate>
     </RouteTransition>
@@ -69,7 +68,6 @@ async function DetailProgressPageBody({ params }: { params: Promise<{ week: stri
         section="Weekly Reports"
         title="Detail Progress"
         className="animate-enter"
-        action={<SectionSwitch week={week} to="data" />}
       >
         <span className="font-medium text-foreground">Week {week}</span> · {leafCount} activities.{' '}
         <span className="hidden sm:inline">The numbers are edited in </span>

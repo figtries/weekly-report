@@ -51,7 +51,7 @@ async function WeightsPageBody({ params }: { params: Promise<{ week: string }> }
           section="Data Overall"
           title="Weights"
           className="mb-0 animate-enter"
-          action={<SectionSwitch week={week} to="report" />}
+          action={<SectionSwitch week={week} />}
         />
 
         <Reveal delay={MOTION.stagger}>

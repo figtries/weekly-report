@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from 'react';
+import { cookies } from 'next/headers';
 import { connection } from 'next/server';
 
 import NoLegacyData from './NoLegacyData';
@@ -62,6 +63,19 @@ async function gateFor(planned: Planned, what: string): Promise<ReactNode | null
  * behind `<Suspense>` or the build fails with "Uncached data was accessed
  * outside of `<Suspense>`".
  *
+ * `prefetchable` READS THE COOKIE INSTEAD (1 Oct 2026). Both keep the answer
+ * out of the static shell, but `connection()` also ends a RUNTIME prefetch,
+ * and the four report sheets ask for one (`unstable_instant: { prefetch:
+ * 'runtime' }`). The router held only `SectionSkeleton` for each, so every
+ * press of Summary, Detail, S-Curve or Photos showed grey blocks for a full
+ * round trip to the lambda. A runtime prefetch renders with the visitor's own
+ * cookies, so a gate that reads nothing else lets it carry the finished page.
+ * It is opt-in because a page that reads the clock (Check does, `new Date()`)
+ * fails the build under a runtime prefetch unless `connection()` came first.
+ * (`<Link prefetch>` and `router.prefetch(href, { kind: 'full' })` are no
+ * substitute: Next ignores a full prefetch on any route that exports
+ * `instant`.)
+ *
  * The cost is real and accepted: the gated content now streams instead of
  * prerendering. It has to. Content whose meaning depends on mutable global
  * state was never safely prerenderable — the static version was simply wrong
@@ -70,13 +84,16 @@ async function gateFor(planned: Planned, what: string): Promise<ReactNode | null
 async function Decide({
   what,
   planned,
+  prefetchable,
   children,
 }: {
   what: string;
   planned: Planned;
+  prefetchable: boolean;
   children: ReactNode;
 }) {
-  await connection();
+  if (prefetchable) await cookies();
+  else await connection();
   const card = await gateFor(planned, what);
   return <>{card ?? children}</>;
 }
@@ -84,6 +101,7 @@ async function Decide({
 export default function LegacyGate({
   what,
   planned = false,
+  prefetchable = false,
   fallback,
   children,
 }: {
@@ -91,12 +109,14 @@ export default function LegacyGate({
   what: string;
   /** True where the page can render a SQLite project with a plan. */
   planned?: Planned;
+  /** Let a runtime prefetch carry the page (see above). Never on a page that reads the clock. */
+  prefetchable?: boolean;
   fallback?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Suspense fallback={fallback ?? <SectionSkeleton />}>
-      <Decide what={what} planned={planned}>
+      <Decide what={what} planned={planned} prefetchable={prefetchable}>
         {children}
       </Decide>
     </Suspense>

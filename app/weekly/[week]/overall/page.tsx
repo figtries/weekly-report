@@ -245,7 +245,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
         section="Data Overall"
         title="Update progress"
         className="mb-0 animate-enter"
-        action={<SectionSwitch week={week} to="report" />}
+        action={<SectionSwitch week={week} />}
       >
         {/* The dates and nothing else. The sentence that used to follow them
             explained how the screen works, which is a thing you read once and

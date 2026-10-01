@@ -92,7 +92,7 @@ export default function WeekTabs({
 
   // THE BAR HOLDS THE SECTION YOU ARE IN, AND ONLY THAT (25 Sep 2026). Report
   // was a fourth tab here beside Fill in, Check and Weights; it is now the
-  // `SectionSwitch` button beside each page title, and on the report the four
+  // `SectionSwitch` button beside the Data Overall titles, and on the report the four
   // sheets are the bar themselves instead of a second row under a "Report" tab.
   const steps: WeekStep[] = onReport
     ? GROUPS.laporan.map((t) => ({

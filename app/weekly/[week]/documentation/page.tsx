@@ -3,7 +3,6 @@ import { getOpenDb, getOpenJsonDb, getWeekMeta } from '@/lib/data';
 import { weeklyPhotosOf } from '@/lib/weekly-photos';
 import PhotoUploadGrid from '@/components/weekly/PhotoUploadGrid';
 import PageHeader from '@/components/layout/PageHeader';
-import SectionSwitch from '@/components/weekly/SectionSwitch';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import LegacyGate from '@/components/projects/LegacyGate';
 
@@ -22,7 +21,7 @@ export const unstable_instant = {
  */
 export default function DocumentationPage({ params }: { params: Promise<{ week: string }> }) {
   return (
-    <LegacyGate what="weekly reports" planned>
+    <LegacyGate what="weekly reports" prefetchable planned>
       <DocumentationPageBody params={params} />
     </LegacyGate>
   );
@@ -46,7 +45,6 @@ async function DocumentationPageBody({ params }: { params: Promise<{ week: strin
           section="Weekly Reports"
           title="Documentation"
           className="animate-enter"
-          action={<SectionSwitch week={week} to="data" />}
         >
           {/* Explicit {' '}: JSX dropped the space before the middot here and
               the line read "Week 36· The photographs". */}
