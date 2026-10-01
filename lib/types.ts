@@ -276,6 +276,8 @@ export interface DailyReport {
   aoc?: AocRow[];
   aocNone?: boolean;
   log?: LogEntry[];
+  /** "Today so far" lines a person removed, by row id. Only the line goes: the photo, permit or item it names stays. */
+  logRemoved?: string[];
   /** Sections a person has said are right. Undefined means an older report, see `sectionStates`. */
   confirmed?: Partial<Record<DailySectionKey, true>>;
 }

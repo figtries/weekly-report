@@ -73,17 +73,17 @@ export default function DailyReportScreen(props: DailyScreenProps) {
     return () => window.removeEventListener('beforeunload', guard);
   }, [pending]);
 
-  const rows = useMemo<LogRow[]>(
-    () => [
+  const rows = useMemo<LogRow[]>(() => {
+    const removed = new Set(report.logRemoved ?? []);
+    return [
       ...(report.log ?? []),
       ...report.photos.flatMap((p, i) =>
         p && times[p]
           ? [{ id: `photo-${p}`, at: times[p], kind: 'photo' as const, text: `Photo ${i + 1}`, thumb: p }]
           : []
       ),
-    ],
-    [report.log, report.photos, times]
-  );
+    ].filter((r) => !removed.has(r.id));
+  }, [report.log, report.logRemoved, report.photos, times]);
 
   const weekday = new Date(`${report.date}T00:00:00Z`).toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -190,7 +190,10 @@ export default function DailyReportScreen(props: DailyScreenProps) {
           </GroupCard>
         </div>
         <div className="animate-enter stagger-4 min-w-0 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:self-start">
-          <TodayLog rows={rows} />
+          <TodayLog
+            rows={rows}
+            onRemove={(id) => commit({ logRemoved: [...(report.logRemoved ?? []), id] })}
+          />
         </div>
       </div>
     </div>

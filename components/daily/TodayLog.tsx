@@ -1,8 +1,9 @@
 'use client';
 
 import { AnimatePresence, m } from 'framer-motion';
-import { Camera, FileCheck2, ListChecks, ShieldCheck, StickyNote } from 'lucide-react';
+import { Camera, FileCheck2, ListChecks, ShieldCheck, StickyNote, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { MOTION } from '@/lib/design';
 import type { LogKind } from '@/lib/types';
 import { useHydrated } from './fields';
@@ -26,9 +27,10 @@ const KIND: Record<LogRow['kind'], { label: string; Icon: typeof Camera; dot: st
 const timeOf = (at: string) =>
   new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-export default function TodayLog({ rows }: { rows: LogRow[] }) {
+export default function TodayLog({ rows, onRemove }: { rows: LogRow[]; onRemove: (id: string) => void }) {
   const hydrated = useHydrated();
   const [all, setAll] = useState(false);
+  const [asking, setAsking] = useState<LogRow | null>(null);
   const sorted = [...rows].sort((a, b) => b.at.localeCompare(a.at));
   const shown = all ? sorted : sorted.slice(0, 3);
 
@@ -73,6 +75,15 @@ export default function TodayLog({ rows }: { rows: LogRow[] }) {
                     </span>
                     <span className="block text-[13px] font-medium leading-snug text-foreground">{r.text}</span>
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setAsking(r)}
+                    aria-label={`Remove ${r.text} from Today so far`}
+                    title="Remove from Today so far"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-bad-soft hover:text-bad active:scale-95 sm:size-9"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </m.li>
               );
             })}
@@ -89,6 +100,23 @@ export default function TodayLog({ rows }: { rows: LogRow[] }) {
           {all ? 'Show fewer' : `All ${sorted.length}`}
         </button>
       )}
+
+      <ConfirmDialog
+        open={asking !== null}
+        title="Remove from Today so far"
+        message={
+          <p>
+            Remove <span className="font-medium text-foreground">{asking?.text}</span> from Today so far? Only
+            this line goes. What it records stays in the report.
+          </p>
+        }
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (asking) onRemove(asking.id);
+          setAsking(null);
+        }}
+        onCancel={() => setAsking(null)}
+      />
     </section>
   );
 }
