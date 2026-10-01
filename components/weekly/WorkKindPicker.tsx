@@ -8,7 +8,6 @@ import {
   agreeingPeers,
   BUILT_IN_KINDS,
   guessWorkKind,
-  shapeOf,
   suggestFromPeers,
   type Shape,
 } from '@/lib/work-kind';
@@ -22,8 +21,8 @@ import { cn } from '@/lib/utils';
  * this?
  *
  * Everything that follows from it is the app's job, not the person's. The kind
- * supplies the rungs, and the row's own name decides whether it carries the
- * whole ladder or IS one rung of it (`shapeOf`) — so nobody is asked to choose
+ * supplies its template ladder, every rung of it, whatever the row is called,
+ * so nobody is asked to choose
  * between "stages" and "one-off", which is a question about our data model
  * wearing a question about their work. A middle version of this screen did ask
  * it, as a four-way measurement choice before the kind, and it was wrong twice
@@ -124,11 +123,10 @@ export default function WorkKindPicker({
     }
     const kind = BUILT_IN_KINDS.find((k) => k.id === kindId);
     if (!kind) return;
-    // The peer's own shape wins for the kind it actually suggested; any other
-    // kind falls back to what the row's name itself implies.
-    const shape =
-      suggestion && suggestion.kindId === kindId ? suggestion.shape : shapeOf(node.name, kind);
-    onPick(kindId, shape, ladderFor(kindId, shape, node.name, BUILT_IN_KINDS));
+    // Every kind is measured by its own template ladder (1 Oct 2026). A peer's
+    // quantity or typed-percent answer, or a name that matches one rung, used
+    // to replace the ladder with a count box or a single "Done": not asked for.
+    onPick(kindId, 'steps', ladderFor(kindId, 'steps', node.name, BUILT_IN_KINDS));
   }
 
   return (
