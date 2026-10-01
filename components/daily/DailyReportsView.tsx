@@ -18,19 +18,6 @@ export type DailyListItem = {
   day: number | null;
 };
 
-function monthKey(date: string): string {
-  return date.slice(0, 7); // YYYY-MM
-}
-
-function monthLabel(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
 function fullDateLabel(date: string): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -48,10 +35,13 @@ export default function DailyReportsView({
 }: {
   reports: DailyListItem[];
   defaultDate: string;
-  /** "28 Sep to 4 Oct" per week number, for the headings the days are grouped under. */
+  /**
+   * "28 Sep to 4 Oct" per week number: every week of the plan up to this week, so
+   * it is both the headings the days are grouped under and the filter's list.
+   */
   weekLabels: Record<number, string>;
 }) {
-  const [selected, setSelected] = useState<string>('all');
+  const [selected, setSelected] = useState<number | 'all'>('all');
 
   const [confirmDate, setConfirmDate] = useState<string | null>(null);
   const [, startDeleteTransition] = useTransition();
@@ -71,27 +61,28 @@ export default function DailyReportsView({
 
   const visible = reports.filter((r) => !deletedDates.includes(r.date));
 
-  const months = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of visible) {
-      const k = monthKey(r.date);
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [visible]);
+  // The plan's weeks, newest first, each with how many of its days have a report.
+  const weeks = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const r of visible) if (r.week !== null) counts.set(r.week, (counts.get(r.week) ?? 0) + 1);
+    return Object.keys(weekLabels)
+      .map(Number)
+      .sort((a, b) => b - a)
+      .map((week) => ({ week, range: weekLabels[week], count: counts.get(week) ?? 0 }));
+  }, [visible, weekLabels]);
 
-  const filtered = selected === 'all' ? visible : visible.filter((r) => monthKey(r.date) === selected);
+  const filtered = selected === 'all' ? visible : visible.filter((r) => r.week === selected);
 
   /**
    * Whether the rows may carry framer-motion's `layout`.
    *
    * The threshold is the same ~20 the app uses for Radix, for the same reason:
    * the cost is per element, and it is paid on every change rather than once.
-   * A month's worth of days sits comfortably under it; "All" on a finished
+   * A week's seven days sit comfortably under it; "All" on a finished
    * project does not.
    */
   const animatedRows = filtered.length <= 20;
-  const selectedLabel = selected === 'all' ? 'All months' : monthLabel(selected);
+  const selectedLabel = selected === 'all' ? 'All weeks' : `Week ${selected}`;
 
   function confirmDelete() {
     const date = confirmDate;
@@ -124,8 +115,8 @@ export default function DailyReportsView({
           <p className="text-sm sm:text-base text-muted-foreground">Field man-hours, permits, HSE and daily activities</p>
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          <MonthDropdown
-            months={months}
+          <WeekDropdown
+            weeks={weeks}
             total={visible.length}
             selected={selected}
             label={selectedLabel}
@@ -153,7 +144,7 @@ export default function DailyReportsView({
           <m.div
             key={d.date}
             // `layout` is what makes the rows SLIDE to their new places when a
-            // month is picked rather than jumping. It is also the expensive
+            // week is picked rather than jumping. It is also the expensive
             // prop — it measures every element carrying it on every change —
             // so it is gated on the list being short. This view holds a
             // project's whole daily history, and Gundih is 415 days: measuring
@@ -252,18 +243,18 @@ export default function DailyReportsView({
   );
 }
 
-function MonthDropdown({
-  months,
+function WeekDropdown({
+  weeks,
   total,
   selected,
   label,
   onSelect,
 }: {
-  months: [string, number][];
+  weeks: { week: number; range: string; count: number }[];
   total: number;
-  selected: string;
+  selected: number | 'all';
   label: string;
-  onSelect: (value: string) => void;
+  onSelect: (value: number | 'all') => void;
 }) {
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -293,7 +284,7 @@ function MonthDropdown({
     };
   }, [open]);
 
-  function choose(value: string) {
+  function choose(value: number | 'all') {
     onSelect(value);
     close();
   }
@@ -325,15 +316,16 @@ function MonthDropdown({
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
-          <MonthOption label="All months" count={total} active={selected === 'all'} onClick={() => choose('all')} />
-          {months.length > 0 && <div className="my-1 h-px bg-muted" />}
-          {months.map(([key, count]) => (
-            <MonthOption
-              key={key}
-              label={monthLabel(key)}
+          <WeekOption label="All weeks" count={total} active={selected === 'all'} onClick={() => choose('all')} />
+          {weeks.length > 0 && <div className="my-1 h-px bg-muted" />}
+          {weeks.map(({ week, range, count }) => (
+            <WeekOption
+              key={week}
+              label={`Week ${week}`}
+              range={range}
               count={count}
-              active={selected === key}
-              onClick={() => choose(key)}
+              active={selected === week}
+              onClick={() => choose(week)}
             />
           ))}
         </div>
@@ -342,13 +334,15 @@ function MonthDropdown({
   );
 }
 
-function MonthOption({
+function WeekOption({
   label,
+  range,
   count,
   active,
   onClick,
 }: {
   label: string;
+  range?: string;
   count: number;
   active: boolean;
   onClick: () => void;
@@ -356,7 +350,7 @@ function MonthOption({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm transition-colors active:scale-[0.98] sm:py-2 ${
+      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm tabular-nums transition-colors active:scale-[0.98] sm:py-2 ${
         active ? 'bg-chart-1/10 font-medium text-chart-1' : 'text-foreground hover:bg-muted/60 active:bg-muted/60'
       }`}
     >
@@ -370,6 +364,9 @@ function MonthOption({
           <path d="M5 10.5l3.5 3.5L15 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         {label}
+        {range && (
+          <span className={`font-normal ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{range}</span>
+        )}
       </span>
       <span className={`shrink-0 tabular-nums ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{count}</span>
     </button>

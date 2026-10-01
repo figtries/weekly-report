@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { weekAndDay, weekRangeLabel } from '@/lib/daily-week';
+import { weekOfDate } from '@/lib/weeks';
 import { getOpenJsonDb, getOpenProjectStatus } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
 
@@ -54,8 +55,14 @@ async function DailyListBody() {
       day: wd?.day ?? null,
     };
   });
+  // The filter offers the PLAN's weeks, from week one to this week (or to a later
+  // week a report was already written for), newest first. A week with no report
+  // is still listed: a gap in the days is something to see, not to hide.
+  const todayWeek = anchor ? weekOfDate(anchor, new Date().toISOString().slice(0, 10)) : 0;
+  const reportWeeks = rows.flatMap((r) => (r.week !== null ? [r.week] : []));
+  const lastWeek = Math.max(Math.min(todayWeek, status?.lastWeek ?? 0), ...reportWeeks, 0);
   const weekLabels: Record<number, string> = {};
-  for (const r of rows) if (r.week !== null && !weekLabels[r.week]) weekLabels[r.week] = weekRangeLabel(anchor, r.week);
+  for (let w = lastWeek; w >= 1; w--) weekLabels[w] = weekRangeLabel(anchor, w);
   const defaultDate = nextDateAfter(sorted[0]?.date);
 
   // No entrance on the wrapper at all: the RouteTransition fades this whole

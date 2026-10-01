@@ -259,7 +259,7 @@ await tap('Add group', 'Add group');
 
 // Daily.
 await at('/daily');
-await tap('All months', 'All months');
+await tap('All weeks', 'All weeks');
 await at('/daily');
 await tap('New Daily Report', 'New Daily Report');
 
