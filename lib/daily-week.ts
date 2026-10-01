@@ -19,8 +19,10 @@ export function weekAndDay(anchorEnd: string, date: string): { week: number; day
   return day === null ? null : { week: weekOfDate(anchorEnd, date), day };
 }
 
-const short = (d: Date) =>
-  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(d);
+// Spelled out rather than Intl's en-GB short month, which writes September as "Sept":
+// one month a letter longer than the other eleven made the week list ragged.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const short = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 
 /** "28 Sep to 4 Oct". */
 export function weekRangeLabel(anchorEnd: string, week: number): string {

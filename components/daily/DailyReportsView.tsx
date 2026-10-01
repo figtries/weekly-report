@@ -32,6 +32,7 @@ export default function DailyReportsView({
   reports,
   defaultDate,
   weekLabels,
+  thisWeek,
 }: {
   reports: DailyListItem[];
   defaultDate: string;
@@ -40,6 +41,8 @@ export default function DailyReportsView({
    * it is both the headings the days are grouped under and the filter's list.
    */
   weekLabels: Record<number, string>;
+  /** Today's week of the plan, tagged "This week" in the filter. */
+  thisWeek: number;
 }) {
   const [selected, setSelected] = useState<number | 'all'>('all');
 
@@ -117,6 +120,7 @@ export default function DailyReportsView({
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <WeekDropdown
             weeks={weeks}
+            thisWeek={thisWeek}
             total={visible.length}
             selected={selected}
             label={selectedLabel}
@@ -245,12 +249,14 @@ export default function DailyReportsView({
 
 function WeekDropdown({
   weeks,
+  thisWeek,
   total,
   selected,
   label,
   onSelect,
 }: {
   weeks: { week: number; range: string; count: number }[];
+  thisWeek: number;
   total: number;
   selected: number | 'all';
   label: string;
@@ -312,17 +318,18 @@ function WeekDropdown({
 
       {open && (
         <div
-          className={`absolute left-0 z-30 mt-2 max-h-[60vh] w-max min-w-full max-w-[calc(100vw-2rem)] origin-top-left overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl sm:min-w-[13rem] ${
+          className={`absolute left-0 z-30 mt-2 max-h-[60vh] w-60 min-w-full max-w-[calc(100vw-2rem)] origin-top-left overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
           <WeekOption label="All weeks" count={total} active={selected === 'all'} onClick={() => choose('all')} />
-          {weeks.length > 0 && <div className="my-1 h-px bg-muted" />}
+          {weeks.length > 0 && <div className="mx-2 my-1 h-px bg-border" />}
           {weeks.map(({ week, range, count }) => (
             <WeekOption
               key={week}
               label={`Week ${week}`}
               range={range}
+              current={week === thisWeek}
               count={count}
               active={selected === week}
               onClick={() => choose(week)}
@@ -334,41 +341,63 @@ function WeekDropdown({
   );
 }
 
+/**
+ * Two lines per week, the dates under the number, so every date starts at the same
+ * edge whatever the width of "Week 9" or "Week 40". The count is a pill only when
+ * there is something to count: a column of zeros buried the weeks that had reports.
+ */
 function WeekOption({
   label,
   range,
+  current = false,
   count,
   active,
   onClick,
 }: {
   label: string;
   range?: string;
+  current?: boolean;
   count: number;
   active: boolean;
   onClick: () => void;
 }) {
+  // On the selected row the tinted pills would vanish into the tinted row, so they turn white.
+  const chip = active ? 'bg-card' : 'bg-chart-1/10';
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm tabular-nums transition-colors active:scale-[0.98] sm:py-2 ${
-        active ? 'bg-chart-1/10 font-medium text-chart-1' : 'text-foreground hover:bg-muted/60 active:bg-muted/60'
+      className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-left text-sm tabular-nums transition-colors active:scale-[0.98] ${
+        active ? 'bg-chart-1/10' : 'hover:bg-muted/60 active:bg-muted/60'
       }`}
     >
-      <span className="flex items-center gap-2">
-        <svg
-          className={`h-4 w-4 shrink-0 ${active ? 'text-chart-1' : 'text-transparent'}`}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path d="M5 10.5l3.5 3.5L15 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {label}
+      <svg
+        className={`h-4 w-4 shrink-0 ${active ? 'text-chart-1' : 'text-transparent'}`}
+        viewBox="0 0 20 20"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path d="M5 10.5l3.5 3.5L15 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className={`font-medium ${active ? 'text-chart-1' : 'text-foreground'}`}>{label}</span>
+          {current && (
+            <span className={`rounded-md px-1.5 py-px text-[11px] font-medium text-chart-1 ${chip}`}>This week</span>
+          )}
+        </span>
         {range && (
-          <span className={`font-normal ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{range}</span>
+          <span className={`mt-0.5 block text-xs ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{range}</span>
         )}
       </span>
-      <span className={`shrink-0 tabular-nums ${active ? 'text-chart-1/70' : 'text-muted-foreground'}`}>{count}</span>
+      {count > 0 ? (
+        <span className={`min-w-7 shrink-0 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold text-chart-1 ${chip}`}>
+          {count}
+        </span>
+      ) : (
+        <span className="min-w-7 shrink-0 text-center text-xs text-muted-foreground" aria-label="No reports">
+          –
+        </span>
+      )}
     </button>
   );
 }

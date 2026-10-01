@@ -74,6 +74,7 @@ async function DailyListBody() {
       <DailyReportsView
         reports={rows}
         weekLabels={weekLabels}
+        thisWeek={todayWeek}
         defaultDate={defaultDate}
       />
     </div>
