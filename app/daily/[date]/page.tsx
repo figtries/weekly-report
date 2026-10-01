@@ -4,7 +4,7 @@ import { connection } from 'next/server';
 import { weatherLabels } from '@/lib/catalogs';
 import { withPlan } from '@/lib/daily-items';
 import { weekAndDay } from '@/lib/daily-week';
-import { getOpenJsonDb, getOpenProjectStatus, getWorkspace } from '@/lib/data';
+import { getOpenJsonDb, getOpenWeekGrid, getWorkspace } from '@/lib/data';
 import { readOpenDb } from '@/lib/db';
 import type { DailyReport, Database } from '@/lib/types';
 import CreateReportHere from '@/components/daily/CreateReportHere';
@@ -95,9 +95,9 @@ async function DailyDetail({ date }: { date: string }) {
     );
   }
 
-  // After getOpenJsonDb(), which read the project cookie: a request read has
-  // happened, so the clock `getOpenProjectStatus` reads is allowed here.
-  const status = await getOpenProjectStatus();
+  // The plan's dates alone, so a project whose weights do not close yet still gets
+  // its "Week N · Day N".
+  const grid = await getOpenWeekGrid();
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <DailyReportScreen
@@ -108,7 +108,7 @@ async function DailyDetail({ date }: { date: string }) {
         weatherLabels={labels}
         hasPredecessor={db.daily.some((d) => d.date < date)}
         photoTimes={photoTimesOf(db, report)}
-        weekDay={status ? weekAndDay(status.anchorEnd, date) : null}
+        weekDay={grid ? weekAndDay(grid.anchorEnd, date) : null}
       />
     </div>
   );

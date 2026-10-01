@@ -4,7 +4,7 @@ import { RouteTransition } from '@/components/motion/RouteTransition';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { weekAndDay, weekRangeLabel } from '@/lib/daily-week';
 import { weekOfDate } from '@/lib/weeks';
-import { getOpenJsonDb, getOpenProjectStatus } from '@/lib/data';
+import { getOpenJsonDb, getOpenWeekGrid } from '@/lib/data';
 import DailyReportsView from '@/components/daily/DailyReportsView';
 
 function nextDateAfter(lastDate: string | undefined): string {
@@ -41,11 +41,11 @@ async function DailyListBody() {
 
   const db = await getOpenJsonDb();
   // After the cookie read above, so the clock the status reads is allowed.
-  const status = await getOpenProjectStatus();
+  const grid = await getOpenWeekGrid();
   const sorted = [...db.daily].sort((a, b) => b.date.localeCompare(a.date));
   // The days are grouped by the week they fall in ("Week 40, 28 Sep to 4 Oct"). Nobody
   // types the day of the project either: both come from the plan's dates.
-  const anchor = status?.anchorEnd ?? '';
+  const anchor = grid?.anchorEnd ?? '';
   const rows = sorted.map((d) => {
     const wd = anchor ? weekAndDay(anchor, d.date) : null;
     return {
@@ -55,12 +55,12 @@ async function DailyListBody() {
       day: wd?.day ?? null,
     };
   });
-  // The filter offers the PLAN's weeks, from week one to this week (or to a later
-  // week a report was already written for), newest first. A week with no report
-  // is still listed: a gap in the days is something to see, not to hide.
+  // The filter offers EVERY week of the plan, start to finish (and any later week a
+  // report was written for), newest first. The project's dates already say how many
+  // weeks there are; stopping at this week hid weeks 41 to 72 of a 72-week plan.
   const todayWeek = anchor ? weekOfDate(anchor, new Date().toISOString().slice(0, 10)) : 0;
   const reportWeeks = rows.flatMap((r) => (r.week !== null ? [r.week] : []));
-  const lastWeek = Math.max(Math.min(todayWeek, status?.lastWeek ?? 0), ...reportWeeks, 0);
+  const lastWeek = Math.max(grid?.lastWeek ?? 0, ...reportWeeks, 0);
   const weekLabels: Record<number, string> = {};
   for (let w = lastWeek; w >= 1; w--) weekLabels[w] = weekRangeLabel(anchor, w);
   const defaultDate = nextDateAfter(sorted[0]?.date);

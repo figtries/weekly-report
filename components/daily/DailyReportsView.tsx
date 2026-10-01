@@ -3,7 +3,7 @@
 import { pressMotion } from '@/components/motion/Press';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { deleteDailyAction } from '@/lib/actions';
 import { MOTION } from '@/lib/design';
@@ -262,6 +262,22 @@ function WeekDropdown({
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // A whole plan is seventy-odd weeks, newest first, so the list opens on the week that
+  // matters (the one shown, or this week) instead of on the plan's last week.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    const target = list?.querySelector<HTMLElement>(`[data-week="${selected === 'all' ? thisWeek : selected}"]`);
+    const pinned = list?.firstElementChild as HTMLElement | null;
+    if (!list || !target || !pinned) return;
+    // Middle of the list, landing on a whole row: a row cut in half under the pinned
+    // All weeks looked like a rendering fault.
+    const row = target.offsetHeight;
+    const above = Math.floor((Math.floor((list.clientHeight - pinned.offsetHeight) / row) - 1) / 2);
+    list.scrollTop = target.offsetTop - pinned.offsetHeight - above * row;
+  }, [open, selected, thisWeek]);
 
   function close() {
     setClosing(true);
@@ -315,15 +331,20 @@ function WeekDropdown({
 
       {open && (
         <div
-          className={`absolute inset-x-0 z-30 mt-2 max-h-[60vh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl ${
+          ref={listRef}
+          className={`absolute inset-x-0 z-30 mt-2 max-h-[60vh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-card px-1 pb-1 shadow-xl ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >
-          <WeekOption label="All weeks" active={selected === 'all'} onClick={() => choose('all')} />
-          {weeks.length > 0 && <div className="mx-2 my-1 h-px bg-border" />}
+          {/* Pinned, so All weeks is one press away wherever the list was scrolled to. */}
+          <div className="sticky top-0 z-10 bg-card pt-1 pb-1">
+            <WeekOption label="All weeks" active={selected === 'all'} onClick={() => choose('all')} />
+            {weeks.length > 0 && <div className="mx-2 mt-1 h-px bg-border" />}
+          </div>
           {weeks.map(({ week, range }) => (
             <WeekOption
               key={week}
+              week={week}
               label={`Week ${week}`}
               range={range}
               current={week === thisWeek}
@@ -344,12 +365,14 @@ function WeekDropdown({
  * with a check, exactly as the weekly week picker (WeekSelect) marks the current week.
  */
 function WeekOption({
+  week,
   label,
   range,
   current = false,
   active,
   onClick,
 }: {
+  week?: number;
   label: string;
   range?: string;
   current?: boolean;
@@ -360,6 +383,7 @@ function WeekOption({
     <button
       onClick={onClick}
       aria-pressed={active}
+      data-week={week}
       title={current ? 'Current week' : undefined}
       className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm tabular-nums transition-colors active:scale-[0.98] ${
         current ? 'bg-ok-soft text-ok' : 'text-foreground hover:bg-muted/60 active:bg-muted/60'
