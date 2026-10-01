@@ -13,16 +13,19 @@ export default function WeekSelect({
   weeks: weeksAsGiven,
   selectedWeek,
   projectCurrentWeek,
-  activeTab,
+  activeTab = '',
   basePath = '/weekly',
   hrefPattern,
   prefetch = true,
   anchorEnd,
+  onPick,
+  variant = 'bar',
+  label,
 }: {
   weeks: number[];
   selectedWeek: number;
   projectCurrentWeek: number;
-  activeTab: string;
+  activeTab?: string;
   /** Document Control drives the same control over its own routes. */
   basePath?: string;
   /**
@@ -40,6 +43,15 @@ export default function WeekSelect({
   prefetch?: boolean;
   /** Week one's end date, so each row can say which seven days it is. */
   anchorEnd?: string;
+  /**
+   * Hand the picked week back instead of navigating to it: the week log's
+   * "from Week 12 to Week 20" uses the same list as every other week picker.
+   */
+  onPick?: (week: number) => void;
+  /** `pill` sits inside a sentence and takes that sentence's tinted capsule. */
+  variant?: 'bar' | 'pill';
+  /** Read out for the trigger, for a picker whose sentence names it. */
+  label?: string;
 }) {
   const router = useRouter();
   // Newest first, as the Daily Reports filter lists them, so every week list in the
@@ -52,7 +64,7 @@ export default function WeekSelect({
   // The picked week shows in the trigger immediately; the server render
   // catches up in the background (and selectedWeek takes over on arrival).
   const [pickedWeek, setPickedWeek] = useState<number | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLSpanElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   /**
@@ -136,10 +148,13 @@ export default function WeekSelect({
 
   function pick(w: number) {
     close();
-    if (w !== selectedWeek) {
-      setPickedWeek(w);
-      startTransition(() => router.push(hrefFor(w)));
+    if (w === selectedWeek) return;
+    if (onPick) {
+      onPick(w);
+      return;
     }
+    setPickedWeek(w);
+    startTransition(() => router.push(hrefFor(w)));
   }
 
   // Warm the router cache so picking a week commits instantly. As soon as the
@@ -239,6 +254,7 @@ export default function WeekSelect({
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       close();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -260,7 +276,9 @@ export default function WeekSelect({
   }
 
   return (
-    <div ref={rootRef} className="relative w-fit">
+    // A span, so the picker can sit inside a sentence's <p> (the week log's "from /
+    // to") without a div there, which is invalid HTML and a hydration error.
+    <span ref={rootRef} className={variant === 'pill' ? 'relative inline-flex' : 'relative block w-fit'}>
       <m.button
         {...pressMotion}
         type="button"
@@ -268,9 +286,19 @@ export default function WeekSelect({
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        aria-label={label ? `${label}: Week ${displayedWeek}` : undefined}
+        className={
+          variant === 'pill'
+            ? 'flex min-h-9 w-38 items-center justify-between gap-2 rounded-full bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1'
+            : 'flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+        }
       >
-        <svg className="h-4 w-4 shrink-0 text-muted-foreground" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <svg
+          className={`h-4 w-4 shrink-0 ${variant === 'pill' ? 'text-primary' : 'text-muted-foreground'}`}
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+        >
           <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
           <path d="M3 8h14M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
@@ -298,7 +326,7 @@ export default function WeekSelect({
           </svg>
         ) : (
           <svg
-            className="h-4 w-4 text-muted-foreground transition-transform duration-200 ease-ios"
+            className={`h-4 w-4 transition-transform duration-200 ease-ios ${variant === 'pill' ? 'text-primary' : 'text-muted-foreground'}`}
             style={{
               transform: open && !closing ? 'rotate(180deg)' : 'rotate(0deg)',
             }}
@@ -385,6 +413,6 @@ export default function WeekSelect({
           </div>,
           document.body,
         )}
-    </div>
+    </span>
   );
 }

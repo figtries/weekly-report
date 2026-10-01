@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { ChevronDown, Layers, Lock } from 'lucide-react';
+import { Layers, Lock } from 'lucide-react';
 
 import { restoreLeafWeeksAction, saveLeafWeeksAction } from '@/lib/actions';
 import type { MapNode } from '@/lib/overall-map';
@@ -22,6 +22,7 @@ import {
 import { Expand } from '@/components/motion/Expand';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape } from './ProgressEntry';
+import WeekSelect from './WeekSelect';
 import type { Draft } from './ActivityPanel';
 
 /**
@@ -502,6 +503,13 @@ export default function WeekLog({
   const nWrites = plan?.edits.size ?? 0;
   const aheadInFill = fill ? [...(plan?.edits.keys() ?? [])].filter((w) => w > today && !opened.has(w)) : [];
   const weekOptions = rows.map((r) => r.week);
+  // Week one's end, worked back from the first row, so the "from / to" lists carry
+  // the same dates as every other week picker in the app.
+  const anchorEnd = (() => {
+    const d = new Date(`${rows[0].endDate}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - (rows[0].week - 1) * 7);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const warning =
     moved.length > 0 && !plan?.error
@@ -608,21 +616,38 @@ export default function WeekLog({
                 )}
               </p>
               <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-                <span>from</span>
-                <WeekSelect
-                  label="First week"
-                  value={from}
-                  weeks={weekOptions}
-                  onChange={(w) => {
-                    setFrom(w);
-                    if (to < w) setTo(w);
-                  }}
-                />
+                {/* Each word with its pill, so a phone breaks the sentence as
+                    "from [Week 35]" / "to [Week 40]", never leaving "to" alone. */}
+                <span className="inline-flex items-center gap-2">
+                  <span>from</span>
+                  <WeekSelect
+                    variant="pill"
+                    label="First week"
+                    weeks={weekOptions}
+                    selectedWeek={from}
+                    projectCurrentWeek={today}
+                    anchorEnd={anchorEnd}
+                    prefetch={false}
+                    onPick={(w) => {
+                      setFrom(w);
+                      if (to < w) setTo(w);
+                    }}
+                  />
+                </span>
                 {fill === 'range' ? (
-                  <>
+                  <span className="inline-flex items-center gap-2">
                     <span>to</span>
-                    <WeekSelect label="Last week" value={to} weeks={weekOptions.filter((w) => w >= from)} onChange={setTo} />
-                  </>
+                    <WeekSelect
+                      variant="pill"
+                      label="Last week"
+                      weeks={weekOptions.filter((w) => w >= from)}
+                      selectedWeek={to}
+                      projectCurrentWeek={today}
+                      anchorEnd={anchorEnd}
+                      prefetch={false}
+                      onPick={setTo}
+                    />
+                  </span>
                 ) : (
                   <span>until it is done</span>
                 )}
@@ -951,45 +976,6 @@ function AmountInput({ value, onChange, unit }: { value: string; onChange: (v: s
         className="h-9 border-0 border-b-2 border-border bg-transparent px-1 text-center text-[17px] font-semibold tabular-nums text-primary outline-none transition-colors duration-200 ease-ios focus:border-chart-1"
       />
       <span className="text-[15px] font-medium text-primary">{unit.trim()}</span>
-    </span>
-  );
-}
-
-/**
- * A week, chosen from the project's own weeks. Native, so a phone gets its own
- * wheel rather than a popover nobody can hit, and dressed as the pill every
- * other choice in this sentence is.
- */
-function WeekSelect({
-  value,
-  weeks,
-  onChange,
-  label,
-}: {
-  value: number;
-  weeks: number[];
-  onChange: (w: number) => void;
-  label: string;
-}) {
-  return (
-    <span className="relative inline-flex">
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="min-h-9 cursor-pointer appearance-none rounded-full bg-primary/6 py-1 pl-3.5 pr-8 text-[14px] font-medium tabular-nums text-primary outline-none transition-colors duration-200 ease-ios hover:bg-primary/12 focus-visible:ring-2 focus-visible:ring-chart-1"
-      >
-        {weeks.map((w) => (
-          <option key={w} value={w}>
-            W{w}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-primary"
-        strokeWidth={2.25}
-        aria-hidden="true"
-      />
     </span>
   );
 }
