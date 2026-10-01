@@ -28,6 +28,22 @@ function fullDateLabel(date: string): string {
   });
 }
 
+// The list row splits the weekday off into a column of its own. "Wednesday" and
+// "Friday" differ by three letters, so with the weekday in front every row's date
+// started somewhere else and the list read as ragged on a phone.
+function weekdayShort(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
+}
+
+function dateLabel(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export default function DailyReportsView({
   reports,
   defaultDate,
@@ -182,19 +198,20 @@ export default function DailyReportsView({
             >
             <Link
               href={`/daily/${d.date}`}
-              className="flex min-w-0 flex-1 flex-col gap-1 py-3 sm:py-4"
+              className="flex min-w-0 flex-1 items-center gap-3 py-3 tabular-nums sm:py-4"
             >
+              <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">{weekdayShort(d.date)}</span>
               <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">{fullDateLabel(d.date)}</p>
+                <p className="truncate font-medium text-foreground">{dateLabel(d.date)}</p>
                 <p className="text-sm text-muted-foreground">Day {d.day ?? d.hariKe ?? '-'}</p>
               </div>
             </Link>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="-mr-2 flex shrink-0 items-center sm:-mr-3">
               <Link
                 href={`/daily/${d.date}`}
                 aria-label={`Edit report for ${d.date}`}
                 title="Edit report"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-chart-1/10 hover:text-chart-1 active:scale-95"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-chart-1/10 hover:text-chart-1 active:scale-95"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -211,7 +228,7 @@ export default function DailyReportsView({
                 }}
                 aria-label={`Delete report for ${d.date}`}
                 title="Delete report"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-bad-soft hover:text-bad active:scale-95"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 ease-ios hover:bg-bad-soft hover:text-bad active:scale-95"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path
