@@ -80,7 +80,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
     <>
       <m.button {...pressMotion}
         onClick={openModal}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg btn-primary px-4 py-2 text-sm font-medium sm:flex-none"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg btn-primary px-4 py-2 text-sm font-medium sm:flex-none"
       >
         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
