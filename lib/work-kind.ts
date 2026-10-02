@@ -101,7 +101,15 @@ export const BUILT_IN_KINDS: WorkKind[] = [
       { id: 'qc', label: 'QC inspection', weight: 10 },
     ],
     stageHints: ['qc inspection', 'inspection', 'connections'],
-    kindHints: ['installation', 'install', 'instalasi', 'dismantle', 'erection', 'civil', 'piping', 'structure', 'tie in', 'tie-in', 'cabling', 'electrical', 'mechanical'],
+    kindHints: [
+      'installation', 'install', 'instalasi', 'dismantle', 'erection', 'civil', 'piping', 'structure', 'tie in', 'tie-in', 'cabling', 'electrical', 'mechanical',
+      // The disciplines' WORK words (lib/disciplines.ts), so "Hydrotest" is
+      // construction at the first question too. Their OBJECT words (instrument,
+      // cable, pump) are not here: those also name engineering and procurement rows.
+      'hydrotest', 'hydro test', 'pressure test', 'leak test', 'painting', 'coating', 'excavation', 'foundation', 'pondasi',
+      'concrete', 'pengecoran', 'welding', 'stringing', 'lowering', 'backfill', 'trenching', 'piling', 'spool', 'termination',
+      'cable pulling', 'cable laying',
+    ],
   },
   {
     id: 'commissioning',
@@ -207,11 +215,11 @@ export function suggestFromPeers(
  * user's own past decisions that the user cannot check — worse than no count
  * at all, because a wrong count still looks like evidence.
  */
-export function agreeingPeers(
+export function agreeingPeers<P extends { name: string; kindId: string; shape: Shape }>(
   name: string,
   hit: { kindId: string; shape: Shape },
-  peers: Array<{ name: string; kindId: string; shape: Shape }>
-): Array<{ name: string; kindId: string; shape: Shape }> {
+  peers: P[]
+): P[] {
   const n = normalizeName(name);
   return peers.filter((p) => normalizeName(p.name) === n && p.kindId === hit.kindId && p.shape === hit.shape);
 }

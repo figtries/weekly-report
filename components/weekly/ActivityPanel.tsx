@@ -16,12 +16,15 @@ import type { MapNode } from '@/lib/overall-map';
 import type { Milestone } from '@/lib/types';
 import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
 import { changeFor } from '@/lib/work-kind-apply';
+import { disciplineOf } from '@/lib/disciplines';
+import { stepIdOf } from '@/lib/forecast-epc';
+import { stageSentence } from '@/lib/stage-sentence';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
-import WorkKindPicker, { type WorkKindPeer } from './WorkKindPicker';
+import WorkKindPicker, { type WorkKindPeer, type WorkKindPickerHandle } from './WorkKindPicker';
 import ForecastBlock from './ForecastBlock';
 import type { ForecastLeafView, LinkRef } from '@/lib/forecast-view';
 import { formatMoney } from '@/lib/currency';
@@ -130,6 +133,7 @@ export default function ActivityPanel({
   peers,
   forecast = null,
   forecastOptions = [],
+  planReady = false,
   onClose,
   onSaved,
 }: {
@@ -152,6 +156,8 @@ export default function ActivityPanel({
   forecast?: ForecastLeafView | null;
   /** Every scheduled activity, for "What has to finish before this one?". */
   forecastOptions?: LinkRef[];
+  /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
+  planReady?: boolean;
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
@@ -173,6 +179,7 @@ export default function ActivityPanel({
         peers={peers}
         forecast={forecast}
         forecastOptions={forecastOptions}
+        planReady={planReady}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -198,6 +205,7 @@ function PanelBody({
   peers,
   forecast = null,
   forecastOptions = [],
+  planReady = false,
   onClose,
   onSaved,
 }: {
@@ -213,23 +221,30 @@ function PanelBody({
   forecast?: ForecastLeafView | null;
   /** Every scheduled activity, for "What has to finish before this one?". */
   forecastOptions?: LinkRef[];
+  /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
+  planReady?: boolean;
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
   /**
-   * Set on the TAP, before the write goes out, so the form for the kind just
-   * chosen is on screen immediately. `node` itself will not carry the new
-   * `workKind` until the route refreshes behind it — that is a round trip
-   * away, not zero — so until it lands this override stands in for the fields
-   * a freshly-answered leaf would have. `pickKind` drops it again if the write
-   * comes back a failure.
+   * Set on the TAP, so the form for the kind just chosen is on screen at once,
+   * and WRITTEN ON SAVE (2 Oct 2026). The press only shows the answer; the
+   * panel's one Save sends it, with whatever was ticked or typed on the new
+   * rungs. Closing the panel without Save leaves the row as it was.
    */
   const [kindOverride, setKindOverride] = useState<{
     kindId: string;
     shape: Shape;
+    /** The rungs as the server stores them, `${nodeId}:${stepId}`. */
     milestones: Milestone[];
+    /** The same rungs as the action takes them, step ids alone. */
+    steps: Milestone[];
     /** Rungs the restatement awards, so the optimistic figure is the server's. */
     done: string[];
+    /** The figure the restatement leaves, for the map once it is saved. */
+    toPct: number;
+    /** Whether Save has written it. */
+    saved: boolean;
   } | null>(null);
 
   /**
@@ -240,7 +255,7 @@ function PanelBody({
    * data alone, so the first Save closed the question for good: a row measured
    * the wrong way could only be corrected through a disclosure that spoke a
    * different language, and a row answered by accident could not be corrected
-   * at all. Now the question is a place the panel can go back to, and Save on
+   * at all. Now the question is a place the panel can go back to, and pressing
    * the same answer returns from it having changed nothing.
    */
   const [picking, setPicking] = useState(false);
@@ -265,48 +280,31 @@ function PanelBody({
     : node;
 
   /**
-   * The answer is applied on the TAP, and the write follows it.
+   * The answer is applied on the TAP; Save writes it (see `footerSave`).
    *
    * Nothing on this path needs the server's opinion: the rungs come from
-   * `ladderFor`, which is the same pure function the action itself calls, so
-   * waiting for the round trip bought a spinner and nothing else. The form is
-   * on screen before the request leaves. If the write does fail, the override
-   * is dropped and the question comes back with the reason on it, which is the
-   * only part of this that has to be true rather than fast.
+   * `ladderFor`, the same pure function the action itself calls.
    */
-  function pickKind(kindId: string, kindShape: Shape, milestones: Milestone[]) {
-    const previous = kindOverride;
+  function applyKind(kindId: string, kindShape: Shape, steps: Milestone[]) {
+    // The rungs carry the ids the server will give them, so a rung ticked
+    // before Save is one `saveFieldProgressSqlite` recognises when Save sends
+    // it; it drops any id the row does not have.
+    const milestones = steps.map((ms) => ({ ...ms, id: `${node.id}:${ms.id}` }));
     // CHANGING HOW YOU MEASURE MUST NOT CHANGE WHAT WAS MEASURED, and the
     // optimistic view has to keep that promise too. The server restates the
     // figure into the new ladder's own terms through `changeFor`; showing an
     // untouched ladder here instead read a row sitting at 100% as 0.0%, which
     // is not only wrong on screen — the draft would have counted as dirty and
     // Save would have written the zero over it.
-    const { done } = changeFor(
+    const { done, toPct } = changeFor(
       { id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct },
       milestones
     );
-    setKindOverride({ kindId, shape: kindShape, milestones, done });
+    const next = { kindId, shape: kindShape, milestones, steps, done, toPct, saved: false };
+    setKindOverride(next);
     setPicking(false);
     setError(null);
-    // Deliberately not inside the panel's own transition: that one drives the
-    // Save button, and a question that has already been answered should not
-    // leave the button reading "Saving…" over a form nobody has typed in yet.
-    void setWorkKindAction(
-      node.id,
-      node.name,
-      kindId,
-      kindShape,
-      { steps: milestones },
-      projectId
-    ).then(
-      (res) => {
-        if (res.ok) return;
-        setKindOverride(previous);
-        setPicking(true);
-        setError(res.error ?? 'Could not save');
-      }
-    );
+    return next;
   }
 
   /**
@@ -359,8 +357,11 @@ function PanelBody({
   // the question was "what kind of work is this", so the way back to it has to
   // carry the word they replied with. The shape is the fallback for a row the
   // importer or the planner set a method on without anyone being asked.
-  const kindLabel =
-    BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
+  // A construction row also names its discipline, read from its own rungs.
+  const discipline = effectiveNode.workKind === 'construction' ? disciplineOf(effectiveNode.milestones) : null;
+  const kindLabel = discipline
+    ? `Construction · ${discipline.short}`
+    : BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
   // The raw string in the percent box while it has focus. See the input.
   const [typing, setTyping] = useState<string | null>(null);
@@ -428,6 +429,15 @@ function PanelBody({
   // The escape hatch reads from `draft.pct` regardless of how the row is
   // normally measured — that is the whole point of typing a percent instead.
   const pct = manual ? clampPct(round2(draft.pct)) : pctOfDraft(effectiveNode, draft);
+
+  // The plan read as a stage (lib/stage-sentence.ts), for a construction row on
+  // a discipline's ladder. Held by the weight gate like every plan figure, and
+  // never for a row weighing 0, whose planPct is 0 by construction. Reads the
+  // figure ON SCREEN, so it follows a tick or a typed percent before Save.
+  const planLine =
+    planReady && discipline && shape === 'steps' && node.weight > 0
+      ? stageSentence({ steps: effectiveNode.milestones ?? [], actualPct: pct, planPct: node.planPct, week })
+      : null;
   // The note counts as a change too. It did not have to before, because the
   // only form that carried one also carried its own percent box; now a ladder
   // row can be answered "nothing moved, but here is who told me so", and a
@@ -520,6 +530,61 @@ function PanelBody({
     nothing();
   }
 
+  /**
+   * THE ONE SAVE (2 Oct 2026). The kind-of-work question used to carry a Save
+   * of its own, which stacked a second blue Save right above this one, and it
+   * wrote the moment a kind was pressed. Now a press only APPLIES the answer
+   * on screen and this is the one place anything is written: the kind first,
+   * then what was ticked on its new rungs or typed in the figure, then the
+   * panel closes as after any Save. Pressed with the question still open, it
+   * applies the highlighted answer and writes it. With no new answer it is the
+   * foot's usual Save.
+   */
+  const pickerRef = useRef<WorkKindPickerHandle>(null);
+  function footerSave() {
+    if (saving) return;
+    let pending = kindOverride && !kindOverride.saved ? kindOverride : null;
+    // Applied by THIS press, so nothing can have been ticked on its rungs yet.
+    let freshly = false;
+    if (asking) {
+      const choice = pickerRef.current?.choice() ?? null;
+      if (choice === 'same') setPicking(false);
+      else if (choice) {
+        pending = applyKind(choice.kindId, choice.shape, choice.steps);
+        freshly = true;
+      }
+    }
+    if (!pending) return saveOrConfirm();
+
+    const kind = pending;
+    // A typed figure wins, as it does everywhere in this panel; otherwise the
+    // rungs ticked since the answer was applied, if they differ from what the
+    // restatement awarded.
+    const typed = manual && dirty;
+    const ticked = [...draft.milestonesDone].sort().join();
+    const ticks = !typed && !freshly && ticked !== [...kind.done].sort().join() ? draft.milestonesDone : null;
+    const finalPct = typed || ticks ? pct : kind.toPct;
+    const finalSource = typed ? 'manual' : kind.shape;
+    setError(null);
+    startSaving(async () => {
+      const res = await setWorkKindAction(node.id, node.name, kind.kindId, kind.shape, { steps: kind.steps }, projectId);
+      if (!res.ok) return setError(res.error ?? 'Could not save');
+      setKindOverride({ ...kind, saved: true });
+      if (typed) {
+        const r = await saveWeekUpdatesAction(week, {
+          [node.id]: { cumProgressPct: pct, note: draft.note || undefined, source: finalSource },
+        }, projectId);
+        if (!r.ok) return setError(r.error ?? 'Could not save');
+      } else if (ticks) {
+        const r = await saveFieldProgressAction(week, [
+          { leafId: node.id, milestonesDone: ticks, note: draft.note || undefined, source: finalSource },
+        ], projectId);
+        if (!r.ok) return setError(r.error ?? 'Could not save');
+      }
+      finish(finalPct);
+    });
+  }
+
   function nothing() {
     if (saving) return;
     setError(null);
@@ -609,10 +674,13 @@ function PanelBody({
             <div className="rounded-2xl bg-muted/40 p-4">
               {asking ? (
                 <WorkKindPicker
+                  ref={pickerRef}
                   node={node}
                   peers={peers}
                   current={answered ? effectiveNode.workKind ?? null : null}
-                  onPick={pickKind}
+                  context={trail.map((t) => t.name).reverse()}
+                  currentLadder={answered ? (effectiveNode.milestones ?? []).map((ms) => stepIdOf(ms.id)) : undefined}
+                  onPick={applyKind}
                   onCancel={answered ? () => setPicking(false) : undefined}
                 />
               ) : (
@@ -668,6 +736,9 @@ function PanelBody({
                       setTyping(null);
                     }}
                   />
+                  {planLine && (
+                    <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">{planLine}</p>
+                  )}
                 </>
               )}
   
@@ -795,7 +866,7 @@ function PanelBody({
           <div className="flex gap-2 border-t border-border bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
             <m.button
               {...pressMotion}
-              onClick={saveOrConfirm}
+              onClick={footerSave}
               disabled={saving}
               className="btn-primary min-h-12 flex-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
             >

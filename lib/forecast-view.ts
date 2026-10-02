@@ -229,7 +229,7 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
           ? `Set as ${currentLabel}, but it sits under ${tidyName(c.heading)}`
           : `No kind of work yet; it sits under ${tidyName(c.heading)}`
       );
-    } else if (c.kind === 'material-early') {
+    } else if (c.kind === 'ticked-early') {
       const first = ref(c.waiting[0].id);
       say(
         c.leafId,

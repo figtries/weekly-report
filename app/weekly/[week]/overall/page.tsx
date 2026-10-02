@@ -303,6 +303,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
           blockingIds={blocking}
           initialItem={initialItem}
           forecast={forecast}
+          figuresReady={gate.ok}
         />
       </Reveal>
     </div>

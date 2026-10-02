@@ -6,6 +6,7 @@ import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
 import type { ForecastView } from '@/lib/forecast-view';
+import { disciplineOf } from '@/lib/disciplines';
 import { deriveShape } from '@/components/weekly/ProgressEntry';
 import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
@@ -146,6 +147,7 @@ export default function OverallMap({
   blockingIds = [],
   initialItem = null,
   forecast = null,
+  figuresReady = false,
 }: {
   map: MapModel;
   week: number;
@@ -168,6 +170,8 @@ export default function OverallMap({
   initialItem?: string | null;
   /** The forecast and what it needs looked at; null until the weights close. */
   forecast?: ForecastView | null;
+  /** The weight gate is open, so plan figures may show (lib/weight-gate.ts). */
+  figuresReady?: boolean;
 }) {
   // The path down to the item the Check screen pointed at is opened for you,
   // so closing its panel leaves the row itself on screen, not four collapsed
@@ -234,7 +238,12 @@ export default function OverallMap({
         // the picker offers. The hatch itself never reaches here, because it
         // leaves the row's stored method alone — a ladder overridden by a
         // typed percent still reads back as 'steps'.
-        out.push({ name: n.name, kindId: n.workKind, shape: deriveShape(n) });
+        out.push({
+          name: n.name,
+          kindId: n.workKind,
+          shape: deriveShape(n),
+          disciplineId: n.workKind === 'construction' ? disciplineOf(n.milestones)?.id ?? null : null,
+        });
       }
       n.children.forEach(walk);
     }
@@ -478,6 +487,7 @@ export default function OverallMap({
         peers={peers}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
         forecastOptions={forecast?.options}
+        planReady={figuresReady}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />

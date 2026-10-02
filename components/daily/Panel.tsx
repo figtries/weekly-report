@@ -14,7 +14,18 @@ import { MOTION } from '@/lib/design';
  * The curve is the app's own (`MOTION.ease`); opacity is quicker than height, which is
  * what makes the closing read as one soft movement rather than a shrinking box.
  */
-export function Panel({ id, open, children }: { id: string; open: boolean; children: ReactNode }) {
+export function Panel({
+  id,
+  open,
+  children,
+  innerClassName = 'px-4 pb-4 pt-1 sm:pl-[50px] sm:pr-5',
+}: {
+  id: string;
+  open: boolean;
+  children: ReactNode;
+  /** The padding of what opens. The default is a daily section row's. */
+  innerClassName?: string;
+}) {
   return (
     <AnimatePresence initial={false}>
       {open && (
@@ -35,7 +46,7 @@ export function Panel({ id, open, children }: { id: string; open: boolean; child
             animate={{ y: 0 }}
             exit={{ y: -6 }}
             transition={{ duration: 0.36, ease: [...MOTION.ease] }}
-            className="px-4 pb-4 pt-1 sm:pl-[50px] sm:pr-5"
+            className={innerClassName}
           >
             {children}
           </m.div>

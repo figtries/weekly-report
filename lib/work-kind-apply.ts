@@ -1,3 +1,4 @@
+import { findDiscipline } from './disciplines';
 import { milestoneProgress } from './progress';
 import type { Milestone } from './types';
 import { gateLadder, type Shape, type WorkKind } from './work-kind';
@@ -33,16 +34,23 @@ export interface KindChange {
   done: string[];
 }
 
-/** The rungs a row gets. A gate is one rung carrying the row's own name. */
+/**
+ * The rungs a row gets. A gate is one rung carrying the row's own name. A
+ * construction row climbs its discipline's ladder when one is named, and
+ * today's construction ladder (Other) when none is.
+ */
 export function ladderFor(
   kindId: string,
   shape: Shape,
   rowName: string,
-  kinds: WorkKind[]
+  kinds: WorkKind[],
+  disciplineId: string | null = null
 ): Milestone[] {
   if (shape === 'gate') return gateLadder(rowName);
   // Quantity counts a count and a typed percent is typed: neither climbs rungs.
   if (shape !== 'steps') return [];
+  const discipline = kindId === 'construction' ? findDiscipline(disciplineId) : null;
+  if (discipline) return discipline.steps.map((s) => ({ ...s }));
   const kind = kinds.find((k) => k.id === kindId);
   return kind ? kind.steps.map((s) => ({ ...s })) : [];
 }

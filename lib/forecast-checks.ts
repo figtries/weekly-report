@@ -10,14 +10,17 @@
  *   C3 a typed percent that is not what its own ticked ladder says
  *   C4 progress entered in bulk after weeks of nothing
  *   C5 activities on the path that sets the finish with no outside date
- *   C6 "Material on site" ticked on a construction row while a delivery it
- *      waits for is not in yet (28 Sep 2026): one of the two is wrong, and
- *      the forecast cannot tell which
+ *   C6 a construction rung ticked before the work its row waits for is done
+ *      (28 Sep 2026; widened 2 Oct 2026): the rung each discipline marks as
+ *      needing it (lib/disciplines.ts), so a hydrotest filled before its piping
+ *      is finished is found as well as material ticked before delivery. One of
+ *      the two is wrong, and the forecast cannot tell which
  *
  * Data only. What they say on screen is Plan B's.
  */
 import { milestoneProgress, resolveLeafProgress } from './progress';
 import { profileRowsOf, rungsNamedBy, stepIdOf, subjectOf, suggestWaitsFor, type Phase } from './forecast-epc';
+import { disciplineOf } from './disciplines';
 import { BUILT_IN_KINDS } from './work-kind';
 import type { LeafForecast } from './forecast';
 import type { WbsItem, WeeklyLeafData } from './types';
@@ -28,7 +31,7 @@ export type ForecastCheck =
   | { kind: 'typed-vs-ladder'; leafId: string; typedPct: number; ladderPct: number }
   | { kind: 'bulk-entry'; week: number; addedPct: number; quietWeeks: number }
   | { kind: 'needs-date'; leafId: string }
-  | { kind: 'material-early'; leafId: string; rungLabel: string; waiting: { id: string; pct: number }[] };
+  | { kind: 'ticked-early'; leafId: string; rungLabel: string; waiting: { id: string; pct: number }[] };
 
 /** A week this big after this many silent ones reads as catching up, not as work. */
 const BULK_POINTS = 5;
@@ -108,20 +111,24 @@ export function forecastChecks(input: {
   }
 
   // C6. The links a person confirmed, or EPC order's offer while nobody has
-  // answered, so the check works before anyone has pressed Link.
+  // answered, so the check works before anyone has linked anything. Any row
+  // it waits for counts, not only procurement: a test waits for what it tests.
   const offered = suggestWaitsFor(rows);
   for (const r of leafRows) {
     const item = itemById.get(r.id);
     if (!item || r.phase !== 'construction' || item.progressMethod !== 'milestone') continue;
-    const material = (item.milestones ?? []).find((m) => stepIdOf(m.id) === 'material');
-    if (!material || !(leafData[r.id]?.milestonesDone ?? []).includes(material.id)) continue;
+    const discipline = disciplineOf(item.milestones);
+    if (!discipline) continue;
+    const guarded = (item.milestones ?? []).find((m) => stepIdOf(m.id) === discipline.needs);
+    if (!guarded || !(leafData[r.id]?.milestonesDone ?? []).includes(guarded.id)) continue;
     const preds = item.waitsFor ?? offered.get(r.id) ?? [];
     const waiting = preds
-      .map((id) => ({ id, item: itemById.get(id) }))
-      .filter((p) => p.item && rows.find((x) => x.id === p.id)?.phase === 'procurement')
-      .map((p) => ({ id: p.id, pct: resolveLeafProgress(p.item!, leafData[p.id]) }))
+      .flatMap((id) => {
+        const p = itemById.get(id);
+        return p ? [{ id, pct: resolveLeafProgress(p, leafData[id]) }] : [];
+      })
       .filter((p) => p.pct < 100);
-    if (waiting.length) out.push({ kind: 'material-early', leafId: r.id, rungLabel: material.label, waiting });
+    if (waiting.length) out.push({ kind: 'ticked-early', leafId: r.id, rungLabel: guarded.label, waiting });
   }
 
   return out;
