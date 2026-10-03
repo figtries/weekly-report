@@ -96,6 +96,14 @@ export interface RegisterSummary {
  * back AWC at IFR on 15 Apr, went out at IFA on 22 Apr and at AFC on 30 Apr,
  * and the summary still said it had been held up for 18 days.
  */
+/** A project whose register can be copied when another one is built (3 Oct 2026). */
+export interface RegisterSource {
+  projectId: string;
+  name: string;
+  documents: number;
+  headings: number;
+}
+
 export type ObstacleKind = 'late' | 'comments' | 'waiting' | 'soon' | 'untouched';
 
 /** Over this many days with the other side, a document is chased. */

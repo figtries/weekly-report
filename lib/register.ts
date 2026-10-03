@@ -35,8 +35,9 @@ import {
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
-  type EngineeringBridge, type Movement, type WeekMovement,
+  type EngineeringBridge, type Movement, type WeekMovement, type RegisterSource,
 } from './register-shared';
+import { kindOf, type OutlineHeading } from './builder-model';
 import type { DocStage, RegisterKind } from './schema';
 import { detectPrefix, type NumberingRule } from './register-numbering';
 import { outlineCode } from './register-outline';
@@ -454,8 +455,9 @@ export function getNumbering(projectId: string, register: RegisterKind): {
       : null,
     taken,
     suggestedPrefix: detectPrefix(taken)
-      ?? (project?.docNoPrefix?.split('-')[0] ?? '')
-      ?? '',
+      // A register with no numbers yet takes the project's initial (JPI,
+      // MRB), the three letters people already write it by.
+      ?? (project?.alias?.trim() || project?.docNoPrefix?.split('-')[0] || ''),
   };
 }
 
@@ -1070,4 +1072,65 @@ export function getEngineeringBridge(projectId: string, week?: number): Engineer
  */
 export function getAllRegisterWeekNumbers(): number[] {
   return db.select({ weekNo: schema.weeks.weekNo }).from(schema.weeks).all().map((w) => w.weekNo);
+}
+
+/* ------------------------------------------------- what a builder copies */
+
+/**
+ * A register as headings, sub-headings and titles, for the builder to start
+ * from (3 Oct 2026). Dates, letters and status never travel: a copy is a list
+ * of what to produce, not a record of what happened on another project.
+ *
+ * The builder has two levels. A root category is a heading; every LEAF below
+ * it becomes a sub-heading named by itself, so a three-level register
+ * (A GENERAL > A.2 PROCEDURE > A.2.1 General Procedure) arrives as GENERAL with
+ * a sub-heading "General Procedure", which is the level people file under.
+ */
+export function getRegisterOutline(projectId: string, register: RegisterKind): OutlineHeading[] {
+  const categories = db.select().from(schema.docCategories)
+    .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
+    .all().sort((a, b) => a.order - b.order);
+  const documents = db.select().from(schema.documents)
+    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
+    .all().sort((a, b) => a.order - b.order);
+
+  const children = new Map<string, typeof categories>();
+  for (const c of categories) {
+    if (!c.parentId) continue;
+    const list = children.get(c.parentId) ?? [];
+    list.push(c);
+    children.set(c.parentId, list);
+  }
+  const docsOf = (categoryId: string) => documents
+    .filter((d) => d.categoryId === categoryId)
+    .map((d) => ({ title: d.title, kind: kindOf(d.kind) }));
+  const leavesUnder = (id: string): typeof categories =>
+    (children.get(id) ?? []).flatMap((c) => ((children.get(c.id)?.length ?? 0) > 0 ? leavesUnder(c.id) : [c]));
+
+  return categories.filter((c) => !c.parentId).map((root) => ({
+    name: root.name,
+    documents: docsOf(root.id),
+    subheadings: leavesUnder(root.id).map((leaf) => ({ name: leaf.name, documents: docsOf(leaf.id) })),
+  }));
+}
+
+/** Every OTHER project with something in this register, to copy from. */
+export function getRegisterSources(currentProjectId: string, register: RegisterKind): RegisterSource[] {
+  const projects = db.select().from(schema.projects).all();
+  const docs = db.select({ projectId: schema.documents.projectId }).from(schema.documents)
+    .where(eq(schema.documents.register, register)).all();
+  const roots = db.select({ projectId: schema.docCategories.projectId, parentId: schema.docCategories.parentId })
+    .from(schema.docCategories).where(eq(schema.docCategories.register, register)).all()
+    .filter((c) => c.parentId === null);
+
+  return projects
+    .filter((p) => p.id !== currentProjectId)
+    .map((p) => ({
+      projectId: p.id,
+      name: p.name,
+      documents: docs.filter((d) => d.projectId === p.id).length,
+      headings: roots.filter((c) => c.projectId === p.id).length,
+    }))
+    .filter((s) => s.documents > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

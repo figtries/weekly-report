@@ -61,13 +61,26 @@ export function writeSeed(input: SeedInput): SeedResult {
  */
 export interface DraftGroup {
   path: string[];
-  documents: { docNo: string | null; title: string }[];
+  documents: {
+    docNo: string | null;
+    title: string;
+    /** Doc or Dwg as chosen in the builder; null lets the writer default to Doc. */
+    kind?: string | null;
+    /** The IFR planned date (ISO), written as that stage's plan. Never marks it sent. */
+    planIfr?: string | null;
+  }[];
 }
+
+/** A document on its way in, as the writer sees it: the paste's shape plus a plan date. */
+type SeedDocument = PasteCategory['documents'][number] & { planIfr?: string | null };
+type SeedCategory = Omit<PasteCategory, 'documents'> & { documents: SeedDocument[] };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function writeDraft(
   input: Omit<SeedInput, 'text' | 'mapping'> & { groups: DraftGroup[] },
 ): SeedResult {
-  const categories: PasteCategory[] = [];
+  const categories: SeedCategory[] = [];
   for (const group of input.groups) {
     // A path with no documents is NOT skipped: it is a heading, a section or a
     // group somebody created deliberately, and a register is built structure
@@ -78,7 +91,9 @@ export function writeDraft(
         name,
         depth: depth + 1,
         documents: depth === group.path.length - 1
-          ? group.documents.map((d) => ({ docNo: d.docNo, title: d.title, kind: null }))
+          ? group.documents.map((d) => ({
+            docNo: d.docNo, title: d.title, kind: d.kind ?? null, planIfr: d.planIfr ?? null,
+          }))
           : [],
       });
     });
@@ -88,7 +103,7 @@ export function writeDraft(
 
 function writeCategories(
   input: SeedInput,
-  categories: PasteCategory[],
+  categories: SeedCategory[],
   { allowEmpty = false }: { allowEmpty?: boolean } = {},
 ): SeedResult {
   const clientName = input.clientName.trim();
@@ -230,6 +245,20 @@ function writeCategories(
         // one list is two documents that happen to share it, not the same one
         // twice. See the comment on `byNumber`.
         newDocuments += 1;
+
+        // The builder asks for the IFR plan date beside the title, because the
+        // engineering plan curve is counted from these dates (3 Oct 2026). A
+        // plan is a promise, so the row is written NOT submitted.
+        if (doc.planIfr && ISO_DATE.test(doc.planIfr)) {
+          tx.insert(schema.docStages).values({
+            id: randomUUID(),
+            documentId: newId,
+            stage: 'IFR',
+            order: STAGE_ORDER.indexOf('IFR'),
+            planSubmitDate: doc.planIfr,
+            submitted: false,
+          }).run();
+        }
       }
     }
 
