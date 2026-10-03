@@ -6,6 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
+  getRegisterSources,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -52,7 +53,7 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
           contractorName={parties.contractorName}
 
           hasDocuments={false}
-          existingSections={[]}
+          sources={getRegisterSources(projectId, 'vdrl')}
           numbering={getNumbering(projectId, 'vdrl')}
         />
       </RouteTransition>

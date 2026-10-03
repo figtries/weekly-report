@@ -94,6 +94,10 @@ console.log('\nthe numbering guess falls back to the project initial');
 db.insert(schema.projects).values({ id: 'builder-empty', name: 'Empty', alias: 'JPI' }).run();
 check('initial used', getNumbering('builder-empty', 'edl').suggestedPrefix, 'JPI');
 check('existing numbers win', getNumbering(PROJECT, 'edl').suggestedPrefix, 'BTS');
+const { deriveInitial } = await import('../lib/initial.ts');
+db.insert(schema.projects).values({ id: 'builder-noalias', name: 'asdasd' }).run();
+check('no initial stored: the sidebar\x27s guess', getNumbering('builder-noalias', 'edl').suggestedPrefix, deriveInitial('asdasd'));
+check('and it is not empty', deriveInitial('asdasd').length > 0, true);
 
 sqlite.close();
 rmSync(tmp, { force: true });

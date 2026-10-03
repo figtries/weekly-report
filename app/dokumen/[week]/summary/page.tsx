@@ -6,6 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
+  getRegisterSources,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -57,7 +58,7 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
           contractorName={parties.contractorName}
 
           hasDocuments={false}
-          existingSections={[]}
+          sources={getRegisterSources(projectId, 'edl')}
           numbering={getNumbering(projectId, 'edl')}
         />
       </RouteTransition>
@@ -65,9 +66,15 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
   }
 
   const tree = getRegisterTree(projectId, 'edl', week);
-  // A and B are the sheet's own two bands; what a controller works in is the
-  // level below — General, Procedure, Process, Mechanical, Electrical, Instrument.
-  const groups = tree.flatMap((root) => (root.children.length > 0 ? root.children : [root]));
+  // A card per HEADING, the level people choose in the builder (GENERAL,
+  // INSTRUMENT), with its sub-headings inside it. Only a band whose every part
+  // is itself split (an imported DETAIL ENGINEERING holding PROCESS, CIVIL...)
+  // opens into those parts, which is where an imported register keeps its
+  // disciplines. Splitting every heading put GENERAL's Execution Plan and
+  // Procedure on cards of their own (4 Oct 2026).
+  const groups = tree.flatMap((root) => (
+    root.children.length > 0 && root.children.every((c) => c.children.length > 0) ? root.children : [root]
+  ));
 
   return (
     <RouteTransition id="dokumen-edl-summary">

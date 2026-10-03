@@ -38,6 +38,7 @@ import {
   type EngineeringBridge, type Movement, type WeekMovement, type RegisterSource,
 } from './register-shared';
 import { kindOf, type OutlineHeading } from './builder-model';
+import { deriveInitial } from './initial';
 import type { DocStage, RegisterKind } from './schema';
 import { detectPrefix, type NumberingRule } from './register-numbering';
 import { outlineCode } from './register-outline';
@@ -457,7 +458,9 @@ export function getNumbering(projectId: string, register: RegisterKind): {
     suggestedPrefix: detectPrefix(taken)
       // A register with no numbers yet takes the project's initial (JPI,
       // MRB), the three letters people already write it by.
-      ?? (project?.alias?.trim() || project?.docNoPrefix?.split('-')[0] || ''),
+      ?? (project?.alias?.trim() || project?.docNoPrefix?.split('-')[0]
+        // No initial stored: the same guess the sidebar card shows ("ASD").
+        || (project ? deriveInitial(project.name) : '')),
   };
 }
 

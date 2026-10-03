@@ -7,6 +7,7 @@ import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights,
+  getRegisterSources,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -47,7 +48,7 @@ async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }
           contractorName={parties.contractorName}
 
           hasDocuments={false}
-          existingSections={[]}
+          sources={getRegisterSources(projectId, 'edl')}
           numbering={getNumbering(projectId, 'edl')}
         />
       </RouteTransition>
@@ -70,6 +71,7 @@ async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }
       clientName={parties.clientName}
       contractorName={parties.contractorName}
       numbering={getNumbering(projectId, 'edl')}
+      sources={getRegisterSources(projectId, 'edl')}
       footer={
         // What each stage is worth: a contract setting, moved here from the
         // summary on 3 Oct 2026 because a summary reads and this screen writes.

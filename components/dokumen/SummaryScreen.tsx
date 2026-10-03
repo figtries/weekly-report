@@ -566,7 +566,7 @@ function GroupCard({ group: g }: { group: RegisterNode }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-snug">{g.name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{g.documents} documents</p>
+            <p className="mt-1 text-xs text-muted-foreground">{g.documents} document{g.documents === 1 ? '' : 's'}</p>
           </div>
           {v && (
             <Badge className={cn('w-24 shrink-0 justify-center font-medium tabular-nums', v.chip)}>{v.label}</Badge>

@@ -15,7 +15,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { deleteCategory } from '@/lib/doc-actions';
 import { DURATION, EASE } from '@/components/motion/Reveal';
-import { STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode } from '@/lib/register-shared';
+import {
+  STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
+} from '@/lib/register-shared';
 import type { RegisterKind } from '@/lib/schema';
 import type { NumberingRule } from '@/lib/register-numbering';
 import { cn } from '@/lib/utils';
@@ -138,6 +140,7 @@ export function RegisterWorkbench({
   clientName,
   contractorName,
   numbering,
+  sources,
   footer,
 }: {
   projectId: string;
@@ -159,6 +162,8 @@ export function RegisterWorkbench({
   contractorName: string;
   /** The numbering rule and the numbers already spoken for. */
   numbering: NumberingProps;
+  /** Other projects whose register the builder can copy. */
+  sources: RegisterSource[];
   /** Shown under the register, never under the builder that replaces it. */
   footer?: React.ReactNode;
 }) {
@@ -292,23 +297,14 @@ export function RegisterWorkbench({
   const columnHidden = selected !== null || mobileWorklist;
 
   /**
-   * What this register already contains, as bands → sections → groups, so the
-   * builder shows them beside the ready-made ones instead of offering to create
-   * a second "ELECTRICAL" next to the one that exists.
+   * What this register already holds, as the builder's headings: each root,
+   * how many documents sit under it, and the leaves below it, so additions
+   * land in the headings and sub-headings that exist instead of beside them.
    */
-  const existingSections = useMemo(() => {
-    const out: { band: string; section: string; groups: string[] }[] = [];
-    for (const band of tree) {
-      for (const section of band.children.length > 0 ? band.children : []) {
-        out.push({
-          band: band.name,
-          section: section.name,
-          groups: section.children.map((g) => g.name),
-        });
-      }
-      if (band.children.length === 0) out.push({ band: band.name, section: band.name, groups: [] });
-    }
-    return out;
+  const existing = useMemo(() => {
+    const leaves = (n: RegisterNode): string[] =>
+      n.children.flatMap((c) => (c.children.length > 0 ? leaves(c) : [c.name]));
+    return tree.map((root) => ({ name: root.name, documents: root.documents, subheadings: leaves(root) }));
   }, [tree]);
 
   const tools = <RegisterTools register={register} onAdd={() => setBuilding(true)} />;
@@ -321,8 +317,9 @@ export function RegisterWorkbench({
         clientName={clientName}
         contractorName={contractorName}
         hasDocuments={totalDocuments > 0}
-        existingSections={existingSections}
+        existing={existing}
         numbering={numbering}
+        sources={sources}
         onClose={() => setBuilding(false)}
       />
     );
