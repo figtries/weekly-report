@@ -7,7 +7,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Reports & PDF
 
 Every report page in this app is one `.print-sheet-a4` element, and every report
-leaves the app as a **server-rendered PDF** — never `window.print()`. This is the
+leaves the app as a **server-rendered PDF** — never `window.print()`. (Since 30 Sep / 3 Oct
+2026 the daily and the weekly report leave as the client's Excel workbooks instead; see
+their own sections. The rules below still bind the PDF routes and `/print/*`.) This is the
 feature users trust least, because every bug in it costs them paper, and it has
 regressed on real phones repeatedly. The rules below are the scar tissue. Read
 `app/globals.css` (the `.print-sheet-a4` block), `lib/pdf.ts` and
@@ -612,6 +614,49 @@ and prints it to PDF, and `scripts/pdf-to-png.ps1 -Dir <dir> -Name <name>` rende
 with Windows' own PDF renderer. The person's own Excel window is never touched; check with
 `Win32_Process` that no `/automation` instance is left behind. Measure a picture's shape from
 pixels (a drawn circle's width over height), never by eye.
+
+# The weekly report leaves as ONE Excel workbook
+
+Decided 3 Oct 2026; spec `docs/superpowers/specs/2026-10-03-weekly-excel-export-design.md`,
+plan `docs/superpowers/plans/2026-10-03-weekly-excel-export.md`. "Export Excel" REPLACED
+"Save as PDF" in the weekly bar: one button on Summary, Detail, S-Curve and Photos opens a
+pop-up (`ExportExcelDialog`, variant V2 of two he compared) where Documentation, Summary
+Overall, and Detail / S-Curve for Overall and each work package are ticked; all are ticked
+on opening. The PDF route and `/print/weekly` stay, unlinked, as the daily PDF did.
+
+**THE LOOK IS THE SAMPLE'S, THE CONTENT IS THE APP'S.** "Yang kumaksud sama hanyalah
+tampilan, kalo isi kita kan sudah benar." The look is `contoh.xlsx` (`...\Weekly Report\W45\`)
+minus the logos (they belong to one company) and minus `Data Overall`. Every figure, row,
+curve and photo is what the screens show: `lib/xlsx/weekly-input.ts` computes nothing of its
+own (rollup, `summariseUnits`, `buildSCurveSeries` / `buildPackageSCurves`), rounds the way
+`lib/figures.ts` does and apportions the Summary's package columns so each adds to its total.
+So the S-curve stops at the exported week like the screen, NOT at the project's end like the
+sample. **Values, never formulas** ("angka jadi aja"): the sample's formulas all read
+`Data Overall`.
+
+**Work packages are the Summary cards' groups**, named as the project names them
+(`SummaryRow.key` is the stable id the pop-up and the route share). Never a hard-coded "SPK":
+a project with no flagged unit gets its top branches. A package's Detail sheet weighs its rows
+as a share of the package (closes at 100%); a package nested in another reports only in its own.
+
+**It is BUILT, not patched** (unlike the daily export): row count follows the WBS and sheet
+count the packages, so `lib/xlsx/weekly-export.ts` writes the package from scratch and takes
+only the look from `lib/xlsx/weekly-skin.ts`, which `scripts/build-weekly-skin.ts` GENERATES
+from the sample. The skin's row numbers (`SUMMARY`, `DETAIL`, `SCURVE` in `weekly-sheets.ts`)
+are the sample's and are the whole cell map. The S-curve chart is the sample's chart with its
+refs and caches cut out, refilled per sheet, caches included so a phone preview draws it.
+
+**A frozen pane must name its top-left cell.** Lifting the sample dropped `topLeftCell` from
+Detail's `<pane state="frozen">` and Excel refused the whole file with only "Unable to get the
+Open property of the Workbooks class"; found by opening one sheet kind per file. **Fit a
+multi-page sheet to N tall, not 0**: Documentation's copies of the page with `fitToHeight="0"`
+spilled each page's last row of photos onto a sheet of its own.
+
+Proof is `scripts/verify-weekly-xlsx.ts` (input against the screens' readers, then the
+workbook read back by ExcelJS; package soundness, no formula, no external link). The look is
+checked in Excel itself (see the daily section above for the late-bound `cscript` recipe):
+the full workbook opens, but closing a 12-sheet one can hang the hidden instance, so run it
+under `//T:` and stop only the `/automation` process you started.
 
 # Progress has one origin
 

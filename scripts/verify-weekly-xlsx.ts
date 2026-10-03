@@ -15,6 +15,7 @@
  *
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-weekly-xlsx.ts
  */
+import ExcelJS from 'exceljs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -150,7 +151,6 @@ check('duplicate suffix is numbered', b !== a && b.endsWith('(2)'), b);
 check('file name', W.weeklyFileName('PRGG-00-G0-RPT-002', 45, '2026-09-03') === 'PRGG-00-G0-RPT-002_WEEKLY PROGRESS REPORT W45 (Overall)_030926.xlsx');
 
 // ------------------------------------------------------------------ 2. the workbook
-const ExcelJS = (await import('exceljs')).default;
 const JSZip = (await import('jszip')).default;
 const fsx = await import('node:fs');
 const { buildWeeklyWorkbook } = await import('../lib/xlsx/weekly-export.ts');
@@ -214,7 +214,7 @@ for (const c of cases) {
 
   // Read back by an independent parser.
   const x = new ExcelJS.Workbook();
-  await x.xlsx.load(book.bytes);
+  await x.xlsx.load(book.bytes as unknown as ExcelJS.Buffer);
   const sum = x.getWorksheet('Summary Overall')!;
   check(`${tag}: Summary title`, sum.getCell('A2').value === `WEEKLY REPORT NO.${c.week}`);
   check(`${tag}: Summary project`, sum.getCell('A3').value === input.project.name.toUpperCase());
