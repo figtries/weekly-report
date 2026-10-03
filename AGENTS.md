@@ -915,6 +915,18 @@ BUDGET IS THE ONLY THING" above); the Weights strip names every such leaf so
 the gap is reminded rather than guessed. And a row that stops being a leaf
 stops carrying a weight, the same stale-flag family as `isMilestone`.
 
+# Roles: a draft until login exists
+
+Added 3 Oct 2026. **Roles took Settings' slot at the foot of the sidebar**; the
+lists Settings held are daily-report lists the daily report edits itself, so
+`/settings` stays reachable by its URL and is linked from nowhere (the same
+treatment as the unlinked PDF routes). `/roles` shows six role cards; pressing
+one opens None / View / Edit per destination, and the Master is always Edit.
+NOTHING IS SAVED AND NOTHING IS RESTRICTED: there is no login (board item 22),
+so the page says "Draft" above the cards and a reload puts `lib/roles.ts` back.
+That file is the whole content (roles, destinations, defaults); the user will
+supply the real roles, so change them there and nowhere else.
+
 # The v2 rebuild — read this before starting new work
 
 The app is being rebuilt from fundamentals against the CPP Gundih data

@@ -15,7 +15,7 @@ import { usePathname } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
-import { ChevronDown, Menu, Settings } from 'lucide-react';
+import { ChevronDown, Menu, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DailyReportsIcon,
@@ -34,8 +34,8 @@ import {
  * SHEETS, which are output, not places to go. They belong to one Reports
  * destination with tabs, exactly as they appear in the PDF. Everything used to
  * put numbers in sits under Progress; everything used once a project starts
- * sits under Settings, at the bottom, where it stops competing for attention
- * every day.
+ * sat under Settings, at the bottom, where it stopped competing for attention
+ * every day. Roles holds that foot slot since 3 Oct 2026.
  *
  * `match` decides highlighting, so a destination stays lit while the user moves
  * between its own tabs.
@@ -121,13 +121,15 @@ const DESTINATIONS: Entry[] = [
   },
 ];
 
-const SETTINGS: Destination = {
-  label: 'Settings',
-  icon: Settings,
-  // Setup and Portfolio live as tabs inside Settings — a project is configured
-  // a handful of times, and until now they cost two permanent menu slots.
-  href: () => '/settings',
-  match: (p) => p.startsWith('/settings'),
+// Roles took Settings' place at the foot (3 Oct 2026): who may open what is the
+// one thing here that belongs to the whole app rather than to a project. The
+// lists Settings held are daily-report lists the daily report edits itself, so
+// `/settings` stays reachable by its URL and is linked from nowhere.
+const ROLES: Destination = {
+  label: 'Roles',
+  icon: ShieldCheck,
+  href: () => '/roles',
+  match: (p) => p.startsWith('/roles'),
 };
 
 const itemClass = (active: boolean) =>
@@ -307,20 +309,20 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
  * them. A card inside the swapping subtree is remounted on every page load:
  * its streamed content is thrown away and redrawn a frame later.
  *
- * The foot reads card, rule, Settings (25 Sep 2026): the project card stands
- * alone in its own box, and the edge-to-edge rule (-mx-3) sits UNDER it,
- * above Settings. Settings stays the last row, but lifted off the bottom edge
+ * The foot reads card, rule, Roles (25 Sep 2026; Roles replaced Settings on
+ * 3 Oct): the project card stands alone in its own box, and the edge-to-edge
+ * rule (-mx-3) sits UNDER it, above Roles. Roles stays the last row, but lifted off the bottom edge
  * with room below it (plus the iPhone home-indicator inset) — flush against
  * the edge it read as buried.
  */
-function NavList({ links, settings, card }: { links: ReactNode; settings: ReactNode; card: ReactNode }) {
+function NavList({ links, foot, card }: { links: ReactNode; foot: ReactNode; card: ReactNode }) {
   return (
     <nav className="flex flex-1 flex-col px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
       <div className="space-y-1">{links}</div>
 
       <div className="mt-auto pt-4">{card}</div>
 
-      <div className="-mx-3 mt-4 border-t px-3 pt-3">{settings}</div>
+      <div className="-mx-3 mt-4 border-t px-3 pt-3">{foot}</div>
     </nav>
   );
 }
@@ -463,7 +465,7 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
 
               <NavList
                 links={<Links dests={DESTINATIONS} pathname={pathname} />}
-                settings={<Links dests={[SETTINGS]} pathname={pathname} />}
+                foot={<Links dests={[ROLES]} pathname={pathname} />}
                 card={switcher}
               />
             </div>
@@ -543,7 +545,7 @@ export default function Sidebar({
 
           <NavList
             links={<ActiveLinks dests={DESTINATIONS} />}
-            settings={<ActiveLinks dests={[SETTINGS]} />}
+            foot={<ActiveLinks dests={[ROLES]} />}
             card={switcher}
           />
         </div>
