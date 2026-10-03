@@ -1,22 +1,22 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import type { ExportPackage } from './ExportExcelDialog';
 
 // The overlay rule (AGENTS.md): the dialog stays out of the first bundle. It is
-// fetched once the page is idle (and on the first touch of the button, whichever
-// comes first), so the first press opens it instead of waiting for the download:
-// a press that sat still and then popped was the glitch reported 3 Oct 2026.
+// fetched as soon as the page has LOADED (not when the browser next feels idle: on
+// a phone that came after the first press), and on the first touch of the button
+// too. Measured 3 Oct 2026 on a cold page, mobile network, CPU 4x: the first press
+// waited 1011 ms for these chunks before anything moved, the second 283 ms.
 const loadDialog = () => import('./ExportExcelDialog');
 const ExportExcelDialog = dynamic(loadDialog);
-let dialogRequested = false;
-function preloadDialog() {
-  if (dialogRequested) return;
-  dialogRequested = true;
-  loadDialog().catch(() => {
-    dialogRequested = false;
+let dialogReady: Promise<unknown> | null = null;
+function preloadDialog(): Promise<unknown> {
+  dialogReady ??= loadDialog().catch(() => {
+    dialogReady = null;
   });
+  return dialogReady;
 }
 
 // The route is a serverless function; a cold one makes the first export wait for
@@ -50,18 +50,24 @@ export default function ExportExcelButton({
   figuresReady: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  // Mounted once opened, so its choices survive closing and reopening it.
+  // Mounted once its code is here (or on the first press), and kept, so its choices
+  // survive closing and reopening it.
   const [mounted, setMounted] = useState(false);
 
+  // Once the code is here, the dialog is mounted CLOSED, so a press only opens it
+  // rather than building it first.
   useEffect(() => {
-    // Safari has no requestIdleCallback; a short timer stands in for it there.
-    const hasIdle = 'requestIdleCallback' in window;
-    const idle = hasIdle
-      ? window.requestIdleCallback(preloadDialog, { timeout: 2500 })
-      : window.setTimeout(preloadDialog, 1200);
+    let live = true;
+    const start = () => {
+      void preloadDialog().then(() => {
+        if (live) setMounted(true);
+      });
+    };
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
     return () => {
-      if (hasIdle) window.cancelIdleCallback(idle);
-      else window.clearTimeout(idle);
+      live = false;
+      window.removeEventListener('load', start);
     };
   }, []);
 
@@ -93,16 +99,24 @@ export default function ExportExcelButton({
         </svg>
         <span className="hidden sm:inline">Export Excel</span>
       </button>
+      {/* ITS OWN SUSPENSE BOUNDARY, and that is the first-press glitch (3 Oct 2026).
+          A lazy component suspends the first time it renders, even when its code has
+          already arrived, and with no boundary of its own the suspension reached the
+          week bar's: the whole bar (week picker, Current, the tabs, this button) went
+          back to its grey skeleton for a moment on the first press of a page. A null
+          fallback here means nothing on screen changes while it resolves. */}
       {mounted && (
-        <ExportExcelDialog
-          open={open}
-          onOpenChange={setOpen}
-          week={week}
-          period={period}
-          packages={packages}
-          fileName={fileName}
-          figuresReady={figuresReady}
-        />
+        <Suspense fallback={null}>
+          <ExportExcelDialog
+            open={open}
+            onOpenChange={setOpen}
+            week={week}
+            period={period}
+            packages={packages}
+            fileName={fileName}
+            figuresReady={figuresReady}
+          />
+        </Suspense>
       )}
     </>
   );

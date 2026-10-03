@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import SavePdfButton from '@/components/print/SavePdfButton';
+import { CheckBox } from '@/components/ui/CheckBox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { OVERALL, selectionCount, selectionQuery, type WeeklySelection } from '@/lib/xlsx/weekly-selection';
 
@@ -59,8 +60,20 @@ export default function ExportExcelDialog({
     setSel((s) => ({ ...s, [field]: !s[field] }));
   };
 
-  const box = 'size-5 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed';
   const cell = 'flex min-h-11 items-center justify-center';
+
+  /**
+   * FOCUS MOVES AFTER THE FIRST FRAMES, NOT BEFORE THEM. Radix focuses the first
+   * checkbox while it mounts the card, and a focus() makes the browser lay out the
+   * whole report page under it: 90 ms of the open at CPU 4x, all of it before the
+   * first frame of the animation could be drawn (3 Oct 2026). So the card opens
+   * first and focus follows two frames later, without scrolling anything; on close
+   * it goes back to the button that opened it the same way. Keyboard and screen
+   * reader users still land inside the dialog and return to the button.
+   */
+  const contentRef = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const later = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,6 +82,17 @@ export default function ExportExcelDialog({
       <DialogContent
         className="dialog-soft max-h-[90dvh] overflow-y-auto sm:max-w-lg"
         overlayClassName="scrim-soft bg-black/40 supports-backdrop-filter:backdrop-blur-none"
+        ref={contentRef}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          later(() => contentRef.current?.focus({ preventScroll: true }));
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          const back = opener.current;
+          if (back) later(() => back.focus({ preventScroll: true }));
+        }}
       >
         <DialogHeader>
           <DialogTitle>Export Excel</DialogTitle>
@@ -95,7 +119,7 @@ export default function ExportExcelDialog({
             ] as const
           ).map(([field, label, enabled]) => (
             <label key={field} className={`flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm ${enabled ? 'cursor-pointer hover:bg-muted/60' : 'opacity-50'}`}>
-              <input type="checkbox" className={box} checked={sel[field]} disabled={!enabled} onChange={() => flip(field)} />
+              <CheckBox checked={sel[field]} disabled={!enabled} onChange={() => flip(field)} />
               <span className="font-medium text-foreground">{label}</span>
             </label>
           ))}
@@ -114,7 +138,7 @@ export default function ExportExcelDialog({
               </span>
               {(['detail', 'scurve'] as const).map((list) => (
                 <label key={list} className={`${cell} ${figuresReady ? 'cursor-pointer' : ''}`} aria-label={`${list === 'detail' ? 'Detail' : 'S-Curve'} ${r.label}`}>
-                  <input type="checkbox" className={box} checked={sel[list].includes(r.key)} disabled={!figuresReady} onChange={() => toggle(list, r.key)} />
+                  <CheckBox checked={sel[list].includes(r.key)} disabled={!figuresReady} onChange={() => toggle(list, r.key)} />
                 </label>
               ))}
             </div>
