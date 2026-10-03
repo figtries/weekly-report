@@ -31,7 +31,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import {
-  STAGE_ORDER, daysBetween, isApproved,
+  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, daysBetween, isApproved,
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
@@ -234,26 +234,127 @@ function trendOf(deviation: number | null): Trend {
   return 'behind';
 }
 
+interface OpenState {
+  kind: ObstacleKind;
+  stage: DocStage | null;
+  returnCode: string | null;
+  next: DocStage | null;
+  since: string | null;
+  days: number | null;
+}
+
+/**
+ * Where one document stands as of the week being viewed: who holds the ball,
+ * and whether that makes it outstanding. ONE place, so the summary's tiles,
+ * its list, the data screen's badges and its worklist cannot disagree.
+ *
+ * `awaiting` is the days since its latest send when that send has had no reply
+ * (null when the ball is not with the other side, or the send has no date).
+ */
+function openStateOf(rows: StageRow[], loaded: Loaded): {
+  open: OpenState | null;
+  withOtherSide: boolean;
+  awaiting: number | null;
+} {
+  const { asOfDate } = loaded;
+  let furthest = -1;
+  rows.forEach((s, i) => { if (reachedBy(s, loaded)) furthest = i; });
+
+  // With the other side: the furthest stage sent has not come back. Nothing on
+  // our side can be late or due then; the next stage waits on their reply.
+  const latest = furthest >= 0 ? rows[furthest] : null;
+  if (latest && !returnedBy(latest, loaded)) {
+    const awaiting = latest.submittedAt ? daysBetween(latest.submittedAt, asOfDate) : null;
+    const open: OpenState | null = awaiting !== null && awaiting > REPLY_DAYS
+      ? { kind: 'waiting', stage: latest.stage, returnCode: null, next: null, since: latest.submittedAt, days: awaiting }
+      : null;
+    return { open, withOtherSide: true, awaiting };
+  }
+
+  // The ball is with us: nothing sent yet, or the last send came back.
+  const ahead = rows.slice(furthest + 1).filter((s) => s.planSubmitDate)
+    .sort((a, b) => (a.planSubmitDate! < b.planSubmitDate! ? -1 : 1));
+  const unanswered = latest && latest.returnCode && !isApproved(latest.returnCode) ? latest : null;
+
+  const late = ahead.find((s) => s.planSubmitDate! < asOfDate);
+  if (late) {
+    return {
+      open: {
+        kind: 'late',
+        stage: late.stage,
+        returnCode: unanswered?.returnCode ?? null,
+        next: late.stage,
+        since: late.planSubmitDate,
+        days: daysBetween(late.planSubmitDate!, asOfDate),
+      },
+      withOtherSide: false,
+      awaiting: null,
+    };
+  }
+
+  if (unanswered) {
+    return {
+      open: {
+        kind: 'comments',
+        stage: unanswered.stage,
+        returnCode: unanswered.returnCode,
+        // The answer to a comment is the next stage on this document.
+        next: rows[furthest + 1]?.stage ?? null,
+        since: unanswered.returnedAt,
+        days: unanswered.returnedAt ? daysBetween(unanswered.returnedAt, asOfDate) : null,
+      },
+      withOtherSide: false,
+      awaiting: null,
+    };
+  }
+
+  const soon = ahead.find((s) => daysBetween(asOfDate, s.planSubmitDate!) <= LOOKAHEAD_DAYS);
+  if (soon) {
+    return {
+      open: {
+        kind: 'soon',
+        stage: soon.stage,
+        returnCode: null,
+        next: soon.stage,
+        since: soon.planSubmitDate,
+        days: daysBetween(asOfDate, soon.planSubmitDate!),
+      },
+      withOtherSide: false,
+      awaiting: null,
+    };
+  }
+
+  if (furthest < 0) {
+    return {
+      open: { kind: 'untouched', stage: null, returnCode: null, next: null, since: null, days: null },
+      withOtherSide: false,
+      awaiting: null,
+    };
+  }
+  return { open: null, withOtherSide: false, awaiting: null };
+}
+
 function countsFor(docs: DocumentRow[], loaded: Loaded) {
   let untouched = 0;
   let returnedOpen = 0;
   let overdue = 0;
+  let awaiting = 0;
+  let longestWait: number | null = null;
 
   for (const d of docs) {
     const rows = loaded.byDoc.get(d.id) ?? [];
     if (!rows.some((s) => reachedBy(s, loaded))) untouched += 1;
 
-    const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
-    const last = returned[returned.length - 1];
-    if (last && !isApproved(last.returnCode)) returnedOpen += 1;
-
-    // Promised by the week being viewed and still not out.
-    if (rows.some((s) => !reachedBy(s, loaded) && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)) {
-      overdue += 1;
+    const state = openStateOf(rows, loaded);
+    if (state.open?.kind === 'comments') returnedOpen += 1;
+    if (state.open?.kind === 'late') overdue += 1;
+    if (state.withOtherSide) {
+      awaiting += 1;
+      if (state.awaiting !== null) longestWait = Math.max(longestWait ?? 0, state.awaiting);
     }
   }
 
-  return { untouched, returnedOpen, overdue };
+  return { untouched, returnedOpen, overdue, awaiting, longestWait };
 }
 
 /* ----------------------------------------------------------------- public */
@@ -589,11 +690,12 @@ export function getRegisterLeaves(projectId: string, register: RegisterKind, wee
 }
 
 /**
- * What is actually holding the work up, worst first.
+ * Every document that is outstanding, each once, in the order decided with the
+ * user: late, then comments, then waiting too long, then due soon, then (for
+ * the vendor register) never sent. The rule is `openStateOf`.
  *
- * Three kinds, and the order matters: a document that came back with a comment
- * is blocking construction now; one that is past its promised date is blocking
- * it soon; one that has never moved is the vendor register's whole story.
+ * Within a kind the longest-standing comes first, except due soon, which runs
+ * soonest first because that is the order the work has to happen in.
  */
 export function getObstacles(projectId: string, register: RegisterKind, week?: number): Obstacle[] {
   const loaded = loadRegister(projectId, register, week);
@@ -603,51 +705,22 @@ export function getObstacles(projectId: string, register: RegisterKind, week?: n
   const out: Obstacle[] = [];
 
   for (const doc of loaded.documents) {
-    const rows = loaded.byDoc.get(doc.id) ?? [];
-    const base = {
+    const { open } = openStateOf(loaded.byDoc.get(doc.id) ?? [], loaded);
+    if (!open) continue;
+    out.push({
       documentId: doc.id,
       docNo: doc.docNo,
       title: doc.title,
       categoryId: doc.categoryId,
-      categoryName: categoryName.get(doc.categoryId) ?? '—',
-    };
-
-    const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
-    const last = returned[returned.length - 1];
-    if (last && !isApproved(last.returnCode)) {
-      out.push({
-        ...base,
-        kind: 'returned',
-        stage: last.stage,
-        returnCode: last.returnCode,
-        since: last.returnedAt,
-        days: last.returnedAt ? daysBetween(last.returnedAt, loaded.asOfDate) : null,
-      });
-      continue;
-    }
-
-    const late = rows
-      .filter((s) => !reachedBy(s, loaded) && s.planSubmitDate && s.planSubmitDate < loaded.asOfDate)
-      .sort((a, b) => (a.planSubmitDate! < b.planSubmitDate! ? -1 : 1))[0];
-    if (late) {
-      out.push({
-        ...base,
-        kind: 'overdue',
-        stage: late.stage,
-        returnCode: null,
-        since: late.planSubmitDate,
-        days: daysBetween(late.planSubmitDate!, loaded.asOfDate),
-      });
-      continue;
-    }
-
-    if (!rows.some((s) => reachedBy(s, loaded))) {
-      out.push({ ...base, kind: 'untouched', stage: null, returnCode: null, since: null, days: null });
-    }
+      categoryName: categoryName.get(doc.categoryId) ?? '',
+      ...open,
+    });
   }
 
-  const rank: Record<ObstacleKind, number> = { returned: 0, overdue: 1, untouched: 2 };
-  return out.sort((a, b) => rank[a.kind] - rank[b.kind] || (b.days ?? 0) - (a.days ?? 0));
+  const rank: Record<ObstacleKind, number> = { late: 0, comments: 1, waiting: 2, soon: 3, untouched: 4 };
+  return out.sort((a, b) =>
+    rank[a.kind] - rank[b.kind]
+    || (a.kind === 'soon' ? (a.days ?? 0) - (b.days ?? 0) : (b.days ?? 0) - (a.days ?? 0)));
 }
 
 /**

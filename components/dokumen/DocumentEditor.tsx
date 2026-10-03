@@ -84,31 +84,20 @@ export function DocumentEditor({
         />
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] border-separate border-spacing-y-1 text-sm">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="w-16 pb-1 font-medium">Stage</th>
-              <th className="pb-1 font-medium">Sent</th>
-              <th className="pb-1 font-medium">Letter</th>
-              <th className="pb-1 font-medium">Returned</th>
-              <th className="pb-1 font-medium">Letter</th>
-              <th className="w-24 pb-1 font-medium">Code</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stages.map((stage) => (
-              <StageRow
-                key={stage}
-                projectId={projectId}
-                register={register}
-                documentId={doc.id}
-                stage={stage}
-                row={doc.stages.find((s) => s.stage === stage) ?? null}
-              />
-            ))}
-          </tbody>
-        </table>
+      {/* One block per stage, two lines each (3 Oct 2026). The plan date joined
+          the row and a single line of seven fields left the letter numbers
+          about forty pixels: "MRB-TRM-O-(" was all anyone could read. */}
+      <div className="flex flex-col gap-2">
+        {stages.map((stage) => (
+          <StageRow
+            key={stage}
+            projectId={projectId}
+            register={register}
+            documentId={doc.id}
+            stage={stage}
+            row={doc.stages.find((s) => s.stage === stage) ?? null}
+          />
+        ))}
       </div>
 
       <button
@@ -138,6 +127,7 @@ function StageRow({
   row: DocumentCard['stages'][number] | null;
 }) {
   const [draft, setDraft] = useState({
+    planSubmitDate: row?.planSubmitDate ?? '',
     sentAt: row?.submittedAt ?? '',
     sentTransmittal: row?.submitTransmittal ?? '',
     returnedAt: row?.returnedAt ?? '',
@@ -157,6 +147,7 @@ function StageRow({
     if (lastKey.current === serverKey) return;
     lastKey.current = serverKey;
     setDraft({
+      planSubmitDate: row?.planSubmitDate ?? '',
       sentAt: row?.submittedAt ?? '',
       sentTransmittal: row?.submitTransmittal ?? '',
       returnedAt: row?.returnedAt ?? '',
@@ -183,56 +174,70 @@ function StageRow({
     commit(next);
   };
 
-  const plan = row?.planSubmitDate ?? null;
-
   return (
-    <tr className="align-middle">
-      <td className="pr-2">
-        <div className="flex items-center gap-1.5">
-          <span className="font-mono text-xs font-medium">{STAGE_LABEL[stage]}</span>
-          {pending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-          {saved && !pending && <Check className="h-3 w-3 text-emerald-600" />}
-        </div>
-        {plan && <div className="text-[10px] text-muted-foreground">plan {plan}</div>}
-        {error && <div className="text-[10px] text-destructive">{error}</div>}
-      </td>
-      <td className="pr-2">
-        <input type="date" defaultValue={draft.sentAt} onBlur={onBlur('sentAt')} className={field} />
-      </td>
-      <td className="pr-2">
-        <input
-          defaultValue={draft.sentTransmittal}
-          onBlur={onBlur('sentTransmittal')}
-          placeholder="T.001"
-          className={cn(field, 'font-mono')}
-        />
-      </td>
-      <td className="pr-2">
-        <input type="date" defaultValue={draft.returnedAt} onBlur={onBlur('returnedAt')} className={field} />
-      </td>
-      <td className="pr-2">
-        <input
-          defaultValue={draft.returnTransmittal}
-          onBlur={onBlur('returnTransmittal')}
-          placeholder="T.002"
-          className={cn(field, 'font-mono')}
-        />
-      </td>
-      {/* `pr-2` like every other cell in this row. Without it the Code column
-          sat flush against the table's right edge while the five fields to its
-          left each kept a gutter, which is what made this row look ragged. */}
-      <td className="pr-2">
-        <NativeSelect
-          defaultValue={draft.returnCode}
-          onBlur={onBlur('returnCode')}
-          aria-label="Return code"
-        >
-          {CODES.map((c) => (
-            <option key={c} value={c}>{c || '—'}</option>
-          ))}
-        </NativeSelect>
-      </td>
-    </tr>
+    <div className="rounded-lg border bg-card px-3 py-2.5">
+      <div className="flex min-h-9 items-center gap-2">
+        <span className="font-mono text-xs font-semibold">{STAGE_LABEL[stage]}</span>
+        {pending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+        {saved && !pending && <Check className="h-3 w-3 text-emerald-600" />}
+        {error && <span className="text-[11px] text-destructive">{error}</span>}
+        <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          Plan
+          <input
+            type="date"
+            defaultValue={draft.planSubmitDate}
+            onBlur={onBlur('planSubmitDate')}
+            aria-label={`${STAGE_LABEL[stage]} planned date`}
+            className={cn(field, 'w-[9.5rem] text-foreground')}
+          />
+        </label>
+      </div>
+      <div className="mt-2 grid grid-cols-[8.5rem_minmax(0,1fr)] gap-2 sm:grid-cols-[8.5rem_minmax(0,1fr)_8.5rem_minmax(0,1fr)_5rem]">
+        <Field label="Sent">
+          <input type="date" defaultValue={draft.sentAt} onBlur={onBlur('sentAt')} className={field} />
+        </Field>
+        <Field label="Letter out">
+          <input
+            defaultValue={draft.sentTransmittal}
+            onBlur={onBlur('sentTransmittal')}
+            placeholder="T.001"
+            className={cn(field, 'px-2 font-mono tracking-tight sm:px-2.5 md:text-[13px] md:tracking-normal')}
+          />
+        </Field>
+        <Field label="Returned">
+          <input type="date" defaultValue={draft.returnedAt} onBlur={onBlur('returnedAt')} className={field} />
+        </Field>
+        <Field label="Letter back">
+          <input
+            defaultValue={draft.returnTransmittal}
+            onBlur={onBlur('returnTransmittal')}
+            placeholder="T.002"
+            className={cn(field, 'px-2 font-mono tracking-tight sm:px-2.5 md:text-[13px] md:tracking-normal')}
+          />
+        </Field>
+        <Field label="Code">
+          <NativeSelect
+            defaultValue={draft.returnCode}
+            onBlur={onBlur('returnCode')}
+            aria-label="Return code"
+          >
+            {CODES.map((c) => (
+              <option key={c} value={c}>{c || 'None'}</option>
+            ))}
+          </NativeSelect>
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+/** A field with its name over it, so every box says what it holds on a phone too. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      {children}
+    </label>
   );
 }
 

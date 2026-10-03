@@ -4,9 +4,8 @@ import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
-import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
+  getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -68,18 +67,9 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
       groups={getRegisterTree(projectId, 'vdrl', week)}
       obstacles={getObstacles(projectId, 'vdrl', week)}
       movement={getWeekMovement(projectId, 'vdrl', week)}
-      groupNoun="packages"
       groupsTitle="By vendor package"
       foldEmptyGroups
     />
-
-    <div className="mt-6">
-      <StageWeightsCard
-        projectId={projectId}
-        register="vdrl"
-        weights={getStageWeights(projectId, 'vdrl')}
-      />
-    </div>
     </RouteTransition>
   );
 }

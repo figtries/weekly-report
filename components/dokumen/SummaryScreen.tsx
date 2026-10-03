@@ -4,10 +4,11 @@ import { ArrowRight, TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Reveal } from '@/components/motion/Reveal';
 import { CountUp } from '@/components/motion/CountUp';
 import { RegisterCurve } from '@/components/dokumen/RegisterCurve';
+import { OutstandingBlock } from '@/components/dokumen/OutstandingBlock';
+import { r1, verdict } from '@/components/dokumen/verdict';
 import {
   STAGE_FULL, STAGE_LABEL,
   type EngineeringBridge, type Obstacle, type RegisterNode, type RegisterSummary,
@@ -16,8 +17,8 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * The register in three blocks: where it stands, what moved this week, what is
- * holding it up.
+ * The register in four blocks: where it stands, what is outstanding, each
+ * discipline, and the week.
  *
  * Two rules hold the whole screen together.
  *
@@ -68,28 +69,12 @@ const isFull = (n: number) => n >= 99.995;
  * red. A bar coloured by verdict cannot also say where the plan is, so bars are
  * never coloured by trend. Written out because Tailwind reads files as text.
  */
-const TREND: Record<RegisterNode['trend'], { label: string; chip: string }> = {
-  ahead: { label: 'ahead', chip: 'bg-emerald-100 text-emerald-700' },
-  'on-track': { label: 'on plan', chip: 'bg-emerald-100 text-emerald-700' },
-  slipping: { label: 'slipping', chip: 'bg-amber-100 text-amber-700' },
-  behind: { label: 'behind', chip: 'bg-red-100 text-red-700' },
-  unplanned: { label: 'no plan', chip: 'bg-muted text-muted-foreground' },
-};
-
-const OBSTACLE: Record<Obstacle['kind'], { heading: string; chip: string }> = {
-  returned: { heading: 'Returned with comments', chip: 'bg-red-100 text-red-700' },
-  overdue: { heading: 'Past its promised date', chip: 'bg-amber-100 text-amber-700' },
-  untouched: { heading: 'Never sent', chip: 'bg-muted text-muted-foreground' },
-};
-
 const MOVEMENT = {
   submitted: { label: 'Sent out', chip: 'bg-blue-100 text-blue-700' },
   returned: { label: 'Returned', chip: 'bg-red-100 text-red-700' },
   approved: { label: 'Approved', chip: 'bg-emerald-100 text-emerald-700' },
 } as const;
 
-const OBSTACLES_SHOWN = 8;
-const MOVEMENTS_SHOWN = 6;
 const NAMES_SHOWN = 10;
 
 /* ------------------------------------------------------------ primitives */
@@ -209,28 +194,9 @@ function Key({ hasPlan }: { hasPlan: boolean }) {
   );
 }
 
-function Stat({ label, value, delay = 0 }: { label: string; value: string; delay?: number }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-2">
-      {/* The figure lands a beat after the tile carrying it, and the three
-          tiles land in sequence — the same shape CountUp gives the hero number
-          elsewhere. `.animate-fade-in-up` and not `.animate-enter`: this is one
-          figure inside something that is already arriving, and the two must not
-          travel the same distance or the number slides against its own tile. */}
-      <span
-        className="animate-fade-in-up text-xl font-semibold tabular-nums"
-        style={delay ? { animationDelay: `${delay}s` } : undefined}
-      >
-        {value}
-      </span>
-      <span className="truncate text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function BlockHeading({ step, title, aside }: { step: string; title: string; aside?: string }) {
+function BlockHeading({ step, title, aside, extra }: {
+  step: string; title: string; aside?: string; extra?: React.ReactNode;
+}) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-semibold tabular-nums text-secondary-foreground">
@@ -238,12 +204,22 @@ function BlockHeading({ step, title, aside }: { step: string; title: string; asi
       </span>
       <h2 className="text-base font-semibold tracking-tight">{title}</h2>
       {aside && <span className="text-sm text-muted-foreground">{aside}</span>}
+      {extra}
     </div>
   );
 }
 
 /* ---------------------------------------------------------------- screen */
 
+/**
+ * Four blocks since 3 Oct 2026, tidied with the user from a screen they liked
+ * the look of and found crowded: where it stands, what is outstanding, each
+ * discipline, the week. Gone: the stat strip (documents, disciplines, still
+ * open), the "Against plan" box (its verdict was wrong and its figure is now
+ * the line under the ring), "As at" (the register's last entry, not the week
+ * being viewed), the six-event list (the Log tab has them) and the stage
+ * weights (a contract setting, now on the Data screen).
+ */
 export function SummaryScreen({
   summary,
   groups,
@@ -251,7 +227,6 @@ export function SummaryScreen({
   movement,
   bridge,
   groupsTitle,
-  groupNoun,
   /** Vendor packages get folded by status; six disciplines do not need it. */
   foldEmptyGroups = false,
 }: {
@@ -262,25 +237,26 @@ export function SummaryScreen({
   /** The seam to the weekly report. EDL only — the VDRL feeds no WBS leaf. */
   bridge?: EngineeringBridge | null;
   groupsTitle: string;
-  /** What one card below is, plural. The hero counts the same things. */
-  groupNoun: string;
   foldEmptyGroups?: boolean;
 }) {
   const isEdl = summary.register === 'edl';
   const stale = summary.evidenceWeek < summary.asOfWeek;
+  const hasPlan = summary.plan !== null;
 
-  // Each document appears in exactly one of these, which is why they sum to the
-  // list below them. Counting them separately is what produced 75 + 63 + 6 = 144
-  // above a list of 98.
-  const blocking = (['returned', 'overdue', 'untouched'] as const).map((kind) => ({
-    kind,
-    value: obstacles.filter((o) => o.kind === kind).length,
-  }));
+  // Taken between the printed figures, so the line adds up on a calculator.
+  const previous = summary.actual - summary.thisWeek;
+  const gained = r1(r1(summary.actual) - r1(previous));
+  const against = hasPlan ? verdict(summary.actual, summary.plan!) : null;
 
-  // A week is more useful to argue about than a percentage nobody can place.
-  const planFullWeek = summary.series.find((p) => p.plan !== null && isFull(p.plan))?.weekNo ?? null;
-
-  const moving = foldEmptyGroups ? groups.filter((g) => g.actual > 0 && !isFull(g.actual)) : groups;
+  // Most behind first: the discipline that needs a push is the first one read.
+  // A discipline with no planned dates has nothing to be behind, so it goes last.
+  const ranked = foldEmptyGroups
+    ? groups
+    : [...groups].sort((a, b) => {
+      if (a.plan === null || b.plan === null) return (a.plan === null ? 1 : 0) - (b.plan === null ? 1 : 0);
+      return verdict(a.actual, a.plan).diff - verdict(b.actual, b.plan).diff;
+    });
+  const moving = foldEmptyGroups ? groups.filter((g) => g.actual > 0 && !isFull(g.actual)) : ranked;
   const done = foldEmptyGroups ? groups.filter((g) => isFull(g.actual)) : [];
   const idle = foldEmptyGroups ? groups.filter((g) => g.actual === 0) : [];
 
@@ -305,7 +281,7 @@ export function SummaryScreen({
       )}
 
       {/* ============================================ 1 · where it stands */}
-      <section className={cn(stale && "mt-4")}>
+      <section className={cn(stale && 'mt-4')}>
         <Reveal>
           <BlockHeading step="1" title="Where it stands" />
         </Reveal>
@@ -313,136 +289,90 @@ export function SummaryScreen({
         <Reveal delay={0.04}>
           <Card className="py-0 overflow-hidden shadow-sm">
             <CardContent className="flex flex-col divide-y p-0 lg:flex-row lg:divide-x lg:divide-y-0">
-              <div className="flex flex-col gap-5 p-5 sm:p-6 lg:w-[42%]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
-                    {isEdl ? 'Engineering documents' : 'Vendor documents'}
-                  </span>
-                  <Badge variant="secondary" className="shrink-0 font-normal">
-                    week {summary.asOfWeek}
-                  </Badge>
-                </div>
-
-                <div className="flex flex-1 flex-col justify-center gap-4">
-                  <div className="flex flex-col items-center gap-3">
-                    <Ring actual={summary.actual} plan={summary.plan} />
-                    <Key hasPlan={summary.plan !== null} />
-                  </div>
-                  <div className="flex divide-x rounded-lg border bg-muted/40 py-3">
-                    <Stat label="Documents" value={String(summary.documents)} delay={0.06} />
-                    <Stat
-                      label={groupNoun.replace(/^./, (c) => c.toUpperCase())}
-                      value={String(groups.length)}
-                      delay={0.12}
-                    />
-                    <Stat label="Still open" value={String(obstacles.length)} delay={0.18} />
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  As at {longDate(summary.evidenceDate)}
-                  {summary.numbered < summary.documents
-                    && ` · ${summary.documents - summary.numbered} unnumbered`}
+              <div className="flex flex-col items-center gap-4 p-5 sm:p-6 lg:w-[42%]">
+                <span className="self-start text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
+                  {isEdl ? 'Engineering documents' : 'Vendor documents'}
+                </span>
+                <Ring actual={summary.actual} plan={summary.plan} />
+                <Key hasPlan={hasPlan} />
+                <p className="text-center text-sm tabular-nums">
+                  {against ? (
+                    <>
+                      <span className="text-red-600">Plan {summary.plan!.toFixed(1)}%</span>
+                      <span className="text-muted-foreground"> · </span>
+                      <span className={cn('font-semibold', against.diff < 0 ? 'text-red-600' : against.diff > 0 ? 'text-emerald-600' : '')}>
+                        {against.label}
+                      </span>
+                      <span className="text-muted-foreground"> · </span>
+                    </>
+                  ) : null}
+                  <span className="font-semibold text-blue-600">{signed(gained)}</span> this week
+                  {!hasPlan && (
+                    <>
+                      <span className="text-muted-foreground"> · </span>
+                      {summary.untouched} of {summary.documents} never sent
+                    </>
+                  )}
                 </p>
               </div>
 
-              <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
-                      Against plan
-                    </p>
-                    {summary.plan === null ? (
-                      <Badge variant="secondary" className="shrink-0 font-normal">
-                        no promised dates
-                      </Badge>
-                    ) : (
-                      <Badge className={cn('shrink-0 font-normal', TREND[
-                        summary.deviation === null ? 'unplanned'
-                          : summary.deviation >= 1 ? 'ahead'
-                          : summary.deviation >= -1 ? 'on-track'
-                          : summary.deviation >= -10 ? 'slipping' : 'behind'
-                      ].chip)}>
-                        {(summary.deviation ?? 0) >= -1 ? 'on plan' : 'behind'}
-                      </Badge>
-                    )}
-                  </div>
-                  {summary.plan !== null ? (
-                    <p className="text-sm leading-relaxed">
-                      Due{' '}
-                      {planFullWeek !== null && isFull(summary.plan)
-                        ? <>in full by <span className="font-semibold">week {planFullWeek}</span></>
-                        : <>at <span className="font-semibold tabular-nums text-red-600">
-                            {summary.plan.toFixed(1)}%
-                          </span> this week</>}
-                      {(summary.deviation ?? 0) < -0.05 && (
-                        <>
-                          {' '}·{' '}
-                          <span className="font-semibold tabular-nums text-red-600">
-                            {Math.abs(summary.deviation ?? 0).toFixed(1)}%
-                          </span> short
-                        </>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-sm leading-relaxed">
-                      {/* Register-aware, because this sentence is no longer the
-                          vendors' alone: a register built by hand in the app
-                          starts with no promised dates either, and on the EDL
-                          "no vendor gave one" names the wrong counterparty. */}
-                      {summary.register === 'vdrl'
-                        ? 'No vendor gave a submission date, so there is no plan to draw. '
-                        : 'No promised dates have been recorded, so there is no plan to draw. '}
-                      <span className="font-semibold tabular-nums">{summary.untouched}</span> of{' '}
-                      <span className="tabular-nums">{summary.documents}</span> have never been sent.
-                    </p>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* flex-1 so the three bars spread down the zone instead of
-                    stacking at the top and leaving a tail of empty card. */}
-                <div className="flex flex-1 flex-col justify-between gap-3.5">
-                  <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
-                    How far they have got
-                  </p>
-                  {summary.stages.map((s, i) => (
-                    <div key={s.stage} className="flex flex-col gap-1.5">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                        <span className="font-medium">
-                          {STAGE_FULL[s.stage]}
-                          <span className="ml-1.5 font-mono text-xs font-normal text-muted-foreground">
-                            {STAGE_LABEL[s.stage]}
-                          </span>
+              {/* flex-1 so the three bars spread down the zone instead of
+                  stacking at the top and leaving a tail of empty card. */}
+              <div className="flex flex-1 flex-col justify-between gap-3.5 p-5 sm:p-6">
+                <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
+                  How far they have got
+                </p>
+                {summary.stages.map((s, i) => (
+                  <div key={s.stage} className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                      <span className="font-medium">
+                        {STAGE_FULL[s.stage]}
+                        <span className="ml-1.5 font-mono text-xs font-normal text-muted-foreground">
+                          {STAGE_LABEL[s.stage]}
                         </span>
-                        <span className="tabular-nums text-muted-foreground">
-                          {s.reached} of {summary.documents}
-                        </span>
-                      </div>
-                      {/* IFR, then IFA, then AFC — a tenth of a second apart, so
-                          the three read as one sweep down the stages rather than
-                          three bars all firing at once. They are the same three
-                          stages in the same order every time, so the cascade is
-                          telling the truth about their sequence. */}
-                      <Meter actual={(s.reached / summary.documents) * 100} delay={i * 0.1} />
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {s.reached} of {summary.documents}
+                      </span>
                     </div>
-                  ))}
-                  <p className="text-xs text-muted-foreground">
-                    Weighted {summary.stages.map((s) => s.weight.toFixed(0)).join(' / ')}
-                  </p>
-                </div>
+                    {/* IFR, then IFA, then AFC, a tenth of a second apart, so
+                        the three read as one sweep down the stages. */}
+                    <Meter actual={(s.reached / summary.documents) * 100} delay={i * 0.1} />
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
         </Reveal>
 
         {bridge && <EngineeringSeam bridge={bridge} />}
+      </section>
 
-        <Reveal delay={0.22}>
-          <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h3 className="text-base font-semibold tracking-tight">{groupsTitle}</h3>
-            {foldEmptyGroups && (
+      {/* ============================================== 2 · outstanding */}
+      <section className="mt-10">
+        <Reveal delay={0.08}>
+          <BlockHeading step="2" title="Outstanding" />
+        </Reveal>
+        <Reveal delay={0.12}>
+          <OutstandingBlock
+            obstacles={obstacles}
+            register={summary.register}
+            week={summary.asOfWeek}
+            asOfDate={summary.asOfDate}
+            awaiting={summary.awaiting}
+            longestWait={summary.longestWait}
+          />
+        </Reveal>
+      </section>
+
+      {/* ============================================ 3 · by discipline */}
+      <ScrollReveal>
+      <section className="mt-10">
+        <Reveal delay={0.06}>
+          <BlockHeading
+            step="3"
+            title={groupsTitle}
+            extra={foldEmptyGroups ? (
               <>
                 <Badge variant="secondary" className="font-normal">{moving.length} under way</Badge>
                 <Badge variant="secondary" className="font-normal">{idle.length} not started</Badge>
@@ -450,20 +380,22 @@ export function SummaryScreen({
                   <Badge variant="secondary" className="font-normal">{done.length} complete</Badge>
                 )}
               </>
-            )}
-          </div>
+            ) : hasPlan ? (
+              <span className="text-sm text-muted-foreground">Most behind first</span>
+            ) : null}
+          />
         </Reveal>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {moving.map((g, i) => (
-            <Reveal key={g.id} delay={0.26 + Math.min(i, 8) * 0.02}>
+            <Reveal key={g.id} delay={0.1 + Math.min(i, 8) * 0.02}>
               <GroupCard group={g} />
             </Reveal>
           ))}
         </div>
 
         {idle.length > 0 && (
-          <Reveal delay={0.34}>
+          <Reveal delay={0.2}>
             <Card className="py-0 mt-3 border-dashed shadow-none">
               <CardContent className="flex flex-col gap-3 p-5">
                 <p className="text-sm font-semibold">
@@ -490,79 +422,34 @@ export function SummaryScreen({
           </Reveal>
         )}
       </section>
+      </ScrollReveal>
 
-      {/* =========================================== 2 · what moved this week */}
+      {/* =================================================== 4 · the week */}
       <ScrollReveal>
-      <section className="mt-12">
+      <section className="mt-10">
         <Reveal delay={0.06}>
           <BlockHeading
-            step="2"
+            step="4"
             title={`Week ${summary.asOfWeek}`}
             aside={movement ? `${shortDate(movement.startDate)} – ${shortDate(movement.endDate)}` : undefined}
           />
         </Reveal>
 
         {movement && moved > 0 ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {(['submitted', 'returned', 'approved'] as const).map((kind, i) => (
-                <Reveal key={kind} delay={0.1 + i * 0.04}>
-                  <Card className="py-0 h-full shadow-sm">
-                    <CardContent className="flex items-center justify-between gap-3 p-5">
-                      <Badge className={cn('font-normal', MOVEMENT[kind].chip)}>
-                        {MOVEMENT[kind].label}
-                      </Badge>
-                      <span className="text-2xl font-semibold tabular-nums">{movement[kind]}</span>
-                    </CardContent>
-                  </Card>
-                </Reveal>
-              ))}
-            </div>
-
-            <Reveal delay={0.22}>
-              <p className="mt-3 text-sm text-muted-foreground">
-                The register moved{' '}
-                <span className="font-semibold tabular-nums text-blue-600">
-                  {signed(movement.gain, 2)}%
-                </span>{' '}
-                over the week.
-              </p>
-            </Reveal>
-
-            <div className="mt-3 flex flex-col gap-2">
-              {movement.events.slice(0, MOVEMENTS_SHOWN).map((e, i) => (
-                <Reveal key={`${e.documentId}-${e.stage}-${e.kind}`} delay={0.26 + Math.min(i, 6) * 0.03}>
-                  <Card className="py-0 shadow-sm">
-                    <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                      <div className="flex min-w-0 flex-col gap-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {e.docNo && <span className="font-mono text-xs font-medium">{e.docNo}</span>}
-                          <Badge className={cn('font-normal', MOVEMENT[e.kind].chip)}>
-                            {MOVEMENT[e.kind].label} · {STAGE_LABEL[e.stage]}
-                          </Badge>
-                          {e.returnCode && (
-                            <Badge variant="outline" className="font-normal">{e.returnCode}</Badge>
-                          )}
-                        </div>
-                        <p className="line-clamp-2 text-sm">{e.title}</p>
-                      </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {shortDate(e.at)}
-                      </span>
-                    </CardContent>
-                  </Card>
-                </Reveal>
-              ))}
-            </div>
-
-            {movement.events.length > MOVEMENTS_SHOWN && (
-              <Reveal delay={0.44}>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {MOVEMENTS_SHOWN} of {movement.events.length}. The Log tab has them all.
-                </p>
+          <div className="grid grid-cols-3 gap-3">
+            {(['submitted', 'returned', 'approved'] as const).map((kind, i) => (
+              <Reveal key={kind} delay={0.1 + i * 0.04}>
+                <Card className="py-0 h-full shadow-sm">
+                  <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:p-5">
+                    <Badge className={cn('w-fit font-normal', MOVEMENT[kind].chip)}>
+                      {MOVEMENT[kind].label}
+                    </Badge>
+                    <span className="text-2xl font-semibold tabular-nums">{movement[kind]}</span>
+                  </CardContent>
+                </Card>
               </Reveal>
-            )}
-          </>
+            ))}
+          </div>
         ) : (
           <Reveal delay={0.1}>
             <Card className="py-0 border-dashed shadow-none">
@@ -578,13 +465,13 @@ export function SummaryScreen({
           </Reveal>
         )}
 
-        <Reveal delay={0.3}>
+        <Reveal delay={0.2}>
           <Card className="py-0 mt-4 shadow-sm">
             <CardContent className="p-5 sm:p-6">
               <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold">Week by week</h3>
                 <span className="text-xs text-muted-foreground">
-                  week {summary.series[0]?.weekNo ?? 1}–
+                  Week {summary.series[0]?.weekNo ?? 1}–
                   {summary.series[summary.series.length - 1]?.weekNo ?? 1}
                 </span>
               </div>
@@ -598,76 +485,6 @@ export function SummaryScreen({
         </Reveal>
       </section>
       </ScrollReveal>
-
-      {/* ========================================= 3 · what is holding it up */}
-      {obstacles.length > 0 && (
-        <ScrollReveal>
-        <section className="mt-12">
-          <Reveal delay={0.06}>
-            <BlockHeading
-              step="3"
-              title="What is holding it up"
-              aside={`${obstacles.length} of ${summary.documents} open · each counted once`}
-            />
-          </Reveal>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            {blocking.map((b, i) => (
-              <Reveal key={b.kind} delay={0.1 + i * 0.04}>
-                <Card className="py-0 h-full shadow-sm">
-                  <CardContent className="flex items-center justify-between gap-3 p-5">
-                    <Badge className={cn('font-normal', OBSTACLE[b.kind].chip)}>
-                      {OBSTACLE[b.kind].heading}
-                    </Badge>
-                    <span className="text-2xl font-semibold tabular-nums">{b.value}</span>
-                  </CardContent>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2">
-            {obstacles.slice(0, OBSTACLES_SHOWN).map((o, i) => (
-              <Reveal key={o.documentId} delay={0.24 + Math.min(i, 6) * 0.03}>
-                <Card className="py-0 shadow-sm transition-shadow duration-300 ease-ios hover:shadow-md">
-                  <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                    <div className="flex min-w-0 flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {o.docNo && <span className="font-mono text-xs font-medium">{o.docNo}</span>}
-                        {o.stage && (
-                          <Badge variant="outline" className="font-normal">{STAGE_LABEL[o.stage]}</Badge>
-                        )}
-                        <Badge className={cn('font-normal', OBSTACLE[o.kind].chip)}>
-                          {o.returnCode ?? OBSTACLE[o.kind].heading}
-                        </Badge>
-                      </div>
-                      {/* Wraps rather than truncates: on a phone a cut-off
-                          drawing title is the one thing the reader needed. */}
-                      <p className="line-clamp-2 text-sm">{o.title}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-4 text-xs sm:flex-col sm:items-end sm:gap-1">
-                      <span className="text-muted-foreground">{shortDate(o.since)}</span>
-                      {o.days !== null && (
-                        <span className="font-medium tabular-nums">{o.days} days</span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
-
-          {obstacles.length > OBSTACLES_SHOWN && (
-            <Reveal delay={0.44}>
-              <p className="mt-3 text-xs text-muted-foreground">
-                The {OBSTACLES_SHOWN} worst of {obstacles.length}, ordered returned first, then overdue,
-                then never sent.
-              </p>
-            </Reveal>
-          )}
-        </section>
-        </ScrollReveal>
-      )}
     </div>
   );
 }
@@ -742,7 +559,7 @@ function EngineeringSeam({ bridge }: { bridge: EngineeringBridge }) {
 }
 
 function GroupCard({ group: g }: { group: RegisterNode }) {
-  const t = TREND[g.trend];
+  const v = g.plan !== null ? verdict(g.actual, g.plan) : null;
   return (
     <Card className="py-0 h-full shadow-sm transition-shadow duration-300 ease-ios hover:shadow-md">
       <CardContent className="flex h-full flex-col gap-4 p-5">
@@ -751,8 +568,8 @@ function GroupCard({ group: g }: { group: RegisterNode }) {
             <p className="text-sm font-semibold leading-snug">{g.name}</p>
             <p className="mt-1 text-xs text-muted-foreground">{g.documents} documents</p>
           </div>
-          {g.trend !== 'unplanned' && (
-            <Badge className={cn('shrink-0 font-normal', t.chip)}>{t.label}</Badge>
+          {v && (
+            <Badge className={cn('w-24 shrink-0 justify-center font-medium tabular-nums', v.chip)}>{v.label}</Badge>
           )}
         </div>
 
@@ -763,7 +580,7 @@ function GroupCard({ group: g }: { group: RegisterNode }) {
             </span>
             {g.plan !== null && (
               <span className="text-xs tabular-nums text-red-600">
-                plan {g.plan.toFixed(0)}%
+                Plan {g.plan.toFixed(1)}%
               </span>
             )}
           </div>

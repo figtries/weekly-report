@@ -4,8 +4,9 @@ import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
+import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree,
+  getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -63,9 +64,23 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
       obstacles={getObstacles(projectId, 'vdrl', week)}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
+      asOfDate={summary.asOfDate}
+      awaiting={summary.awaiting}
+      longestWait={summary.longestWait}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
       numbering={getNumbering(projectId, 'vdrl')}
+      footer={
+        // What each stage is worth: a contract setting, moved here from the
+        // summary on 3 Oct 2026 because a summary reads and this screen writes.
+        <div key="stage-weights" className="mt-6">
+          <StageWeightsCard
+            projectId={projectId}
+            register="vdrl"
+            weights={getStageWeights(projectId, 'vdrl')}
+          />
+        </div>
+      }
     />
     </RouteTransition>
   );

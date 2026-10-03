@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
-  ArrowLeft, ChevronDown, ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search, TriangleAlert,
+  ArrowLeft, ChevronDown, ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,8 @@ import type { NumberingRule } from '@/lib/register-numbering';
 import { cn } from '@/lib/utils';
 
 import { DocumentEditor } from './DocumentEditor';
-import { RegisterWorklist } from './RegisterWorklist';
+import { OutstandingBlock } from './OutstandingBlock';
+import { verdict } from './verdict';
 import { RegisterTools } from './RegisterTools';
 import { RegisterBuilder } from './RegisterBuilder';
 
@@ -43,7 +44,7 @@ const CategoryDialog = dynamic(() => import('./CategoryDialog').then((m) => m.Ca
  * **The right-hand column is never empty.** It used to hold a dashed box
  * saying "Pick a group to start" until you clicked something, which on a wide
  * screen left most of the workbench doing no work at all. It now opens on
- * `RegisterWorklist` — what is actually stuck — and every row there jumps into
+ * the outstanding card (the summary's own, opening rows in place) and every row jumps into
  * the group it belongs to with that document already open.
  */
 
@@ -59,33 +60,16 @@ interface Group {
 const clamp = (n: number) => Math.min(100, Math.max(0, n));
 
 /**
- * The verdict chips, borrowed from the summary screen so the two agree.
+ * Every fill in Document Control is blue, and every plan is a thin red bar.
  *
- * They appear on a group's header ONLY, never on the cards in the column: a
- * column where every card carries a coloured verdict is a column where none of
- * them stands out. The cards say how far and what is stuck; the verdict is for
- * the group you actually opened.
- */
-const TREND: Record<RegisterNode['trend'], { label: string; chip: string } | null> = {
-  ahead: { label: 'ahead', chip: 'bg-emerald-100 text-emerald-700' },
-  'on-track': { label: 'on plan', chip: 'bg-emerald-100 text-emerald-700' },
-  slipping: { label: 'slipping', chip: 'bg-amber-100 text-amber-700' },
-  behind: { label: 'behind', chip: 'bg-red-100 text-red-700' },
-  unplanned: null,
-};
-
-/**
- * Every fill in Document Control is blue, and every plan mark is red.
+ * Blue actual over a thin red plan bar on the same scale, the app-wide rule
+ * (AGENTS.md, "Plan is a bar, not a tick"). This screen kept a red tick inside
+ * the track and a pink shortfall until 3 Oct 2026, and the summary beside it
+ * drew the plan as a bar, so the same discipline looked two ways.
  *
- * The convention comes from `SCurveClient` — `#3b82f6` and `#ef4444` — by way
- * of both summary screens. The bars here were once painted by trend, emerald
- * when ahead and rose when behind, and a rose bar then read as a plan line,
- * which is the opposite of what it is.
- *
- * Hand-rolled rather than the shadcn `Progress`: it needs the plan tick drawn
- * INTO the track, and `Progress` is a Radix primitive, so one per row put a
- * root, a context and a ref on every card in a column that can run to sixty.
- * That is exactly the per-row cost AGENTS.md tells us to keep off this screen.
+ * Hand-rolled rather than the shadcn `Progress`, which is a Radix primitive:
+ * one per row would put a root, a context and a ref on every card in a column
+ * that can run to sixty (AGENTS.md, "Radix per screen, never per row").
  */
 function Bar({
   actual,
@@ -94,48 +78,49 @@ function Bar({
   className,
 }: {
   actual: number;
-  /** Null on the VDRL, which has no promised dates — so no red is invented. */
+  /** Null on the VDRL, which has no promised dates, so no red is invented. */
   plan?: number | null;
   grow?: boolean;
   className?: string;
 }) {
   return (
-    <div className={cn('relative h-1.5 w-full overflow-hidden rounded-full bg-muted', className)}>
+    <div className={cn('flex w-full flex-col gap-1', className)}>
       {/* The width in the markup is already the true one; the keyframe only
           scales X on the compositor, so a phone that never receives the bundle
           still renders the right bar. */}
-      <span
-        className={cn('block h-full rounded-full bg-blue-500', grow && 'animate-bar-grow')}
-        style={{ width: `${clamp(actual)}%` }}
-      />
-      {/* The shortfall, tinted. A mark at the plan alone answers "where should
-          it be" and leaves the reader to measure the gap themselves — and at
-          the 100% most of the EDL plans for, that mark sits on the track's own
-          end and reads as a rounding error. The distance is the fact worth
-          seeing, so the distance is what gets painted. */}
-      {plan !== null && plan > actual && (
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <span
-          aria-hidden
-          className="absolute inset-y-0 bg-red-500/25"
-          style={{ left: `${clamp(actual)}%`, width: `${clamp(plan) - clamp(actual)}%` }}
+          className={cn('block h-full rounded-full bg-blue-500', grow && 'animate-bar-grow')}
+          style={{ width: `${clamp(actual)}%` }}
         />
-      )}
+      </div>
       {plan !== null && (
-        // Drawn after the fill so it stays visible when the work is ahead of
-        // plan — the mistake the summary screen's ring made and had to undo.
-        //
-        // The `clamp()` is the whole trick. Centred on its own percentage the
-        // mark hangs half outside the track at either end, and the track has to
-        // clip (a rounded fill that escapes it looks broken), so a plan of 100 —
-        // which is most of the EDL — rendered as a one-pixel sliver nobody
-        // could see. Held inside the track it reads at every value.
-        <span
-          aria-hidden
-          className="absolute inset-y-0 w-[2px] rounded-full bg-red-500"
-          style={{ left: `clamp(0px, calc(${clamp(plan)}% - 1px), calc(100% - 2px))` }}
-        />
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <span
+            className={cn('block h-full rounded-full bg-red-500', grow && 'animate-bar-grow')}
+            style={{ width: `${clamp(plan)}%` }}
+          />
+        </div>
       )}
     </div>
+  );
+}
+
+/** What is open in a group, in the summary's own words and tones. */
+function OpenChips({ node, size = 'sm' }: { node: RegisterNode; size?: 'sm' | 'md' }) {
+  const chip = cn(
+    'shrink-0 rounded-md font-medium tabular-nums',
+    size === 'sm' ? 'px-1.5 py-0.5 text-[0.7rem]' : 'px-2 py-0.5 text-xs',
+  );
+  return (
+    <>
+      {node.overdue > 0 && <span className={cn(chip, 'bg-bad-soft text-bad')}>{node.overdue} late</span>}
+      {node.returnedOpen > 0 && (
+        <span className={cn(chip, 'bg-warn-soft text-warn')}>
+          {node.returnedOpen} {node.returnedOpen === 1 ? 'comment' : 'comments'}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -147,9 +132,13 @@ export function RegisterWorkbench({
   obstacles,
   totalDocuments,
   weekNo,
+  asOfDate,
+  awaiting,
+  longestWait,
   clientName,
   contractorName,
   numbering,
+  footer,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -160,11 +149,18 @@ export function RegisterWorkbench({
   totalDocuments: number;
   /** The week being reported. Every figure below is as it stood at its end. */
   weekNo: number;
+  /** That week's last day, for the outstanding card's "due by". */
+  asOfDate: string;
+  /** Documents with the other side, and the longest of those waits. */
+  awaiting: number;
+  longestWait: number | null;
   /** Passed straight back on import so a file cannot blank them. */
   clientName: string;
   contractorName: string;
   /** The numbering rule and the numbers already spoken for. */
   numbering: NumberingProps;
+  /** Shown under the register, never under the builder that replaces it. */
+  footer?: React.ReactNode;
 }) {
   const reduced = useReducedMotion();
 
@@ -216,6 +212,7 @@ export function RegisterWorkbench({
   }, [cards]);
 
   const selected = groups.find((g) => g.id === selectedId) ?? null;
+  const outstanding = obstacles.filter((o) => o.kind !== 'untouched').length;
   const q = query.trim().toLowerCase();
 
   /** One row in the worklist opens both halves of the screen at once. */
@@ -224,6 +221,31 @@ export function RegisterWorkbench({
     setOpenDoc(documentId);
     setMobileWorklist(false);
   };
+
+  /**
+   * `?doc=<id>` opens that document, which is how a row under Outstanding on
+   * the summary lands here ready to be updated. Read from `location` once on
+   * mount rather than `useSearchParams`, which would make this route read a
+   * request value at render; the address is then put back without it so a
+   * reload does not reopen it.
+   */
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('doc');
+    if (!id) return;
+    // In a frame rather than in the effect body, and the address is cleaned
+    // there too: Strict Mode runs this twice, and cleaning it in the first run
+    // would leave the second (the one that stays) with nothing to open.
+    const frame = requestAnimationFrame(() => {
+      const card = Object.values(cards).flat().find((d) => d.id === id);
+      if (card) openFromWorklist(card.categoryId, card.id);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('doc');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    });
+    return () => cancelAnimationFrame(frame);
+    // Once, on arrival: later edits re-render with new cards and must not reopen it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Bring the open group into view in the column beside it.
@@ -369,17 +391,15 @@ export function RegisterWorkbench({
 
         {/* Phones only. On a wide screen the worklist is already open to the
             right of this column, and a band pointing at it would be furniture. */}
-        {obstacles.length > 0 && (
+        {outstanding > 0 && (
           <button
             type="button"
             onClick={() => setMobileWorklist(true)}
-            className="flex min-h-12 items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 text-left transition-colors duration-300 ease-ios active:bg-amber-100 lg:hidden"
+            className="flex min-h-12 items-center gap-2.5 rounded-xl border bg-card px-3.5 text-left transition-colors duration-300 ease-ios active:bg-muted lg:hidden"
           >
-            <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600" />
-            <span className="flex-1 text-sm font-medium text-amber-900">
-              <span className="tabular-nums">{obstacles.length}</span> need work
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-amber-600" />
+            <span className="flex-1 text-sm font-semibold">What has to go out</span>
+            <span className="text-sm tabular-nums text-muted-foreground">{outstanding}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         )}
 
@@ -402,9 +422,13 @@ export function RegisterWorkbench({
               One section, one entrance; see the entry scale in AGENTS.md. */}
           {groupByPackage(matchingGroups).map(([packageName, list]) => (
             <div key={packageName} className="flex flex-col gap-1.5">
-              <p className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {packageName}
-              </p>
+              {/* A heading that only repeats the one card under it ("PROCESS"
+                  over "Process") says nothing, so it goes. */}
+              {!(list.length === 1 && list[0].name.trim().toLowerCase() === packageName.trim().toLowerCase()) && (
+                <p className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  {packageName}
+                </p>
+              )}
               {list.map((g) => (
                 <button
                   key={g.id}
@@ -434,8 +458,8 @@ export function RegisterWorkbench({
                     {/* Fixed width and tabular figures: this is what makes every
                         percentage in the column land on one right edge, and
                         every bar below it end at the same place. */}
-                    <span className="w-12 shrink-0 text-right text-base font-semibold leading-none tabular-nums tracking-tight">
-                      {g.node.actual.toFixed(0)}
+                    <span className="w-16 shrink-0 text-right text-base font-semibold leading-none tabular-nums tracking-tight">
+                      {g.node.actual.toFixed(1)}
                       <span className="ml-px text-[0.7rem] font-medium text-muted-foreground">%</span>
                     </span>
                     <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -459,16 +483,7 @@ export function RegisterWorkbench({
                     </span>
                     {/* Only what is wrong speaks. A healthy group stays quiet,
                         which is the only thing that lets a stuck one carry. */}
-                    {g.node.returnedOpen > 0 && (
-                      <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[0.65rem] font-medium tabular-nums text-red-700">
-                        {g.node.returnedOpen} returned
-                      </span>
-                    )}
-                    {g.node.overdue > 0 && (
-                      <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-medium tabular-nums text-amber-700">
-                        {g.node.overdue} overdue
-                      </span>
-                    )}
+                    <OpenChips node={g.node} />
                   </div>
                 </button>
               ))}
@@ -510,9 +525,13 @@ export function RegisterWorkbench({
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Groups
               </Button>
             )}
-            <RegisterWorklist
+            <OutstandingBlock
               obstacles={obstacles}
-              totalDocuments={totalDocuments}
+              register={register}
+              week={weekNo}
+              asOfDate={asOfDate}
+              awaiting={awaiting}
+              longestWait={longestWait}
               query={query}
               onOpen={openFromWorklist}
             />
@@ -598,26 +617,15 @@ export function RegisterWorkbench({
                     middle of the card at any width above a phone; read as one
                     line they are a sentence about the same group. */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {TREND[selected.node.trend] && (
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        TREND[selected.node.trend]!.chip,
-                      )}
-                    >
-                      {TREND[selected.node.trend]!.label}
-                    </span>
-                  )}
-                  {selected.node.returnedOpen > 0 && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium tabular-nums text-red-700">
-                      {selected.node.returnedOpen} returned
-                    </span>
-                  )}
-                  {selected.node.overdue > 0 && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium tabular-nums text-amber-700">
-                      {selected.node.overdue} overdue
-                    </span>
-                  )}
+                  {selected.node.plan !== null && (() => {
+                    const v = verdict(selected.node.actual, selected.node.plan);
+                    return (
+                      <span className={cn('rounded-md px-2 py-0.5 text-xs font-medium tabular-nums', v.chip)}>
+                        {v.label}
+                      </span>
+                    );
+                  })()}
+                  <OpenChips node={selected.node} size="md" />
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {selected.node.documents} document{selected.node.documents === 1 ? '' : 's'}
                   </span>
@@ -625,7 +633,7 @@ export function RegisterWorkbench({
               </div>
 
               <Bar
-                className="mt-3 h-2"
+                className="mt-3"
                 actual={selected.node.actual}
                 plan={selected.node.plan}
                 grow
@@ -676,7 +684,7 @@ export function RegisterWorkbench({
                             <Badge variant="secondary" className="font-normal">{STAGE_LABEL[doc.stage]}</Badge>
                           )}
                           {doc.returnCode && (
-                            <Badge className="bg-red-100 font-normal text-red-700">{doc.returnCode}</Badge>
+                            <Badge className="bg-warn-soft font-normal text-warn">{doc.returnCode}</Badge>
                           )}
                         </div>
                         <p className="mt-0.5 line-clamp-1 text-sm">{doc.title}</p>
@@ -733,22 +741,6 @@ export function RegisterWorkbench({
               )}
             </div>
 
-            {/* A group of five documents used to end halfway up the screen and
-                leave the rest of the column blank. What is stuck elsewhere is
-                the honest thing to put there — and it is one click from being
-                the next thing worked on. */}
-            {obstacles.some((o) => o.categoryId !== selected.id) && (
-              <div className="mt-2 border-t pt-4">
-                <RegisterWorklist
-                  compact
-                  obstacles={obstacles}
-                  totalDocuments={totalDocuments}
-                  query={query}
-                  onOpen={openFromWorklist}
-                  excludeCategoryId={selected.id}
-                />
-              </div>
-            )}
           </div>
         )}
       </section>
@@ -780,6 +772,7 @@ export function RegisterWorkbench({
         />
       )}
     </div>
+    {footer}
     </div>
   );
 }

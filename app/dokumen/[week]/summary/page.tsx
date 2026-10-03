@@ -4,9 +4,8 @@ import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
-import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
-  getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights, getWeekMovement,
+  getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -78,17 +77,8 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
       obstacles={getObstacles(projectId, 'edl', week)}
       movement={getWeekMovement(projectId, 'edl', week)}
       bridge={getEngineeringBridge(projectId, week)}
-      groupNoun="disciplines"
       groupsTitle="By discipline"
     />
-
-    <div className="mt-6">
-      <StageWeightsCard
-        projectId={projectId}
-        register="edl"
-        weights={getStageWeights(projectId, 'edl')}
-      />
-    </div>
     </RouteTransition>
   );
 }

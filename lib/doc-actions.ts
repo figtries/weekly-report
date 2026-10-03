@@ -133,6 +133,13 @@ export interface StageInput {
    * not quietly erase it.
    */
   returnCode?: string;
+  /**
+   * The date this stage is planned to go out. It is what the engineering plan
+   * curve is counted from (decided 3 Oct 2026: plan comes from the EDL), and
+   * until then nothing in the app could type one. Undefined leaves it alone;
+   * an empty string clears it. A plan never marks a stage as sent.
+   */
+  planSubmitDate?: string;
 }
 
 /**
@@ -157,6 +164,9 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
 
     const sentAt = optionalDate(input.sentAt, 'Sent');
     const returnedAt = optionalDate(input.returnedAt, 'Returned');
+    const plan = input.planSubmitDate === undefined
+      ? undefined
+      : optionalDate(input.planSubmitDate, 'Plan');
     const sentNo = input.sentTransmittal.trim();
     const returnNo = input.returnTransmittal.trim();
 
@@ -185,6 +195,7 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
         returnedAt,
         returnTransmittalId: inId,
         returnCode: code,
+        ...(plan !== undefined ? { planSubmitDate: plan } : {}),
       };
 
       if (existing) {

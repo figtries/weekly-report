@@ -43,9 +43,9 @@ export interface RegisterNode {
   trend: Trend;
   /** Never went out at any stage. The VDRL's headline number. */
   untouched: number;
-  /** Came back with a comment and has not been approved since. */
+  /** Came back with a comment and nothing has gone out since (`comments`). */
   returnedOpen: number;
-  /** Promised by the as-of date and still not submitted. */
+  /** Past a planned send date with the ball on our side (`late`). */
   overdue: number;
   children: RegisterNode[];
 }
@@ -72,11 +72,36 @@ export interface RegisterSummary {
   untouched: number;
   returnedOpen: number;
   overdue: number;
+  /** Documents whose latest send has had no reply yet. */
+  awaiting: number;
+  /** The longest of those waits in days, or null when nothing is out. */
+  longestWait: number | null;
   /** Submissions the register marks without a date — placed on the curve by estimate. */
   undated: number;
 }
 
-export type ObstacleKind = 'returned' | 'overdue' | 'untouched';
+/**
+ * What a document is waiting on, as of the week being viewed (3 Oct 2026).
+ *
+ * Decided with the user, in this order, each document counted once:
+ * - `late`: the ball is with us and a planned send date has passed.
+ * - `comments`: it came back with a comment code and nothing has gone out since.
+ * - `waiting`: it is with the other side and has been for over `REPLY_DAYS`.
+ * - `soon`: the ball is with us and a planned send date is within `LOOKAHEAD_DAYS`.
+ * - `untouched`: never sent and none of the above. Not outstanding on the EDL
+ *   summary (a document not yet due is not a problem), kept for the VDRL.
+ *
+ * The old `returned` kind counted any document whose LAST RETURN carried a
+ * comment, even after the next stage had gone out: P&ID Gas Dehydration came
+ * back AWC at IFR on 15 Apr, went out at IFA on 22 Apr and at AFC on 30 Apr,
+ * and the summary still said it had been held up for 18 days.
+ */
+export type ObstacleKind = 'late' | 'comments' | 'waiting' | 'soon' | 'untouched';
+
+/** Over this many days with the other side, a document is chased. */
+export const REPLY_DAYS = 14;
+/** How far ahead "due soon" looks from the end of the week being viewed. */
+export const LOOKAHEAD_DAYS = 14;
 
 export interface Obstacle {
   documentId: string;
@@ -87,10 +112,16 @@ export interface Obstacle {
   categoryName: string;
   kind: ObstacleKind;
   stage: DocStage | null;
+  /** The comment it came back with, when it has one still unanswered. */
   returnCode: string | null;
-  /** The date the clock started: returned, or promised. */
+  /** The stage that goes out next: the one to send, or the one answering a comment. */
+  next: DocStage | null;
+  /**
+   * The date that matters for its kind: the planned date (`late`, `soon`), the
+   * return (`comments`) or the send (`waiting`).
+   */
   since: string | null;
-  /** Days between that date and the register's as-of date. */
+  /** Days from `since` to the as-of date; for `soon`, days until it is due. */
   days: number | null;
 }
 
