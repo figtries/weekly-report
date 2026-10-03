@@ -28,7 +28,8 @@ Overall and/or per work package.
    flagged reporting units (Merbau: "SPK-001 Gas Processing Facility (GPF)" ...),
    else the `(SPK-###)` tag, else the plan's top branches (PHSS Samberah has no
    flagged unit).
-6. **Generator with the sample's skin** (approach 1 of three). Approach 2, patching
+6. **The LOOK is the sample's, the CONTENT is the app's.** "Yang kumaksud sama hanyalah tampilan, kalo isi kita kan sudah benar": print layout and Excel format (fonts, borders, fills, widths, number formats, page setup) follow `contoh.xlsx`; every figure, row, curve and photo is what the app's own screens show. Where the two differ, the app wins.
+7. **Generator with the sample's skin** (approach 1 of three). Approach 2, patching
    the sample like the daily export, was rejected: the weekly workbook is not a
    fixed form (row count follows the WBS, sheet count follows the packages), its
    sheet names are baked into thousands of references, and it is 7.8 MB.
@@ -54,8 +55,8 @@ package also carries 106 external links and a `calcChain`; none of that comes al
 
 The chart (`chart1.xml`) is two line series, CUM. ACTUAL (blue `0070C0`) and CUM.
 PLAN (red `FF0000`), categories = week end dates, a data table under the axis, and
-a callout on each series at the reported week ("03-Sep-26; 83,20%"). The plan runs
-to the end of the project; the actual stops at the reported week. Headings and
+a callout on each series at the reported week ("03-Sep-26; 83,20%"). The sample's
+plan runs to the end of the project; the export follows the app instead (see S-Curve below). Headings and
 package rows in Detail show only BOBOT; activities show every column.
 
 ## The pop-up
@@ -81,7 +82,8 @@ Work package                              Detail   S-Curve
 - A long name truncates with an ellipsis. Rows are at least 44 px high.
 - It is a Radix `Dialog`, loaded through `next/dynamic` (the overlay rule).
 - The selection is not remembered between exports.
-- **Weight gate.** While the weights do not close (`lib/weight-gate.ts`), the
+- **Weight gate.** Only for a project whose weights do not close yet (a new one;
+  Merbau closes at 100%, its six key milestones are exempt by design). While the weights do not close (`lib/weight-gate.ts`), the
   figure rows are unticked and cannot be ticked, with one line saying why and a
   link to Weights; Documentation can still be exported. This mirrors today's PDF
   button, which prints Photos while figures are held.
@@ -131,9 +133,10 @@ A package nested inside another appears only in its own sheet, as in the Summary
 (three spaces per depth, as typed in the sample). Activities measured by quantity
 show their own VOL and SATUAN; every other activity shows "1" and "Ls".
 
-**S-Curve.** Each S-Curve sheet carries its own data block beside the print area
-(so a package sheet works without the overall one), from week 0 at 0 to the last
-week of the plan; actual up to the exported week. The chart's series point at that
+**S-Curve.** The curve is the app's S-Curve screen (`buildSCurveSeries` cut at the
+exported week, plan AND actual), not the sample's plan-to-the-end. Each S-Curve
+sheet carries its own data block beside the print area (so a package sheet works
+without the overall one), from week 0 at 0 to the exported week. The chart's series point at that
 block and also carry cached values, so a phone preview draws it without
 recalculating. The callouts sit on the exported week.
 
