@@ -79,7 +79,17 @@ async function lift(name: string, keepRow: (r: number) => boolean, c1: number, c
   pre = pre
     .replace(/\s+codeName="[^"]*"/, '')
     .replace(/\s+tabSelected="1"/, '')
-    .replace(/\s+topLeftCell="[^"]*"/g, '')
+    .replace(/(<sheetView\b[^>]*?)\s+topLeftCell="[^"]*"/g, '$1')
+    // A frozen pane MUST name its top-left cell: without it Excel refuses the whole
+    // file ("Unable to get the Open property"). It is the first cell past the split,
+    // never where the sample's author last scrolled to.
+    .replace(/<pane\b([^>]*?)\/>/g, (_, a: string) => {
+      const x = Number(/xSplit="(\d+)"/.exec(a)?.[1] ?? 0);
+      const y = Number(/ySplit="(\d+)"/.exec(a)?.[1] ?? 0);
+      let col = '';
+      for (let n = x + 1; n > 0; n = Math.floor((n - 1) / 26)) col = String.fromCharCode(65 + ((n - 1) % 26)) + col;
+      return `<pane${a.replace(/\s+topLeftCell="[^"]*"/, '')} topLeftCell="${col}${y + 1}"/>`;
+    })
     .replace(/<selection\b[^>]*\/>/g, '');
 
   const rows: Record<string, string> = {};

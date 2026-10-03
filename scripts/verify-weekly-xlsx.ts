@@ -149,12 +149,116 @@ check('long suffix is cut', a.length <= 23, a);
 check('duplicate suffix is numbered', b !== a && b.endsWith('(2)'), b);
 check('file name', W.weeklyFileName('PRGG-00-G0-RPT-002', 45, '2026-09-03') === 'PRGG-00-G0-RPT-002_WEEKLY PROGRESS REPORT W45 (Overall)_030926.xlsx');
 
-if (process.argv[1]?.endsWith('verify-weekly-xlsx.ts')) {
-  const { verifyWorkbooks } = await import('./verify-weekly-xlsx-book.ts').catch(() => ({ verifyWorkbooks: null }));
-  if (verifyWorkbooks) {
-    const r = await verifyWorkbooks(cases, check);
-    void r;
-  } else console.log('(workbook checks not written yet)');
-  console.log(`${passed} passed, ${failed} failed`);
-  process.exit(failed ? 1 : 0);
+// ------------------------------------------------------------------ 2. the workbook
+const ExcelJS = (await import('exceljs')).default;
+const JSZip = (await import('jszip')).default;
+const fsx = await import('node:fs');
+const { buildWeeklyWorkbook } = await import('../lib/xlsx/weekly-export.ts');
+
+const photoDir = 'public/uploads/demo-merbau/daily/2026-09-17';
+const photos = fsx.existsSync(photoDir)
+  ? fsx.readdirSync(photoDir).filter((f) => /\.jpe?g$/i.test(f)).slice(0, 4).map((f) => fsx.readFileSync(`${photoDir}/${f}`))
+  : [];
+// Eight photos: two Documentation pages.
+const eight = photos.length ? Array.from({ length: 8 }, (_, i) => photos[i % photos.length]) : [];
+
+const near = (a: unknown, b: number) => typeof a === 'number' && Math.abs(a - b) < 1e-9;
+const pc = (v: number) => Number((v / 100).toFixed(8));
+
+for (const c of cases) {
+  const tag = `${c.name} xlsx`;
+  const input = c.input;
+  const sel = {
+    documentation: true,
+    summary: true,
+    detail: ['overall', ...input.packages.map((p) => p.key)],
+    scurve: ['overall', ...input.packages.map((p) => p.key)],
+  };
+  const book = await buildWeeklyWorkbook(input, sel, eight);
+  const expected = [
+    'Documentation', 'Summary Overall', 'S-Curve Overall', 'Detail Overall',
+    ...input.packages.map((p) => `Detail ${p.sheetSuffix}`),
+    ...input.packages.map((p) => `S-Curve ${p.sheetSuffix}`),
+  ];
+  check(`${tag}: sheets in the sample's order`, JSON.stringify(book.sheets) === JSON.stringify(expected), book.sheets.join(' | '));
+
+  // Package soundness: every relationship target exists, every part has a content type.
+  const zip = await JSZip.loadAsync(book.bytes);
+  const files = new Set(Object.keys(zip.files).filter((f) => !zip.files[f].dir));
+  const types = (await zip.file('[Content_Types].xml')!.async('string')) as string;
+  for (const relPath of [...files].filter((f) => f.endsWith('.rels'))) {
+    const relXml = (await zip.file(relPath)!.async('string')) as string;
+    const base = relPath.replace(/_rels\/[^/]*\.rels$/, '');
+    for (const m of relXml.matchAll(/Target="([^"]+)"/g)) {
+      const norm: string[] = [];
+      for (const p of (base + m[1]).split('/')) {
+        if (p === '..') norm.pop();
+        else if (p) norm.push(p);
+      }
+      check(`${tag}: ${relPath} -> ${m[1]} exists`, files.has(norm.join('/')));
+    }
+  }
+  for (const f of files) {
+    if (/\.(rels|jpeg|jpg|png)$/.test(f) || f === '[Content_Types].xml') continue;
+    check(`${tag}: ${f} has a content type`, types.includes(`PartName="/${f}"`));
+  }
+  const allXml = (await Promise.all([...files].filter((f) => f.endsWith('.xml')).map((f) => zip.file(f)!.async('string')))) as string[];
+  check(`${tag}: no formula anywhere`, allXml.every((x) => !/<f[ >]/.test(x)));
+  check(`${tag}: no link to another file`, allXml.every((x) => !x.includes('Data Overall')) && ![...files].some((f) => f.includes('externalLink')));
+  check(`${tag}: one chart per S-Curve sheet`, [...files].filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f)).length === 1 + input.packages.length);
+  check(`${tag}: every photo`, [...files].filter((f) => f.startsWith('xl/media/')).length === eight.length);
+  const doc = (await zip.file('xl/worksheets/sheet1.xml')!.async('string')) as string;
+  check(`${tag}: photos past six start a second page`, eight.length <= 6 || /<brk id="46"/.test(doc));
+  const wb = (await zip.file('xl/workbook.xml')!.async('string')) as string;
+  check(`${tag}: Documentation prints two pages`, eight.length <= 6 || wb.includes("'Documentation'!$A$1:$J$92"));
+
+  // Read back by an independent parser.
+  const x = new ExcelJS.Workbook();
+  await x.xlsx.load(book.bytes);
+  const sum = x.getWorksheet('Summary Overall')!;
+  check(`${tag}: Summary title`, sum.getCell('A2').value === `WEEKLY REPORT NO.${c.week}`);
+  check(`${tag}: Summary project`, sum.getCell('A3').value === input.project.name.toUpperCase());
+  check(`${tag}: Summary period`, sum.getCell('A4').value === input.periodText);
+  input.summary.rows.forEach((row, i) => {
+    const r = 12 + 2 * i;
+    check(`${tag}: Summary row ${i + 1} text`, sum.getCell(`B${r}`).value === row.text);
+    const cols: Array<[string, number]> = [['C', row.bobot], ['D', row.prevProgress], ['E', row.prevWF], ['F', row.thisProgress], ['G', row.thisWF], ['H', row.curProgress], ['I', row.curWF], ['J', row.target], ['K', row.variance]];
+    for (const [col, v] of cols) check(`${tag}: Summary ${col}${r}`, near(sum.getCell(`${col}${r}`).value, pc(v)), `${sum.getCell(`${col}${r}`).value} vs ${pc(v)}`);
+  });
+  const totalR = 12 + 2 * (input.summary.rows.length - 1) + 3;
+  check(`${tag}: Summary total actual WF`, near(sum.getCell(`I${totalR}`).value, pc(input.summary.total.curWF)));
+  check(`${tag}: Summary total weight`, near(sum.getCell(`C${totalR}`).value, pc(input.summary.total.bobot)));
+
+  const detailChecks = (name: string, data: typeof input.detail.overall) => {
+    const ws = x.getWorksheet(name);
+    if (!ws) return check(`${tag}: ${name} exists`, false);
+    let bad = 0;
+    data.lines.forEach((l, i) => {
+      const r = 15 + i;
+      if (ws.getCell(`B${r}`).value !== l.text) bad += 1;
+      if (l.figures && !near(ws.getCell(`K${r}`).value, pc(l.figures.curWF))) bad += 1;
+      if (l.bobot !== null && !near(ws.getCell(`C${r}`).value, pc(l.bobot))) bad += 1;
+    });
+    check(`${tag}: ${name} rows equal the input`, bad === 0, `${bad} cells differ`);
+    const tr = 15 + data.lines.length;
+    check(`${tag}: ${name} Grand Total`, ws.getCell(`A${tr}`).value === 'Grand Total' && near(ws.getCell(`K${tr}`).value, pc(data.total.curWF)) && near(ws.getCell(`C${tr}`).value, pc(data.total.bobot)));
+  };
+  detailChecks('Detail Overall', input.detail.overall);
+  for (const p of input.packages) detailChecks(`Detail ${p.sheetSuffix}`, input.detail.byPackage.get(p.key)!);
+
+  const sc = x.getWorksheet('S-Curve Overall')!;
+  check(`${tag}: S-Curve left signature`, (sc.getCell('D28').value ?? '') === input.project.signatureLeft.company);
+  const lastPt = input.scurve.overall[input.scurve.overall.length - 1];
+  const lastCell = sc.getRow(11).getCell(20 + input.scurve.overall.length).value;
+  check(`${tag}: S-Curve last actual`, lastPt.actualPct === null || near(lastCell, pc(r2(lastPt.actualPct))), `${lastCell}`);
+  const chart1 = (await zip.file('xl/charts/chart1.xml')!.async('string')) as string;
+  check(`${tag}: chart reads its own sheet`, chart1.includes("'S-Curve Overall'!$T$11:") && chart1.includes("'S-Curve Overall'!$T$5:"));
+  check(`${tag}: chart cache ends on this week`, chart1.includes(`<c:ptCount val="${c.week + 1}"/>`));
+
+  fsx.mkdirSync('Claude outputs', { recursive: true });
+  if (c.name === 'Merbau') fsx.writeFileSync(`Claude outputs/${book.fileName}`, book.bytes);
+  console.log(`${tag}: ${book.sheets.length} sheets, ${(book.bytes.length / 1024).toFixed(0)} KB -> ${book.fileName}`);
 }
+
+console.log(`${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);
