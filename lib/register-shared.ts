@@ -261,6 +261,15 @@ export interface DocumentCard {
   plannedAt: string | null;
   overdue: boolean;
   laps: number;
+  /**
+   * The stage this document goes out at next while the ball is on our side;
+   * null while it is with the other side or when it is finished. Decided by
+   * the same rule as Outstanding (`ballOf` in lib/register.ts), and offered by
+   * Record transmittal.
+   */
+  sendNext: DocStage | null;
+  /** The stage that is with the other side now, and since when. */
+  out: { stage: DocStage; since: string | null; days: number | null } | null;
   stages: DocumentStageDetail[];
 }
 

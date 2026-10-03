@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { beforeWrite, db, schema } from './sqlite';
+import { transmittalId, writeStage, writeTransmittal, type TransmittalInput } from './transmittal-write';
 import { STAGE_ORDER } from './register-shared';
 import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
@@ -81,32 +82,6 @@ function ownedDocuments(projectId: string, register: RegisterKind, documentIds: 
  * up before it is created. Its date is the date of the first thing recorded
  * under it — a later correction updates the letter, not a second letter.
  */
-function transmittalId(
-  projectId: string,
-  register: RegisterKind,
-  no: string,
-  direction: 'out' | 'in',
-  date: string,
-): string | null {
-  const trimmed = no.trim();
-  if (!trimmed) return null;
-
-  const existing = db.select().from(schema.transmittals)
-    .where(and(
-      eq(schema.transmittals.projectId, projectId),
-      eq(schema.transmittals.register, register),
-      eq(schema.transmittals.no, trimmed),
-      eq(schema.transmittals.direction, direction),
-    )).all()[0];
-  if (existing) return existing.id;
-
-  const id = randomUUID();
-  db.insert(schema.transmittals)
-    .values({ id, projectId, register, no: trimmed, direction, date })
-    .run();
-  return id;
-}
-
 function refreshRegister() {
   // Every read in this module is a synchronous SQLite query that prerenders
   // into the static shell (see lib/sqlite.ts), so nothing here carries a cache
@@ -172,10 +147,10 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
 
     db.transaction((tx) => {
       const outId = sentNo
-        ? transmittalId(input.projectId, input.register, sentNo, 'out', sentAt ?? returnedAt ?? today())
+        ? transmittalId(input.projectId, input.register, sentNo, 'out', sentAt ?? returnedAt ?? today(), tx)
         : null;
       const inId = returnNo
-        ? transmittalId(input.projectId, input.register, returnNo, 'in', returnedAt ?? sentAt ?? today())
+        ? transmittalId(input.projectId, input.register, returnNo, 'in', returnedAt ?? sentAt ?? today(), tx)
         : null;
 
       const existing = tx.select().from(schema.docStages)
@@ -198,21 +173,30 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
         ...(plan !== undefined ? { planSubmitDate: plan } : {}),
       };
 
-      if (existing) {
-        tx.update(schema.docStages).set(values).where(eq(schema.docStages.id, existing.id)).run();
-      } else {
-        tx.insert(schema.docStages).values({
-          id: randomUUID(),
-          documentId: doc.id,
-          stage,
-          order: STAGE_ORDER.indexOf(stage),
-          ...values,
-        }).run();
-      }
+      // One writer for a stage row, shared with Record transmittal.
+      writeStage(tx, doc.id, stage, values);
     });
 
     refreshRegister();
     return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* ---------------------------------------------------- one letter, many */
+
+/**
+ * Record one transmittal for every document in it (3 Oct 2026). The letter is
+ * the unit people hold in their hand; typing its date and number into each
+ * document separately was the chore this replaces. See lib/transmittal-write.ts.
+ */
+export async function recordTransmittal(input: TransmittalInput): Promise<ActionResult> {
+  await beforeWrite();
+  try {
+    const changed = writeTransmittal({ ...input, register: assertRegister(input.register) });
+    refreshRegister();
+    return { ok: true, changed };
   } catch (err) {
     return fail(err);
   }

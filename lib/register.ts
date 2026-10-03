@@ -253,19 +253,54 @@ interface OpenState {
  * `awaiting` is the days since its latest send when that send has had no reply
  * (null when the ball is not with the other side, or the send has no date).
  */
+/**
+ * Who holds a document as of the week being viewed: the furthest stage that
+ * went out, and whether it is still with the other side (sent, no reply).
+ * Outstanding and the document cards both start here.
+ */
+function ballOf(rows: StageRow[], loaded: Loaded): { furthest: number; latest: StageRow | null; out: boolean } {
+  let furthest = -1;
+  rows.forEach((s, i) => { if (reachedBy(s, loaded)) furthest = i; });
+  const latest = furthest >= 0 ? rows[furthest] : null;
+  return { furthest, latest, out: Boolean(latest && !returnedBy(latest, loaded)) };
+}
+
+/**
+ * The stage a document goes out at next, when the ball is ours (null while it
+ * is out, or once the last weighted stage came back approved).
+ *
+ * Read off the last reply, the way a document controller reads it: APP moves
+ * on to the next weighted stage; RWC is a rejection and goes back out as the
+ * RE- stage (IFR to RE-IFR, AFC to RE-AFC 1, RE-AFC 1 to RE-AFC 2); AWC moves
+ * on, or past the last weighted stage goes out as the RE- one after it. The
+ * first cut offered RE-AFC 1 again after an AWC at RE-AFC 1, which overwrote
+ * the round it was answering (found by pressing, 4 Oct 2026).
+ */
+function sendNextOf(rows: StageRow[], loaded: Loaded): DocStage | null {
+  const { latest, out } = ballOf(rows, loaded);
+  if (out) return null;
+  const weighted = loaded.weights.map((w) => w.stage);
+  const order = (stage: DocStage) => STAGE_ORDER.indexOf(stage);
+  if (!latest) return rows[0]?.stage ?? weighted[0] ?? null;
+  const nextWeighted = weighted.find((stage) => order(stage) > order(latest.stage)) ?? null;
+  const nextInOrder = STAGE_ORDER[order(latest.stage) + 1] ?? null;
+  const code = (latest.returnCode ?? '').trim().toUpperCase();
+  if (isApproved(code)) return nextWeighted;
+  if (code === 'RWC') return nextInOrder;
+  return nextWeighted ?? nextInOrder;
+}
+
 function openStateOf(rows: StageRow[], loaded: Loaded): {
   open: OpenState | null;
   withOtherSide: boolean;
   awaiting: number | null;
 } {
   const { asOfDate } = loaded;
-  let furthest = -1;
-  rows.forEach((s, i) => { if (reachedBy(s, loaded)) furthest = i; });
+  const { furthest, latest, out } = ballOf(rows, loaded);
 
   // With the other side: the furthest stage sent has not come back. Nothing on
   // our side can be late or due then; the next stage waits on their reply.
-  const latest = furthest >= 0 ? rows[furthest] : null;
-  if (latest && !returnedBy(latest, loaded)) {
+  if (latest && out) {
     const awaiting = latest.submittedAt ? daysBetween(latest.submittedAt, asOfDate) : null;
     const open: OpenState | null = awaiting !== null && awaiting > REPLY_DAYS
       ? { kind: 'waiting', stage: latest.stage, returnCode: null, next: null, since: latest.submittedAt, days: awaiting }
@@ -300,8 +335,8 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
         kind: 'comments',
         stage: unanswered.stage,
         returnCode: unanswered.returnCode,
-        // The answer to a comment is the next stage on this document.
-        next: rows[furthest + 1]?.stage ?? null,
+        // The answer to a comment is whatever goes out next (see sendNextOf).
+        next: sendNextOf(rows, loaded),
         since: unanswered.returnedAt,
         days: unanswered.returnedAt ? daysBetween(unanswered.returnedAt, asOfDate) : null,
       },
@@ -829,6 +864,13 @@ export function getRegisterCards(
           plannedAt: next?.planSubmitDate ?? null,
           overdue: Boolean(next?.planSubmitDate && next.planSubmitDate < loaded.asOfDate),
           laps: rows.filter((s) => s.stage.startsWith('RE_') && reachedBy(s, loaded)).length,
+          sendNext: sendNextOf(rows, loaded),
+          out: (() => {
+            const ball = ballOf(rows, loaded);
+            if (!ball.out || !ball.latest) return null;
+            const since = ball.latest.submittedAt;
+            return { stage: ball.latest.stage, since, days: since ? daysBetween(since, loaded.asOfDate) : null };
+          })(),
           stages: rows.map((s) => ({
             stage: s.stage,
             planSubmitDate: s.planSubmitDate,

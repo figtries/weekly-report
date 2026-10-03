@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Plus } from 'lucide-react';
+import { Download, Plus, Send } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { RegisterKind } from '@/lib/schema';
@@ -14,10 +14,14 @@ import type { RegisterKind } from '@/lib/schema';
  * One button opens the builder now, and the builder is what asks how.
  */
 export function RegisterTools({
-  register, onAdd,
+  register, onAdd, onTransmittal, onTransmittalIntent,
 }: {
   register: RegisterKind;
   onAdd: () => void;
+  /** Opens Record transmittal: one letter, many documents (3 Oct 2026). */
+  onTransmittal: () => void;
+  /** Fetch the dialog's code before the press lands (pointer down, focus). */
+  onTransmittalIntent?: () => void;
 }) {
   const label = register === 'edl' ? 'EDL' : 'VDRL';
 
@@ -25,6 +29,16 @@ export function RegisterTools({
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button className="h-11" onClick={onAdd}>
         <Plus className="mr-1.5 h-4 w-4" /> Add {label}
+      </Button>
+
+      <Button
+        variant="outline"
+        className="h-11"
+        onClick={onTransmittal}
+        onPointerDown={onTransmittalIntent}
+        onFocus={onTransmittalIntent}
+      >
+        <Send className="mr-1.5 h-4 w-4" /> Record transmittal
       </Button>
 
       {/* A plain link, not a fetch-and-blob: the file is built by a route that

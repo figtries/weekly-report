@@ -72,6 +72,10 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
       contractorName={parties.contractorName}
       numbering={getNumbering(projectId, 'vdrl')}
       sources={getRegisterSources(projectId, 'vdrl')}
+      // Recording a letter is a fact about today, whatever week is on screen,
+      // so the transmittal dialog reads the register as it stands now.
+      currentCards={getRegisterCards(projectId, 'vdrl')}
+      currentObstacles={getObstacles(projectId, 'vdrl')}
       footer={
         // What each stage is worth: a contract setting, moved here from the
         // summary on 3 Oct 2026 because a summary reads and this screen writes.

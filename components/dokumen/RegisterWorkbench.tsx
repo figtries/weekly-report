@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
@@ -29,6 +29,9 @@ import { RegisterTools } from './RegisterTools';
 import { RegisterBuilder } from './RegisterBuilder';
 
 // The one overlay left: adding a document. It loads on demand.
+const loadTransmittal = () => import('./TransmittalDialog');
+const preloadTransmittal = () => { void loadTransmittal(); };
+const TransmittalDialog = dynamic(loadTransmittal);
 const AddDocumentDialog = dynamic(() => import('./AddDocumentDialog').then((m) => m.AddDocumentDialog));
 const CategoryDialog = dynamic(() => import('./CategoryDialog').then((m) => m.CategoryDialog));
 
@@ -141,6 +144,8 @@ export function RegisterWorkbench({
   contractorName,
   numbering,
   sources,
+  currentCards,
+  currentObstacles,
   footer,
 }: {
   projectId: string;
@@ -164,6 +169,9 @@ export function RegisterWorkbench({
   numbering: NumberingProps;
   /** Other projects whose register the builder can copy. */
   sources: RegisterSource[];
+  /** The register as it stands now, for Record transmittal (a letter is today's fact). */
+  currentCards: Record<string, DocumentCard[]>;
+  currentObstacles: Obstacle[];
   /** Shown under the register, never under the builder that replaces it. */
   footer?: React.ReactNode;
 }) {
@@ -194,6 +202,10 @@ export function RegisterWorkbench({
   // the same screen an empty register lands on — there is one way to build a
   // register, not two that drift apart.
   const [building, setBuilding] = useState(false);
+  // Record transmittal: mounted on first use and kept, so its choices survive
+  // closing and reopening; its code is fetched on pointer down (see below).
+  const [transmittalOpen, setTransmittalOpen] = useState(false);
+  const [transmittalMounted, setTransmittalMounted] = useState(false);
   const [categoryDialog, setCategoryDialog] = useState<
     | { mode: 'add'; parentId: string | null; parentName: string | null }
     | { mode: 'rename'; id: string; name: string }
@@ -307,7 +319,15 @@ export function RegisterWorkbench({
     return tree.map((root) => ({ name: root.name, documents: root.documents, subheadings: leaves(root) }));
   }, [tree]);
 
-  const tools = <RegisterTools register={register} onAdd={() => setBuilding(true)} />;
+  const tools = (
+    <RegisterTools
+      register={register}
+      onAdd={() => setBuilding(true)}
+      onTransmittal={() => { setTransmittalMounted(true); setTransmittalOpen(true); }}
+      onTransmittalIntent={preloadTransmittal}
+    />
+  );
+  const groupNames = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g.name])), [groups]);
 
   if (building) {
     return (
@@ -756,6 +776,22 @@ export function RegisterWorkbench({
           parentId={categoryDialog.mode === 'add' ? categoryDialog.parentId : null}
           parentName={categoryDialog.mode === 'add' ? categoryDialog.parentName : null}
         />
+      )}
+
+      {/* Its own boundary: a lazy dialog suspends on its first render, and
+          without one the suspension reached the page's (see ExportExcelButton). */}
+      {transmittalMounted && (
+        <Suspense fallback={null}>
+          <TransmittalDialog
+            open={transmittalOpen}
+            onOpenChange={setTransmittalOpen}
+            projectId={projectId}
+            register={register}
+            cards={currentCards}
+            obstacles={currentObstacles}
+            groupNames={groupNames}
+          />
+        </Suspense>
       )}
 
       {adding && selected && (
