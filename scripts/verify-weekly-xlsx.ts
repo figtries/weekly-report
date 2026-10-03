@@ -252,7 +252,7 @@ for (const c of cases) {
   const lastCell = sc.getRow(11).getCell(20 + input.scurve.overall.length).value;
   check(`${tag}: S-Curve last actual`, lastPt.actualPct === null || near(lastCell, pc(r2(lastPt.actualPct))), `${lastCell}`);
   const chart1 = (await zip.file('xl/charts/chart1.xml')!.async('string')) as string;
-  check(`${tag}: chart reads its own sheet`, chart1.includes("'S-Curve Overall'!$T$11:") && chart1.includes("'S-Curve Overall'!$T$5:"));
+  check(`${tag}: chart reads its own sheet`, chart1.includes("'S-Curve Overall'!$T$11:") && chart1.includes("'S-Curve Overall'!$T$7:"));
   check(`${tag}: chart cache ends on this week`, chart1.includes(`<c:ptCount val="${c.week + 1}"/>`));
 
   fsx.mkdirSync('Claude outputs', { recursive: true });

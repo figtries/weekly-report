@@ -2,6 +2,7 @@ import { excelSerial, numToCol } from './addr';
 import { coverCrop, imageInfo, type PhotoImage } from './daily-photos';
 import { SheetXml } from './sheet-xml';
 import { WEEKLY_SKIN, type SkinSheet } from './weekly-skin';
+import { TABLE } from './weekly-table-styles';
 import type { DetailLine, DetailSheetData, PercentRow, WeeklyExportInput, WeeklyPackage } from './weekly-input';
 import type { SCurveRow } from '../scurve';
 import { r2, shownDiff } from '../figures';
@@ -17,7 +18,34 @@ import { r2, shownDiff } from '../figures';
 
 const SUMMARY = { headerLast: 11, data: 12, spacer: 13, tailFirst: 19, tailLast: 22, total: 21, lastSampleData: 18 } as const;
 const DETAIL = { headerLast: 14, root: 15, bare: 16, package: 17, heading: 18, activity: 19, total: 300, first: 15 } as const;
-const SCURVE = { last: 35, dataCol: 20 /* T */, labelCol: 'S', groupCell: 'R6' } as const;
+/**
+ * The S-curve sheet. The figure table sits right of the print area, as in the
+ * sample, on rows 6 to 12: all of them the sheet's default height, so the table is
+ * one even block whose rows never move the printed page above it (3 Oct 2026).
+ */
+const SCURVE = {
+  last: 35,
+  dataCol: 20 /* T */,
+  labelCol: 'S',
+  titleCell: 'S5',
+  row: { week: 6, date: 7, plan: 8, cumPlan: 9, actual: 10, cumActual: 11, deviation: 12 },
+} as const;
+
+/** Even columns for the table: a narrow gap, the labels, then one width for every week. */
+function tableCols(pre: string, weeks: number): string {
+  return pre.replace(/<cols>([\s\S]*?)<\/cols>/, (_, inner: string) => {
+    const kept = (inner.match(/<col\b[^>]*\/>/g) ?? []).filter((c) => Number(/\bmax="(\d+)"/.exec(c)?.[1] ?? 0) < 18);
+    return (
+      '<cols>' +
+      kept.join('') +
+      '<col min="18" max="18" width="2.6" customWidth="1"/>' +
+      '<col min="19" max="19" width="15.6" customWidth="1"/>' +
+      `<col min="20" max="${19 + weeks}" width="9.6" customWidth="1"/>` +
+      '</cols>'
+    );
+  });
+}
+
 const DOC = { pageRows: 46 } as const;
 
 // ------------------------------------------------------------------ rows
@@ -192,22 +220,7 @@ export interface ChartSpec {
 }
 
 export function scurveSheet(input: WeeklyExportInput, series: SCurveRow[], pkg: WeeklyPackage | null): WrittenSheet {
-  const sk = WEEKLY_SKIN.sheets.scurve;
-  const ds = WEEKLY_SKIN.dataStyles;
-  const rows: string[] = [];
-  for (let r = 1; r <= SCURVE.last; r += 1) rows.push(moveRow(sk, r, r));
-  const sheet = SheetXml.parse(assemble(sk, rows, SCURVE.last, 'P'));
-  const p = input.project;
-  sheet.setText('B1', `PROGRESS S-CURVE ${pkg ? pkg.sheetSuffix.toUpperCase() : 'OVERALL'}`);
-  sheet.setText('H3', `W${input.week}`);
-  sheet.setNumber('H4', excelSerial(input.periodStart)!);
-  sheet.setNumber('K4', excelSerial(input.periodEnd)!);
-  sheet.setText('D28', p.signatureLeft.company);
-  sheet.setText('L28', p.signatureRight.company);
-  sheet.setText('D33', p.signatureLeft.name);
-  sheet.setText('L33', p.signatureRight.name);
-
-  // The numbers the chart reads, beside the print area as in the sample.
+  // The numbers the chart reads, first: the table's columns are sized to them.
   const points: ChartSpec['points'] = [{ serial: excelSerial(input.scurve.weekEnds[0])!, plan: 0, actual: 0 }];
   for (const row of series) {
     const end = input.scurve.weekEnds[row.week];
@@ -218,31 +231,51 @@ export function scurveSheet(input: WeeklyExportInput, series: SCurveRow[], pkg: 
       actual: row.actualPct === null ? null : r2(row.actualPct),
     });
   }
-  sheet.setText(SCURVE.groupCell, pkg ? pkg.sheetSuffix.toUpperCase() : 'OVERALL', ds.group);
-  const label = (r: number, text: string) => sheet.setText(`${SCURVE.labelCol}${r}`, text, ds.label);
-  label(3, 'Week NO');
-  label(5, 'Week ending');
-  label(7, 'PLAN');
-  label(8, 'CUM. PLAN');
-  label(10, 'ACTUAL');
-  label(11, 'CUM. ACTUAL');
-  // No formula in the label either (3 Oct 2026): every figure here is the app's
-  // own, so the row is named for what it is, not for how it was once worked out.
-  label(12, 'DEVIATION');
+
+  const sk = { ...WEEKLY_SKIN.sheets.scurve, pre: tableCols(WEEKLY_SKIN.sheets.scurve.pre, points.length) };
+  const rows: string[] = [];
+  for (let r = 1; r <= SCURVE.last; r += 1) rows.push(moveRow(sk, r, r));
+  const sheet = SheetXml.parse(assemble(sk, rows, SCURVE.last, 'P'));
+  const p = input.project;
+  // Named as the project names the work package (3 Oct 2026), not by its code alone.
+  const name = pkg ? pkg.label : 'Overall';
+  sheet.setText('B1', `PROGRESS S-CURVE ${name.toUpperCase()}`);
+  sheet.setText('H3', `W${input.week}`);
+  sheet.setNumber('H4', excelSerial(input.periodStart)!);
+  sheet.setNumber('K4', excelSerial(input.periodEnd)!);
+  sheet.setText('D28', p.signatureLeft.company);
+  sheet.setText('L28', p.signatureRight.company);
+  sheet.setText('D33', p.signatureLeft.name);
+  sheet.setText('L33', p.signatureRight.name);
+
+  // The figure table: one block, every cell bordered alike, a grey header band,
+  // the chart's red on the plan rows and its blue on the actual ones. The labels
+  // name what each row is; no formula is written into them or into any cell.
+  const R = SCURVE.row;
+  const xf = TABLE.xf;
+  sheet.setText(SCURVE.titleCell, name, xf.title);
+  const label = (r: number, text: string, style: string) => sheet.setText(`${SCURVE.labelCol}${r}`, text, style);
+  label(R.week, 'Week NO', xf.headLabel);
+  label(R.date, 'Week ending', xf.headLabel);
+  label(R.plan, 'PLAN', xf.planLabel);
+  label(R.cumPlan, 'CUM. PLAN', xf.planLabel);
+  label(R.actual, 'ACTUAL', xf.actualLabel);
+  label(R.cumActual, 'CUM. ACTUAL', xf.actualLabel);
+  label(R.deviation, 'DEVIATION', xf.devLabel);
+  const put = (addr: string, v: number | null, style: string) =>
+    v === null ? sheet.setStyle(addr, xf.blank) : sheet.setNumber(addr, v, style);
   points.forEach((pt, w) => {
     const col = numToCol(SCURVE.dataCol + w);
     const prev = points[w - 1];
-    sheet.setNumber(`${col}3`, w, ds.week);
-    sheet.setNumber(`${col}5`, pt.serial, ds.date);
-    if (pt.plan !== null) {
-      sheet.setNumber(`${col}8`, pt.plan / 100, ds.pct);
-      sheet.setNumber(`${col}7`, (prev && prev.plan !== null ? shownDiff(pt.plan, prev.plan) : pt.plan) / 100, ds.pct);
-    }
-    if (pt.actual !== null) {
-      sheet.setNumber(`${col}11`, pt.actual / 100, ds.pct);
-      sheet.setNumber(`${col}10`, (prev && prev.actual !== null ? shownDiff(pt.actual, prev.actual) : pt.actual) / 100, ds.pct);
-      if (pt.plan !== null) sheet.setNumber(`${col}12`, shownDiff(pt.actual, pt.plan) / 100, ds.pct);
-    }
+    sheet.setNumber(`${col}${R.week}`, w, xf.headWeek);
+    sheet.setNumber(`${col}${R.date}`, pt.serial, xf.headDate);
+    const plan = pt.plan;
+    const actual = pt.actual;
+    put(`${col}${R.plan}`, plan === null ? null : (prev && prev.plan !== null ? shownDiff(plan, prev.plan) : plan) / 100, xf.pct);
+    put(`${col}${R.cumPlan}`, plan === null ? null : plan / 100, xf.pct);
+    put(`${col}${R.actual}`, actual === null ? null : (prev && prev.actual !== null ? shownDiff(actual, prev.actual) : actual) / 100, xf.pct);
+    put(`${col}${R.cumActual}`, actual === null ? null : actual / 100, xf.pct);
+    put(`${col}${R.deviation}`, actual === null || plan === null ? null : shownDiff(actual, plan) / 100, xf.dev);
   });
   const lastCol = numToCol(SCURVE.dataCol + points.length - 1);
   const range = (r: number) => `$${numToCol(SCURVE.dataCol)}$${r}:$${lastCol}$${r}`;
@@ -250,7 +283,14 @@ export function scurveSheet(input: WeeklyExportInput, series: SCurveRow[], pkg: 
     name: pkg ? `S-Curve ${pkg.sheetSuffix}` : 'S-Curve Overall',
     xml: sheet.serialize().replace(/<dimension ref="[^"]*"/, `<dimension ref="B1:${lastCol}${SCURVE.last}"`),
     printArea: '$B$1:$P$35',
-    chart: { points, planTx: '$S$8', actualTx: '$S$11', cat: range(5), planVal: range(8), actualVal: range(11) },
+    chart: {
+      points,
+      planTx: `$S$${R.cumPlan}`,
+      actualTx: `$S$${R.cumActual}`,
+      cat: range(R.date),
+      planVal: range(R.cumPlan),
+      actualVal: range(R.cumActual),
+    },
   };
 }
 

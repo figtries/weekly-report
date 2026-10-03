@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { OVERALL, weeklyFileName, type WeeklyExportInput, type WeeklySelection } from './weekly-input';
 import { detailSheet, documentationSheet, scurveSheet, summarySheet, type ChartSpec, type PlacedPhoto, type WrittenSheet } from './weekly-sheets';
 import { WEEKLY_SKIN } from './weekly-skin';
+import { TABLE } from './weekly-table-styles';
 
 /**
  * The weekly report as ONE workbook in the look of the client's own (contoh.xlsx), with
@@ -201,7 +202,8 @@ export async function buildWeeklyWorkbook(
       '<calcPr calcId="191029"/></workbook>'
   );
   zip.file('xl/_rels/workbook.xml.rels', `${XML}<Relationships xmlns="${NS.pkg}">${wbRels.join('')}</Relationships>`);
-  zip.file('xl/styles.xml', WEEKLY_SKIN.styles);
+  // The sample's stylesheet with the S-curve table's own styles appended.
+  zip.file('xl/styles.xml', TABLE.styles);
   zip.file('xl/theme/theme1.xml', WEEKLY_SKIN.theme);
 
   const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
