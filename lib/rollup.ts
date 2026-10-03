@@ -259,6 +259,11 @@ export function findNode(roots: RollupNode[], id: string): RollupNode | null {
 
 export interface SummaryRow {
   id: string;
+  /**
+   * The package this row is, stable across weeks: the anchor node's id, or the
+   * "(SPK-###)" tag. The weekly Excel export names its per-package sheets by it.
+   */
+  key: string;
   deskripsi: string;
   /**
    * The identifier to chip in front of the name, when the name does not already
@@ -355,6 +360,7 @@ function summaryAnchors(roots: RollupNode[]): {
 export function summariseUnits(roots: RollupNode[]): SummaryUnits {
   const { basis, anchorAt } = summaryAnchors(roots);
   interface Group {
+    key: string;
     label: string;
     code: string | null;
     order: number;
@@ -373,7 +379,7 @@ export function summariseUnits(roots: RollupNode[]): SummaryUnits {
       if (cur && node.bobot > 0) {
         let g = groups.get(cur.key);
         if (!g) {
-          g = { label: cur.label, code: cur.code, order: order++, bobot: 0, prevWF: 0, curWF: 0, thisWeekWF: 0, targetWF: 0 };
+          g = { key: cur.key, label: cur.label, code: cur.code, order: order++, bobot: 0, prevWF: 0, curWF: 0, thisWeekWF: 0, targetWF: 0 };
           groups.set(cur.key, g);
         }
         g.bobot += node.bobot;
@@ -392,6 +398,7 @@ export function summariseUnits(roots: RollupNode[]): SummaryUnits {
     .sort((a, b) => a.order - b.order)
     .map((g, i) => ({
       id: `${basis === 'spk' ? 'spk' : basis}-${i}`,
+      key: g.key,
       deskripsi: g.label,
       code: g.code,
       bobot: g.bobot,
@@ -406,6 +413,23 @@ export function summariseUnits(roots: RollupNode[]): SummaryUnits {
     }));
 
   return { basis, rows };
+}
+
+/**
+ * Which package each node is credited to: the nearest anchor at or above it, by
+ * the same rule `summariseUnits` groups by. Nodes above every anchor are absent.
+ * The weekly Excel export cuts its per-package Detail sheets with it.
+ */
+export function packageOfNodes(roots: RollupNode[]): Map<string, string> {
+  const { anchorAt } = summaryAnchors(roots);
+  const out = new Map<string, string>();
+  const walk = (node: RollupNode, key: string | null) => {
+    const here = anchorAt(node)?.key ?? key;
+    if (here) out.set(node.id, here);
+    node.children.forEach((c) => walk(c, here));
+  };
+  roots.forEach((r) => walk(r, null));
+  return out;
 }
 
 /** What every caller wanted before the basis mattered to anyone. */

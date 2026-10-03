@@ -39,6 +39,8 @@ export interface WbsItem {
    */
   isReportingUnit?: boolean;
   unitLabel?: string | null;
+  /** The unit's own contract number, printed in the weekly Excel export's Detail header. */
+  unitContractNo?: string | null;
   /**
    * The planner's milestone flag. The weight gate reads it: a milestone is the
    * one leaf allowed to weigh nothing. Absent on the db.json path.

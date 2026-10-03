@@ -1,4 +1,4 @@
-import { computeGrandTotal, computeRollup } from './rollup';
+import { computeGrandTotal, computeRollup, summariseUnits } from './rollup';
 import type { Database } from './types';
 
 export interface SCurveRow {
@@ -48,4 +48,41 @@ export function buildSCurveSeries(db: Database, upToWeek?: number): SCurveRow[] 
     rows.push({ week, planPct: plan, actualPct: actual });
   }
   return rows;
+}
+
+/**
+ * The same curve per work package, for the weekly Excel export's per-package
+ * S-Curve sheets. Weeks, rollups and the `currentWeek` cut are exactly
+ * `buildSCurveSeries`'s; the package figures are `summariseUnits`'s, the groups
+ * the Summary cards show, keyed by `SummaryRow.key`. A week with no recorded
+ * leaf data gives the package no point (null), never a stored project figure.
+ */
+export function buildPackageSCurves(db: Database, upToWeek: number): Map<string, SCurveRow[]> {
+  const series = buildSCurveSeries(db, upToWeek);
+  const currentWeek = db.project.currentWeek;
+  const weekMap = new Map(db.weeks.map((w) => [w.week, w]));
+  const out = new Map<string, SCurveRow[]>();
+  const done: number[] = [];
+  for (const { week } of series) {
+    const meta = weekMap.get(week);
+    const rows = meta
+      ? summariseUnits(computeRollup(db.wbsItems, meta.leafData, weekMap.get(week - 1)?.leafData ?? null)).rows
+      : [];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      seen.add(r.key);
+      // A package first weighed in a later week still starts at week 1.
+      if (!out.has(r.key)) out.set(r.key, done.map((w) => ({ week: w, planPct: null, actualPct: null })));
+      out.get(r.key)!.push({
+        week,
+        planPct: r.bobot > 0 ? (r.targetWF / r.bobot) * 100 : 0,
+        actualPct: week <= currentWeek ? r.curProgressPct : null,
+      });
+    }
+    for (const [key, list] of out) {
+      if (!seen.has(key)) list.push({ week, planPct: null, actualPct: null });
+    }
+    done.push(week);
+  }
+  return out;
 }

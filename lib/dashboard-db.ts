@@ -175,6 +175,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // Overall Summary sheet for every project made inside the app.
     isReportingUnit: n.isReportingUnit,
     unitLabel: n.unitLabel,
+    unitContractNo: n.unitContractNo,
     // The one leaf the weight gate lets weigh nothing. See lib/weight-gate.ts.
     isMilestone: n.isMilestone,
     // What only a person knows, for the forecast (lib/forecast.ts): what this
