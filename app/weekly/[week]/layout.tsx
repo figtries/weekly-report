@@ -2,6 +2,9 @@ import { getOpenWeekRollup, getOpenDb } from '@/lib/data';
 import { db as sqlite, schema } from '@/lib/sqlite';
 import { validateWeek } from '@/lib/analysis';
 import { weightGate } from '@/lib/weight-gate';
+import { summariseUnits } from '@/lib/rollup';
+import { toISODate, weekEndDate } from '@/lib/weeks';
+import { weeklyFileName } from '@/lib/xlsx/weekly-input';
 import { buildWorklist } from '@/lib/worklist';
 import WeekTabs from '@/components/weekly/WeekTabs';
 import { RouteTransition } from '@/components/motion/RouteTransition';
@@ -74,6 +77,9 @@ async function WeeklyTabsFor({ week }: { week: number }) {
       anchorEnd={db.project.weekAnchorEndDate}
       dueCount={dueCount}
       checkCount={validation.errors + validation.warnings}
+      // The export pop-up's rows are the Summary cards' groups, named as they are.
+      exportPackages={rollup ? summariseUnits(rollup.roots).rows.map((r) => ({ key: r.key, label: r.deskripsi.trim() })) : []}
+      exportFileName={weeklyFileName(db.project.documentNoWeekly ?? '', week, toISODate(weekEndDate(db.project.weekAnchorEndDate, week)))}
     />
   );
 }

@@ -2,7 +2,9 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import SavePdfButton from '@/components/print/SavePdfButton';
+import ExportExcelButton from './ExportExcelButton';
+import type { ExportPackage } from './ExportExcelDialog';
+import { weekPeriodShort } from '@/lib/weeks';
 import WeekSteps, { type WeekStep } from './WeekSteps';
 import WeekRow from './WeekRow';
 
@@ -56,6 +58,8 @@ export default function WeekTabs({
   checkCount,
   figuresReady = true,
   anchorEnd,
+  exportPackages = [],
+  exportFileName = '',
 }: {
   weeks: number[];
   selectedWeek: number;
@@ -82,6 +86,10 @@ export default function WeekTabs({
    * not shown anywhere would be the one place they still leaked out.
    */
   figuresReady?: boolean;
+  /** The Summary's groups, for the export pop-up's rows. */
+  exportPackages?: ExportPackage[];
+  /** The workbook's file name, from the project's weekly document number. */
+  exportFileName?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -157,12 +165,17 @@ export default function WeekTabs({
           {/* In the row on a phone, where the bar is the screen's width and
               the row ends where the screen does. From `sm` it leaves the row
               for the page's top corner, so the row can stay the bar's width. */}
-          {active.printable && (figuresReady || activeTab === 'documentation') && (
+          {/* ONE workbook for the whole week (3 Oct 2026): the same button on all four
+              report tabs, and the pop-up decides what goes in. The figure sheets are held
+              there while the weights do not close; the photos are not. */}
+          {onReport && (
             <div className="shrink-0 sm:absolute sm:top-4 sm:right-6 lg:right-8">
-              <SavePdfButton
-                url={`/api/pdf/weekly/${selectedWeek}?only=${activeTab}`}
-                filename={`Week ${selectedWeek} - ${active.label}.pdf`}
-                ariaLabel={`Save ${active.label} as PDF`}
+              <ExportExcelButton
+                week={selectedWeek}
+                period={anchorEnd ? weekPeriodShort(anchorEnd, selectedWeek) : `Week ${selectedWeek}`}
+                packages={exportPackages}
+                fileName={exportFileName || `WEEKLY PROGRESS REPORT W${selectedWeek}.xlsx`}
+                figuresReady={figuresReady}
               />
             </div>
           )}
