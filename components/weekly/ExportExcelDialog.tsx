@@ -64,7 +64,12 @@ export default function ExportExcelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      {/* Opens on the app's own motion, not shadcn's 100ms pop: see `.dialog-soft`
+          in app/globals.css. A plain dark scrim, no blur, like the activity sheet. */}
+      <DialogContent
+        className="dialog-soft max-h-[90dvh] overflow-y-auto sm:max-w-lg"
+        overlayClassName="scrim-soft bg-black/40 supports-backdrop-filter:backdrop-blur-none"
+      >
         <DialogHeader>
           <DialogTitle>Export Excel</DialogTitle>
           <DialogDescription>

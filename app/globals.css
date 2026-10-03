@@ -553,6 +553,49 @@ a:active {
   animation: scrim-out 0.4s var(--ease-ios) both;
 }
 
+/* A Radix pop-up opening the way the app's own sheets do (3 Oct 2026). shadcn's
+   dialog gives 100ms of fade + zoom over a blurred page: on a phone that is one
+   frame after a pause, a pop rather than an opening, and the blur is recomputed
+   over the whole page every frame. These are the activity sheet's terms instead:
+   a plain dark scrim fading on `--ease-ios`, the card rising a few pixels as it
+   settles, transform and opacity only so it runs on the compositor. Keyed on the
+   data-state Radix writes, so its Presence waits for the exit to finish. Outside
+   any layer on purpose: it has to win over tw-animate's `animate-in` utilities.
+   The card's centring is the `translate` property, which this `transform` adds to
+   rather than replaces. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.98);
+  }
+}
+.dialog-soft[data-state='open'] {
+  animation: dialog-in 0.42s var(--ease-ios) both;
+}
+.dialog-soft[data-state='closed'] {
+  animation: dialog-out 0.24s var(--ease-ios) both;
+}
+.scrim-soft[data-state='open'] {
+  animation: scrim-in 0.4s var(--ease-ios) both;
+}
+.scrim-soft[data-state='closed'] {
+  animation: scrim-out 0.24s var(--ease-ios) both;
+}
+
 @keyframes level-in-fwd {
   from {
     opacity: 0;
@@ -937,6 +980,24 @@ a:active {
   100% {
     transform: scale(1);
   }
+}
+
+/* Saved, on a WIDE button (one that fills its row: the Export pop-up, the daily
+   report's foot). The bump's 1.08 is a few pixels on an icon button and 28 px on a
+   full-width one, which pushed it into the card's edge and read as a glitch
+   (3 Oct 2026). A wide button says it with its colour, the drawn tick and a halo
+   kept inside the padding around it. */
+@keyframes glow-soft {
+  0% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgb(16 185 129 / 0);
+  }
+}
+
+.animate-success-soft {
+  animation: glow-soft 0.8s var(--ease-ios) both;
 }
 
 .animate-success-bump {

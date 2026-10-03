@@ -4,8 +4,20 @@ import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import type { ExportPackage } from './ExportExcelDialog';
 
-// The overlay rule (AGENTS.md): the dialog stays out of the first bundle.
-const ExportExcelDialog = dynamic(() => import('./ExportExcelDialog'));
+// The overlay rule (AGENTS.md): the dialog stays out of the first bundle. It is
+// fetched once the page is idle (and on the first touch of the button, whichever
+// comes first), so the first press opens it instead of waiting for the download:
+// a press that sat still and then popped was the glitch reported 3 Oct 2026.
+const loadDialog = () => import('./ExportExcelDialog');
+const ExportExcelDialog = dynamic(loadDialog);
+let dialogRequested = false;
+function preloadDialog() {
+  if (dialogRequested) return;
+  dialogRequested = true;
+  loadDialog().catch(() => {
+    dialogRequested = false;
+  });
+}
 
 // The route is a serverless function; a cold one makes the first export wait for
 // the boot. Wake it while the button is on screen and again when the tab comes
@@ -42,6 +54,18 @@ export default function ExportExcelButton({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Safari has no requestIdleCallback; a short timer stands in for it there.
+    const hasIdle = 'requestIdleCallback' in window;
+    const idle = hasIdle
+      ? window.requestIdleCallback(preloadDialog, { timeout: 2500 })
+      : window.setTimeout(preloadDialog, 1200);
+    return () => {
+      if (hasIdle) window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
+    };
+  }, []);
+
+  useEffect(() => {
     warm(week);
     const onVisible = () => {
       if (document.visibilityState === 'visible') warm(week);
@@ -54,6 +78,8 @@ export default function ExportExcelButton({
     <>
       <button
         type="button"
+        onPointerDown={preloadDialog}
+        onFocus={preloadDialog}
         onClick={() => {
           setMounted(true);
           setOpen(true);

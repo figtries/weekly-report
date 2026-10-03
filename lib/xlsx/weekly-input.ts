@@ -71,7 +71,7 @@ export interface SummaryLine extends PercentRow {
 
 export interface WeeklyExportInput {
   week: number;
-  /** "22 July 2026 s/d 28 July 2026" */
+  /** "22 July 2026 to 28 July 2026": the workbook is in English, like the app. */
   periodText: string;
   periodStart: string;
   periodEnd: string;
@@ -293,7 +293,7 @@ export function gatherWeeklyExport(args: {
 
   return {
     week,
-    periodText: `${formatDateLong(start)} s/d ${formatDateLong(end)}`,
+    periodText: `${formatDateLong(start)} to ${formatDateLong(end)}`,
     periodStart: toISODate(start),
     periodEnd: toISODate(end),
     project: {

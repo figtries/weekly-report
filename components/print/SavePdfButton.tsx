@@ -168,7 +168,7 @@ export default function SavePdfButton({
 
   const palette =
     phase === 'done'
-      ? 'bg-emerald-600 text-white shadow-md animate-success-bump'
+      ? `bg-emerald-600 text-white shadow-md ${labelAlways ? 'animate-success-soft' : 'animate-success-bump'}`
       : phase === 'error'
         ? 'bg-rose-600 text-white hover:bg-rose-700'
         : variant === 'outline'

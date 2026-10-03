@@ -73,7 +73,8 @@ function chartXml(sheetName: string, spec: ChartSpec): string {
     `<c:numCache><c:formatCode>${format}</c:formatCode><c:ptCount val="${values.length}"/>` +
     values.map((v, i) => (v === null ? '' : `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`)).join('') +
     '</c:numCache>';
-  const cat = num('dd\\-mmm\\-yy', spec.points.map((p) => p.serial));
+  // Pinned to en-US like the Week ending cells, so the axis reads Aug and Oct in any Excel.
+  const cat = num('[$-409]dd\\-mmm\\-yy', spec.points.map((p) => p.serial));
   const fill = (token: string, f: string, cache: string) => (xml: string) =>
     xml.split(`<c:f>${token}</c:f>`).join(`<c:f>${esc(f)}</c:f>${cache}`);
   let xml = WEEKLY_SKIN.chart;

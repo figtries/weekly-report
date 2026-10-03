@@ -226,7 +226,9 @@ export function scurveSheet(input: WeeklyExportInput, series: SCurveRow[], pkg: 
   label(8, 'CUM. PLAN');
   label(10, 'ACTUAL');
   label(11, 'CUM. ACTUAL');
-  label(12, 'DEVIATION (ACTUAL - PLAN)');
+  // No formula in the label either (3 Oct 2026): every figure here is the app's
+  // own, so the row is named for what it is, not for how it was once worked out.
+  label(12, 'DEVIATION');
   points.forEach((pt, w) => {
     const col = numToCol(SCURVE.dataCol + w);
     const prev = points[w - 1];

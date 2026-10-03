@@ -43,6 +43,22 @@ const strings = [...sst.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) =>
 
 const colNum = (col: string) => [...col].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
 
+/**
+ * The sample's fixed labels, in English (3 Oct 2026: "aku maunya semua pakai bahasa
+ * inggris ya, ini kan appnya bahasa inggris"). Keyed by the label exactly as the sample
+ * spells it, spacing included, so the colons and line breaks stay where they were. Only
+ * the LOOK's own words: anything the writer fills in comes from the app.
+ */
+const ENGLISH: Record<string, string> = {
+  DESKRIPSI: 'DESCRIPTION',
+  'BOBOT\r\n (%)': 'WEIGHT\r\n (%)',
+  'MINGGU LALU': 'LAST WEEK',
+  'MINGGU INI': 'THIS WEEK',
+  'CUMM. MINGGU INI': 'CUM. THIS WEEK',
+  'PERIODE      : ': 'PERIOD       : ',
+  SATUAN: 'UNIT',
+};
+
 /** A cell as the writer wants it: shared strings inlined, formulas replaced by their cached value. */
 function cleanCell(cell: string): string {
   const attrs = /^<c\b([^>]*?)\/?>/.exec(cell)![1];
@@ -55,6 +71,7 @@ function cleanCell(cell: string): string {
   else if (type === 'inlineStr') text = /<t[^>]*>([\s\S]*?)<\/t>/.exec(cell)?.[1] ?? null;
   if (text !== null) {
     if (text.trim() === '') return `<c${base}/>`;
+    text = ENGLISH[text] ?? text;
     return `<c${base} t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
   }
   if (type === 'e' || v === undefined) return `<c${base}/>`;
@@ -172,8 +189,27 @@ for (const token of ['{{ACTUAL_TX}}', '{{PLAN_TX}}', '{{CAT}}', '{{ACTUAL_VAL}}'
 }
 if (chart.includes(sheetRef)) throw new Error('chart template still points at the sample');
 
+// ---------------------------------------------------------------- dates in English
+// The Week ending dates read in English whatever language Excel runs in. The sample's
+// date cells use built-in format 15, whose month names follow the reader's Excel, so an
+// Indonesian Excel shows "Agu" and "Okt". The sample carries its own [$-409] format,
+// the same picture with the language pinned, and the date style is pointed at it.
+let styles = await read('xl/styles.xml');
+const enDate = /<numFmt numFmtId="(\d+)" formatCode="\[\$-409\]dd\\-mmm\\-yy;@"\/>/.exec(styles)?.[1];
+if (!enDate) throw new Error('the sample lost its en-US date format');
+{
+  const open = styles.indexOf('<cellXfs');
+  const close = styles.indexOf('</cellXfs>', open);
+  let n = -1;
+  const body = styles.slice(open, close).replace(/<xf\b[^>]*>/g, (xf) => {
+    n += 1;
+    return String(n) === dataStyles.date ? xf.replace(/numFmtId="\d+"/, `numFmtId="${enDate}"`) : xf;
+  });
+  styles = styles.slice(0, open) + body + styles.slice(close);
+}
+
 const skin = {
-  styles: await read('xl/styles.xml'),
+  styles,
   theme: await read('xl/theme/theme1.xml'),
   sheets: { documentation, summary, scurve, detail },
   dataStyles,
