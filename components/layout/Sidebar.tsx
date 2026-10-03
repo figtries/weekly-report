@@ -15,7 +15,7 @@ import { usePathname } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
-import { ChevronDown, Menu, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DailyReportsIcon,
@@ -24,6 +24,7 @@ import {
   DocumentControlIcon,
   ProjectsIcon,
   ReportsIcon,
+  RolesIcon,
   WeeklyReportsIcon,
 } from './NavIcons';
 
@@ -127,7 +128,7 @@ const DESTINATIONS: Entry[] = [
 // `/settings` stays reachable by its URL and is linked from nowhere.
 const ROLES: Destination = {
   label: 'Roles',
-  icon: ShieldCheck,
+  icon: RolesIcon,
   href: () => '/roles',
   match: (p) => p.startsWith('/roles'),
 };
