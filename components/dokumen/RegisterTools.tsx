@@ -26,14 +26,17 @@ export function RegisterTools({
   const label = register === 'edl' ? 'EDL' : 'VDRL';
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    // Phone: Add and Export side by side, Record transmittal full width under
+    // them; three buttons in one wrapping row left Export stranded on a line
+    // of its own. From sm they sit in one row again.
+    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
       <Button className="h-11" onClick={onAdd}>
         <Plus className="mr-1.5 h-4 w-4" /> Add {label}
       </Button>
 
       <Button
         variant="outline"
-        className="h-11"
+        className="order-last col-span-2 h-11 sm:order-none"
         onClick={onTransmittal}
         onPointerDown={onTransmittalIntent}
         onFocus={onTransmittalIntent}
