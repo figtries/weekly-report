@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
@@ -18,12 +18,13 @@ import { DURATION, EASE } from '@/components/motion/Reveal';
 import {
   STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
-import type { RegisterKind } from '@/lib/schema';
+import type { DocStage, RegisterKind } from '@/lib/schema';
 import type { NumberingRule } from '@/lib/register-numbering';
 import { cn } from '@/lib/utils';
 
 import { DocumentEditor } from './DocumentEditor';
 import { OutstandingBlock } from './OutstandingBlock';
+import { StageWeightsCard } from './StageWeightsCard';
 import { verdict } from './verdict';
 import { RegisterTools } from './RegisterTools';
 import { RegisterBuilder } from './RegisterBuilder';
@@ -146,7 +147,7 @@ export function RegisterWorkbench({
   sources,
   currentCards,
   currentObstacles,
-  footer,
+  stageWeights,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -172,8 +173,14 @@ export function RegisterWorkbench({
   /** The register as it stands now, for Record transmittal (a letter is today's fact). */
   currentCards: Record<string, DocumentCard[]>;
   currentObstacles: Obstacle[];
-  /** Shown under the register, never under the builder that replaces it. */
-  footer?: React.ReactNode;
+  /**
+   * What each stage is worth, drawn under the register (never under the
+   * builder that replaces it). Plain data, not an element: an element passed
+   * down from the page became a postponed PPR segment, S:3, which collided
+   * with React's own S:3 and threw #418 on every load (4 Oct 2026, see
+   * scripts/verify-hydration.mjs).
+   */
+  stageWeights: { stage: DocStage; weight: number }[];
 }) {
   const reduced = useReducedMotion();
 
@@ -206,6 +213,20 @@ export function RegisterWorkbench({
   // closing and reopening; its code is fetched on pointer down (see below).
   const [transmittalOpen, setTransmittalOpen] = useState(false);
   const [transmittalMounted, setTransmittalMounted] = useState(false);
+  // Once the page has loaded and gone quiet, fetch the dialog's code and mount
+  // it closed, so the first press only opens it (Export Excel does the same;
+  // building it on the press was 82-94 ms at CPU 4x).
+  useEffect(() => {
+    let live = true;
+    const idle = (fn: () => void) => {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fn, { timeout: 2000 });
+      else setTimeout(fn, 600);
+    };
+    const start = () => idle(() => { void loadTransmittal().then(() => { if (live) setTransmittalMounted(true); }); });
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
+    return () => { live = false; window.removeEventListener('load', start); };
+  }, []);
   const [categoryDialog, setCategoryDialog] = useState<
     | { mode: 'add'; parentId: string | null; parentName: string | null }
     | { mode: 'rename'; id: string; name: string }
@@ -279,10 +300,19 @@ export function RegisterWorkbench({
   const groupRefs = useRef(new Map<string, HTMLButtonElement>());
   useEffect(() => {
     if (!selectedId) return;
-    groupRefs.current.get(selectedId)?.scrollIntoView({
-      block: 'nearest',
-      behavior: reduced ? 'auto' : 'smooth',
+    // Below lg the column is display:none while a group is open, so there is
+    // nothing to bring into view, and asking anyway forced a layout of the
+    // whole page before the first frame: 46 ms of a 100 ms press at CPU 4x
+    // (traced 4 Oct 2026). On a wide screen it waits a frame, so the press
+    // paints first and the column follows.
+    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    const frame = requestAnimationFrame(() => {
+      groupRefs.current.get(selectedId)?.scrollIntoView({
+        block: 'nearest',
+        behavior: reduced ? 'auto' : 'smooth',
+      });
     });
+    return () => cancelAnimationFrame(frame);
   }, [selectedId, reduced]);
 
   const matchingGroups = useMemo(
@@ -454,7 +484,7 @@ export function RegisterWorkbench({
                     if (el) groupRefs.current.set(g.id, el);
                     else groupRefs.current.delete(g.id);
                   }}
-                  onClick={() => { setSelectedId(g.id); setOpenDoc(null); }}
+                  onClick={() => startTransition(() => { setSelectedId(g.id); setOpenDoc(null); })}
                   className={cn(
                     'w-full rounded-xl border px-3.5 py-3 text-left transition-colors duration-300 ease-ios',
                     selectedId === g.id
@@ -670,7 +700,10 @@ export function RegisterWorkbench({
                   <div
                     key={doc.id}
                     className={cn(
-                      'overflow-hidden rounded-xl border bg-card transition-shadow duration-300 ease-ios',
+                      // Off-screen rows skip layout and paint until scrolled to:
+                      // a discipline of thirty documents laid all thirty out on
+                      // the press that opened it (traced at CPU 4x, 4 Oct 2026).
+                      'overflow-hidden rounded-xl border bg-card transition-shadow duration-300 ease-ios [content-visibility:auto] [contain-intrinsic-size:auto_68px]',
                       open ? 'shadow-md ring-1 ring-blue-600/30' : 'hover:shadow-sm',
                     )}
                   >
@@ -805,7 +838,12 @@ export function RegisterWorkbench({
         />
       )}
     </div>
-    {footer}
+    {/* A contract setting, moved here from the summary on 3 Oct 2026 because
+        a summary reads and this screen writes. Off-screen until scrolled to,
+        so its layout waits. */}
+    <div className="mt-6 [content-visibility:auto] [contain-intrinsic-size:auto_220px]">
+      <StageWeightsCard projectId={projectId} register={register} weights={stageWeights} />
+    </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { MoreHorizontal, Plus, X } from 'lucide-react';
 
@@ -35,7 +35,12 @@ const field =
   'transition-colors duration-200 ease-ios focus-visible:border-ring focus-visible:ring-3 ' +
   'focus-visible:ring-ring/50 md:text-sm';
 
-export function BuilderHeadingCard({
+/**
+ * Memoised: the builder holds every heading in one list, and a change to one
+ * must not redraw the others. Its callbacks are stable (they take the heading)
+ * and `renumber` keeps an unchanged heading the same object.
+ */
+export const BuilderHeadingCard = memo(function BuilderHeadingCard({
   heading: h,
   register,
   onChange,
@@ -44,7 +49,7 @@ export function BuilderHeadingCard({
   heading: BuilderHeading;
   register: RegisterKind;
   onChange: (next: BuilderHeading) => void;
-  onRemove: () => void;
+  onRemove: (heading: BuilderHeading) => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
@@ -94,7 +99,7 @@ export function BuilderHeadingCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={onRemove}>Remove</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => onRemove(h)}>Remove</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -165,7 +170,7 @@ export function BuilderHeadingCard({
       )}
     </section>
   );
-}
+});
 
 /* ------------------------------------------------------------------ rows */
 

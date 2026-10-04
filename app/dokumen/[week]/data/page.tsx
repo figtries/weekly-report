@@ -4,7 +4,6 @@ import SectionSkeleton from '@/components/ui/SectionSkeleton';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
-import { StageWeightsCard } from '@/components/dokumen/StageWeightsCard';
 import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights,
   getRegisterSources,
@@ -76,17 +75,7 @@ async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }
       // so the transmittal dialog reads the register as it stands now.
       currentCards={getRegisterCards(projectId, 'edl')}
       currentObstacles={getObstacles(projectId, 'edl')}
-      footer={
-        // What each stage is worth: a contract setting, moved here from the
-        // summary on 3 Oct 2026 because a summary reads and this screen writes.
-        <div key="stage-weights" className="mt-6">
-          <StageWeightsCard
-            projectId={projectId}
-            register="edl"
-            weights={getStageWeights(projectId, 'edl')}
-          />
-        </div>
-      }
+      stageWeights={getStageWeights(projectId, 'edl')}
     />
     </RouteTransition>
   );

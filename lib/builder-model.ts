@@ -165,13 +165,20 @@ export function renumber(hs: BuilderHeading[], rule: NumberingRule, taken: strin
     if (!keep(r)) return r.docNo ? { ...r, docNo: '' } : r;
     const docNo = nextNumber(rule, heading, group ?? r.title, r.kind, used);
     used.push(docNo);
-    return { ...r, docNo };
+    return docNo === r.docNo ? r : { ...r, docNo };
   };
-  return hs.map((h) => ({
-    ...h,
-    rows: h.rows.map(number(h.name, null)),
-    subs: h.subs.map((s) => ({ ...s, rows: s.rows.map(number(h.name, s.name)) })),
-  }));
+  // UNCHANGED STAYS THE SAME OBJECT. The page draws one memoised card per
+  // heading; a new object for every heading on every keystroke re-rendered
+  // all of them, and that was the slow frame when a row arrived (4 Oct 2026).
+  const same = <T,>(a: T[], b: T[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  return hs.map((h) => {
+    const rows = h.rows.map(number(h.name, null));
+    const subs = h.subs.map((s) => {
+      const subRows = s.rows.map(number(h.name, s.name));
+      return same(subRows, s.rows) ? s : { ...s, rows: subRows };
+    });
+    return same(rows, h.rows) && same(subs, h.subs) ? h : { ...h, rows, subs };
+  });
 }
 
 const toDoc = (r: BuilderRow) => ({

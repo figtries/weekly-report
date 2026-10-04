@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { Suspense, useMemo, useRef, useState, useTransition } from 'react';
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { ArrowLeft, ClipboardPaste, Copy, FilePlus2, FileSpreadsheet } from 'lucide-react';
 
@@ -25,7 +25,8 @@ import { cn } from '@/lib/utils';
 
 import { BuilderHeadingCard } from './BuilderHeadingCard';
 
-const NumberingDialog = dynamic(() => import('./NumberingDialog'));
+const loadNumbering = () => import('./NumberingDialog');
+const NumberingDialog = dynamic(loadNumbering);
 
 /**
  * Building a register (3 Oct 2026, rebuilt with the user from rendered options).
@@ -84,6 +85,15 @@ export function RegisterBuilder({
   );
   const [ruleDirty, setRuleDirty] = useState(false);
   const [numberingOpen, setNumberingOpen] = useState(false);
+  const [numberingMounted, setNumberingMounted] = useState(false);
+  // On the build step, fetch the numbering dialog's code while nothing is
+  // happening and mount it closed, so "Change" only opens it.
+  useEffect(() => {
+    if (step !== 'build') return;
+    let live = true;
+    const t = window.setTimeout(() => { void loadNumbering().then(() => { if (live) setNumberingMounted(true); }); }, 400);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [step]);
   const [client, setClient] = useState(clientName);
   const [contractor, setContractor] = useState(contractorName);
   const askNames = !clientName.trim() || !contractorName.trim();
@@ -119,11 +129,15 @@ export function RegisterBuilder({
 
   /* ----------------------------------------------------------- starting */
 
+  // A transition: the page that follows is the biggest render here, and React
+  // can build it in slices instead of one long task (traced at CPU 4x).
   const begin = (next: BuilderHeading[], from: string | null) => {
-    setHeadings(next);
-    setOrigin(from);
-    setError(null);
-    setStep('build');
+    startTransition(() => {
+      setHeadings(next);
+      setOrigin(from);
+      setError(null);
+      setStep('build');
+    });
   };
 
   /** A GET route, retried once: a read through a server action has left a screen blank before. */
@@ -167,12 +181,23 @@ export function RegisterBuilder({
 
   const toggleHeading = (name: string) => {
     const found = headingOf(name);
-    if (!found) { setHeadings((hs) => [...hs, newHeading(name)]); return; }
+    if (!found) { startTransition(() => setHeadings((hs) => [...hs, newHeading(name)])); return; }
     if (found.locked) return;
     const typed = found.rows.some((r) => r.title.trim()) || found.subs.some((s) => s.rows.some((r) => r.title.trim()));
     if (typed) { setConfirmRemove(found); return; }
     setHeadings((hs) => hs.filter((h) => h.id !== found.id));
   };
+
+  // Stable, so a memoised card is only redrawn when its own heading changes.
+  const updateHeading = useCallback((next: BuilderHeading) => {
+    setHeadings((hs) => hs.map((x) => (x.id === next.id ? next : x)));
+  }, []);
+  const removeHeading = useCallback((h: BuilderHeading) => {
+    if (h.locked) return;
+    const typed = h.rows.some((r) => r.title.trim()) || h.subs.some((s) => s.rows.some((r) => r.title.trim()));
+    if (typed) setConfirmRemove(h);
+    else setHeadings((hs) => hs.filter((x) => x.id !== h.id));
+  }, []);
 
   const addOwnHeading = () => {
     const name = ownHeading.trim();
@@ -441,8 +466,8 @@ export function RegisterBuilder({
                       <BuilderHeadingCard
                         heading={h}
                         register={register}
-                        onChange={(next) => setHeadings((hs) => hs.map((x) => (x.id === h.id ? next : x)))}
-                        onRemove={() => toggleHeading(h.name)}
+                        onChange={updateHeading}
+                        onRemove={removeHeading}
                       />
                     </div>
                   </m.div>
@@ -457,7 +482,10 @@ export function RegisterBuilder({
 
             {error && <ErrorLine text={error} />}
 
-            <div className="sticky bottom-0 -mx-3 flex items-center gap-3 border-t bg-background/95 px-3 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:bg-card sm:px-4 sm:shadow-md">
+            {/* A plain bar, no backdrop blur: a blur under a sticky bar is redrawn on
+                every frame the page scrolls or moves behind it (70 ms of GPU on the
+                step change, traced at CPU 4x, 4 Oct 2026). */}
+            <div className="sticky bottom-0 -mx-3 flex items-center gap-3 border-t bg-background px-3 py-3 sm:mx-0 sm:rounded-xl sm:border sm:bg-card sm:px-4 sm:shadow-md">
               <span className="text-sm tabular-nums" data-builder-count>
                 <span className="font-semibold"><AnimatedNumber value={documents} decimals={0} /></span>
                 {` document${documents === 1 ? '' : 's'}`}
@@ -473,7 +501,7 @@ export function RegisterBuilder({
 
       {/* Its own boundary: a lazy dialog suspends on its first render, and
           without one the suspension reached the page's (see ExportExcelButton). */}
-      {numberingOpen && (
+      {(numberingOpen || numberingMounted) && (
         <Suspense fallback={null}>
           <NumberingDialog
             open={numberingOpen}

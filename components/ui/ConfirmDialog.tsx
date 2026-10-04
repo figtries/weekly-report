@@ -10,7 +10,14 @@ import { createPortal } from 'react-dom';
 import Spinner from '@/components/ui/Spinner';
 
 // Shared confirm dialog with the same motion language as the other modals:
-// backdrop fade + card scale-in, and a mirrored exit animation on close.
+// the app's soft card (`.dialog-soft`, rises 12px and settles on --ease-ios)
+// over a plain dark scrim (`.scrim-soft`), and the mirrored exit on close.
+//
+// NO BLUR (4 Oct 2026). The backdrop was `backdrop-blur-sm` over the whole
+// screen, and blurring everything behind it is the most expensive paint a page
+// can ask for: traced at 390px with CPU 4x, the first frame of the open took
+// 60-90 ms from the EDL builder. Export Excel dropped its blur for the same
+// reason; this dialog now opens the same way.
 export default function ConfirmDialog({
   open,
   title,
@@ -34,12 +41,13 @@ export default function ConfirmDialog({
 }) {
   // Keep mounted briefly after close so the exit animation can play.
   const [visible, setVisible] = useState(open);
+  // Opening shows it in the same render, not one effect later: an effect that
+  // set it drew a frame of nothing first (and is what the lint rule flags).
+  if (open && !visible) setVisible(true);
   useEffect(() => {
-    if (open) {
-      setVisible(true);
-      return;
-    }
-    const t = window.setTimeout(() => setVisible(false), 120);
+    if (open) return;
+    // As long as `.dialog-soft`'s exit (0.24s), so the card finishes leaving.
+    const t = window.setTimeout(() => setVisible(false), 240);
     return () => window.clearTimeout(t);
   }, [open]);
 
@@ -57,13 +65,13 @@ export default function ConfirmDialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div
-        className={`absolute inset-0 bg-black/40 backdrop-blur-sm ${open ? 'animate-fade-in' : 'animate-fade-out'}`}
+        data-state={open ? 'open' : 'closed'}
+        className="scrim-soft absolute inset-0 bg-black/40"
         onClick={() => !busy && onCancel()}
       />
       <div
-        className={`relative w-full max-w-sm rounded-2xl border bg-card p-5 shadow-xl sm:p-6 ${
-          open ? 'animate-scale-in' : 'animate-scale-out'
-        }`}
+        data-state={open ? 'open' : 'closed'}
+        className="dialog-soft relative w-full max-w-sm rounded-2xl border bg-card p-5 shadow-xl sm:p-6"
       >
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <div className="mt-1 text-sm text-muted-foreground">{message}</div>
