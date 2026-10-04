@@ -5,7 +5,7 @@ import { RouteTransition } from '@/components/motion/RouteTransition';
 import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import {
-  getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights,
+  getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getRegisterSettings, getNextLetterNumbers,
   getRegisterSources, getRegisterExisting,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
@@ -75,7 +75,9 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
       // so the transmittal dialog reads the register as it stands now.
       currentCards={getRegisterCards(projectId, 'vdrl')}
       currentObstacles={getObstacles(projectId, 'vdrl')}
-      stageWeights={getStageWeights(projectId, 'vdrl')}
+      settings={getRegisterSettings(projectId, 'vdrl')}
+      nextLetters={getNextLetterNumbers(projectId, 'vdrl')}
+      overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage)) }}
     />
     </RouteTransition>
   );

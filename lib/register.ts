@@ -608,10 +608,10 @@ export function getRegisterSettings(projectId: string, register: RegisterKind): 
     .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register)))
     .all()[0];
   const shown = rows.filter((r) => MAIN_STAGES.includes(r.stage) || r.weight > 0);
-  const stages = (shown.length ? shown : MAIN_STAGES.map((stage) => ({ stage, weight: undefined, label: null, fullName: null, color: null })))
+  const stages = (shown.length ? shown : MAIN_STAGES.map((stage) => ({ stage, weight: undefined, label: null, fullName: null, color: null, revStart: null })))
     .map((r) => {
       const d = defaultStage(r.stage, r.weight ?? undefined);
-      return { ...d, label: r.label?.trim() || d.label, name: r.fullName?.trim() || d.name, color: r.color || d.color };
+      return { ...d, label: r.label?.trim() || d.label, name: r.fullName?.trim() || d.name, color: r.color || d.color, revStart: r.revStart ?? d.revStart };
     });
   return { stages, codes: parseCodes(numbering?.codes), area: numbering?.area ?? '' };
 }

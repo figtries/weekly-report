@@ -15,6 +15,7 @@ import { recordTransmittal } from '@/lib/doc-actions';
 import { MOTION } from '@/lib/design';
 import { STAGE_LABEL, STAGE_ORDER, type DocumentCard, type Obstacle } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
+import type { RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -70,6 +71,9 @@ export default function TransmittalDialog({
   cards,
   obstacles,
   groupNames,
+  preset = null,
+  nextLetters,
+  settings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,6 +82,12 @@ export default function TransmittalDialog({
   cards: Record<string, DocumentCard[]>;
   obstacles: Obstacle[];
   groupNames: Record<string, string>;
+  /** Opened from ticked rows or a document's sheet: which way, and which documents. */
+  preset?: { direction: 'out' | 'in'; ids: string[] } | null;
+  /** The next letter number each way, continuing the register's pattern. */
+  nextLetters?: { out: string; in: string };
+  /** The register's own words for its codes. */
+  settings?: RegisterSettings;
 }) {
   const edl = register === 'edl';
   const [direction, setDirection] = useState<'out' | 'in'>('out');
@@ -89,6 +99,24 @@ export default function TransmittalDialog({
   const [codeOf, setCodeOf] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [missingCodes, setMissingCodes] = useState(false);
+
+  // Opened from ticked rows: that direction, those documents, the next letter
+  // number proposed. Applied once per opening (state adjusted during render,
+  // React's pattern for following a prop), so a second press with other rows
+  // ticked is that letter, not the last one.
+  const openKey = open ? `${preset?.direction ?? ''}:${preset?.ids.join(',') ?? ''}` : null;
+  const [appliedKey, setAppliedKey] = useState<string | null>(null);
+  if (openKey !== appliedKey) {
+    setAppliedKey(openKey);
+    if (openKey !== null) {
+      const dir = preset?.direction ?? direction;
+      if (preset) { setDirection(preset.direction); setTicked(new Set(preset.ids)); }
+      setLetter((l) => l || (nextLetters?.[dir] ?? ''));
+      setMissingCodes(false);
+    }
+  }
+  const codeName = (key: string) => settings?.codes.find((c) => c.key === key)?.label ?? key;
 
   const contentRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
@@ -139,6 +167,7 @@ export default function TransmittalDialog({
     setDirection(next);
     setTicked(new Set());
     setError(null);
+    setLetter(nextLetters?.[next] ?? '');
   };
 
   const toggle = (id: string) => setTicked((s) => {
@@ -150,10 +179,16 @@ export default function TransmittalDialog({
   const save = () => {
     setError(null);
     if (!letter.trim()) { setError('Type the letter number first.'); return; }
+    // No code is ever assumed: a reply records what the other side wrote.
+    if (direction === 'in' && rows.some((r) => ticked.has(r.card.id) && !codeOf[r.card.id])) {
+      setMissingCodes(true);
+      setError('Choose a code for every ticked document.');
+      return;
+    }
     const items = rows.filter((r) => ticked.has(r.card.id)).map((r) => ({
       documentId: r.card.id,
       stage: direction === 'out' ? (stageOf[r.card.id] ?? r.stage) : r.stage,
-      code: direction === 'in' ? (codeOf[r.card.id] ?? 'APP') : undefined,
+      code: direction === 'in' ? codeOf[r.card.id] : undefined,
     }));
     start(async () => {
       const result = await recordTransmittal({ projectId, register, direction, date, letter, items });
@@ -279,10 +314,12 @@ export default function TransmittalDialog({
                       ) : (
                         <NativeSelect
                           aria-label={`Code for ${r.card.title}`}
-                          value={codeOf[r.card.id] ?? 'APP'}
+                          value={codeOf[r.card.id] ?? ''}
                           onChange={(e) => setCodeOf((s) => ({ ...s, [r.card.id]: e.target.value }))}
+                          className={missingCodes && ticked.has(r.card.id) && !codeOf[r.card.id] ? 'border-bad text-bad' : undefined}
                         >
-                          {CODES.map((c) => <option key={c} value={c}>{c}</option>)}
+                          <option value="">Choose a code</option>
+                          {CODES.map((c) => <option key={c} value={c}>{codeName(c)}</option>)}
                         </NativeSelect>
                       )}
                     </li>

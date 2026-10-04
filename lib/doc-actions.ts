@@ -516,7 +516,7 @@ export async function saveStageWeights(input: {
 export async function saveRegisterSettings(input: {
   projectId: string;
   register: RegisterKind;
-  stages: { stage: string; weight: number; label: string; name: string; color: string }[];
+  stages: { stage: string; weight: number; label: string; name: string; color: string; revStart?: string }[];
   codes?: { key: string; label: string; meaning: string }[];
   area?: string;
 }): Promise<ActionResult> {
@@ -546,6 +546,7 @@ export async function saveRegisterSettings(input: {
             label: s.label.trim().slice(0, 12),
             fullName: s.name.trim().slice(0, 60) || null,
             color: COLOR.test(s.color) ? s.color : null,
+            ...(s.revStart !== undefined ? { revStart: s.revStart.trim().slice(0, 6) } : {}),
           })
           .where(and(
             eq(schema.docStageWeights.projectId, input.projectId),

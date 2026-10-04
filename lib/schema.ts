@@ -590,6 +590,12 @@ export const docStageWeights = sqliteTable('doc_stage_weights', {
   label: text('label'),
   fullName: text('full_name'),
   color: text('color'),
+  /**
+   * The revision a document goes out with at this stage (A for IFR, B for IFA,
+   * 0 for AFC), each resubmission one more: the project's own rule, set on
+   * Setup. A document's Rev is derived from it and its history, never typed.
+   */
+  revStart: text('rev_start'),
 }, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.register, t.stage)]);
 
 /**

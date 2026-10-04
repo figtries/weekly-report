@@ -1,0 +1,1 @@
+ALTER TABLE `doc_stage_weights` ADD `rev_start` text;
