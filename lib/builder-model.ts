@@ -149,6 +149,21 @@ export function findNode(tree: BuilderNode[], id: string): { node: BuilderNode; 
   return walk(tree, 1);
 }
 
+/** The node and every heading above it, main heading first; empty when it is not there. */
+export function pathTo(tree: BuilderNode[], id: string): BuilderNode[] {
+  for (const n of tree) {
+    if (n.id === id) return [n];
+    const below = pathTo(n.children, id);
+    if (below.length) return [n, ...below];
+  }
+  return [];
+}
+
+/** Every node in screen order with its depth, for a list that draws one row each. */
+export function flatten(tree: BuilderNode[], depth = 1): { node: BuilderNode; depth: number }[] {
+  return tree.flatMap((node) => [{ node, depth }, ...flatten(node.children, depth + 1)]);
+}
+
 /**
  * What may go inside a node. Headings while it is above the third level and
  * the register has not already filled it with documents; documents while it
