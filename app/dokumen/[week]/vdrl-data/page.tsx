@@ -6,7 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { RegisterWorkbench } from '@/components/dokumen/RegisterWorkbench';
 import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getStageWeights,
-  getRegisterSources,
+  getRegisterSources, getRegisterExisting,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -41,6 +41,10 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
     return (
       <RouteTransition id="dokumen-vdrl-data">
         <RegisterBuilder
+          // Saved headings come back as fixed rows to keep adding into: the
+          // page only becomes the workbench once a document exists.
+          key={shape.categories}
+          existing={getRegisterExisting(projectId, 'vdrl')}
           projectId={projectId}
           register="vdrl"
           clientName={parties.clientName}
@@ -61,12 +65,8 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
       register="vdrl"
       tree={getRegisterTree(projectId, 'vdrl', week)}
       cards={getRegisterCards(projectId, 'vdrl', week)}
-      obstacles={getObstacles(projectId, 'vdrl', week)}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
-      asOfDate={summary.asOfDate}
-      awaiting={summary.awaiting}
-      longestWait={summary.longestWait}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
       numbering={getNumbering(projectId, 'vdrl')}

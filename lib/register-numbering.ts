@@ -96,6 +96,17 @@ export function disciplineFor(section: string, rule?: NumberingRule): string {
   return codeFromName(section, 2);
 }
 
+/**
+ * Whether a heading NAMES a discipline (the rule's own, or one of the defaults),
+ * rather than being a band above them. Gundih files PROCESS under DETAIL
+ * ENGINEERING; the discipline code is PROCESS's, not the band's.
+ */
+export function knownDiscipline(section: string, rule?: NumberingRule): boolean {
+  if (rule?.disciplines?.[section]) return true;
+  const upper = section.toUpperCase();
+  return Object.keys(DISCIPLINE_DEFAULTS).some((name) => upper === name || upper.includes(name));
+}
+
 export function typeFor(group: string, rule?: NumberingRule): string {
   const direct = rule?.types?.[group];
   if (direct) return direct;

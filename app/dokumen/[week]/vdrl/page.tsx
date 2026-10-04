@@ -6,7 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
-  getRegisterSources,
+  getRegisterSources, getRegisterExisting,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -47,6 +47,10 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
     return (
       <RouteTransition id="dokumen-vdrl-summary">
         <RegisterBuilder
+          // Saved headings come back as fixed rows to keep adding into: the
+          // page only becomes the workbench once a document exists.
+          key={shape.categories}
+          existing={getRegisterExisting(projectId, 'vdrl')}
           projectId={projectId}
           register="vdrl"
           clientName={parties.clientName}

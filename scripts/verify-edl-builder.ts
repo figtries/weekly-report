@@ -16,7 +16,7 @@ process.env.REPORT_DB_PATH = tmp;
 
 const { db, schema, sqlite } = await import('../lib/sqlite.ts');
 const { writeDraft } = await import('../lib/register-seed.ts');
-const { getRegisterOutline, getRegisterSources, getNumbering } = await import('../lib/register.ts');
+const { getRegisterExisting, getRegisterOutline, getRegisterSources, getNumbering } = await import('../lib/register.ts');
 const { and, eq, inArray } = await import('drizzle-orm');
 
 const failures: string[] = [];
@@ -76,13 +76,17 @@ check('documents now', docs().length, 4);
 
 console.log('\nthe outline a copy starts from');
 const outline = getRegisterOutline('pdemo-merbau', 'edl');
+type Node = (typeof outline)[number];
+const all = (ns: Node[]): Node[] => ns.flatMap((n) => [n, ...all(n.children)]);
 check('Merbau headings', outline.length, 10);
-check('Merbau documents', outline.reduce((n, h) => n + h.documents.length + h.subheadings.reduce((m, s) => m + s.documents.length, 0), 0), 51);
-check('no sub-headings in a flat register', outline.every((h) => h.subheadings.length === 0), true);
-check('every kind is Doc or Dwg', outline.every((h) => h.documents.every((d) => d.kind === 'Doc' || d.kind === 'Dwg')), true);
+check('Merbau documents', all(outline).reduce((n, h) => n + h.documents.length, 0), 51);
+check('no sub-headings in a flat register', outline.every((h) => h.children.length === 0), true);
+check('every kind is Doc or Dwg', all(outline).every((h) => h.documents.every((d) => d.kind === 'Doc' || d.kind === 'Dwg')), true);
 const mine = getRegisterOutline(PROJECT, 'edl');
-check('own outline: GENERAL keeps its sub-heading', mine.find((h) => h.name === 'GENERAL')?.subheadings.map((s) => [s.name, s.documents.length]),
+check('own outline: GENERAL keeps its sub-heading', mine.find((h) => h.name === 'GENERAL')?.children.map((s) => [s.name, s.documents.length]),
   [['Execution Plan', 2]]);
+const existing = getRegisterExisting(PROJECT, 'edl');
+check('existing counts the documents under a heading', existing.find((h) => h.name === 'GENERAL')?.documents, 2);
 
 console.log('\nprojects that can be copied from');
 const sources = getRegisterSources(PROJECT, 'edl');

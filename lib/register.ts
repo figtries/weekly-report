@@ -37,7 +37,7 @@ import {
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
   type EngineeringBridge, type Movement, type WeekMovement, type RegisterSource,
 } from './register-shared';
-import { kindOf, type OutlineHeading } from './builder-model';
+import { kindOf, type ExistingNode, type OutlineNode } from './builder-model';
 import { deriveInitial } from './initial';
 import type { DocStage, RegisterKind } from './schema';
 import { detectPrefix, type NumberingRule } from './register-numbering';
@@ -1126,12 +1126,11 @@ export function getAllRegisterWeekNumbers(): number[] {
  * from (3 Oct 2026). Dates, letters and status never travel: a copy is a list
  * of what to produce, not a record of what happened on another project.
  *
- * The builder has two levels. A root category is a heading; every LEAF below
- * it becomes a sub-heading named by itself, so a three-level register
- * (A GENERAL > A.2 PROCEDURE > A.2.1 General Procedure) arrives as GENERAL with
- * a sub-heading "General Procedure", which is the level people file under.
+ * The whole tree, at the depth it was written in (4 Oct 2026): the builder is
+ * one outline now, so a three-level register (A GENERAL > A.2 PROCEDURE >
+ * A.2.1 General Procedure) arrives as the three levels it is.
  */
-export function getRegisterOutline(projectId: string, register: RegisterKind): OutlineHeading[] {
+export function getRegisterOutline(projectId: string, register: RegisterKind): OutlineNode[] {
   const categories = db.select().from(schema.docCategories)
     .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
     .all().sort((a, b) => a.order - b.order);
@@ -1139,24 +1138,31 @@ export function getRegisterOutline(projectId: string, register: RegisterKind): O
     .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
     .all().sort((a, b) => a.order - b.order);
 
-  const children = new Map<string, typeof categories>();
+  const children = new Map<string | null, typeof categories>();
   for (const c of categories) {
-    if (!c.parentId) continue;
-    const list = children.get(c.parentId) ?? [];
+    const list = children.get(c.parentId ?? null) ?? [];
     list.push(c);
-    children.set(c.parentId, list);
+    children.set(c.parentId ?? null, list);
   }
-  const docsOf = (categoryId: string) => documents
-    .filter((d) => d.categoryId === categoryId)
-    .map((d) => ({ title: d.title, kind: kindOf(d.kind) }));
-  const leavesUnder = (id: string): typeof categories =>
-    (children.get(id) ?? []).flatMap((c) => ((children.get(c.id)?.length ?? 0) > 0 ? leavesUnder(c.id) : [c]));
+  const node = (c: (typeof categories)[number]): OutlineNode => ({
+    name: c.name,
+    documents: documents.filter((d) => d.categoryId === c.id).map((d) => ({ title: d.title, kind: kindOf(d.kind) })),
+    children: (children.get(c.id) ?? []).map(node),
+  });
+  return (children.get(null) ?? []).map(node);
+}
 
-  return categories.filter((c) => !c.parentId).map((root) => ({
-    name: root.name,
-    documents: docsOf(root.id),
-    subheadings: leavesUnder(root.id).map((leaf) => ({ name: leaf.name, documents: docsOf(leaf.id) })),
-  }));
+/**
+ * What a register already holds, for the builder to add into: every heading
+ * with the documents under it counted. Read from the categories, not from the
+ * figures, so a register of headings with no document yet still has a shape.
+ */
+export function getRegisterExisting(projectId: string, register: RegisterKind): ExistingNode[] {
+  const map = (n: OutlineNode): ExistingNode => {
+    const children = n.children.map(map);
+    return { name: n.name, documents: n.documents.length + children.reduce((sum, c) => sum + c.documents, 0), children };
+  };
+  return getRegisterOutline(projectId, register).map(map);
 }
 
 /** Every OTHER project with something in this register, to copy from. */

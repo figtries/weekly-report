@@ -18,12 +18,12 @@ import { DURATION, EASE } from '@/components/motion/Reveal';
 import {
   STAGE_LABEL, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
+import type { ExistingNode } from '@/lib/builder-model';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import type { NumberingRule } from '@/lib/register-numbering';
 import { cn } from '@/lib/utils';
 
 import { DocumentEditor } from './DocumentEditor';
-import { OutstandingBlock } from './OutstandingBlock';
 import { StageWeightsCard } from './StageWeightsCard';
 import { verdict } from './verdict';
 import { RegisterTools } from './RegisterTools';
@@ -48,10 +48,11 @@ const CategoryDialog = dynamic(() => import('./CategoryDialog').then((m) => m.Ca
  * every row and on both summary screens are computed from them.
  *
  * **The right-hand column is never empty.** It used to hold a dashed box
- * saying "Pick a group to start" until you clicked something, which on a wide
- * screen left most of the workbench doing no work at all. It now opens on
- * the outstanding card (the summary's own, opening rows in place) and every row jumps into
- * the group it belongs to with that document already open.
+ * saying "Pick a group to start" until you clicked something. It then opened
+ * on the outstanding card ("What has to go out"), until 4 Oct 2026, when the
+ * user asked for Data to be purely where the register is worked on: what has
+ * to go out is the Summary's to say, and says it there. With nothing picked, a
+ * wide screen now shows the first group (the first that matches a search).
  */
 
 type NumberingProps = { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
@@ -135,12 +136,8 @@ export function RegisterWorkbench({
   register,
   tree,
   cards,
-  obstacles,
   totalDocuments,
   weekNo,
-  asOfDate,
-  awaiting,
-  longestWait,
   clientName,
   contractorName,
   numbering,
@@ -153,16 +150,9 @@ export function RegisterWorkbench({
   register: RegisterKind;
   tree: RegisterNode[];
   cards: Record<string, DocumentCard[]>;
-  /** Everything stuck, ranked. Feeds the right column before anything is picked. */
-  obstacles: Obstacle[];
   totalDocuments: number;
   /** The week being reported. Every figure below is as it stood at its end. */
   weekNo: number;
-  /** That week's last day, for the outstanding card's "due by". */
-  asOfDate: string;
-  /** Documents with the other side, and the longest of those waits. */
-  awaiting: number;
-  longestWait: number | null;
   /** Passed straight back on import so a file cannot blank them. */
   clientName: string;
   contractorName: string;
@@ -232,9 +222,6 @@ export function RegisterWorkbench({
     | { mode: 'rename'; id: string; name: string }
     | null
   >(null);
-  // Phones have no empty right-hand column to fill, so the worklist is a place
-  // you go rather than a place you land. Desktop never reads this.
-  const [mobileWorklist, setMobileWorklist] = useState(false);
 
   /**
    * Numbers used more than once. The register accepts them — real ones are like
@@ -250,14 +237,12 @@ export function RegisterWorkbench({
   }, [cards]);
 
   const selected = groups.find((g) => g.id === selectedId) ?? null;
-  const outstanding = obstacles.filter((o) => o.kind !== 'untouched').length;
   const q = query.trim().toLowerCase();
 
-  /** One row in the worklist opens both halves of the screen at once. */
-  const openFromWorklist = (categoryId: string, documentId: string) => {
+  /** Opens a document in its group: both halves of the screen at once. */
+  const openDocument = (categoryId: string, documentId: string) => {
     setSelectedId(categoryId);
     setOpenDoc(documentId);
-    setMobileWorklist(false);
   };
 
   /**
@@ -275,7 +260,7 @@ export function RegisterWorkbench({
     // would leave the second (the one that stays) with nothing to open.
     const frame = requestAnimationFrame(() => {
       const card = Object.values(cards).flat().find((d) => d.id === id);
-      if (card) openFromWorklist(card.categoryId, card.id);
+      if (card) openDocument(card.categoryId, card.id);
       const url = new URL(window.location.href);
       url.searchParams.delete('doc');
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
@@ -327,26 +312,25 @@ export function RegisterWorkbench({
     [groups, cards, q],
   );
 
+  // What the right column shows. Nothing picked: the first group that matches,
+  // on a wide screen only (below lg the column is hidden until a group is
+  // pressed, so a phone still lands on the list of groups).
+  const current = selected ?? matchingGroups[0] ?? null;
+
   const shown = useMemo(() => {
-    const list = selected ? cards[selected.id] ?? [] : [];
+    const list = current ? cards[current.id] ?? [] : [];
     if (q === '') return list;
     return list.filter((d) =>
       (d.docNo ?? '').toLowerCase().includes(q) || d.title.toLowerCase().includes(q));
-  }, [selected, cards, q]);
+  }, [current, cards, q]);
 
-  // The column shows the group list unless a group is open, or unless a phone
-  // has gone looking at the worklist.
-  const columnHidden = selected !== null || mobileWorklist;
+  // The column shows the group list unless a group is open.
+  const columnHidden = selected !== null;
 
-  /**
-   * What this register already holds, as the builder's headings: each root,
-   * how many documents sit under it, and the leaves below it, so additions
-   * land in the headings and sub-headings that exist instead of beside them.
-   */
+  /** What this register already holds, as the builder's outline, so additions land inside it. */
   const existing = useMemo(() => {
-    const leaves = (n: RegisterNode): string[] =>
-      n.children.flatMap((c) => (c.children.length > 0 ? leaves(c) : [c.name]));
-    return tree.map((root) => ({ name: root.name, documents: root.documents, subheadings: leaves(root) }));
+    const map = (n: RegisterNode): ExistingNode => ({ name: n.name, documents: n.documents, children: n.children.map(map) });
+    return tree.map(map);
   }, [tree]);
 
   const tools = (
@@ -436,20 +420,6 @@ export function RegisterWorkbench({
           />
         </div>
 
-        {/* Phones only. On a wide screen the worklist is already open to the
-            right of this column, and a band pointing at it would be furniture. */}
-        {outstanding > 0 && (
-          <button
-            type="button"
-            onClick={() => setMobileWorklist(true)}
-            className="flex min-h-12 items-center gap-2.5 rounded-xl border bg-card px-3.5 text-left transition-colors duration-300 ease-ios active:bg-muted lg:hidden"
-          >
-            <span className="flex-1 text-sm font-semibold">What has to go out</span>
-            <span className="text-sm tabular-nums text-muted-foreground">{outstanding}</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
-        )}
-
         {/* Only the groups scroll. Search stays put, because a picker whose
             search box scrolls away is a picker you have to scroll back up to
             use. `scrollbar-none` matches the app's own scroller — the classic
@@ -489,7 +459,11 @@ export function RegisterWorkbench({
                     'w-full rounded-xl border px-3.5 py-3 text-left transition-colors duration-300 ease-ios',
                     selectedId === g.id
                       ? 'border-foreground/20 bg-muted'
-                      : 'border-transparent bg-card hover:bg-muted/60',
+                      : selectedId === null && current?.id === g.id
+                        // The group the right column shows when nothing is picked:
+                        // marked on a wide screen only, where that column exists.
+                        ? 'border-transparent bg-card hover:bg-muted/60 lg:border-foreground/20 lg:bg-muted'
+                        : 'border-transparent bg-card hover:bg-muted/60',
                   )}
                 >
                   {/* Three rows, one fact each. They used to be two, with the
@@ -561,28 +535,8 @@ export function RegisterWorkbench({
           columnHidden ? 'block' : 'hidden lg:block',
         )}
       >
-        {!selected ? (
-          <div className="flex flex-col gap-3">
-            {mobileWorklist && (
-              <Button
-                variant="ghost"
-                className="h-11 w-fit px-2 lg:hidden"
-                onClick={() => setMobileWorklist(false)}
-              >
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> Groups
-              </Button>
-            )}
-            <OutstandingBlock
-              obstacles={obstacles}
-              register={register}
-              week={weekNo}
-              asOfDate={asOfDate}
-              awaiting={awaiting}
-              longestWait={longestWait}
-              query={query}
-              onOpen={openFromWorklist}
-            />
-          </div>
+        {!current ? (
+          <p className="px-1 py-8 text-center text-sm text-muted-foreground">No match.</p>
         ) : (
           <div className="flex flex-col gap-4">
             {/* ------------------------------------------- the group's header */}
@@ -602,9 +556,9 @@ export function RegisterWorkbench({
                 </Button>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                    {selected.packageName} · week {weekNo}
+                    {current.packageName} · week {weekNo}
                   </p>
-                  <h2 className="mt-0.5 text-lg font-semibold leading-tight">{selected.name}</h2>
+                  <h2 className="mt-0.5 text-lg font-semibold leading-tight">{current.name}</h2>
                 </div>
                 <Button variant="outline" className="h-11 shrink-0" onClick={() => setAdding(true)}>
                   <FilePlus2 className="mr-1.5 h-4 w-4" /> Add
@@ -625,14 +579,14 @@ export function RegisterWorkbench({
                   <DropdownMenuContent>
                     <DropdownMenuItem
                       onSelect={() => setCategoryDialog({
-                        mode: 'rename', id: selected.id, name: selected.name,
+                        mode: 'rename', id: current.id, name: current.name,
                       })}
                     >
                       Rename group
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={() => setCategoryDialog({
-                        mode: 'add', parentId: selected.id, parentName: selected.name,
+                        mode: 'add', parentId: current.id, parentName: current.name,
                       })}
                     >
                       Add group inside
@@ -640,49 +594,49 @@ export function RegisterWorkbench({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       variant="destructive"
-                      disabled={selected.node.documents > 0}
+                      disabled={current.node.documents > 0}
                       onSelect={async () => {
                         const result = await deleteCategory({
-                          projectId, register, categoryId: selected.id,
+                          projectId, register, categoryId: current.id,
                         });
                         if (result.ok) { setSelectedId(null); setOpenDoc(null); }
                       }}
                     >
-                      {selected.node.documents > 0 ? 'Delete group: empty it first' : 'Delete group'}
+                      {current.node.documents > 0 ? 'Delete group: empty it first' : 'Delete group'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
 
               <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
-                <Figure label="actual" value={selected.node.actual} className="text-blue-600" />
-                {selected.node.plan !== null && (
-                  <Figure label="plan" value={selected.node.plan} className="text-red-500" />
+                <Figure label="actual" value={current.node.actual} className="text-blue-600" />
+                {current.node.plan !== null && (
+                  <Figure label="plan" value={current.node.plan} className="text-red-500" />
                 )}
                 {/* Beside the figures, not flung to the far edge. `ml-auto`
                     pushed these to the right margin and left a hole across the
                     middle of the card at any width above a phone; read as one
                     line they are a sentence about the same group. */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {selected.node.plan !== null && (() => {
-                    const v = verdict(selected.node.actual, selected.node.plan);
+                  {current.node.plan !== null && (() => {
+                    const v = verdict(current.node.actual, current.node.plan);
                     return (
                       <span className={cn('rounded-md px-2 py-0.5 text-xs font-medium tabular-nums', v.chip)}>
                         {v.label}
                       </span>
                     );
                   })()}
-                  <OpenChips node={selected.node} size="md" />
+                  <OpenChips node={current.node} size="md" />
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {selected.node.documents} document{selected.node.documents === 1 ? '' : 's'}
+                    {current.node.documents} document{current.node.documents === 1 ? '' : 's'}
                   </span>
                 </div>
               </div>
 
               <Bar
                 className="mt-3"
-                actual={selected.node.actual}
-                plan={selected.node.plan}
+                actual={current.node.actual}
+                plan={current.node.plan}
                 grow
               />
             </div>
@@ -827,14 +781,14 @@ export function RegisterWorkbench({
         </Suspense>
       )}
 
-      {adding && selected && (
+      {adding && current && (
         <AddDocumentDialog
           open
           onOpenChange={setAdding}
           projectId={projectId}
           register={register}
-          categoryId={selected.id}
-          categoryName={selected.name}
+          categoryId={current.id}
+          categoryName={current.name}
         />
       )}
     </div>
