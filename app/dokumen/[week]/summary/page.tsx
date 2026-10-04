@@ -6,7 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
-  getRegisterSources, getRegisterExisting,
+  getRegisterSources, getRegisterExisting, getRegisterSettings,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -89,6 +89,9 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
       movement={getWeekMovement(projectId, 'edl', week)}
       bridge={getEngineeringBridge(projectId, week)}
       groupsTitle="By discipline"
+      settings={getRegisterSettings(projectId, 'edl')}
+      otherName={getRegisterParties(projectId).clientName}
+      week={week}
     />
     </RouteTransition>
   );

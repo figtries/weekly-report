@@ -1,225 +1,37 @@
-import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import Link from 'next/link';
-import { ArrowRight, TriangleAlert } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Reveal } from '@/components/motion/Reveal';
-import { CountUp } from '@/components/motion/CountUp';
 import { RegisterCurve } from '@/components/dokumen/RegisterCurve';
-import { OutstandingBlock } from '@/components/dokumen/OutstandingBlock';
-import { r1, verdict } from '@/components/dokumen/verdict';
-import {
-  STAGE_FULL, STAGE_LABEL,
-  type EngineeringBridge, type Obstacle, type RegisterNode, type RegisterSummary,
-  type WeekMovement,
-} from '@/lib/register';
+import { verdict } from '@/components/dokumen/verdict';
+import type {
+  EngineeringBridge, Obstacle, RegisterNode, RegisterSummary, WeekMovement,
+} from '@/lib/register-shared';
+import { CODE_TONE, DEFAULT_SETTINGS, codeLabel, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
 
 /**
- * The register in four blocks: where it stands, what is outstanding, each
- * discipline, and the week.
+ * A register's week on one screen (4 Oct 2026, variant A of the mockups,
+ * "Ledger", with the touch of luxury the user asked for: stronger type, and
+ * room between the grey and the black line of every outstanding row).
  *
- * Two rules hold the whole screen together.
+ * Top to bottom, the order a weekly meeting reads it in: where it stands (the
+ * figure, each stage, the week's letters), how it got there (the curve beside
+ * the disciplines, most behind first), and what has to happen next (Needs
+ * action: what is ours to send, what the other side has had too long). Every
+ * row there is a link straight into the document on Data.
  *
- * **ACTUAL IS BLUE, PLAN IS RED, AND BOTH ARE ALWAYS DRAWN.** The convention
- * comes from `SCurveClient` — `#3b82f6` and `#ef4444` — and a reader who
- * learned it on the S-curve must not relearn it here. Each gets its own track:
- * concentric arcs in the ring, stacked bars in the meter. A one-pixel plan
- * marker encoded the same fact and nobody could see it; painting the two on one
- * track made the plan vanish outright whenever the work ran ahead of it.
- *
- * **The screen shows, it does not lecture.** An earlier pass gave every block a
- * paragraph of explanation and every count a sentence of its own; together they
- * buried the figures they were meant to introduce. Labels are two or three
- * words, each number is stated exactly once, and anything a chart already shows
- * is not also written out.
- *
- * One shape serves both registers. The EDL has promised dates, so it has a plan
- * and a shortfall; the VDRL has none — no vendor gave one — so it shows no red
- * anywhere rather than inventing a baseline to draw.
+ * The stage names and colours are the register's own (Setup). No percentage
+ * is computed here: every figure comes from lib/register.ts.
  */
 
-const longDate = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-  });
-
-const shortDate = (iso: string | null) =>
-  iso
-    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC',
-      })
-    : '—';
-
-const signed = (n: number, decimals = 1) =>
-  `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(decimals)}`;
-
+const r1 = (n: number) => Math.round(n * 10) / 10;
 const clamp = (n: number) => Math.min(100, Math.max(0, n));
+const fmt = (iso: string | null) =>
+  iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
 
-/** Full within rounding — the curve lands exactly on 1.0, so 99.995 is 100. */
-const isFull = (n: number) => n >= 99.995;
+const card = 'rounded-2xl bg-card shadow-[0_0_0_1px_rgba(16,24,40,.05),0_1px_2px_rgba(16,24,40,.06)]';
+const title = 'text-[15px] font-bold tracking-tight text-foreground';
 
-/**
- * The verdict palette: what a chip says, never what a bar is painted.
- *
- * Two colour jobs run side by side and mixing them is what makes a chart
- * unreadable. A chip answers "is this all right?" in the weekly report's own
- * tinted pairs. A bar answers "how far, against what was promised?" in blue and
- * red. A bar coloured by verdict cannot also say where the plan is, so bars are
- * never coloured by trend. Written out because Tailwind reads files as text.
- */
-const MOVEMENT = {
-  submitted: { label: 'Sent out', chip: 'bg-blue-100 text-blue-700' },
-  returned: { label: 'Returned', chip: 'bg-red-100 text-red-700' },
-  approved: { label: 'Approved', chip: 'bg-emerald-100 text-emerald-700' },
-} as const;
-
-const NAMES_SHOWN = 10;
-
-/* ------------------------------------------------------------ primitives */
-
-/**
- * The ring: two concentric arcs, actual inside and plan outside.
- *
- * They were stacked on one radius at first — red to the plan, blue painted over
- * it — which drew the shortfall beautifully and then vanished the moment the
- * work ran ahead of plan, because blue simply covered every pixel of red. A
- * baseline that disappears exactly when you are winning is not a baseline. On
- * two radii both are always visible and the comparison is the arc lengths.
- *
- * Hand-drawn rather than a charting library: it is two arcs, it has to take the
- * app's own blue and red, and its stroke must not be tweened — framer-motion
- * implements `pathLength` with stroke-dasharray and would fight the dash offset
- * the arcs are made of.
- */
-function Ring({ actual, plan }: { actual: number; plan: number | null }) {
-  const arc = (r: number, pct: number) => {
-    const c = 2 * Math.PI * r;
-    return { strokeDasharray: c, strokeDashoffset: c * (1 - clamp(pct) / 100) };
-  };
-  const ACTUAL_R = 44;
-  const PLAN_R = 58;
-
-  return (
-    <div className="relative flex shrink-0 items-center justify-center">
-      <svg viewBox="0 0 128 128" className="h-40 w-40 -rotate-90" aria-hidden>
-        {plan !== null && (
-          <>
-            <circle cx="64" cy="64" r={PLAN_R} fill="none" strokeWidth="6" className="stroke-muted" />
-            <circle
-              cx="64" cy="64" r={PLAN_R} fill="none" strokeWidth="6" strokeLinecap="round"
-              className="stroke-red-500" {...arc(PLAN_R, plan)}
-            />
-          </>
-        )}
-        <circle cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" className="stroke-muted" />
-        {/* ONLY THE ACTUAL SWEEPS. The plan ring above stands still, which is
-            the same call the hero gauge in WbsTreeVisual makes and for the same
-            reason: standing still it states the target first, and the actual
-            then runs at it and stops short, so the shortfall is something you
-            watch happen rather than a gap you find afterwards. Sweeping both
-            would race them, and on a week that is behind, the one thing worth
-            seeing is exactly the distance between the two.
-
-            `--ring-c` is the circumference the keyframe counts back from; the
-            offset in the markup is already the true one. */}
-        <circle
-          cx="64" cy="64" r={ACTUAL_R} fill="none" strokeWidth="13" strokeLinecap="round"
-          className="animate-ring-draw stroke-blue-500"
-          style={{ '--ring-c': 2 * Math.PI * ACTUAL_R } as React.CSSProperties}
-          {...arc(ACTUAL_R, actual)}
-        />
-      </svg>
-      <div className="absolute flex flex-col items-center">
-        <span className="text-2xl font-semibold leading-none tracking-tight text-blue-600">
-          <CountUp value={actual} decimals={1} />
-        </span>
-        <span className="mt-1 text-[0.6rem] font-medium uppercase tracking-wider text-muted-foreground">
-          done
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The ring laid flat: actual above, plan on its own track below.
- *
- * Two tracks for the same reason the ring has two radii — one track hides the
- * plan completely whenever the work is ahead of it. Same left edge and same
- * scale, so the two ends can be read against each other at a glance.
- */
-function Meter({ actual, plan, delay = 0 }: { actual: number; plan?: number | null; delay?: number }) {
-  return (
-    <div className="flex w-full flex-col gap-1">
-      {/* Both tracks grow, the plan a beat behind the actual, so the gap between
-          the two ends is something you watch open rather than a difference you
-          have to go looking for. The widths in the markup are already the real
-          ones — the keyframe only scales X — so nothing here depends on the
-          bundle arriving. */}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <span
-          className="block h-full animate-bar-grow rounded-full bg-blue-500"
-          style={{ width: `${clamp(actual)}%`, animationDelay: delay ? `${delay}s` : undefined }}
-        />
-      </div>
-      {plan != null && (
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <span
-            className="block h-full animate-bar-grow rounded-full bg-red-500"
-            style={{ width: `${clamp(plan)}%`, animationDelay: `${delay + 0.12}s` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Blue key, red key. Two words each — the numbers live elsewhere. */
-function Key({ hasPlan }: { hasPlan: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-      <span className="flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-full bg-blue-500" />
-        <span className="font-medium text-blue-600">Actual</span>
-      </span>
-      {hasPlan && (
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          <span className="font-medium text-red-600">Plan</span>
-        </span>
-      )}
-    </div>
-  );
-}
-
-function BlockHeading({ step, title, aside, extra }: {
-  step: string; title: string; aside?: string; extra?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-semibold tabular-nums text-secondary-foreground">
-        {step}
-      </span>
-      <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-      {aside && <span className="text-sm text-muted-foreground">{aside}</span>}
-      {extra}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- screen */
-
-/**
- * Four blocks since 3 Oct 2026, tidied with the user from a screen they liked
- * the look of and found crowded: where it stands, what is outstanding, each
- * discipline, the week. Gone: the stat strip (documents, disciplines, still
- * open), the "Against plan" box (its verdict was wrong and its figure is now
- * the line under the ring), "As at" (the register's last entry, not the week
- * being viewed), the six-event list (the Log tab has them) and the stage
- * weights (a contract setting, now on the Data screen).
- */
 export function SummaryScreen({
   summary,
   groups,
@@ -227,373 +39,259 @@ export function SummaryScreen({
   movement,
   bridge,
   groupsTitle,
-  /** Vendor packages get folded by status; six disciplines do not need it. */
-  foldEmptyGroups = false,
+  settings = DEFAULT_SETTINGS,
+  otherName,
+  week,
 }: {
   summary: RegisterSummary;
   groups: RegisterNode[];
   obstacles: Obstacle[];
   movement: WeekMovement | null;
-  /** The seam to the weekly report. EDL only — the VDRL feeds no WBS leaf. */
+  /** The seam to the weekly report. EDL only. */
   bridge?: EngineeringBridge | null;
   groupsTitle: string;
+  /** Kept for the VDRL page's call; the table sorts the same way for both. */
   foldEmptyGroups?: boolean;
+  settings?: RegisterSettings;
+  /** The client's (EDL) or vendors' (VDRL) name, from the project. */
+  otherName?: string;
+  week: number;
 }) {
-  const isEdl = summary.register === 'edl';
-  const stale = summary.evidenceWeek < summary.asOfWeek;
+  const edl = summary.register === 'edl';
+  const dataHref = `/dokumen/${week}/${edl ? 'data' : 'vdrl-data'}`;
   const hasPlan = summary.plan !== null;
-
-  // Taken between the printed figures, so the line adds up on a calculator.
-  const previous = summary.actual - summary.thisWeek;
-  const gained = r1(r1(summary.actual) - r1(previous));
   const against = hasPlan ? verdict(summary.actual, summary.plan!) : null;
+  const stale = summary.evidenceWeek < summary.asOfWeek;
+  const other = otherName?.trim() || (edl ? 'the client' : 'vendors');
 
-  // Most behind first: the discipline that needs a push is the first one read.
-  // A discipline with no planned dates has nothing to be behind, so it goes last.
-  const ranked = foldEmptyGroups
-    ? groups
-    : [...groups].sort((a, b) => {
-      if (a.plan === null || b.plan === null) return (a.plan === null ? 1 : 0) - (b.plan === null ? 1 : 0);
-      return verdict(a.actual, a.plan).diff - verdict(b.actual, b.plan).diff;
-    });
-  const moving = foldEmptyGroups ? groups.filter((g) => g.actual > 0 && !isFull(g.actual)) : ranked;
-  const done = foldEmptyGroups ? groups.filter((g) => isFull(g.actual)) : [];
-  const idle = foldEmptyGroups ? groups.filter((g) => g.actual === 0) : [];
+  const ranked = [...groups].sort((a, b) => {
+    if (a.plan === null || b.plan === null) return (a.plan === null ? 1 : 0) - (b.plan === null ? 1 : 0) || a.actual - b.actual;
+    return verdict(a.actual, a.plan).diff - verdict(b.actual, b.plan).diff;
+  });
 
-  const moved = movement ? movement.submitted + movement.returned + movement.approved : 0;
+  const ours = obstacles.filter((o) => o.kind === 'late' || o.kind === 'comments' || o.kind === 'soon');
+  const theirs = obstacles.filter((o) => o.kind === 'waiting');
+  const stages = summary.stages.filter((s) => ['IFR', 'IFA', 'AFC'].includes(s.stage));
+  // The table is narrow on a phone and again as the half-width card below xl:
+  // there it drops the count and the bars and says the count under the name.
+  const cols = hasPlan
+    ? 'grid-cols-[minmax(0,1fr)_3rem_3rem_3.25rem] sm:grid-cols-[minmax(0,1fr)_2.5rem_4.5rem_3.5rem_3.5rem_3.5rem] lg:grid-cols-[minmax(0,1fr)_3rem_3rem_3.25rem] xl:grid-cols-[minmax(0,1fr)_2.5rem_4.5rem_3.5rem_3.5rem_3.5rem]'
+    : 'grid-cols-[minmax(0,1fr)_3.5rem] sm:grid-cols-[minmax(0,1fr)_2.5rem_5rem_3.5rem] lg:grid-cols-[minmax(0,1fr)_3.5rem] xl:grid-cols-[minmax(0,1fr)_2.5rem_5rem_3.5rem]';
+  const wide = 'max-sm:hidden lg:max-xl:hidden';
+  const narrow = 'sm:max-lg:hidden xl:hidden';
 
   return (
-    <div className="pb-4">
-      {stale && (
-        <Reveal>
-          <Card className="py-0 border-amber-200 bg-amber-50 shadow-none">
-            <CardContent className="flex items-center gap-3 p-4 text-sm text-amber-900">
-              <TriangleAlert className="h-4 w-4 shrink-0" />
-              <p>
-                <span className="font-semibold">
-                  Nothing filed since week {summary.evidenceWeek}
-                </span>{' '}
-                ({longDate(summary.evidenceDate)}). You are viewing week {summary.asOfWeek}.
-              </p>
-            </CardContent>
-          </Card>
-        </Reveal>
-      )}
-
-      {/* ============================================ 1 · where it stands */}
-      <section className={cn(stale && 'mt-4')}>
-        <Reveal>
-          <BlockHeading step="1" title="Where it stands" />
-        </Reveal>
-
-        <Reveal delay={0.04}>
-          <Card className="py-0 overflow-hidden shadow-sm">
-            <CardContent className="flex flex-col divide-y p-0 lg:flex-row lg:divide-x lg:divide-y-0">
-              <div className="flex flex-col items-center gap-4 p-5 sm:p-6 lg:w-[42%]">
-                <span className="self-start text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
-                  {isEdl ? 'Engineering documents' : 'Vendor documents'}
-                </span>
-                <Ring actual={summary.actual} plan={summary.plan} />
-                <Key hasPlan={hasPlan} />
-                <p className="text-center text-sm tabular-nums">
-                  {against ? (
-                    <>
-                      <span className="text-red-600">Plan {summary.plan!.toFixed(1)}%</span>
-                      <span className="text-muted-foreground"> · </span>
-                      <span className={cn('font-semibold', against.diff < 0 ? 'text-red-600' : against.diff > 0 ? 'text-emerald-600' : '')}>
-                        {against.label}
-                      </span>
-                      <span className="text-muted-foreground"> · </span>
-                    </>
-                  ) : null}
-                  <span className="font-semibold text-blue-600">{signed(gained)}</span> this week
-                  {!hasPlan && (
-                    <>
-                      <span className="text-muted-foreground"> · </span>
-                      {summary.untouched} of {summary.documents} never sent
-                    </>
-                  )}
-                </p>
-              </div>
-
-              {/* flex-1 so the three bars spread down the zone instead of
-                  stacking at the top and leaving a tail of empty card. */}
-              <div className="flex flex-1 flex-col justify-between gap-3.5 p-5 sm:p-6">
-                <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">
-                  How far they have got
-                </p>
-                {summary.stages.map((s, i) => (
-                  <div key={s.stage} className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                      <span className="font-medium">
-                        {STAGE_FULL[s.stage]}
-                        <span className="ml-1.5 font-mono text-xs font-normal text-muted-foreground">
-                          {STAGE_LABEL[s.stage]}
-                        </span>
-                      </span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {s.reached} of {summary.documents}
-                      </span>
-                    </div>
-                    {/* IFR, then IFA, then AFC, a tenth of a second apart, so
-                        the three read as one sweep down the stages. */}
-                    <Meter actual={(s.reached / summary.documents) * 100} delay={i * 0.1} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </Reveal>
-
-        {bridge && <EngineeringSeam bridge={bridge} />}
-      </section>
-
-      {/* ============================================== 2 · outstanding */}
-      <section className="mt-10">
-        <Reveal delay={0.08}>
-          <BlockHeading step="2" title="Outstanding" />
-        </Reveal>
-        <Reveal delay={0.12}>
-          <OutstandingBlock
-            obstacles={obstacles}
-            register={summary.register}
-            week={summary.asOfWeek}
-            asOfDate={summary.asOfDate}
-            awaiting={summary.awaiting}
-            longestWait={summary.longestWait}
-          />
-        </Reveal>
-      </section>
-
-      {/* ============================================ 3 · by discipline */}
-      <ScrollReveal>
-      <section className="mt-10">
-        <Reveal delay={0.06}>
-          <BlockHeading
-            step="3"
-            title={groupsTitle}
-            extra={foldEmptyGroups ? (
-              <>
-                <Badge variant="secondary" className="font-normal">{moving.length} under way</Badge>
-                <Badge variant="secondary" className="font-normal">{idle.length} not started</Badge>
-                {done.length > 0 && (
-                  <Badge variant="secondary" className="font-normal">{done.length} complete</Badge>
-                )}
-              </>
-            ) : hasPlan ? (
-              <span className="text-sm text-muted-foreground">Most behind first</span>
-            ) : null}
-          />
-        </Reveal>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {moving.map((g, i) => (
-            <Reveal key={g.id} delay={0.1 + Math.min(i, 8) * 0.02}>
-              <GroupCard group={g} />
-            </Reveal>
-          ))}
+    <div className="flex flex-col gap-4 pb-6">
+      {/* ------------------------------------------------- where it stands */}
+      <section className={cn(card, 'grid grid-cols-3 overflow-hidden lg:grid-cols-[1.35fr_1fr_1fr_1fr_1.35fr]')}>
+        <div className="col-span-3 flex flex-col justify-center gap-1.5 border-b border-border/70 p-5 lg:col-span-1 lg:border-b-0 lg:border-r">
+          <span className="text-[13px] font-semibold text-foreground/80">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+            <span className="text-[40px] font-semibold leading-none tracking-[-0.03em] text-foreground tabular-nums">
+              {r1(summary.actual).toFixed(1)}<span className="ml-0.5 text-xl font-medium text-muted-foreground">%</span>
+            </span>
+            {against && (
+              <span className={cn('mb-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
+                {against.diff > 0 ? `+${against.diff.toFixed(1)} pts ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} pts behind`}
+              </span>
+            )}
+          </div>
+          <span className="text-[13px] text-foreground/75 tabular-nums">
+            {hasPlan && <>Plan <b className="font-semibold text-foreground">{r1(summary.plan!).toFixed(1)}%</b> · </>}
+            <b className="font-semibold text-foreground">{summary.documents}</b> documents
+          </span>
+          {stale && (
+            <span className="w-fit rounded-full bg-warn-soft px-2.5 py-0.5 text-xs font-medium text-warn">
+              Nothing recorded since week {summary.evidenceWeek}
+            </span>
+          )}
         </div>
-
-        {idle.length > 0 && (
-          <Reveal delay={0.2}>
-            <Card className="py-0 mt-3 border-dashed shadow-none">
-              <CardContent className="flex flex-col gap-3 p-5">
-                <p className="text-sm font-semibold">
-                  {idle.length} packages have sent nothing:{' '}
-                  {idle.reduce((a, g) => a + g.documents, 0)} documents owed
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {idle.slice(0, NAMES_SHOWN).map((g) => (
-                    <Badge key={g.id} variant="secondary" className="max-w-full font-normal">
-                      <span className="truncate">{g.name}</span>
-                      <span className="ml-1.5 shrink-0 tabular-nums text-muted-foreground">
-                        {g.documents}
-                      </span>
-                    </Badge>
-                  ))}
-                  {idle.length > NAMES_SHOWN && (
-                    <Badge variant="outline" className="font-normal">
-                      +{idle.length - NAMES_SHOWN} more
-                    </Badge>
-                  )}
+        {stages.map((s, i) => {
+          const st = stageOf(settings, s.stage);
+          const pct = summary.documents ? (s.reached / summary.documents) * 100 : 0;
+          return (
+            <div key={s.stage} className={cn('flex min-w-0 flex-col justify-between gap-2 border-b border-r border-border/70 p-3.5 sm:p-5 lg:border-b-0', i === stages.length - 1 && 'max-lg:border-r-0')}>
+              <div className="min-w-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <b className="text-[13px] font-semibold text-foreground">{st.label}</b>
+                  <span className="text-[13px] font-medium text-foreground/70 tabular-nums">{pct.toFixed(1)}%</span>
                 </div>
-              </CardContent>
-            </Card>
-          </Reveal>
-        )}
-      </section>
-      </ScrollReveal>
-
-      {/* =================================================== 4 · the week */}
-      <ScrollReveal>
-      <section className="mt-10">
-        <Reveal delay={0.06}>
-          <BlockHeading
-            step="4"
-            title={`Week ${summary.asOfWeek}`}
-            aside={movement ? `${shortDate(movement.startDate)} – ${shortDate(movement.endDate)}` : undefined}
-          />
-        </Reveal>
-
-        {movement && moved > 0 ? (
-          <div className="grid grid-cols-3 gap-3">
-            {(['submitted', 'returned', 'approved'] as const).map((kind, i) => (
-              <Reveal key={kind} delay={0.1 + i * 0.04}>
-                <Card className="py-0 h-full shadow-sm">
-                  <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:p-5">
-                    <Badge className={cn('w-fit font-normal', MOVEMENT[kind].chip)}>
-                      {MOVEMENT[kind].label}
-                    </Badge>
-                    <span className="text-2xl font-semibold tabular-nums">{movement[kind]}</span>
-                  </CardContent>
-                </Card>
-              </Reveal>
+                <span className="line-clamp-2 text-xs text-foreground/65">{st.name}</span>
+              </div>
+              <span className="text-2xl font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums sm:text-[30px]">
+                {s.reached}<span className="text-sm font-medium text-muted-foreground sm:text-base"> / {summary.documents}</span>
+              </span>
+              <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full" style={{ width: `${clamp(pct)}%`, background: st.color }} /></span>
+            </div>
+          );
+        })}
+        <div className="col-span-3 flex flex-col justify-center gap-2 p-5 lg:col-span-1">
+          <span className="text-[13px] text-foreground/75">
+            <b className="font-semibold text-foreground">This week</b>
+            {movement && <> · {fmt(movement.startDate)} – {fmt(movement.endDate)}</>}
+          </span>
+          <div className="flex items-baseline gap-5 tabular-nums">
+            {[
+              [movement?.submitted ?? 0, edl ? 'sent' : 'received'],
+              [movement?.returned ?? 0, edl ? 'back' : 'replied'],
+              [movement?.approved ?? 0, 'approved'],
+            ].map(([n, w]) => (
+              <span key={w as string}>
+                <span className="text-[30px] font-semibold leading-none tracking-[-0.02em] text-foreground">{n}</span>
+                <span className="ml-1 text-[13px] text-foreground/70">{w}</span>
+              </span>
             ))}
           </div>
-        ) : (
-          <Reveal delay={0.1}>
-            <Card className="py-0 border-dashed shadow-none">
-              <CardContent className="p-6 text-sm">
-                <span className="font-semibold">Nothing sent, returned or approved.</span>{' '}
-                {movement && movement.evidenceWeek < summary.asOfWeek && (
-                  <span className="text-muted-foreground">
-                    Last movement was week {movement.evidenceWeek}. A stale file, not a quiet week.
-                  </span>
-                )}
-              </CardContent>
-            </Card>
-          </Reveal>
-        )}
-
-        <Reveal delay={0.2}>
-          <Card className="py-0 mt-4 shadow-sm">
-            <CardContent className="p-5 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold">Week by week</h3>
-                <span className="text-xs text-muted-foreground">
-                  Week {summary.series[0]?.weekNo ?? 1}–
-                  {summary.series[summary.series.length - 1]?.weekNo ?? 1}
-                </span>
-              </div>
-              <RegisterCurve
-                series={summary.series}
-                asOfWeek={summary.asOfWeek}
-                undated={summary.undated}
-              />
-            </CardContent>
-          </Card>
-        </Reveal>
+          <span className="text-[13px] text-foreground/70 tabular-nums">
+            {r1(summary.thisWeek) >= 0 ? '+' : ''}{r1(summary.thisWeek).toFixed(1)} pts of progress this week
+          </span>
+        </div>
       </section>
-      </ScrollReveal>
+
+      {/* --------------------------------------- how it got there, by whom */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section className={cn(card, 'flex flex-col p-5')}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className={title}>Week by week</h2>
+            <span className="text-[13px] text-foreground/70">Cumulative progress, weighted by stage</span>
+            <span className="ml-auto text-[13px] font-medium text-foreground/70 tabular-nums">Week {summary.asOfWeek}</span>
+          </div>
+          <div className="mt-3 flex-1">
+            <RegisterCurve series={summary.series} asOfWeek={summary.asOfWeek} undated={summary.undated} />
+          </div>
+        </section>
+
+        <section className={cn(card, 'flex flex-col overflow-hidden')}>
+          <div className="flex items-center gap-3 px-5 pb-2 pt-5">
+            <h2 className={title}>{groupsTitle}</h2>
+            <span className="ml-auto text-[13px] text-foreground/70">{hasPlan ? 'Most behind first' : 'Least done first'}</span>
+          </div>
+          <div className={cn('grid items-center gap-x-3 border-y border-border/70 bg-muted/50 px-5 py-2 text-xs font-medium text-foreground/70', cols)}>
+            <span>{edl ? 'Discipline' : 'Package'}</span><span className={cn('text-right', wide)}>Docs</span><span className={wide} />
+            <span className="text-right">Actual</span>{hasPlan && <><span className="text-right">Plan</span><span className="text-right">Δ</span></>}
+          </div>
+          <div className="flex-1 overflow-y-auto scrollbar-none lg:max-h-[20rem]">
+            {ranked.map((g) => {
+              const d = g.plan !== null ? verdict(g.actual, g.plan).diff : null;
+              return (
+                <div key={g.id} className={cn('grid min-h-11 items-center gap-x-3 border-b border-border/50 px-5 py-1.5 text-[13.5px] last:border-b-0', cols)}>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-foreground">{g.name}</span>
+                    <span className={cn('block text-xs text-foreground/60 tabular-nums', narrow)}>{g.documents} documents</span>
+                  </span>
+                  <span className={cn('text-right text-foreground/70 tabular-nums', wide)}>{g.documents}</span>
+                  <span className={cn('flex flex-col gap-[2px]', wide)}>
+                    <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.actual)}%` }} /></span>
+                    {g.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.plan)}%` }} /></span>}
+                  </span>
+                  <span className="text-right font-semibold text-foreground tabular-nums">{r1(g.actual).toFixed(1)}</span>
+                  {hasPlan && (
+                    <>
+                      <span className="text-right text-foreground/70 tabular-nums">{g.plan === null ? '—' : r1(g.plan).toFixed(1)}</span>
+                      <span className={cn('text-right font-semibold tabular-nums', d === null ? 'text-muted-foreground' : d < 0 ? 'text-bad' : d > 0 ? 'text-ok' : 'text-muted-foreground')}>
+                        {d === null ? '—' : `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(1)}`}
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      {/* --------------------------------------------- what has to happen */}
+      <section className={cn(card, 'overflow-hidden')}>
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+          <h2 className={title}>Needs action</h2>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">{ours.length + theirs.length}</span>
+          <Link href={dataHref} className="ml-auto inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
+            Open in Data <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="grid border-t border-border/70 lg:grid-cols-2">
+          <ActionColumn
+            heading="With us"
+            sub={`${ours.length} to send`}
+            rows={ours}
+            settings={settings}
+            dataHref={dataHref}
+            className="lg:border-r lg:border-border/70"
+            empty="Nothing of ours is waiting."
+          />
+          <ActionColumn
+            heading={`With ${other}`}
+            sub={`${summary.awaiting} waiting${summary.longestWait !== null ? ` · longest ${summary.longestWait} d` : ''}`}
+            rows={theirs}
+            settings={settings}
+            dataHref={dataHref}
+            empty={`Nothing is with ${other} past its review.`}
+          />
+        </div>
+      </section>
+
+      {bridge && (
+        <p className="px-1 text-[13px] text-foreground/70 tabular-nums">
+          The weekly report reads engineering at <b className="font-semibold text-foreground">{r1(bridge.typedPercent).toFixed(1)}%</b>;
+          this register says <b className="font-semibold text-foreground">{r1(bridge.registerPercent).toFixed(1)}%</b>
+          {bridge.linked > 0 && <> ({bridge.linked} of {bridge.disciplines} disciplines linked)</>}.
+        </p>
+      )}
     </div>
   );
 }
 
-/* ------------------------------------------------------------- fragments */
-
-/** The seam to the weekly report — the same work, counted two ways. */
-function EngineeringSeam({ bridge }: { bridge: EngineeringBridge }) {
-  const gap = bridge.registerPercent - bridge.typedPercent;
-  const agrees = Math.abs(gap) < 0.05;
-
+function ActionColumn({
+  heading, sub, rows, settings, dataHref, className, empty,
+}: {
+  heading: string;
+  sub: string;
+  rows: Obstacle[];
+  settings: RegisterSettings;
+  dataHref: string;
+  className?: string;
+  empty: string;
+}) {
+  const label = (s: Obstacle['stage']) => (s ? stageOf(settings, s).label : '');
   return (
-    <Reveal delay={0.2}>
-      <Card className="py-0 mt-4 shadow-sm">
-        <CardContent className="flex flex-col gap-4 p-5 sm:p-6">
-          <h3 className="text-base font-semibold tracking-tight">
-            The weekly report counts this same work
-          </h3>
-
-          <div className="flex flex-col divide-y rounded-lg border sm:flex-row sm:divide-x sm:divide-y-0">
-            <div className="flex-1 p-4">
-              <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-                Typed in the report{bridge.wbsWeek !== null && ` · week ${bridge.wbsWeek}`}
-              </p>
-              <p className="mt-1.5 text-2xl font-semibold tabular-nums">
-                {bridge.typedPercent.toFixed(1)}%
-              </p>
+    <div className={className}>
+      <div className="flex items-baseline gap-2 border-b border-border/70 bg-muted/40 px-5 py-2.5">
+        <span className="text-[13.5px] font-bold text-foreground">{heading}</span>
+        <span className="text-[13px] text-foreground/70 tabular-nums">{sub}</span>
+      </div>
+      {rows.length === 0 && <p className="px-5 py-6 text-[13.5px] text-foreground/70">{empty}</p>}
+      {rows.slice(0, 8).map((o) => {
+        const reason = o.kind === 'late'
+          ? { text: `Late ${o.days ?? 0} d · send ${label(o.next)}`, tone: 'bg-bad-soft text-bad' }
+          : o.kind === 'comments'
+            ? { text: `${codeLabel(settings, o.returnCode)} ${o.days ?? 0} d ago · send ${label(o.next)}`, tone: CODE_TONE[o.returnCode ?? 'AWC'] ?? 'bg-warn-soft text-warn' }
+            : o.kind === 'soon'
+              ? { text: `Due ${fmt(o.since)} · ${label(o.next)}`, tone: 'bg-primary-soft text-primary' }
+              : { text: `${o.days ?? 0} d${(o.days ?? 0) > 14 ? ' · overdue' : ' waiting'}`, tone: (o.days ?? 0) > 14 ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn' };
+        return (
+          <div key={o.documentId} className="flex min-h-[3.75rem] items-center gap-3 border-b border-border/50 px-5 py-2.5 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <p className="mb-[5px] truncate text-xs text-foreground/65 tabular-nums">{o.docNo ?? 'No number'} · {o.categoryName}</p>
+              <p className="truncate text-[14px] font-semibold leading-5 text-foreground">{o.title}</p>
             </div>
-            <div className="flex-1 p-4">
-              <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-                Counted here
-              </p>
-              <p className="mt-1.5 text-2xl font-semibold tabular-nums">
-                {bridge.registerPercent.toFixed(1)}%
-              </p>
-            </div>
-            <div className={cn('flex-1 p-4', !agrees && 'bg-amber-50')}>
-              <p className={cn(
-                'text-[0.65rem] font-medium uppercase tracking-wider',
-                agrees ? 'text-muted-foreground' : 'text-amber-700',
-              )}>
-                {agrees ? 'In step' : 'They disagree by'}
-              </p>
-              <p className={cn(
-                'mt-1.5 text-2xl font-semibold tabular-nums',
-                agrees ? 'text-emerald-600' : 'text-amber-700',
-              )}>
-                {agrees ? '—' : `${signed(gap)}%`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className={cn('hidden shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold sm:inline', reason.tone)}>{reason.text}</span>
+            {/* No prefetch: every row is a different address, and prefetching each
+                one rendered the whole Data page a dozen times on arrival. */}
             <Link
-              href={`/weekly/${bridge.weekNo}/summary`}
-              className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium hover:underline"
+              href={`${dataHref}?doc=${o.documentId}`}
+              prefetch={false}
+              className="flex h-9 shrink-0 items-center rounded-lg border border-border px-3.5 text-[13px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary-soft"
             >
-              Week {bridge.weekNo} report
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/settings"
-              className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {bridge.linked} of {bridge.disciplines} disciplines read from here
+              {o.kind === 'waiting' ? 'Chase' : 'Send'}
             </Link>
           </div>
-        </CardContent>
-      </Card>
-    </Reveal>
-  );
-}
-
-function GroupCard({ group: g }: { group: RegisterNode }) {
-  const v = g.plan !== null ? verdict(g.actual, g.plan) : null;
-  return (
-    <Card className="py-0 h-full shadow-sm transition-shadow duration-300 ease-ios hover:shadow-md">
-      <CardContent className="flex h-full flex-col gap-4 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-snug">{g.name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{g.documents} document{g.documents === 1 ? '' : 's'}</p>
-          </div>
-          {v && (
-            <Badge className={cn('w-24 shrink-0 justify-center font-medium tabular-nums', v.chip)}>{v.label}</Badge>
-          )}
-        </div>
-
-        <div className="mt-auto flex flex-col gap-2">
-          <div className="flex items-baseline justify-between text-sm">
-            <span className="font-semibold tabular-nums text-blue-600">
-              {g.actual.toFixed(1)}%
-            </span>
-            {g.plan !== null && (
-              <span className="text-xs tabular-nums text-red-600">
-                Plan {g.plan.toFixed(1)}%
-              </span>
-            )}
-          </div>
-          <Meter actual={g.actual} plan={g.plan} />
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[0.7rem] text-muted-foreground">
-            {g.reached.map((r) => (
-              <span key={r.stage} className="tabular-nums">
-                {STAGE_LABEL[r.stage]} {r.reached}/{g.documents}
-              </span>
-            ))}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        );
+      })}
+      {rows.length > 8 && (
+        <Link href={dataHref} className="flex min-h-11 items-center px-5 text-[13px] font-medium text-primary">
+          {rows.length - 8} more in Data
+        </Link>
+      )}
+    </div>
   );
 }

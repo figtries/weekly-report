@@ -917,6 +917,30 @@ a:active {
   transform-origin: center;
 }
 
+/* The register curve wipes in from the left; its head lands after it. */
+@keyframes curve-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.animate-curve-wipe {
+  animation: curve-wipe 0.9s var(--ease-out-expo) both;
+}
+@keyframes curve-head {
+  from {
+    scale: 0;
+  }
+  to {
+    scale: 1;
+  }
+}
+.animate-curve-head {
+  animation: curve-head 0.4s var(--ease-out-expo) 0.9s both;
+}
+
 @keyframes pop-in {
   0% {
     opacity: 0;

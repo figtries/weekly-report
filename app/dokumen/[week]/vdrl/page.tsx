@@ -6,7 +6,7 @@ import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
-  getRegisterSources, getRegisterExisting,
+  getRegisterSources, getRegisterExisting, getRegisterSettings,
 } from '@/lib/register';
 import { getActiveProjectId } from '@/lib/projects';
 
@@ -74,6 +74,9 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
       movement={getWeekMovement(projectId, 'vdrl', week)}
       groupsTitle="By vendor package"
       foldEmptyGroups
+      settings={getRegisterSettings(projectId, 'vdrl')}
+      otherName={'vendors'}
+      week={week}
     />
     </RouteTransition>
   );

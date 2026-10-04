@@ -1,9 +1,7 @@
 'use client';
 
-import { m, useReducedMotion } from 'framer-motion';
 import { useId } from 'react';
 
-import { EASE } from '@/components/motion/Reveal';
 import type { WeekPoint } from '@/lib/register-shared';
 
 /**
@@ -38,7 +36,6 @@ export function RegisterCurve({
   /** Submissions with no date — placed by estimate, and said so below. */
   undated?: number;
 }) {
-  const reduced = useReducedMotion();
   const gradientId = useId();
   if (series.length < 2) return null;
 
@@ -83,10 +80,10 @@ export function RegisterCurve({
               {v}
             </span>
           ))}
-          <span className="block h-48 sm:h-56" />
+          <span className="block h-48 sm:h-56 lg:h-72" />
         </div>
 
-        <div className="relative h-48 flex-1 sm:h-56">
+        <div className="relative h-48 flex-1 sm:h-56 lg:h-72">
           {gridValues.map((v) => (
             <span
               key={v}
@@ -96,19 +93,18 @@ export function RegisterCurve({
             />
           ))}
 
-          {/* Wiped in from the left rather than drawn with `pathLength`:
-              framer-motion implements that with stroke-dasharray in user units,
-              and on a stretched viewBox with non-scaling strokes it breaks both
-              lines into ragged dashes. */}
-          <m.svg
+          {/* Wiped in from the left by a CSS keyframe, not framer-motion: an
+              entrance written as `initial` ships hidden in the server HTML and,
+              on the Summary, held the route's view transition at frame zero.
+              Not `pathLength` either: framer-motion implements that with
+              stroke-dasharray in user units, and on a stretched viewBox with
+              non-scaling strokes it breaks both lines into ragged dashes. */}
+          <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
-            className="absolute inset-0 h-full w-full text-foreground"
+            className="animate-curve-wipe absolute inset-0 h-full w-full text-foreground"
             role="img"
             aria-label={`Register plan and actual curve, week ${first} to ${last}`}
-            initial={reduced ? false : { clipPath: 'inset(0 100% 0 0)' }}
-            animate={{ clipPath: 'inset(0 0% 0 0)' }}
-            transition={{ duration: 0.9, ease: EASE }}
           >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -145,17 +141,14 @@ export function RegisterCurve({
               vectorEffect="non-scaling-stroke"
               className="stroke-blue-500"
             />
-          </m.svg>
+          </svg>
 
           {/* the head of the curve, drawn in HTML so it stays a circle */}
           {lastActual && (
-            <m.span
+            <span
               aria-hidden
-              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500 ring-2 ring-background"
+              className="animate-curve-head absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500 ring-2 ring-background"
               style={{ left: `${x(lastActual.weekNo)}%`, top: `${y(lastActual.actual)}%` }}
-              initial={reduced ? false : { scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.4, ease: EASE, delay: 0.9 }}
             />
           )}
 
