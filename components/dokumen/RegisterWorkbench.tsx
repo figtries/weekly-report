@@ -245,7 +245,9 @@ export function RegisterWorkbench({
   return (
     <div className="flex flex-col gap-3 pb-24 sm:gap-4 md:pb-0">
       {/* ------------------------------------------------------------ toolbar */}
-      <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-3', counts.info === 0 && emptyGroups === 0 && 'max-md:hidden')}>
+      {/* Each block rises in on Setup's own keyframe and steps, so coming back
+          from Setup moves the way going into it does (4 Oct 2026). */}
+      <div className={cn('animate-enter flex flex-wrap items-center gap-x-4 gap-y-3', counts.info === 0 && emptyGroups === 0 && 'max-md:hidden')}>
         <h2 className="hidden min-w-0 flex-1 text-[15px] font-semibold tracking-tight text-foreground md:block">{info.long}</h2>
         <div className="grid w-full grid-cols-2 gap-2 empty:hidden md:flex md:w-auto md:flex-wrap md:items-center">
           {(counts.info > 0 || emptyGroups > 0) && (
@@ -277,7 +279,7 @@ export function RegisterWorkbench({
       </div>
 
       {/* ------------------------------------------------------ phone overview */}
-      <section className={cn(phoneCard, 'p-4 md:hidden')}>
+      <section className={cn(phoneCard, 'animate-enter stagger-1 p-4 md:hidden')}>
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="min-w-0 truncate text-[13px] font-semibold text-foreground">{info.long}</h2>
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{totalDocuments} docs</span>
@@ -314,7 +316,7 @@ export function RegisterWorkbench({
       </section>
 
       {/* Phones (the F-Phone mockup): the filters stand on the page, the picked one dark. */}
-      <div className="flex flex-col gap-2.5 md:hidden">
+      <div className="animate-enter stagger-2 flex flex-col gap-2.5 md:hidden">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scrollbar-none">
           {chips.map((c) => (
             <button
@@ -360,7 +362,7 @@ export function RegisterWorkbench({
       </div>
 
       {/* -------------------------------------------------------------- list */}
-      <section className="flex flex-col gap-3 md:block md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-[0_0_0_1px_rgba(16,24,40,.04),0_1px_2px_rgba(16,24,40,.06)]">
+      <section className="animate-enter stagger-3 flex flex-col gap-3 md:block md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-[0_0_0_1px_rgba(16,24,40,.04),0_1px_2px_rgba(16,24,40,.06)]">
         <div className="hidden items-center gap-3 border-b border-border/70 p-3 md:flex">
           <div className="flex flex-wrap gap-1.5">
             {chips.map((c) => (
@@ -631,7 +633,7 @@ function Row({
       </button>
       <button type="button" onClick={onOpen} className="hidden truncate text-left text-[13.5px] font-medium text-foreground md:block">{c.title}</button>
       <span className="hidden text-[13px] font-medium text-foreground/80 tabular-nums xl:block">{rev ?? '—'}</span>
-      <span className="hidden text-[13px] font-semibold text-foreground md:block">{stage}</span>
+      <span className="hidden whitespace-nowrap text-[13px] font-semibold text-foreground md:block">{stage}</span>
       <span className="hidden text-[13px] md:block">{code}</span>
       <span className="hidden text-[13px] text-foreground/80 md:block">{with_}</span>
       <span className="hidden text-right text-[13px] text-foreground tabular-nums md:block">{plan}</span>
