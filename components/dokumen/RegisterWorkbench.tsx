@@ -16,7 +16,8 @@ import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 
 import { RegisterSetup } from './RegisterSetup';
-import { OPEN_SETUP, RegisterMarks } from './RegisterTabs';
+import { verdict } from './verdict';
+import { OPEN_SETUP } from './RegisterTabs';
 
 const loadTransmittal = () => import('./TransmittalDialog');
 const preloadTransmittal = () => { void loadTransmittal(); };
@@ -66,10 +67,12 @@ const lastLetter = (c: DocumentCard) => {
 };
 
 /** Desktop columns: tick, No., Title, Rev, Issue, Code, With, Plan, Last letter. */
+/** A phone's cards (the F-Phone mockup): rounder, lifted off the page. */
+const phoneCard = 'overflow-hidden rounded-[22px] bg-card shadow-[0_0_0_1px_rgba(16,24,40,.04),0_4px_16px_-6px_rgba(16,24,40,.10)]';
 const COLS = 'md:grid-cols-[2.25rem_10.5rem_minmax(0,1fr)_3.5rem_4rem_8.5rem_6.5rem] xl:grid-cols-[2.25rem_11rem_minmax(0,1fr)_2.75rem_3.5rem_4rem_9rem_6.5rem_8.5rem]';
 
 export function RegisterWorkbench({
-  projectId, register, tree, cards, totalDocuments, weekNo, clientName, contractorName,
+  projectId, register, tree, cards, totalDocuments, clientName, contractorName,
   numbering, sources, currentCards, currentObstacles, settings, nextLetters, overview,
 }: {
   projectId: string;
@@ -77,6 +80,7 @@ export function RegisterWorkbench({
   tree: RegisterNode[];
   cards: Record<string, DocumentCard[]>;
   totalDocuments: number;
+  /** The week on screen; the title no longer says it, the pages still pass it. */
   weekNo: number;
   clientName: string;
   contractorName: string;
@@ -92,6 +96,7 @@ export function RegisterWorkbench({
 }) {
   const edl = register === 'edl';
   const info = REGISTER_INFO[register];
+  const against = overview.plan !== null ? verdict(overview.actual, overview.plan) : null;
   const other = edl ? 'client' : 'vendor';
 
   const groups = useMemo(() => {
@@ -236,16 +241,9 @@ export function RegisterWorkbench({
   return (
     <div className="flex flex-col gap-3 pb-24 sm:gap-4 md:pb-0">
       {/* ------------------------------------------------------------ toolbar */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">{info.long}</h2>
-          <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground tabular-nums">
-            {totalDocuments} documents · week {weekNo}
-            {(contractorName || clientName) && <span className="hidden sm:inline"> · {contractorName || 'Contractor'} → {clientName || 'Client'}</span>}
-          </p>
-        </div>
-        <RegisterMarks register={register} className="flex sm:hidden" />
-        <div className="grid w-full grid-cols-2 gap-2 empty:hidden sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+      <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-3', counts.info === 0 && emptyGroups === 0 && 'max-md:hidden')}>
+        <h2 className="hidden min-w-0 flex-1 text-[15px] font-semibold tracking-tight text-foreground md:block">{info.long}</h2>
+        <div className="grid w-full grid-cols-2 gap-2 empty:hidden md:flex md:w-auto md:flex-wrap md:items-center">
           {(counts.info > 0 || emptyGroups > 0) && (
             <button
               type="button"
@@ -275,13 +273,22 @@ export function RegisterWorkbench({
       </div>
 
       {/* ------------------------------------------------------ phone overview */}
-      <section className="rounded-[22px] bg-card p-4 shadow-[0_0_0_1px_rgba(16,24,40,.04),0_4px_16px_-6px_rgba(16,24,40,.10)] md:hidden">
-        <div className="flex items-end gap-2.5">
-          <span className="text-[40px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
-            {overview.actual.toFixed(1)}<span className="text-xl text-muted-foreground">%</span>
+      <section className={cn(phoneCard, 'p-4 md:hidden')}>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="min-w-0 truncate text-[13px] font-semibold text-foreground">{info.long}</h2>
+          <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{totalDocuments} docs</span>
+        </div>
+        <div className="mt-1.5 flex items-end gap-2.5">
+          <span className="text-[42px] font-bold leading-none tracking-[-0.03em] text-foreground tabular-nums">
+            {overview.actual.toFixed(1)}<span className="text-xl font-medium text-muted-foreground">%</span>
           </span>
           {overview.plan !== null && (
-            <span className="pb-1 text-[13px] text-muted-foreground">plan <b className="text-foreground tabular-nums">{overview.plan.toFixed(1)}%</b></span>
+            <span className="pb-1 text-[13px] text-muted-foreground">plan <b className="font-semibold text-foreground tabular-nums">{overview.plan.toFixed(1)}%</b></span>
+          )}
+          {against && (
+            <span className={cn('mb-1 ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
+              {against.diff > 0 ? `+${against.diff.toFixed(1)} ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} behind`}
+            </span>
           )}
         </div>
         <div className="mt-2.5 flex flex-col gap-[3px]">
@@ -292,9 +299,9 @@ export function RegisterWorkbench({
           {overview.stages.map((s) => {
             const st = stageOf(settings, s.stage);
             return (
-              <div key={s.stage} className="rounded-2xl bg-muted/60 p-2.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground"><span className="h-2 w-2 rounded-[3px]" style={{ background: st.color }} />{st.label}</div>
-                <div className="mt-1 text-lg font-semibold text-foreground tabular-nums">{s.reached}<span className="text-xs font-medium text-muted-foreground"> / {totalDocuments}</span></div>
+              <div key={s.stage} className="rounded-2xl p-2.5" style={{ background: `${st.color}14` }}>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground"><span className="h-2 w-2 rounded-full" style={{ background: st.color }} />{st.label}</div>
+                <div className="mt-1 text-lg font-bold text-foreground tabular-nums">{s.reached}<span className="text-xs font-medium text-muted-foreground"> / {totalDocuments}</span></div>
                 <div className="text-xs text-muted-foreground tabular-nums">{totalDocuments ? ((s.reached / totalDocuments) * 100).toFixed(1) : '0.0'}%</div>
               </div>
             );
@@ -302,10 +309,43 @@ export function RegisterWorkbench({
         </div>
       </section>
 
+      {/* Phones (the F-Phone mockup): the filters stand on the page, the picked one dark. */}
+      <div className="flex flex-col gap-2.5 md:hidden">
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 scrollbar-none">
+          {chips.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              aria-pressed={filter === c.key}
+              onClick={() => setFilter(c.key)}
+              className={cn(
+                'h-10 shrink-0 rounded-full px-4 text-[13.5px] font-semibold transition-colors duration-200 ease-ios',
+                filter === c.key
+                  ? (c.tone === 'bad' ? 'bg-bad text-white' : 'bg-[#0f172a] text-white')
+                  : (c.tone === 'bad' ? 'bg-bad-soft text-bad' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]'),
+              )}
+            >
+              {c.label}{' '}
+              <span className={cn('tabular-nums', filter === c.key ? 'opacity-70' : c.tone === 'warn' ? 'text-warn' : c.tone === 'bad' ? '' : 'font-medium text-muted-foreground')}>{c.n}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search number or title"
+            aria-label="Search documents"
+            className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+          />
+        </div>
+      </div>
+
       {/* -------------------------------------------------------------- list */}
-      <section className="overflow-hidden rounded-2xl bg-card shadow-[0_0_0_1px_rgba(16,24,40,.04),0_1px_2px_rgba(16,24,40,.06)]">
-        <div className="flex flex-col gap-3 border-b border-border/70 p-3 md:flex-row md:items-center">
-          <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 scrollbar-none md:mx-0 md:flex-wrap md:px-0">
+      <section className="flex flex-col gap-3 md:block md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-[0_0_0_1px_rgba(16,24,40,.04),0_1px_2px_rgba(16,24,40,.06)]">
+        <div className="hidden items-center gap-3 border-b border-border/70 p-3 md:flex">
+          <div className="flex flex-wrap gap-1.5">
             {chips.map((c) => (
               <button
                 key={c.key}
@@ -324,19 +364,19 @@ export function RegisterWorkbench({
               </button>
             ))}
           </div>
-          <div className="relative md:ml-auto md:w-72">
+          <div className="relative ml-auto w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search number or title"
               aria-label="Search documents"
-              className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+              className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </div>
         </div>
 
-        <div className="md:max-h-[calc(100dvh-19rem)] md:overflow-y-auto md:scrollbar-none">
+        <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh-17rem)] md:overflow-y-auto md:scrollbar-none">
           {/* Column names: thin, like the Excel register's own header row. */}
           <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-muted/70 px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
             <span />
@@ -352,8 +392,10 @@ export function RegisterWorkbench({
             const open = !collapsed.has(g.id);
             const allTicked = docs.length > 0 && docs.every((c) => ticked.has(c.id));
             return (
-              <Fragment key={g.id}>
-                <div className="sticky top-0 z-10 flex min-h-12 items-center gap-2 border-b border-border/70 bg-[#f8faff] px-3 md:top-9 md:px-4">
+              // Never clipped on a wide screen: an overflow there would become the
+              // sticky header's scroller and push it down over the first row.
+              <div key={g.id} className={cn(phoneCard, 'md:overflow-visible md:rounded-none md:bg-transparent md:shadow-none')}>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 px-4 pb-3.5 pt-4 md:sticky md:top-9 md:z-10 md:min-h-12 md:flex-nowrap md:border-b md:border-border/70 md:bg-[#f8faff] md:py-0">
                   <input
                     type="checkbox"
                     aria-label={`Select every document in ${g.name}`}
@@ -363,14 +405,25 @@ export function RegisterWorkbench({
                     className="hidden h-4 w-4 accent-primary md:block"
                   />
                   <button type="button" aria-expanded={open} onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
-                    className="flex min-w-0 items-center gap-2 text-left md:ml-2">
-                    <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-ios', !open && '-rotate-90')} />
-                    <span className="min-w-0 truncate text-[14px] font-semibold text-foreground">
+                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:flex-none md:items-center">
+                    <ChevronDown className={cn('hidden h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 ease-ios md:block', !open && '-rotate-90')} />
+                    <span className="min-w-0 truncate text-[18px] font-bold tracking-tight text-foreground md:text-[14px] md:font-semibold md:tracking-normal">
                       {g.parentName && <span className="font-medium text-muted-foreground">{g.parentName} · </span>}{g.name}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{docs.length} docs</span>
+                    <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums md:text-xs">{docs.length} docs</span>
                   </button>
-                  <div className="ml-1 hidden items-center gap-2 sm:flex">
+                  <span className="shrink-0 text-[24px] font-bold leading-none tracking-tight text-foreground tabular-nums md:hidden">
+                    {g.node.actual.toFixed(1)}<span className="text-sm font-medium text-muted-foreground">%</span>
+                  </span>
+                  {/* Phone: the bars across the card, its plan beside them. */}
+                  <div className="flex basis-full items-center gap-3 md:hidden">
+                    <span className="flex flex-1 flex-col gap-[3px]">
+                      <span className="h-2 rounded-full bg-muted"><span className="block h-2 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
+                      {g.node.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.node.plan)}%` }} /></span>}
+                    </span>
+                    {g.node.plan !== null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">plan {g.node.plan.toFixed(1)}</span>}
+                  </div>
+                  <div className="ml-1 hidden items-center gap-2 md:flex">
                     <span className="flex w-16 flex-col gap-[2px]">
                       <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
                       {g.node.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.node.plan)}%` }} /></span>}
@@ -378,14 +431,13 @@ export function RegisterWorkbench({
                     <span className="text-xs font-semibold text-foreground tabular-nums">{g.node.actual.toFixed(1)}%</span>
                     {g.node.plan !== null && <span className="text-xs text-muted-foreground tabular-nums">/ {g.node.plan.toFixed(1)}%</span>}
                   </div>
-                  <span className="ml-auto text-sm font-semibold text-foreground tabular-nums sm:hidden">{g.node.actual.toFixed(1)}%</span>
                   <button type="button" onClick={() => { setAddingTo(addingTo === g.id ? null : g.id); setError(null); }}
-                    className="ml-auto hidden h-8 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-3 text-[12.5px] font-semibold text-primary sm:flex">
-                    <Plus className="h-3.5 w-3.5" />Add
+                    className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-4 text-[13.5px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">
+                    <Plus className="h-3.5 w-3.5" />Add<span className="md:hidden"> document</span>
                   </button>
                   <div className="relative">
                     <button type="button" aria-label={`More for ${g.name}`} aria-expanded={menuFor === g.id} onClick={() => setMenuFor(menuFor === g.id ? null : g.id)}
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/70 text-muted-foreground hover:bg-muted md:h-9 md:w-9 md:bg-transparent">
                       <span className="text-base leading-none">⋯</span>
                     </button>
                     {menuFor === g.id && (
@@ -432,7 +484,7 @@ export function RegisterWorkbench({
                     onOpen={() => startTransition(() => setOpenId(c.id))}
                   />
                 ))}
-              </Fragment>
+              </div>
             );
           })}
           {flatVisible.length === 0 && filter !== 'all' && (
@@ -527,27 +579,27 @@ function Row({
   return (
     <div
       className={cn(
-        'group relative flex min-h-11 items-center gap-x-3 border-b border-border/60 px-1 transition-colors duration-150 ease-ios md:grid md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
+        'group relative flex min-h-11 items-center gap-x-1 border-t border-border/60 px-2 transition-colors duration-150 ease-ios md:grid md:gap-x-3 md:border-t-0 md:border-b md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
         COLS,
         ticked ? 'bg-primary-soft/60' : opened ? 'bg-muted/60' : 'hover:bg-muted/40',
       )}
     >
       {opened && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
       <label className="flex h-11 w-11 shrink-0 items-center justify-center md:w-auto md:justify-start">
-        <input type="checkbox" checked={ticked} onChange={onTick} aria-label={`Select ${c.docNo ?? c.title}`} className="h-[18px] w-[18px] accent-primary md:h-4 md:w-4" />
+        <input type="checkbox" checked={ticked} onChange={onTick} aria-label={`Select ${c.docNo ?? c.title}`} className="h-5 w-5 rounded-md accent-primary md:h-4 md:w-4" />
       </label>
 
       {/* Phone: two lines. Desktop: the cells below take over. */}
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left md:hidden">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 text-left md:hidden">
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
-            <span className="truncate">{c.docNo ?? 'No number'} · {stage}{rev ? ` · Rev ${rev}` : ''}</span>{c.returnCode && code}
+          <span className="flex items-center gap-1.5 text-[12px] tracking-[0.02em] text-muted-foreground [font-feature-settings:'tnum'_1,'zero'_1]">
+            <span className="truncate">{c.docNo ?? 'No number'} · {stage}</span>{c.returnCode && code}
           </span>
-          <span className="mt-0.5 block truncate text-[14px] font-semibold text-foreground">{c.title}</span>
+          <span className="mt-1 block truncate text-[15px] font-bold tracking-tight text-foreground">{c.title}</span>
           {needsPlan(c) && <span className="mt-0.5 block text-xs font-semibold text-bad">Plan date needed</span>}
         </span>
         <span className="shrink-0 text-right">
-          <span className={cn('block text-[15px] font-semibold tabular-nums', done ? 'text-ok' : 'text-foreground')}>{c.percent.toFixed(0)}%</span>
+          <span className={cn('block text-[16px] font-bold tabular-nums', done ? 'text-ok' : 'text-foreground')}>{c.percent.toFixed(0)}%</span>
           <span className="block text-[11px] text-muted-foreground">{done ? 'Done' : c.out ? `${other === 'client' ? 'Client' : 'Vendor'}${days !== null ? ` · ${days} d` : ''}` : `Us${c.sendNext ? ` · ${stageOf(settings, c.sendNext).label}` : ''}`}</span>
         </span>
       </button>

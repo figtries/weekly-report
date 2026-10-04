@@ -926,9 +926,19 @@ client. **Data** is the list; a row opens `DocumentSheet`, built on
 `ActivityPanel`'s shell and motion, where a document controller edits
 everything about one document. A transmittal is recorded from a sheet or from
 ticked rows ("Send 3 as IFA"); the standing "Record transmittal" button was
-removed because the sheet already does it. **Export and Setup are two marks**
-(`RegisterMarks`): blue and violet, beside Set as current from a tablet up and
-beside the list's title on a phone, where the week row has no room.
+removed because the sheet already does it. **Export and Setup sit where the
+weekly report's Export Excel sits** (`RegisterMarks`): solid squares in the week
+row beside Current on a phone ("Set as current" wraps to two lines to make room,
+`WeekRow`'s `max-sm` classes), and the page's top-right corner from md, labelled
+"Export Excel" / "Setup" from xl. Blue is Lucille's `primary`, violet is
+`check`. The corner copy is a SIBLING of the week column: the column's entrance
+animation leaves a transform that would anchor `absolute` to the column and put
+the buttons over Set as current. The list's title is the register's name and
+nothing else. **The phone Data screen is the F-Phone mockup he approved**: the
+overview card carries the title and "N docs", the filters stand on the page
+(the picked one dark), each discipline is its own card. A group wrapper is never
+`overflow-hidden` from md: it would become the sticky header's scroller and push
+the header down over the first row.
 
 **Setup** (`RegisterSetup`) holds the documents, the number's shape (the
 project's initial is locked; area, discipline and type codes are the
