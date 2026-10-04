@@ -39,6 +39,7 @@ export default function WeekRow({
   hrefPattern,
   prefetch,
   anchorEnd,
+  compact,
   children,
 }: {
   weeks: number[];
@@ -52,7 +53,12 @@ export default function WeekRow({
   prefetch?: boolean;
   /** Week one's end date, for the dates under each week in the picker. */
   anchorEnd?: string;
-  /** Anything that ends the row, after the seat. */
+  /** Passed to the picker: a narrower trigger on a phone, for a row that also holds buttons. */
+  compact?: boolean;
+  /**
+   * Anything that ends the row, after the seat. On a phone the seat gives way
+   * to it: "Set as current" goes onto two lines rather than off the screen.
+   */
   children?: ReactNode;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -85,10 +91,11 @@ export default function WeekRow({
         hrefPattern={hrefPattern}
         prefetch={prefetch}
         anchorEnd={anchorEnd}
+        compact={compact}
       />
       {isCurrent ? (
-        <span className="inline-flex min-h-11 flex-1 animate-pop-in items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-ok-soft px-3.5 text-sm font-semibold text-ok">
-          <span className="h-2 w-2 rounded-full bg-ok" />
+        <span className="inline-flex min-h-11 min-w-0 flex-1 animate-pop-in items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-lg bg-ok-soft px-3.5 text-sm font-semibold text-ok max-sm:px-2">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-ok" />
           Current
         </span>
       ) : (
@@ -97,10 +104,10 @@ export default function WeekRow({
         <m.button {...pressMotion}
           onClick={setAsCurrent}
           disabled={isPending}
-          className="inline-flex min-h-11 flex-1 animate-scale-in items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ok/40 bg-card px-3.5 text-sm font-semibold text-ok shadow-sm transition-colors duration-300 ease-ios hover:bg-ok-soft disabled:opacity-70"
+          className="inline-flex min-h-11 min-w-0 flex-1 animate-scale-in items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ok/40 bg-card px-3.5 text-sm font-semibold text-ok shadow-sm transition-colors duration-300 ease-ios hover:bg-ok-soft disabled:opacity-70 max-sm:px-2 max-sm:text-center max-sm:leading-tight max-sm:whitespace-normal"
           title="Pin this as the week the project is in. It is where the app opens, until you move it or clear it."
         >
-          <span aria-hidden className="h-2 w-2 rounded-full border-2 border-ok" />
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full border-2 border-ok" />
           Set as current
         </m.button>
       )}

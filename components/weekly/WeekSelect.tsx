@@ -21,6 +21,7 @@ export default function WeekSelect({
   onPick,
   variant = 'bar',
   label,
+  compact = false,
 }: {
   weeks: number[];
   selectedWeek: number;
@@ -43,6 +44,8 @@ export default function WeekSelect({
   prefetch?: boolean;
   /** Week one's end date, so each row can say which seven days it is. */
   anchorEnd?: string;
+  /** A phone's row that also holds buttons (Document Control's Export / Setup): the trigger gives up 24px. */
+  compact?: boolean;
   /**
    * Hand the picked week back instead of navigating to it: the week log's
    * "from Week 12 to Week 20" uses the same list as every other week picker.
@@ -290,7 +293,7 @@ export default function WeekSelect({
         className={
           variant === 'pill'
             ? 'flex min-h-9 w-38 items-center justify-between gap-2 rounded-full bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1'
-            : 'flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+            : `flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40${compact ? ' max-sm:w-32 max-sm:px-3' : ''}`
         }
       >
         <svg

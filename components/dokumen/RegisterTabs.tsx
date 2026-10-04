@@ -3,7 +3,7 @@
 import WeekRow from '@/components/weekly/WeekRow';
 import WeekSteps from '@/components/weekly/WeekSteps';
 import { usePathname } from 'next/navigation';
-import { Download, Settings2 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -54,29 +54,26 @@ export function RegisterTabs({
   const register = active === 'data' ? 'edl' : active === 'vdrl-data' ? 'vdrl' : null;
 
   return (
-    <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
+    <div className="relative px-4 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
       {/* THE SAME HEADER AS THE WEEKLY PAGES (25 Sep 2026): the shared
           `WeekRow` over the shared `WeekSteps` bar, in a column that hugs the
           bar so the week picker and Current share its edges. This section had
           its own copy before, a small pill and a grey full-width tab strip,
           and moving between the two sections read as moving between apps. */}
       <div className="flex w-full animate-enter flex-col gap-3 sm:w-fit">
-        {/* Export and Setup as two small marks at the row's end (4 Oct 2026):
-            as buttons in the register's toolbar they were three more things
-            between the tabs and the list. Data screens only. */}
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <WeekRow
-              weeks={weeks}
-              selectedWeek={selectedWeek}
-              projectCurrentWeek={projectCurrentWeek}
-              activeTab={active}
-              basePath="/dokumen"
-              anchorEnd={anchorEnd}
-            />
-          </div>
-          {register && <RegisterMarks register={register} className="hidden sm:flex" />}
-        </div>
+        <WeekRow
+          weeks={weeks}
+          selectedWeek={selectedWeek}
+          projectCurrentWeek={projectCurrentWeek}
+          activeTab={active}
+          basePath="/dokumen"
+          anchorEnd={anchorEnd}
+          compact={register !== null}
+        >
+          {/* Data screens only, placed as the weekly report places its Export
+              Excel: in the row on a phone, the page's top corner from md. */}
+          {register && <RegisterMarks register={register} className="flex md:hidden" />}
+        </WeekRow>
         <WeekSteps
           className="sm:w-full"
           ariaLabel="Document Control"
@@ -89,6 +86,7 @@ export function RegisterTabs({
           }))}
         />
       </div>
+      {register && <RegisterMarks register={register} className="absolute top-4 right-6 hidden md:flex lg:right-8" />}
 
       {/* The line explaining EDL against VDRL went on 3 Oct 2026: the people
           who work here know the pair, and on every screen it was the first
@@ -99,31 +97,41 @@ export function RegisterTabs({
 }
 
 /**
- * Export and Setup as two small marks: Lucille blue for the file, violet for
- * the register's own settings. Beside Set as current from a tablet up; a
- * phone's week row has no room, so there they sit beside the list's title.
+ * Export and Setup, as the weekly report shows its Export Excel (4 Oct 2026):
+ * solid squares beside Current on a phone; from md they leave the row for the
+ * page's top-right corner, and say what they are from lg ("Export", then
+ * "Export Excel" from xl, where there is room). Export is Lucille
+ * blue, Setup Lucille violet. The corner copy is a sibling of the week column,
+ * never inside it: the column's entrance animation leaves a transform that
+ * would anchor `absolute` to the column instead of the page.
  */
 export function RegisterMarks({ register, className }: { register: 'edl' | 'vdrl'; className?: string }) {
   const name = register === 'edl' ? 'EDL' : 'VDRL';
+  const mark = 'inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:shadow-md max-[380px]:size-10 lg:w-auto lg:px-3 xl:px-4';
   return (
-    <div className={cn('shrink-0 items-center gap-2.5', className)}>
+    <div className={cn('shrink-0 items-center gap-2 max-[380px]:gap-1.5', className)}>
       <a
         href={`/api/register/export?register=${register}`}
         download
-        aria-label={`Export the ${name} to Excel`}
-        title="Export to Excel"
-        className="inline-flex size-11 items-center justify-center rounded-lg bg-primary-soft text-primary shadow-[0_0_0_1px_rgba(29,78,216,.12)] transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
+        aria-label={`Export Excel (${name})`}
+        title={`Export the ${name} to Excel`}
+        className={cn(mark, 'bg-primary hover:bg-primary-hover')}
       >
-        <Download className="h-[18px] w-[18px]" />
+        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5M9 13l3 4m0-4l-3 4" />
+        </svg>
+        <span className="hidden lg:inline">Export<span className="hidden xl:inline"> Excel</span></span>
       </a>
       <button
         type="button"
         onClick={() => window.dispatchEvent(new Event(OPEN_SETUP))}
-        aria-label={`Set up the ${name}`}
-        title="Setup"
-        className="inline-flex size-11 items-center justify-center rounded-lg bg-check-soft text-check shadow-[0_0_0_1px_rgba(109,40,217,.14)] transition-colors duration-200 ease-ios hover:bg-check hover:text-white"
+        aria-label={`Setup (${name})`}
+        title={`Set up the ${name}`}
+        className={cn(mark, 'bg-check hover:bg-check/90')}
       >
-        <Settings2 className="h-[18px] w-[18px]" />
+        <Settings2 className="h-4 w-4 shrink-0" />
+        <span className="hidden lg:inline">Setup</span>
       </button>
     </div>
   );
