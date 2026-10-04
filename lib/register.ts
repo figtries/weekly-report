@@ -41,6 +41,7 @@ import { kindOf, type ExistingNode, type OutlineNode } from './builder-model';
 import { deriveInitial } from './initial';
 import type { DocStage, RegisterKind } from './schema';
 import { detectPrefix, type NumberingRule } from './register-numbering';
+import { MAIN_STAGES, defaultStage, parseCodes, type RegisterSettings } from './register-settings';
 import { outlineCode } from './register-outline';
 
 export * from './register-shared';
@@ -487,6 +488,7 @@ export function getNumbering(projectId: string, register: RegisterKind): {
         disciplines: parse(row.disciplines),
         types: parse(row.types),
         digits: row.digits,
+        area: row.area ?? undefined,
       }
       : null,
     taken,
@@ -592,6 +594,49 @@ export function getStageWeights(projectId: string, register: RegisterKind): {
     )).all()
     .sort((a, b) => a.order - b.order)
     .map((w) => ({ stage: w.stage, weight: w.weight }));
+}
+
+/**
+ * The register's own words and colours (lib/register-settings.ts): its stages
+ * as stored, else the defaults, and its client codes and area segment.
+ */
+export function getRegisterSettings(projectId: string, register: RegisterKind): RegisterSettings {
+  const rows = db.select().from(schema.docStageWeights)
+    .where(and(eq(schema.docStageWeights.projectId, projectId), eq(schema.docStageWeights.register, register)))
+    .all().sort((a, b) => a.order - b.order);
+  const numbering = db.select().from(schema.docNumbering)
+    .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register)))
+    .all()[0];
+  const shown = rows.filter((r) => MAIN_STAGES.includes(r.stage) || r.weight > 0);
+  const stages = (shown.length ? shown : MAIN_STAGES.map((stage) => ({ stage, weight: undefined, label: null, fullName: null, color: null })))
+    .map((r) => {
+      const d = defaultStage(r.stage, r.weight ?? undefined);
+      return { ...d, label: r.label?.trim() || d.label, name: r.fullName?.trim() || d.name, color: r.color || d.color };
+    });
+  return { stages, codes: parseCodes(numbering?.codes), area: numbering?.area ?? '' };
+}
+
+/**
+ * The next letter number each way, continuing the register's own pattern
+ * (`MRB-TRM-O-0017` → `MRB-TRM-O-0018`). Empty when there is no pattern yet:
+ * a first letter's number is the person's to type.
+ */
+export function getNextLetterNumbers(projectId: string, register: RegisterKind): { out: string; in: string } {
+  const letters = db.select().from(schema.transmittals)
+    .where(and(eq(schema.transmittals.projectId, projectId), eq(schema.transmittals.register, register)))
+    .all();
+  const next = (direction: 'out' | 'in') => {
+    let best: { head: string; n: number; width: number } | null = null;
+    for (const l of letters) {
+      if (l.direction !== direction) continue;
+      const m = /^(.*?)(\d+)$/.exec(l.no.trim());
+      if (!m) continue;
+      const n = Number(m[2]);
+      if (!best || n > best.n) best = { head: m[1], n, width: m[2].length };
+    }
+    return best ? `${best.head}${String(best.n + 1).padStart(best.width, '0')}` : '';
+  };
+  return { out: next('out'), in: next('in') };
 }
 
 export function getRegisterSummary(
@@ -854,6 +899,9 @@ export function getRegisterCards(
           docNo: d.docNo,
           title: d.title,
           revision: d.revision,
+          kind: d.kind,
+          pic: d.pic,
+          remarks: d.remarks,
           percent: percentOf([d], loaded),
           stage: last?.stage ?? null,
           returnCode: lastReturn && !isApproved(lastReturn.returnCode) ? lastReturn.returnCode : null,

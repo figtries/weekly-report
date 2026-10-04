@@ -210,6 +210,12 @@ export interface DocumentInput {
   documentId: string;
   docNo: string;
   title: string;
+  /** Each left out keeps what is stored (the detail sheet saves one field at a time). */
+  kind?: string;
+  categoryId?: string;
+  revision?: string;
+  pic?: string;
+  remarks?: string;
 }
 
 /** Fix the document itself — its number and its title. */
@@ -231,7 +237,23 @@ export async function saveDocument(input: DocumentInput): Promise<ActionResult> 
       if (clash) throw new Error(`${docNo} is already used`);
     }
 
-    db.update(schema.documents).set({ docNo, title })
+    const extra: Partial<typeof schema.documents.$inferInsert> = {};
+    if (input.kind !== undefined) extra.kind = input.kind.trim().toLowerCase().startsWith('dw') ? 'Dwg' : 'Doc';
+    if (input.revision !== undefined) extra.revision = input.revision.trim() || null;
+    if (input.pic !== undefined) extra.pic = input.pic.trim() || null;
+    if (input.remarks !== undefined) extra.remarks = input.remarks.trim() || null;
+    if (input.categoryId !== undefined && input.categoryId !== doc.categoryId) {
+      const target = db.select().from(schema.docCategories)
+        .where(and(
+          eq(schema.docCategories.id, input.categoryId),
+          eq(schema.docCategories.projectId, input.projectId),
+          eq(schema.docCategories.register, input.register),
+        )).all()[0];
+      if (!target) throw new Error('That discipline is not in this register');
+      extra.categoryId = target.id;
+    }
+
+    db.update(schema.documents).set({ docNo, title, ...extra })
       .where(eq(schema.documents.id, doc.id)).run();
 
     refreshRegister();
@@ -342,6 +364,8 @@ export async function saveNumbering(input: {
   prefix: string;
   disciplines: Record<string, string>;
   types: Record<string, string>;
+  /** Left out keeps the stored area. */
+  area?: string;
 }): Promise<ActionResult> {
   await beforeWrite();
   try {
@@ -356,6 +380,7 @@ export async function saveNumbering(input: {
       disciplines: JSON.stringify(input.disciplines ?? {}),
       types: JSON.stringify(input.types ?? {}),
       digits: 3,
+      ...(input.area !== undefined ? { area: input.area.trim().toUpperCase() || null } : {}),
     };
 
     const existing = db.select().from(schema.docNumbering)
@@ -482,6 +507,83 @@ export async function saveStageWeights(input: {
  * deleting a group that still holds documents would take their whole history
  * with it and nobody would be asked. This condition is what stands in the way.
  */
+/**
+ * A register's own words, weights and colours (Setup, 4 Oct 2026). The stage
+ * and code KEYS never change here; only what they are called and how they
+ * look. Weights must close at 100, because every percentage is computed from
+ * them; a total of 90 would read a finished document as 90%.
+ */
+export async function saveRegisterSettings(input: {
+  projectId: string;
+  register: RegisterKind;
+  stages: { stage: string; weight: number; label: string; name: string; color: string }[];
+  codes?: { key: string; label: string; meaning: string }[];
+  area?: string;
+}): Promise<ActionResult> {
+  await beforeWrite();
+  try {
+    const register = assertRegister(input.register);
+    const total = input.stages.reduce((a, w) => a + (Number.isFinite(w.weight) ? w.weight : 0), 0);
+    if (Math.abs(total - 100) > 0.001) throw new Error(`The weights add up to ${total}%, not 100%`);
+    const COLOR = /^#[0-9a-f]{6}$/i;
+
+    db.transaction((tx) => {
+      const rows = tx.select().from(schema.docStageWeights)
+        .where(and(eq(schema.docStageWeights.projectId, input.projectId), eq(schema.docStageWeights.register, register)))
+        .all();
+      if (rows.length === 0) {
+        tx.insert(schema.docStageWeights).values(STAGE_ORDER.map((stage, order) => ({
+          id: randomUUID(), projectId: input.projectId, register, stage, weight: 0, order,
+        }))).run();
+      }
+      for (const s of input.stages) {
+        const stage = assertStage(s.stage);
+        if (s.weight < 0) throw new Error('A weight cannot be negative');
+        if (!s.label.trim()) throw new Error(`Give ${stage} a short name`);
+        tx.update(schema.docStageWeights)
+          .set({
+            weight: s.weight,
+            label: s.label.trim().slice(0, 12),
+            fullName: s.name.trim().slice(0, 60) || null,
+            color: COLOR.test(s.color) ? s.color : null,
+          })
+          .where(and(
+            eq(schema.docStageWeights.projectId, input.projectId),
+            eq(schema.docStageWeights.register, register),
+            eq(schema.docStageWeights.stage, stage),
+          )).run();
+      }
+
+      if (input.codes !== undefined || input.area !== undefined) {
+        const values: Partial<typeof schema.docNumbering.$inferInsert> = {};
+        if (input.codes !== undefined) {
+          values.codes = JSON.stringify(input.codes
+            .filter((c) => ['APP', 'AWC', 'RWC'].includes(c.key))
+            .map((c) => ({ key: c.key, label: c.label.trim().slice(0, 8), meaning: c.meaning.trim().slice(0, 60) })));
+        }
+        if (input.area !== undefined) values.area = input.area.trim().toUpperCase().slice(0, 8) || null;
+        const numbering = tx.select().from(schema.docNumbering)
+          .where(and(eq(schema.docNumbering.projectId, input.projectId), eq(schema.docNumbering.register, register)))
+          .all()[0];
+        if (numbering) {
+          tx.update(schema.docNumbering).set(values).where(eq(schema.docNumbering.id, numbering.id)).run();
+        } else {
+          const project = tx.select().from(schema.projects).where(eq(schema.projects.id, input.projectId)).all()[0];
+          tx.insert(schema.docNumbering).values({
+            id: randomUUID(), projectId: input.projectId, register,
+            prefix: (project?.alias?.trim() || 'DOC').toUpperCase(), ...values,
+          }).run();
+        }
+      }
+    });
+
+    refreshRegister();
+    return { ok: true, changed: input.stages.length };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function deleteCategory(input: {
   projectId: string; register: RegisterKind; categoryId: string;
 }): Promise<ActionResult> {

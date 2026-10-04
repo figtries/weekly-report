@@ -250,6 +250,10 @@ export interface DocumentCard {
   docNo: string | null;
   title: string;
   revision: string | null;
+  /** Doc or Dwg as stored. */
+  kind: string | null;
+  pic: string | null;
+  remarks: string | null;
   percent: number;
   /** The furthest stage it has actually reached. */
   stage: DocStage | null;

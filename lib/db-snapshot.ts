@@ -217,6 +217,11 @@ const EXPECTED_COLUMNS: Array<{ table: string; column: string; decl: string }> =
   { table: 'wbs_nodes', column: 'forecast_rung', decl: 'text' },
   { table: 'wbs_nodes', column: 'forecast_week', decl: 'integer' },
   { table: 'wbs_nodes', column: 'waits_for', decl: 'text' },
+  { table: 'doc_stage_weights', column: 'label', decl: 'text' },
+  { table: 'doc_stage_weights', column: 'full_name', decl: 'text' },
+  { table: 'doc_stage_weights', column: 'color', decl: 'text' },
+  { table: 'doc_numbering', column: 'area', decl: 'text' },
+  { table: 'doc_numbering', column: 'codes', decl: 'text' },
 ];
 
 /**

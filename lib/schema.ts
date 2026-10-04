@@ -582,6 +582,14 @@ export const docStageWeights = sqliteTable('doc_stage_weights', {
   /** Share of a document, 0..100. The weighted stages should sum to 100. */
   weight: real('weight').notNull(),
   order: integer('sort_order').notNull().default(0),
+  /**
+   * What this project calls the stage, its full name and its colour (4 Oct
+   * 2026): the register's own words and bars, set on Setup. Null reads the
+   * defaults in `lib/register-settings.ts`; the stage key above never changes.
+   */
+  label: text('label'),
+  fullName: text('full_name'),
+  color: text('color'),
 }, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.register, t.stage)]);
 
 /**
@@ -607,6 +615,10 @@ export const docNumbering = sqliteTable('doc_numbering', {
   /** Group name → type code without its kind letter, as JSON. */
   types: text('types').notNull().default('{}'),
   digits: integer('digits').notNull().default(3),
+  /** The area segment after the project code (`GPF` in MRB-GPF-PR-RPT-001); null when the project numbers without one. */
+  area: text('area'),
+  /** The client's codes as this project words them, JSON (see `lib/register-settings.ts`). */
+  codes: text('codes'),
 }, (t) => [uniqueIndex('doc_numbering_project_idx').on(t.projectId, t.register)]);
 
 export const transmittals = sqliteTable('transmittals', {

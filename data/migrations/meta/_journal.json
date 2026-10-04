@@ -106,6 +106,13 @@
       "when": 1790507967511,
       "tag": "0014_redundant_hannibal_king",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1791126036690,
+      "tag": "0015_remarkable_the_stranger",
+      "breakpoints": true
     }
   ]
 }

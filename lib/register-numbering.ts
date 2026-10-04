@@ -32,6 +32,8 @@ export interface NumberingRule {
   types: Record<string, string>;
   /** How many digits the running number gets. Both real registers use three. */
   digits: number;
+  /** The area segment after the project code (`GPF`), when the project uses one. */
+  area?: string;
 }
 
 /** `Doc` → `D`, `Dwg` → `G` (gambar). The first letter of every type code. */
@@ -130,6 +132,7 @@ export function nextNumber(
 ): string {
   const head = [
     rule.prefix.trim().toUpperCase(),
+    (rule.area ?? '').trim().toUpperCase(),
     disciplineFor(section, rule),
     `${kindLetter(kind)}${typeFor(group, rule)}`,
   ].filter(Boolean).join('-');
