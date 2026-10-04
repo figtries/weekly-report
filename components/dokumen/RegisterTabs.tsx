@@ -3,6 +3,12 @@
 import WeekRow from '@/components/weekly/WeekRow';
 import WeekSteps from '@/components/weekly/WeekSteps';
 import { usePathname } from 'next/navigation';
+import { Download, Settings2 } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+
+/** Pressed in the header, heard by the Data screen (`RegisterWorkbench`). */
+export const OPEN_SETUP = 'register:setup';
 
 /**
  * The four screens of Document Control, laid out exactly like the weekly
@@ -45,6 +51,7 @@ export function RegisterTabs({
 }) {
   const pathname = usePathname();
   const active = TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? 'summary';
+  const register = active === 'data' ? 'edl' : active === 'vdrl-data' ? 'vdrl' : null;
 
   return (
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
@@ -54,14 +61,22 @@ export function RegisterTabs({
           its own copy before, a small pill and a grey full-width tab strip,
           and moving between the two sections read as moving between apps. */}
       <div className="flex w-full animate-enter flex-col gap-3 sm:w-fit">
-        <WeekRow
-          weeks={weeks}
-          selectedWeek={selectedWeek}
-          projectCurrentWeek={projectCurrentWeek}
-          activeTab={active}
-          basePath="/dokumen"
-          anchorEnd={anchorEnd}
-        />
+        {/* Export and Setup as two small marks at the row's end (4 Oct 2026):
+            as buttons in the register's toolbar they were three more things
+            between the tabs and the list. Data screens only. */}
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <WeekRow
+              weeks={weeks}
+              selectedWeek={selectedWeek}
+              projectCurrentWeek={projectCurrentWeek}
+              activeTab={active}
+              basePath="/dokumen"
+              anchorEnd={anchorEnd}
+            />
+          </div>
+          {register && <RegisterMarks register={register} className="hidden sm:flex" />}
+        </div>
         <WeekSteps
           className="sm:w-full"
           ariaLabel="Document Control"
@@ -79,6 +94,37 @@ export function RegisterTabs({
           who work here know the pair, and on every screen it was the first
           thing between the tabs and the figures. REGISTER_INFO still says it
           where a register is first built. */}
+    </div>
+  );
+}
+
+/**
+ * Export and Setup as two small marks: Lucille blue for the file, violet for
+ * the register's own settings. Beside Set as current from a tablet up; a
+ * phone's week row has no room, so there they sit beside the list's title.
+ */
+export function RegisterMarks({ register, className }: { register: 'edl' | 'vdrl'; className?: string }) {
+  const name = register === 'edl' ? 'EDL' : 'VDRL';
+  return (
+    <div className={cn('shrink-0 items-center gap-2.5', className)}>
+      <a
+        href={`/api/register/export?register=${register}`}
+        download
+        aria-label={`Export the ${name} to Excel`}
+        title="Export to Excel"
+        className="inline-flex size-11 items-center justify-center rounded-lg bg-primary-soft text-primary shadow-[0_0_0_1px_rgba(29,78,216,.12)] transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
+      >
+        <Download className="h-[18px] w-[18px]" />
+      </a>
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event(OPEN_SETUP))}
+        aria-label={`Set up the ${name}`}
+        title="Setup"
+        className="inline-flex size-11 items-center justify-center rounded-lg bg-check-soft text-check shadow-[0_0_0_1px_rgba(109,40,217,.14)] transition-colors duration-200 ease-ios hover:bg-check hover:text-white"
+      >
+        <Settings2 className="h-[18px] w-[18px]" />
+      </button>
     </div>
   );
 }

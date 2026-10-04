@@ -113,16 +113,13 @@ check('kategori tetap', db.select().from(schema.docCategories)
 console.log('\ngagal di tengah tidak meninggalkan setengah register');
 const before = db.select().from(schema.documents)
   .where(eq(schema.documents.projectId, PROJECT)).all().length;
-let threw = false;
-try {
-  writeSeed({
-    projectId: PROJECT, register: 'edl', text: 'GENERAL\nWPP-YY-001\tSatu',
-    clientName: '', contractorName: 'PT. INDOTURBINE',
-  });
-} catch { threw = true; }
-check('menolak client kosong', threw, true);
-check('tidak ada yang tertulis', db.select().from(schema.documents)
-  .where(eq(schema.documents.projectId, PROJECT)).all().length, before);
+// Setup sends no names: the project's own stay as they are.
+writeSeed({ projectId: PROJECT, register: 'edl', text: 'GENERAL\nWPP-YY-001\tSatu' });
+const kept = db.select().from(schema.projects).where(eq(schema.projects.id, PROJECT)).get()!;
+check('nama client tetap', kept.clientName, 'PETROGAS (BASIN) LTD.');
+check('nama kontraktor tetap', kept.contractorName, 'PT. INDOTURBINE');
+check('satu dokumen bertambah', db.select().from(schema.documents)
+  .where(eq(schema.documents.projectId, PROJECT)).all().length, before + 1);
 
 console.log('\nstruktur kosong tetap tersimpan — judul besar, judul utama, sub judul');
 const structure = writeDraft({

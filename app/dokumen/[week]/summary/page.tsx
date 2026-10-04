@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
+import { RegisterSetup } from '@/components/dokumen/RegisterSetup';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getEngineeringBridge, getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
@@ -51,7 +51,7 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
     const parties = getRegisterParties(projectId);
     return (
       <RouteTransition id="dokumen-edl-summary">
-        <RegisterBuilder
+        <RegisterSetup
           // Saved headings come back as fixed rows to keep adding into: the
           // page only becomes the workbench once a document exists.
           key={shape.categories}
@@ -60,8 +60,8 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
-
           hasDocuments={false}
+          settings={getRegisterSettings(projectId, 'edl')}
           sources={getRegisterSources(projectId, 'edl')}
           numbering={getNumbering(projectId, 'edl')}
         />

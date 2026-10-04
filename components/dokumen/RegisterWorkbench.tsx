@@ -2,7 +2,7 @@
 
 import { Fragment, Suspense, startTransition, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
-import { Check, ChevronDown, Download, Plus, Search, Send, Settings2, X } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search, Send, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { addCategory, addDocument, deleteCategory, renameCategory } from '@/lib/doc-actions';
@@ -15,7 +15,8 @@ import type { ExistingNode } from '@/lib/builder-model';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 
-import { RegisterBuilder } from './RegisterBuilder';
+import { RegisterSetup } from './RegisterSetup';
+import { OPEN_SETUP, RegisterMarks } from './RegisterTabs';
 
 const loadTransmittal = () => import('./TransmittalDialog');
 const preloadTransmittal = () => { void loadTransmittal(); };
@@ -133,6 +134,13 @@ export function RegisterWorkbench({
     return () => { live = false; window.clearTimeout(t); };
   }, []);
 
+  // The header's Setup mark (RegisterTabs).
+  useEffect(() => {
+    const open = () => setBuilding(true);
+    window.addEventListener(OPEN_SETUP, open);
+    return () => window.removeEventListener(OPEN_SETUP, open);
+  }, []);
+
   // `?doc=<id>` (a row on the Summary's Needs action) opens that document.
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('doc');
@@ -165,13 +173,14 @@ export function RegisterWorkbench({
   const canReply = tickedCards.length > 0 && tickedCards.every((c) => c.out);
   const sendLabel = canSend && sendStages.size === 1 ? stageOf(settings, [...sendStages][0]!).label : null;
 
-  const primary = tickedCards.length === 0
-    ? { text: 'Record transmittal', run: () => openLetter(null) }
-    : canSend
-      ? { text: `Send ${tickedCards.length}${sendLabel ? ` as ${sendLabel}` : ''}`, run: () => openLetter({ direction: 'out', ids: [...ticked] }) }
-      : canReply
-        ? { text: `Record reply · ${tickedCards.length}`, run: () => openLetter({ direction: 'in', ids: [...ticked] }) }
-        : { text: 'Record transmittal', run: () => openLetter(null) };
+  // Only for what is ticked: one document is sent or answered from its own
+  // sheet, so a standing "Record transmittal" button said nothing the sheet
+  // does not (removed 4 Oct 2026).
+  const primary = canSend
+    ? { text: `Send ${tickedCards.length}${sendLabel ? ` as ${sendLabel}` : ''}`, run: () => openLetter({ direction: 'out', ids: [...ticked] }) }
+    : canReply
+      ? { text: `Record reply · ${tickedCards.length}`, run: () => openLetter({ direction: 'in', ids: [...ticked] }) }
+      : null;
 
   function openLetter(preset: { direction: 'out' | 'in'; ids: string[] } | null) {
     setLetterMounted(true);
@@ -200,12 +209,13 @@ export function RegisterWorkbench({
 
   if (building) {
     return (
-      <RegisterBuilder
+      <RegisterSetup
         projectId={projectId}
         register={register}
         clientName={clientName}
         contractorName={contractorName}
         hasDocuments={totalDocuments > 0}
+        settings={settings}
         existing={existing}
         numbering={numbering}
         sources={sources}
@@ -234,7 +244,8 @@ export function RegisterWorkbench({
             {(contractorName || clientName) && <span className="hidden sm:inline"> · {contractorName || 'Contractor'} → {clientName || 'Client'}</span>}
           </p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+        <RegisterMarks register={register} className="flex sm:hidden" />
+        <div className="grid w-full grid-cols-2 gap-2 empty:hidden sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           {(counts.info > 0 || emptyGroups > 0) && (
             <button
               type="button"
@@ -252,15 +263,14 @@ export function RegisterWorkbench({
               <Button variant="outline" className="h-10" onClick={() => setTicked(new Set())}>Clear</Button>
             </span>
           )}
-          <Button variant="outline" className="h-10" asChild>
-            <a href={`/api/register/export?register=${register}`} download><Download className="mr-1.5 h-4 w-4" />Export</a>
-          </Button>
-          <Button variant="outline" className="h-10" onClick={() => setBuilding(true)}>
-            <Settings2 className="mr-1.5 h-4 w-4" />Setup
-          </Button>
-          <Button className="col-span-2 h-10" onClick={primary.run} onPointerDown={preloadTransmittal}>
-            <Send className="mr-1.5 h-4 w-4" />{primary.text}
-          </Button>
+          {primary && (
+            <Button className="hidden h-10 md:inline-flex" onClick={primary.run} onPointerDown={preloadTransmittal}>
+              <Send className="mr-1.5 h-4 w-4" />{primary.text}
+            </Button>
+          )}
+          {tickedCards.length > 0 && !primary && (
+            <span className="hidden text-[13px] text-muted-foreground md:inline">Tick documents at the same step to send or answer them together.</span>
+          )}
         </div>
       </div>
 
@@ -437,7 +447,9 @@ export function RegisterWorkbench({
         <div className="animate-fade-in-up fixed inset-x-3 bottom-4 z-30 flex items-center gap-3 rounded-full bg-[#0f172a] py-2 pl-5 pr-2 shadow-[0_12px_32px_-8px_rgba(15,23,42,.45)] md:hidden">
           <span className="text-sm text-white"><b className="tabular-nums">{tickedCards.length}</b> selected</span>
           <button type="button" onClick={() => setTicked(new Set())} className="h-9 px-2 text-[13px] text-slate-300">Clear</button>
-          <button type="button" onClick={primary.run} className="ml-auto h-11 rounded-full bg-[#2563eb] px-5 text-sm font-semibold text-white">{primary.text}</button>
+          {primary
+            ? <button type="button" onClick={primary.run} className="ml-auto h-11 rounded-full bg-[#2563eb] px-5 text-sm font-semibold text-white">{primary.text}</button>
+            : <span className="ml-auto pr-3 text-right text-xs text-slate-300">Not at the same step</span>}
         </div>
       )}
 

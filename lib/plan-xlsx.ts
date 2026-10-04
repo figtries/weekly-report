@@ -30,7 +30,7 @@
  *
  * **The guess is offered, not imposed.** The columns come back with their
  * labels and sample values and the mapping is just a suggestion the panel can
- * overrule, which is the shape `RegisterBuilder` already uses. That is why the
+ * overrule, which is the shape `RegisterSetup` already uses. That is why the
  * whole left block is returned rather than five chosen columns: re-mapping a
  * column must not mean uploading seven megabytes again.
  *

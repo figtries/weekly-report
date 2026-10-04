@@ -417,8 +417,6 @@ export async function addFromDraft(input: {
   projectId: string;
   register: RegisterKind;
   groups: DraftGroup[];
-  clientName: string;
-  contractorName: string;
 }): Promise<ActionResult> {
   await beforeWrite();
   try {

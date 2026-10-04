@@ -915,6 +915,41 @@ BUDGET IS THE ONLY THING" above); the Weights strip names every such leaf so
 the gap is reminded rather than guessed. And a row that stops being a leaf
 stops carrying a weight, the same stale-flag family as `isMilestone`.
 
+# Document Control: Summary, Data, Setup
+
+Redesigned 4 Oct 2026 from mockups he chose (Summary A, Data B, Setup B). The
+week row and the four tabs above them are NOT part of it and stay as they are.
+
+**Summary** is one ledger: KPI strip, week by week beside the disciplines (most
+behind first), and Needs action split into what is with us and what is with the
+client. **Data** is the list; a row opens `DocumentSheet`, built on
+`ActivityPanel`'s shell and motion, where a document controller edits
+everything about one document. A transmittal is recorded from a sheet or from
+ticked rows ("Send 3 as IFA"); the standing "Record transmittal" button was
+removed because the sheet already does it. **Export and Setup are two marks**
+(`RegisterMarks`): blue and violet, beside Set as current from a tablet up and
+beside the list's title on a phone, where the week row has no room.
+
+**Setup** (`RegisterSetup`) holds the documents, the number's shape (the
+project's initial is locked; area, discipline and type codes are the
+register's), the client's codes and each stage's short name, full name, colour,
+weight and the Rev it goes out with (`lib/register-settings.ts`). **Rev is
+derived**: a document's Rev is the one its latest issue carries under that rule,
+each resubmission one more (A, B, C / 0, 1, 2); a blank rule falls back to the
+typed Rev. The stage and code KEYS never change, only their words. **The two
+sides are never asked here**: contractor and client are the project's, and a
+register only reads them (`writeCategories` writes them only from an import
+that names both).
+
+**A reminder is red, a sentence, and sits where the gap is.** Only what would
+write a wrong figure holds Save back (weights that are not 100, a blank code or
+short name); a missing plan date or an empty heading is reminded, never refused.
+
+**The register curve wipes in with a CSS keyframe** (`.animate-curve-wipe`),
+not framer-motion: its `initial` clip shipped hidden in the server HTML and held
+the route's view transition at frame zero, so headless Chrome never painted the
+Summary. That is the "entrance is a keyframe" rule above, proved again.
+
 # Roles: a draft until login exists
 
 Added 3 Oct 2026. **Roles took Settings' slot at the foot of the sidebar**; the

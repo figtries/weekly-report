@@ -20,8 +20,12 @@ export interface SeedInput {
   register: RegisterKind;
   text: string;
   mapping?: Partial<ColumnMapping>;
-  clientName: string;
-  contractorName: string;
+  /**
+   * The two sides, only from an import that names them. Setup never sends
+   * them: a register's sides are the project's, set in Project details.
+   */
+  clientName?: string;
+  contractorName?: string;
 }
 
 /** IFR 0.5 · IFA 0.3 · AFC 0.2 — Gundih's agreement AND Petrogas', so an honest start. */
@@ -106,10 +110,8 @@ function writeCategories(
   categories: SeedCategory[],
   { allowEmpty = false }: { allowEmpty?: boolean } = {},
 ): SeedResult {
-  const clientName = input.clientName.trim();
-  const contractorName = input.contractorName.trim();
-  if (!clientName) throw new Error('Client name is required');
-  if (!contractorName) throw new Error('Contractor name is required');
+  const clientName = input.clientName?.trim() ?? '';
+  const contractorName = input.contractorName?.trim() ?? '';
 
   const total = categories.reduce((n, c) => n + c.documents.length, 0);
   // Structure on its own is a real thing to save; a pasted list with no
@@ -118,10 +120,14 @@ function writeCategories(
   if (categories.length === 0) throw new Error('Nothing to add');
 
   return db.transaction((tx) => {
-    tx.update(schema.projects)
-      .set({ clientName, contractorName })
-      .where(eq(schema.projects.id, input.projectId))
-      .run();
+    // Only an import that names both sides writes them; anything else leaves
+    // the project's own names alone.
+    if (clientName && contractorName) {
+      tx.update(schema.projects)
+        .set({ clientName, contractorName })
+        .where(eq(schema.projects.id, input.projectId))
+        .run();
+    }
 
     const existingWeights = tx.select().from(schema.docStageWeights)
       .where(and(

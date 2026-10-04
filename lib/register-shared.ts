@@ -369,7 +369,7 @@ export interface DisciplineLink {
  * section for the first time does not start with a guess.
  *
  * Wording taken from what the code already knew: `lib/register.ts` ("what we
- * owe the client" / "what our vendors owe us") and RegisterBuilder's own
+ * owe the client" / "what our vendors owe us") and RegisterSetup's own
  * expansions of the acronyms.
  */
 export const REGISTER_INFO = {

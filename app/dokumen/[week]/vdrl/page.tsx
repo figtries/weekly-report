@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import SectionSkeleton from '@/components/ui/SectionSkeleton';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
-import { RegisterBuilder } from '@/components/dokumen/RegisterBuilder';
+import { RegisterSetup } from '@/components/dokumen/RegisterSetup';
 import { SummaryScreen } from '@/components/dokumen/SummaryScreen';
 import {
   getNumbering, getObstacles, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getWeekMovement,
@@ -46,7 +46,7 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
     const parties = getRegisterParties(projectId);
     return (
       <RouteTransition id="dokumen-vdrl-summary">
-        <RegisterBuilder
+        <RegisterSetup
           // Saved headings come back as fixed rows to keep adding into: the
           // page only becomes the workbench once a document exists.
           key={shape.categories}
@@ -55,8 +55,8 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
-
           hasDocuments={false}
+          settings={getRegisterSettings(projectId, 'vdrl')}
           sources={getRegisterSources(projectId, 'vdrl')}
           numbering={getNumbering(projectId, 'vdrl')}
         />

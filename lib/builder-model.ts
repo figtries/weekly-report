@@ -37,6 +37,8 @@ export interface BuilderDoc {
   docNo: string;
   /** False once the number came from a paste: it is not recomputed. */
   auto: boolean;
+  /** The first stage's plan date (ISO), '' until somebody gives one. */
+  planIfr?: string;
 }
 
 export interface BuilderNode {
@@ -302,7 +304,7 @@ export function toDraftGroups(tree: BuilderNode[]): DraftGroup[] {
     for (const n of ns) {
       const here = [...path, n.name.trim()];
       const docs = n.docs.filter(keep).map((d) => ({
-        docNo: d.docNo.trim() || null, title: d.title.trim(), kind: d.kind,
+        docNo: d.docNo.trim() || null, title: d.title.trim(), kind: d.kind, planIfr: d.planIfr || null,
       }));
       if (docs.length > 0 || (!n.locked && n.children.length === 0)) out.push({ path: here, documents: docs });
       walk(n.children, here);
