@@ -73,7 +73,7 @@ export default async function DocumentControlLayout({
           inside this scroller, so moving between the four never disturbs the
           week picker or the tab row. */}
       <div className="section-scroll flex-1 overflow-auto scrollbar-none">
-        <div className="px-3 py-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="px-4 pt-3 pb-4 sm:p-6 lg:p-8">{children}</div>
       </div>
     </div>
     </RouteTransition>

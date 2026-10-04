@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, Suspense, startTransition, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Suspense, startTransition, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { Check, ChevronDown, Plus, Search, Send, X } from 'lucide-react';
 
@@ -122,6 +122,7 @@ export function RegisterWorkbench({
 
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -158,6 +159,9 @@ export function RegisterWorkbench({
     });
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  /** Adding into a folded group unfolds it first, or the box would open where nobody can see it. */
+  const expand = (id: string) => setCollapsed((c) => { if (!c.has(id)) return c; const n = new Set(c); n.delete(id); return n; });
 
   const q = query.trim().toLowerCase();
   const visible = (c: DocumentCard) => {
@@ -276,17 +280,17 @@ export function RegisterWorkbench({
       <section className={cn(phoneCard, 'p-4 md:hidden')}>
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="min-w-0 truncate text-[13px] font-semibold text-foreground">{info.long}</h2>
-          <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{totalDocuments} docs</span>
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{totalDocuments} docs</span>
         </div>
         <div className="mt-1.5 flex items-end gap-2.5">
-          <span className="text-[42px] font-bold leading-none tracking-[-0.03em] text-foreground tabular-nums">
-            {overview.actual.toFixed(1)}<span className="text-xl font-medium text-muted-foreground">%</span>
+          <span className="text-[40px] font-semibold leading-none tracking-[-0.03em] text-foreground tabular-nums">
+            {overview.actual.toFixed(1)}<span className="text-xl text-muted-foreground">%</span>
           </span>
           {overview.plan !== null && (
             <span className="pb-1 text-[13px] text-muted-foreground">plan <b className="font-semibold text-foreground tabular-nums">{overview.plan.toFixed(1)}%</b></span>
           )}
           {against && (
-            <span className={cn('mb-1 ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
+            <span className={cn('mb-1.5 ml-auto h-6 shrink-0 rounded-full px-[9px] text-xs font-semibold leading-6 tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
               {against.diff > 0 ? `+${against.diff.toFixed(1)} ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} behind`}
             </span>
           )}
@@ -311,7 +315,7 @@ export function RegisterWorkbench({
 
       {/* Phones (the F-Phone mockup): the filters stand on the page, the picked one dark. */}
       <div className="flex flex-col gap-2.5 md:hidden">
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 scrollbar-none">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scrollbar-none">
           {chips.map((c) => (
             <button
               key={c.key}
@@ -319,27 +323,40 @@ export function RegisterWorkbench({
               aria-pressed={filter === c.key}
               onClick={() => setFilter(c.key)}
               className={cn(
-                'h-10 shrink-0 rounded-full px-4 text-[13.5px] font-semibold transition-colors duration-200 ease-ios',
+                'h-9 shrink-0 rounded-full px-3.5 text-[13px] transition-colors duration-200 ease-ios',
                 filter === c.key
-                  ? (c.tone === 'bad' ? 'bg-bad text-white' : 'bg-[#0f172a] text-white')
-                  : (c.tone === 'bad' ? 'bg-bad-soft text-bad' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]'),
+                  ? cn('font-semibold', c.tone === 'bad' ? 'bg-bad text-white' : 'bg-[#0f172a] text-white')
+                  : cn('font-medium', c.tone === 'bad' ? 'bg-bad-soft text-bad' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]'),
               )}
             >
               {c.label}{' '}
-              <span className={cn('tabular-nums', filter === c.key ? 'opacity-70' : c.tone === 'warn' ? 'text-warn' : c.tone === 'bad' ? '' : 'font-medium text-muted-foreground')}>{c.n}</span>
+              <span className={cn('tabular-nums', filter === c.key ? 'opacity-75' : c.tone === 'warn' ? 'font-semibold text-warn' : c.tone === 'bad' ? '' : 'text-muted-foreground')}>{c.n}</span>
             </button>
           ))}
-        </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search number or title"
+          {/* Search is one press away rather than a standing box: the mockup has none. */}
+          <button
+            type="button"
             aria-label="Search documents"
-            className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-          />
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen((v) => !v || query !== '')}
+            className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-full', searchOpen ? 'bg-[#0f172a] text-white' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]')}
+          >
+            <Search className="h-4 w-4" />
+          </button>
         </div>
+        {searchOpen && (
+          <div className="animate-fade-in-up relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search number or title"
+              aria-label="Search number or title"
+              className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            />
+          </div>
+        )}
       </div>
 
       {/* -------------------------------------------------------------- list */}
@@ -376,7 +393,7 @@ export function RegisterWorkbench({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh-17rem)] md:overflow-y-auto md:scrollbar-none">
+        <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh-18.75rem)] md:overflow-y-auto md:scrollbar-none">
           {/* Column names: thin, like the Excel register's own header row. */}
           <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-muted/70 px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
             <span />
@@ -394,8 +411,8 @@ export function RegisterWorkbench({
             return (
               // Never clipped on a wide screen: an overflow there would become the
               // sticky header's scroller and push it down over the first row.
-              <div key={g.id} className={cn(phoneCard, 'md:overflow-visible md:rounded-none md:bg-transparent md:shadow-none')}>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 px-4 pb-3.5 pt-4 md:sticky md:top-9 md:z-10 md:min-h-12 md:flex-nowrap md:border-b md:border-border/70 md:bg-[#f8faff] md:py-0">
+              <div key={g.id} className={cn(phoneCard, 'overflow-visible md:rounded-none md:bg-transparent md:shadow-none')}>
+                <div className="relative flex flex-wrap items-center gap-x-2 gap-y-2.5 px-4 pb-3 pt-3.5 md:sticky md:top-9 md:z-10 md:min-h-12 md:flex-nowrap md:border-b md:border-border/70 md:bg-[#f8faff] md:py-0">
                   <input
                     type="checkbox"
                     aria-label={`Select every document in ${g.name}`}
@@ -404,21 +421,25 @@ export function RegisterWorkbench({
                     onChange={(e) => toggleGroup(g, e.target.checked)}
                     className="hidden h-4 w-4 accent-primary md:block"
                   />
-                  <button type="button" aria-expanded={open} onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
+                  <button type="button" aria-expanded={open} onClick={() => {
+                    // Folding is a wide screen's: a phone shows no chevron, so a tap there would hide rows unexplained.
+                    if (!window.matchMedia('(min-width: 768px)').matches) return;
+                    setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; });
+                  }}
                     className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:flex-none md:items-center">
                     <ChevronDown className={cn('hidden h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 ease-ios md:block', !open && '-rotate-90')} />
-                    <span className="min-w-0 truncate text-[18px] font-bold tracking-tight text-foreground md:text-[14px] md:font-semibold md:tracking-normal">
+                    <span className="min-w-0 truncate text-[16px] font-semibold tracking-[-0.01em] text-foreground md:text-[14px] md:tracking-normal">
                       {g.parentName && <span className="font-medium text-muted-foreground">{g.parentName} · </span>}{g.name}
                     </span>
-                    <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums md:text-xs">{docs.length} docs</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{docs.length} docs</span>
                   </button>
-                  <span className="shrink-0 text-[24px] font-bold leading-none tracking-tight text-foreground tabular-nums md:hidden">
-                    {g.node.actual.toFixed(1)}<span className="text-sm font-medium text-muted-foreground">%</span>
+                  <span className="shrink-0 text-[20px] font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums md:hidden">
+                    {g.node.actual.toFixed(1)}<span className="text-xs text-muted-foreground">%</span>
                   </span>
                   {/* Phone: the bars across the card, its plan beside them. */}
-                  <div className="flex basis-full items-center gap-3 md:hidden">
+                  <div className="flex basis-full items-center gap-2 md:hidden">
                     <span className="flex flex-1 flex-col gap-[3px]">
-                      <span className="h-2 rounded-full bg-muted"><span className="block h-2 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
+                      <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
                       {g.node.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.node.plan)}%` }} /></span>}
                     </span>
                     {g.node.plan !== null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">plan {g.node.plan.toFixed(1)}</span>}
@@ -431,20 +452,21 @@ export function RegisterWorkbench({
                     <span className="text-xs font-semibold text-foreground tabular-nums">{g.node.actual.toFixed(1)}%</span>
                     {g.node.plan !== null && <span className="text-xs text-muted-foreground tabular-nums">/ {g.node.plan.toFixed(1)}%</span>}
                   </div>
-                  <button type="button" onClick={() => { setAddingTo(addingTo === g.id ? null : g.id); setError(null); }}
-                    className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-4 text-[13.5px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">
-                    <Plus className="h-3.5 w-3.5" />Add<span className="md:hidden"> document</span>
+                  <button type="button" onClick={() => { expand(g.id); setAddingTo(addingTo === g.id ? null : g.id); setError(null); }}
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-3.5 text-[13px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">
+                    <Plus className="hidden h-3.5 w-3.5 md:block" /><span className="md:hidden">+ </span>Add<span className="md:hidden"> document</span>
                   </button>
-                  <div className="relative">
+                  {/* On a phone the menu hangs from the header, the card's width; from md, from this button. */}
+                  <div className="md:relative">
                     <button type="button" aria-label={`More for ${g.name}`} aria-expanded={menuFor === g.id} onClick={() => setMenuFor(menuFor === g.id ? null : g.id)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/70 text-muted-foreground hover:bg-muted md:h-9 md:w-9 md:bg-transparent">
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f3f4f6] text-[#374151] hover:bg-muted md:bg-transparent md:text-muted-foreground">
                       <span className="text-base leading-none">⋯</span>
                     </button>
                     {menuFor === g.id && (
                       <GroupMenu
                         name={g.name}
                         empty={docs.length === 0}
-                        onAdd={() => { setMenuFor(null); setAddingTo(g.id); }}
+                        onAdd={() => { setMenuFor(null); expand(g.id); setAddingTo(g.id); }}
                         onClose={() => setMenuFor(null)}
                         onRename={(name) => renameCategory({ projectId, register, categoryId: g.id, name })}
                         onSub={(name) => addCategory({ projectId, register, name, parentId: g.id })}
@@ -579,7 +601,7 @@ function Row({
   return (
     <div
       className={cn(
-        'group relative flex min-h-11 items-center gap-x-1 border-t border-border/60 px-2 transition-colors duration-150 ease-ios md:grid md:gap-x-3 md:border-t-0 md:border-b md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
+        'group relative flex min-h-16 items-center gap-x-0 border-t border-border/60 pl-1 pr-4 transition-colors duration-150 ease-ios max-md:last:rounded-b-[22px] md:grid md:min-h-11 md:gap-x-3 md:border-t-0 md:border-b md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
         COLS,
         ticked ? 'bg-primary-soft/60' : opened ? 'bg-muted/60' : 'hover:bg-muted/40',
       )}
@@ -590,16 +612,16 @@ function Row({
       </label>
 
       {/* Phone: two lines. Desktop: the cells below take over. */}
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 text-left md:hidden">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left md:hidden">
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-[12px] tracking-[0.02em] text-muted-foreground [font-feature-settings:'tnum'_1,'zero'_1]">
             <span className="truncate">{c.docNo ?? 'No number'} · {stage}</span>{c.returnCode && code}
           </span>
-          <span className="mt-1 block truncate text-[15px] font-bold tracking-tight text-foreground">{c.title}</span>
+          <span className="mt-[3px] block truncate text-[14px] font-semibold text-foreground">{c.title}</span>
           {needsPlan(c) && <span className="mt-0.5 block text-xs font-semibold text-bad">Plan date needed</span>}
         </span>
         <span className="shrink-0 text-right">
-          <span className={cn('block text-[16px] font-bold tabular-nums', done ? 'text-ok' : 'text-foreground')}>{c.percent.toFixed(0)}%</span>
+          <span className={cn('block text-[15px] font-semibold tabular-nums', done ? 'text-ok' : 'text-foreground')}>{c.percent.toFixed(0)}%</span>
           <span className="block text-[11px] text-muted-foreground">{done ? 'Done' : c.out ? `${other === 'client' ? 'Client' : 'Vendor'}${days !== null ? ` · ${days} d` : ''}` : `Us${c.sendNext ? ` · ${stageOf(settings, c.sendNext).label}` : ''}`}</span>
         </span>
       </button>
@@ -720,7 +742,7 @@ function GroupMenu({
     if (r.ok) onClose();
   });
   return (
-    <div className="animate-fade-in-up absolute right-0 top-10 z-30 w-64 rounded-2xl border bg-card p-1.5 shadow-lg">
+    <div className="animate-fade-in-up absolute inset-x-4 top-[calc(100%-0.5rem)] z-30 rounded-2xl border bg-card p-1.5 shadow-lg md:inset-x-auto md:right-0 md:top-10 md:w-64">
       {mode === 'menu' ? (
         <>
           <button type="button" className={item} onClick={onAdd}>Add documents</button>
