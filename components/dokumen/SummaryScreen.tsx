@@ -87,8 +87,10 @@ export function SummaryScreen({
         <div className="col-span-3 flex flex-col justify-center gap-1.5 border-b border-border/70 p-5 lg:col-span-1 lg:border-b-0 lg:border-r">
           <span className="text-[13px] font-semibold text-foreground/80">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
           <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-            <span className="text-[40px] font-semibold leading-none tracking-[-0.03em] text-foreground tabular-nums">
-              {r1(summary.actual).toFixed(1)}<span className="ml-0.5 text-xl font-medium text-muted-foreground">%</span>
+            {/* The figure itself takes the verdict's colour: red behind plan,
+                green on or ahead of it, plain with no plan to read against. */}
+            <span className={cn('text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums', against ? (against.diff < 0 ? 'text-bad' : 'text-ok') : 'text-foreground')}>
+              {r1(summary.actual).toFixed(1)}<span className={cn('ml-0.5 text-xl font-medium', against ? 'opacity-80' : 'text-muted-foreground')}>%</span>
             </span>
             {against && (
               <span className={cn('mb-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.chip)}>
