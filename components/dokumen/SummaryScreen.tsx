@@ -91,7 +91,7 @@ export function SummaryScreen({
               {r1(summary.actual).toFixed(1)}<span className="ml-0.5 text-xl font-medium text-muted-foreground">%</span>
             </span>
             {against && (
-              <span className={cn('mb-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
+              <span className={cn('mb-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.chip)}>
                 {against.diff > 0 ? `+${against.diff.toFixed(1)} pts ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} pts behind`}
               </span>
             )}

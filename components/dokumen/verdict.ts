@@ -6,6 +6,10 @@
  * "slipping", and "on plan" covered anything within a point, which put an
  * "on plan" chip on a register 3.3 ahead. The summary and the data screen both
  * read this, so a discipline cannot be "ahead" on one and "on plan" on the other.
+ *
+ * TWO COLOURS, decided 4 Oct 2026: green when the register is on or ahead of
+ * plan, red when it is behind by any amount. Amber for "a little behind" read
+ * as a warning about something else, and on plan in grey read as no verdict.
  */
 
 /** One decimal, the way every figure in Document Control is printed. */
@@ -17,10 +21,6 @@ export const r1 = (n: number) => {
 export function verdict(actual: number, plan: number): { label: string; chip: string; diff: number } {
   const diff = r1(r1(actual) - r1(plan));
   if (diff > 0) return { label: `Ahead ${diff.toFixed(1)}`, chip: 'bg-ok-soft text-ok', diff };
-  if (diff === 0) return { label: 'On plan', chip: 'bg-muted text-muted-foreground', diff };
-  return {
-    label: `Behind ${Math.abs(diff).toFixed(1)}`,
-    chip: diff <= -10 ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn',
-    diff,
-  };
+  if (diff === 0) return { label: 'On plan', chip: 'bg-ok-soft text-ok', diff };
+  return { label: `Behind ${Math.abs(diff).toFixed(1)}`, chip: 'bg-bad-soft text-bad', diff };
 }
