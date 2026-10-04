@@ -4,26 +4,27 @@
  * Two checks over every route, and the first is the one that matters because it
  * catches the fault in the HTML rather than in its symptom.
  *
- * **THE COLLISION.** React numbers its streamed Suspense boundaries `S:0…S:n`
- * and splices each one in with `$RC`. Next numbers the PPR resume segments it
- * splices into a prerendered shell `S:3…S:n` and uses `$RS`. Same namespace,
- * and Next always starts at 3 — measured 13 Sep 2026 across every route in this
- * app: take a boundary away and the resume segments still start at 3.
+ * **THE COLLISION.** Every hidden segment React streams is a
+ * `<div hidden id="S:n">` spliced in by id, and no id may appear twice. One
+ * did, on every load of seven routes, and the cause is in React itself (read
+ * in the bundled react-dom, 4 Oct 2026; Next 16.3.8 ships the same code):
+ * `prerender` copies `nextSegmentId` into the postponed state BEFORE the
+ * prelude is flushed, and flushing the prelude can still take ids — a
+ * COMPLETED boundary over 500 bytes in a shell over ~12.8 KB is "outlined",
+ * written as a template plus `$RC("B:n","S:n")` with the next id. The resume
+ * then starts counting from the stale copy and hands the same id to its own
+ * segments (`$RS("S:3","P:3")`). `$RS` resolves by id at call time and takes
+ * the FIRST match, so on five routes the phone header's menu button was
+ * spliced into a summary card; React found a DOM it had not produced, threw
+ * #418 and regenerated the section shell — 308ms to first paint against 156ms
+ * (390px, 4x CPU). The 13 Sep reading ("Next always starts at 3, keep the
+ * shell under four boundaries") saw the symptom, not this.
  *
- * The two do not splice at the same moment. `$RC` resolves its elements and
- * QUEUES the reveal, flushing up to ~300ms later so several can be batched. In
- * that window React's `<div hidden id="S:3">` is still in the document — and
- * `$RS("S:3","P:3")` resolves by id, at call time, so it takes the FIRST match.
- * On five routes that was the sidebar's navigation, which Next then spliced
- * into the middle of a summary card. React found a DOM it had not produced,
- * threw #418 and regenerated `.section-shell` — week picker, stepper and tab
- * row rebuilt on every load, for 308ms to first paint against 156ms on a page
- * without it (390px, 4x CPU).
- *
- * So: **the shell must own fewer than four streamed Suspense boundaries.** That
- * is a hard budget, it is invisible in review, and a single `<Suspense>` added
- * anywhere above the page brings the bug back in silence. This fails the moment
- * it does.
+ * So: **no `<Suspense>` in the shell may complete during the prerender.** A
+ * boundary that postpones is safe (its id is taken before the copy); one that
+ * finishes at build time is not. Read request data after mount instead (see
+ * `LiveLinks` and `DrawerOverlay` in components/layout/Sidebar.tsx). This fails
+ * the moment any segment id is written twice.
  *
  * **THE SYMPTOM.** Then it loads each route in a real browser and fails on any
  * recoverable React error, which catches every other kind of mismatch too.
@@ -83,12 +84,15 @@ for (const r of ROUTES) {
     failures.push(`${r}: could not be fetched (${e.message})`);
     continue;
   }
-  const rc = ids(html, /\$RC\("B:\d+","(S:\d+)"\)/g);
-  const rs = ids(html, /\$RS\("(S:\d+)","P:\d+"\)/g);
-  const clash = rc.filter((x) => rs.includes(x));
-  if (clash.length) failures.push(`${r}: ${clash.join(', ')} is spliced by BOTH $RC and $RS`);
+  // Ids are hex (`S:a` follows `S:9`), and a segment inside a table or an svg
+  // is wrapped in something other than a div, so match the id alone.
+  const segs = ids(html, / id="(S:[0-9a-f]+)"/g);
+  const clash = [...new Set(segs.filter((x, i) => segs.indexOf(x) !== i))];
+  const rc = ids(html, /\$RC\("B:[0-9a-f]+","(S:[0-9a-f]+)"\)/g);
+  const rs = ids(html, /\$RS\("(S:[0-9a-f]+)","P:[0-9a-f]+"\)/g);
+  if (clash.length) failures.push(`${r}: ${clash.join(', ')} is written more than once`);
   console.log(
-    `${clash.length ? 'CLASH' : 'ok   '} ${r.padEnd(30)} RC[${rc.join(' ') || '—'}]  RS[${rs.slice(0, 4).join(' ') || '—'}]`
+    `${clash.length ? 'CLASH' : 'ok   '} ${r.padEnd(30)} RC[${rc.join(' ') || '-'}]  RS[${rs.slice(0, 4).join(' ') || '-'}]`
   );
 }
 
@@ -128,8 +132,8 @@ if (failures.length) {
   console.log('FAILED');
   for (const f of failures) console.log(`  - ${f}`);
   console.log(
-    '\nA clash means the shell has grown a fourth streamed Suspense boundary.\n' +
-      'See the note on ActiveNavList in components/layout/Sidebar.tsx.'
+    '\nA clash means a <Suspense> in the shell completed during the prerender.\n' +
+      'See the note above ActiveLinks in components/layout/Sidebar.tsx.'
   );
   process.exit(1);
 }

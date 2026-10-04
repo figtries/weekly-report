@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Suspense,
+  useCallback,
   useEffect,
   useId,
   useState,
@@ -337,30 +337,32 @@ function NavList({ links, foot, card }: { links: ReactNode; foot: ReactNode; car
  * whole-shell re-render on five routes, and the mechanism is worth writing
  * down because nothing about it is guessable:
  *
- * React numbers its streamed Suspense boundaries `S:0…S:n`. Next numbers the
- * PPR resume segments it splices into a prerendered shell `S:3…S:n` — the SAME
- * namespace, always starting at 3 (measured on 13 Sep 2026 across every route:
- * remove one boundary and the resume segments still start at 3). The shell had
- * exactly four boundaries, so React's last one was `S:3` and the two collided.
+ * Every segment React streams is a `<div hidden id="S:n">` spliced in by id,
+ * and no id may be written twice. React's `prerender` copies `nextSegmentId`
+ * into the postponed state BEFORE it flushes the prelude, and the flush can
+ * still take ids: a boundary that COMPLETED at build time, over 500 bytes, in
+ * a shell over ~12.8 KB, is written as a template plus `$RC("B:3","S:3")` with
+ * the next id. The request-time resume counts on from the stale copy and
+ * writes its own `S:3` with `$RS("S:3","P:3")`, which resolves by id and takes
+ * the FIRST match: the shell's segment, spliced into a summary card. React
+ * then found a DOM it had not produced, threw #418, and regenerated the
+ * section shell on every load of `/`, `/klaim`, `/weekly/[w]/summary`,
+ * `/weekly/[w]/control`, `/weekly/[w]/overall`, `/dokumen/[w]/summary` and
+ * `/dokumen/[w]/vdrl`. Measured cost, 390px at 4x CPU: 308ms to first
+ * contentful paint against 156ms on a page without it. (Read in the bundled
+ * react-dom on 4 Oct 2026; Next 16.3.8 ships the same code. The 13 Sep reading,
+ * "keep the shell under four boundaries", was the symptom: it held only while
+ * no boundary finished at build time, and the phone header's did.)
  *
- * They collide because the splices are not simultaneous. `$RC` resolves both
- * elements and QUEUES the reveal, flushing up to ~300ms later to batch it; in
- * that window React's `<div hidden id="S:3">` is still in the document, so
- * Next's `$RS("S:3","P:3")` — which resolves by id, at call time — took the
- * SIDEBAR and spliced it into a summary card. React then found a DOM it had
- * not produced, threw #418, and regenerated `.section-shell`: week picker,
- * stepper and tab row rebuilt on every load of
- * `/weekly/[w]/summary`, `/weekly/[w]/control`, `/weekly/[w]/overall`,
- * `/dokumen/[w]/summary` and `/dokumen/[w]/vdrl`. Measured cost, 390px at 4x
- * CPU: 308ms to first contentful paint against 156ms on a page without it.
+ * A boundary that POSTPONES is safe, its id is taken before the copy. So the
+ * rule is: no `<Suspense>` in the shell that can finish during the prerender.
+ * Here the pathname is read AFTER mount instead: nothing postpones, no
+ * boundary is emitted, the nav ships complete in the shell, and the active
+ * link lights up on hydration. Client-side navigation still updates it,
+ * because `LiveLinks` keeps the real hook. `DrawerOverlay` does the same.
  *
- * This is a Next bug, and the only lever the app has is to own fewer streamed
- * boundaries than three. So the pathname is read AFTER mount instead: nothing
- * postpones, no boundary is emitted, the nav ships complete in the shell, and
- * the active link lights up on hydration. Client-side navigation still updates
- * it, because `LiveLinks` keeps the real hook.
- *
- * `scripts/verify-hydration.mjs` fails the moment a fourth boundary comes back.
+ * `scripts/verify-hydration.mjs` fails the moment any segment id is written
+ * twice.
  */
 function ActiveLinks({ dests }: { dests: Entry[] }) {
   // `useSyncExternalStore` rather than a mounted flag in an effect: it takes a
@@ -409,16 +411,88 @@ function Brand() {
   );
 }
 
-function MobileDrawer({ switcher }: { switcher: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+/**
+ * The drawer itself, mounted only after hydration. It is the part that reads
+ * the pathname (to light the current link, and to close on navigation), and
+ * the pathname is request data: read in the header, it needed a `<Suspense>`
+ * there, and that boundary finished at build time and gave two segments one id
+ * (see the note above `ActiveLinks`). Mounted late, the header has no boundary.
+ */
+function DrawerOverlay({
+  open,
+  onClose,
+  switcher,
+}: {
+  open: boolean;
+  onClose: () => void;
+  switcher: ReactNode;
+}) {
   const pathname = usePathname();
 
-  useEffect(() => { setMounted(true); }, []);
-
+  // Following any link in the drawer closes it.
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+    onClose();
+  }, [pathname, onClose]);
+
+  // print:hidden on BOTH: these are portalled to <body>, so the toolbar's own
+  // print:hidden does not reach them. Parked off-screen with a transform, the
+  // closed drawer still printed — its shadow bled onto the top-left of every
+  // printed page.
+  return createPortal(
+    <>
+      <div
+        className={cn(
+          'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden print:hidden',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+        onClick={onClose}
+      />
+
+      {/* From the RIGHT, the side its button is on (25 Sep 2026). What
+          opens is the desktop sidebar itself — same name row, same menu,
+          same project card at the foot — so a phone and a laptop teach one
+          layout, not two.
+          The shadow is worn ONLY while open: parked off-screen, a 50px
+          blur still reached back into the viewport and drew a grey smear
+          down the edge of every page, desktop included — the portal lands
+          in <body> whatever the header's `lg:hidden` says, which is why
+          both layers carry their own. */}
+      <div
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-card transition-[translate,box-shadow] duration-300 lg:hidden print:hidden',
+          'ease-[cubic-bezier(0.32,0.72,0,1)]',
+          open ? 'translate-x-0 shadow-2xl' : 'translate-x-full shadow-none'
+        )}
+      >
+        <div className="flex h-full flex-col overflow-y-auto">
+          {/* No close button: tapping the dimmed backdrop closes the
+              drawer, and so does following any link in it. */}
+          <div className="flex h-16 shrink-0 items-center px-6">
+            <Brand />
+          </div>
+
+          <NavList
+            links={<Links dests={DESTINATIONS} pathname={pathname} />}
+            foot={<Links dests={[ROLES]} pathname={pathname} />}
+            card={switcher}
+          />
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
+function MobileDrawer({ switcher }: { switcher: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  // False on the server and through hydration, true after: the same switch
+  // `ActiveLinks` uses, with no setState in an effect to get there.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
@@ -426,55 +500,7 @@ function MobileDrawer({ switcher }: { switcher: ReactNode }) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
-  // print:hidden on BOTH: these are portalled to <body>, so the toolbar's own
-  // print:hidden does not reach them. Parked off-screen with a transform, the
-  // closed drawer still printed — its shadow bled onto the top-left of every
-  // printed page.
-  const overlay = mounted
-    ? createPortal(
-        <>
-          <div
-            className={cn(
-              'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden print:hidden',
-              open ? 'opacity-100' : 'pointer-events-none opacity-0'
-            )}
-            onClick={() => setOpen(false)}
-          />
-
-          {/* From the RIGHT, the side its button is on (25 Sep 2026). What
-              opens is the desktop sidebar itself — same name row, same menu,
-              same project card at the foot — so a phone and a laptop teach one
-              layout, not two.
-              The shadow is worn ONLY while open: parked off-screen, a 50px
-              blur still reached back into the viewport and drew a grey smear
-              down the edge of every page, desktop included — the portal lands
-              in <body> whatever the header's `lg:hidden` says, which is why
-              both layers carry their own. */}
-          <div
-            className={cn(
-              'fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-card transition-[translate,box-shadow] duration-300 lg:hidden print:hidden',
-              'ease-[cubic-bezier(0.32,0.72,0,1)]',
-              open ? 'translate-x-0 shadow-2xl' : 'translate-x-full shadow-none'
-            )}
-          >
-            <div className="flex h-full flex-col overflow-y-auto">
-              {/* No close button: tapping the dimmed backdrop closes the
-                  drawer, and so does following any link in it. */}
-              <div className="flex h-16 shrink-0 items-center px-6">
-                <Brand />
-              </div>
-
-              <NavList
-                links={<Links dests={DESTINATIONS} pathname={pathname} />}
-                foot={<Links dests={[ROLES]} pathname={pathname} />}
-                card={switcher}
-              />
-            </div>
-          </div>
-        </>,
-        document.body
-      )
-    : null;
+  const overlay = mounted ? <DrawerOverlay open={open} onClose={close} switcher={switcher} /> : null;
 
   return (
     <>
@@ -527,13 +553,10 @@ export default function Sidebar({
           <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
           <span className="text-base font-semibold tracking-tight text-foreground">Lucille</span>
         </PressLink>
-        {/* The drawer reads the pathname, which is request data and cannot
-            prerender. ONE boundary: the shell may not own a third streamed one,
-            which is where the PPR resume segments start colliding with
-            React's. */}
-        <Suspense>
-          <MobileDrawer switcher={switcher} />
-        </Suspense>
+        {/* NO <Suspense> here: a boundary in the shell that finishes at build
+            time gives two segments one id (the note above ActiveLinks). The
+            drawer reads the pathname only once it has mounted. */}
+        <MobileDrawer switcher={switcher} />
       </header>
 
       {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
