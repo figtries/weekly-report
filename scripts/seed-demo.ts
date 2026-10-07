@@ -610,23 +610,45 @@ setLeafForecastSqlite(PID, leaf('Line Pipe 12" API 5L X52 (18.5 km)').id, { date
 setLeafForecastSqlite(PID, leaf('Gas Engine Generator 2 x 1.2 MW').id, { date: '2026-11-13', source: 'vendor', rungId: `${leaf('Gas Engine Generator 2 x 1.2 MW').id}:rts` }, LAST_FULL_WEEK);
 setLeafForecastSqlite(PID, leaf('Land Acquisition Support & Permits').id, { date: '2026-10-16', source: 'client', rungId: null }, LAST_FULL_WEEK);
 
-const waits: [string, string[]][] = [
-  ['Compressor Package Setting & Alignment', ['Gas Compressor Package (2 x 50%)', 'Equipment Foundations']],
-  ['Separator & Vessel Installation', ['Inlet Separator (3-Phase)', 'Gas Scrubber & KO Drum', 'Equipment Foundations']],
-  ['TEG Unit Installation', ['Glycol Dehydration Unit (TEG Package)']],
-  ['Stringing', ['Line Pipe 12" API 5L X52 (18.5 km)', 'ROW Clearing & Grading']],
-  ['Welding', ['Stringing']],
-  ['Generator Setting & Alignment', ['Gas Engine Generator 2 x 1.2 MW', 'Generator Foundation']],
-  ['Switchgear & Transformer Installation', ['MV Switchgear 20 kV', 'Power Transformer 2.5 MVA']],
-  ['DCS / ESD Panel Installation', ['DCS & ESD System', 'Wall, Roof & Finishing']],
-  ['Commissioning & Start Up', ['Pre-Commissioning (Flushing, Leak Test, Drying)']],
-  ['Hydrotest Pipeline (4 Sections)', ['Welding', 'Lowering & Backfilling']],
+// The story's links, the way a pipeline and plant planner would write them
+// (7 Oct 2026): equipment is set after it arrives and its foundation has cured;
+// stringing follows clearing and cannot finish before the last pipe arrives;
+// welding follows stringing; hydrotest and commissioning run section by
+// section, so they start some days after the work before them STARTS. They
+// were all "after it finishes" before, which no real pipeline is planned as,
+// and the planner showed six conflicts that were the demo's mistake.
+const waits: [string, [string, 'FS' | 'SS' | 'FF', number][]][] = [
+  ['Compressor Package Setting & Alignment', [['Gas Compressor Package (2 x 50%)', 'FS', 0], ['Equipment Foundations', 'FS', 7]]],
+  ['Separator & Vessel Installation', [['Inlet Separator (3-Phase)', 'FS', 0], ['Gas Scrubber & KO Drum', 'FS', 0], ['Equipment Foundations', 'FS', 7]]],
+  ['TEG Unit Installation', [['Glycol Dehydration Unit (TEG Package)', 'FS', 0]]],
+  ['Stringing', [['ROW Clearing & Grading', 'SS', 14], ['Line Pipe 12" API 5L X52 (18.5 km)', 'FF', 7]]],
+  ['Welding', [['Stringing', 'SS', 7]]],
+  ['Generator Setting & Alignment', [['Gas Engine Generator 2 x 1.2 MW', 'FS', 0], ['Generator Foundation', 'FS', 7]]],
+  ['Switchgear & Transformer Installation', [['MV Switchgear 20 kV', 'FS', 0], ['Power Transformer 2.5 MVA', 'FS', 0]]],
+  ['DCS / ESD Panel Installation', [['DCS & ESD System', 'FS', 0], ['Wall, Roof & Finishing', 'SS', 14]]],
+  ['Commissioning & Start Up', [['Pre-Commissioning (Flushing, Leak Test, Drying)', 'SS', 14]]],
+  ['Hydrotest Pipeline (4 Sections)', [['Welding', 'SS', 14], ['Lowering & Backfilling', 'SS', 7]]],
 ];
-// The story's links: "after it finishes", no wait (lib/links.ts). Some of them
-// the plan breaks on purpose, so the planner has conflicts to show.
+// Each wait is the planner's intent, trimmed to what the plan's dates allow,
+// so a link only shows red when the dates truly break it.
+const storyDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
+const room = (a: Leaf, b: Leaf, type: 'FS' | 'SS' | 'FF') =>
+  type === 'SS'
+    ? storyDay(b.start) - storyDay(a.start)
+    : type === 'FF'
+      ? storyDay(b.finish) - storyDay(a.finish)
+      : storyDay(b.start) - storyDay(a.finish) - 1;
 const story = new Map<string, StoredLinkDemo[]>();
-for (const [who, on] of waits)
-  story.set(leaf(who).id, on.map((n) => ({ id: leaf(n).id, type: 'FS' as const, wait: 0 })));
+for (const [who, on] of waits) {
+  const b = leaf(who);
+  story.set(
+    b.id,
+    on.map(([n, type, want]) => {
+      const a = leaf(n);
+      return { id: a.id, type, wait: Math.max(0, Math.min(want, room(a, b, type))) };
+    })
+  );
+}
 
 /* ------------------------------------------ 6b. a network, like a real plan */
 
