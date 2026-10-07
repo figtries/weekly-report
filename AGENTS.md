@@ -398,10 +398,18 @@ links since 11287f1.
 types became ONE bar and four marks: the bar is the plan's dates cut into its
 kind's stages (each as wide as its weight, so the solid length IS done), and
 Done / Forecast (red hatch + "+N d") / Contract / Can slip are switched on or
-off in the Bars panel, which is its own toolbar button beside Links. Colour
-says one thing, chosen there: kind of work (default), package, or one colour,
-each swatch changeable from the planner's eight tokens; red and amber are never
-offered (the forecast's and the target's). It is ONE JSON column,
+off in the Bars panel, which is its own toolbar button beside Links. GROUND
+RULES (agreed the same evening): a project has a FIELD (`projects.field`,
+`lib/fields.ts`, EPC only for now) and the kinds of work come from it; the Bars
+menu is identical in every project and hides nothing (an option with nothing
+behind it says so); what colour MEANS is the user's: Kind of work, Package, My
+labels (their own names and colours, a row's in `wbs_nodes.bar_label`, a
+heading's paints the rows under it without one) or One colour, which is where
+a new project starts. Every shape and mark is explained in "What the bars
+mean", in short plain words. Headings stay black. Link arrows always show,
+nothing fades when a bar is pressed; Links is a switch in the menu. Swatches
+come from the planner's eight tokens; red and amber are never offered (the
+forecast's and the target's). It is ONE JSON column,
 `projects.bar_view` (`lib/bar-view.ts`); the rule editor, `lib/bar-styles.ts`
 and the presets are gone, `bar_styles` and `bar_preset` stay in the schema
 unread. Done and Forecast come from `lib/bar-facts.ts`, which reads the same

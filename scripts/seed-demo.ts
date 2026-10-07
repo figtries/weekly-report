@@ -33,7 +33,7 @@ if (/seed\.db$/i.test(process.env.REPORT_DB_PATH ?? '')) throw new Error('Refusi
 
 const { db, schema } = await import('../lib/sqlite.ts');
 const { DB_PATH } = await import('../lib/db-path.ts');
-const { eq } = await import('drizzle-orm');
+const { and, eq } = await import('drizzle-orm');
 const { weekRowsFor } = await import('../lib/week-grid.ts');
 const { syncDerivedWeights } = await import('../lib/weights-auto.ts');
 const { deriveWeights } = await import('../lib/weights.ts');
@@ -47,6 +47,7 @@ const {
   setWorkKindSqlite,
 } = await import('../lib/progress-sqlite.ts');
 const { setLinksSqlite } = await import('../lib/links-sqlite.ts');
+const { lockContractSqlite } = await import('../lib/contract-sqlite.ts');
 const { STAGE_ORDER } = await import('../lib/register-shared.ts');
 const { buildProjectDashboardData } = await import('../lib/dashboard-db.ts');
 const { computeRollup, computeGrandTotal, promoteNestedSpkContracts } = await import('../lib/rollup.ts');
@@ -621,9 +622,100 @@ const waits: [string, string[]][] = [
   ['Commissioning & Start Up', ['Pre-Commissioning (Flushing, Leak Test, Drying)']],
   ['Hydrotest Pipeline (4 Sections)', ['Welding', 'Lowering & Backfilling']],
 ];
-// Every demo link is "after it finishes", no wait (lib/links.ts).
+// The story's links: "after it finishes", no wait (lib/links.ts). Some of them
+// the plan breaks on purpose, so the planner has conflicts to show.
+const story = new Map<string, StoredLinkDemo[]>();
 for (const [who, on] of waits)
-  setLinksSqlite(PID, leaf(who).id, on.map((n) => ({ id: leaf(n).id, type: 'FS' as const, wait: 0 })));
+  story.set(leaf(who).id, on.map((n) => ({ id: leaf(n).id, type: 'FS' as const, wait: 0 })));
+
+/* ------------------------------------------ 6b. a network, like a real plan */
+
+// Around the story, the rest of a real plan's logic: siblings follow each
+// other, each phase hands over to the next inside its package, and every
+// milestone waits for the work that ends before it. Each link takes the way and
+// the wait the plan's own dates allow, so it mixes after-finish, after-start and
+// finish-together links and adds no conflict the story did not put there.
+type StoredLinkDemo = { id: string; type: 'FS' | 'SS' | 'FF'; wait: number };
+const dayNo = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
+function fit(a: Leaf, b: Leaf): StoredLinkDemo | null {
+  const gap = dayNo(b.start) - dayNo(a.finish) - (b.phase === 'ms' ? 0 : 1);
+  if (gap >= 0) return { id: a.id, type: 'FS', wait: gap >= 14 ? 7 : 0 };
+  const lead = dayNo(b.start) - dayNo(a.start);
+  if (lead >= 0 && dayNo(b.finish) >= dayNo(a.finish)) return { id: a.id, type: 'SS', wait: Math.min(lead, 7) };
+  if (dayNo(b.finish) >= dayNo(a.finish)) return { id: a.id, type: 'FF', wait: 0 };
+  return null;
+}
+const parentOfNode = new Map(
+  db.select({ id: schema.wbsNodes.id, parentId: schema.wbsNodes.parentId }).from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.projectId, PID)).all().map((r) => [r.id, r.parentId])
+);
+const network = new Map<string, StoredLinkDemo[]>(story);
+const addLink = (b: Leaf, l: StoredLinkDemo | null) => {
+  if (!l || l.id === b.id) return;
+  const list = network.get(b.id) ?? [];
+  if (!list.some((x) => x.id === l.id)) network.set(b.id, [...list, l]);
+};
+const byStart = (xs: Leaf[]) => [...xs].sort((a, b) => a.start.localeCompare(b.start) || a.finish.localeCompare(b.finish));
+const work = leaves.filter((l) => l.phase !== 'ms');
+// Siblings, in the order they start.
+const siblings = new Map<string, Leaf[]>();
+for (const l of work) {
+  const p = parentOfNode.get(l.id) ?? '';
+  siblings.set(p, [...(siblings.get(p) ?? []), l]);
+}
+for (const group of siblings.values()) {
+  const s = byStart(group);
+  for (let i = 1; i < s.length; i++) addLink(s[i], fit(s[i - 1], s[i]));
+}
+// Each phase hands over to the next inside its package.
+const PHASE_ORDER: Phase[] = ['eng', 'proc', 'cons', 'comm'];
+for (const spk of SPKS) {
+  const of = (ph: Phase) => byStart(work.filter((l) => l.spk === spk && l.phase === ph));
+  for (let i = 1; i < PHASE_ORDER.length; i++) {
+    const before = of(PHASE_ORDER[i - 1]);
+    const first = of(PHASE_ORDER[i])[0];
+    if (!first || !before.length) continue;
+    // The latest of the earlier phase that the plan lets this one wait for.
+    const cand = [...before].sort((a, b) => b.finish.localeCompare(a.finish)).map((a) => fit(a, first)).find(Boolean) ?? null;
+    addLink(first, cand);
+  }
+}
+// Every milestone waits for the work that ends last before it.
+for (const ms of leaves.filter((l) => l.phase === 'ms')) {
+  const before = work.filter((l) => l.finish <= ms.start).sort((a, b) => b.finish.localeCompare(a.finish))[0];
+  if (before) addLink(ms, fit(before, ms));
+}
+for (const [id, links] of network) setLinksSqlite(PID, id, links);
+
+// Headings named for a phase carry its kind, as the planner would set them.
+const HEADING_KIND: [RegExp, string][] = [
+  [/^Engineering$/i, 'engineering'],
+  [/^Procurement$/i, 'procurement'],
+  [/^Construction$/i, 'construction'],
+  [/commissioning/i, 'commissioning'],
+];
+for (const h of db.select({ id: schema.wbsNodes.id, name: schema.wbsNodes.deskripsi }).from(schema.wbsNodes)
+  .where(and(eq(schema.wbsNodes.projectId, PID), eq(schema.wbsNodes.isLeaf, false))).all()) {
+  const k = HEADING_KIND.find(([re]) => re.test(h.name))?.[1];
+  if (k) db.update(schema.wbsNodes).set({ workKind: k }).where(eq(schema.wbsNodes.id, h.id)).run();
+}
+
+// A few labels of the planner's own, the way a team would use them.
+const LABELS = [
+  { id: 'lbl-longlead', name: 'Long lead item', paint: 'plan-4', match: /Compressor Package \(|Line Pipe|Generator 2 x|Transformer|Switchgear/ },
+  { id: 'lbl-client', name: 'Client scope', paint: 'plan-5', match: /Land Acquisition|Permit/ },
+  { id: 'lbl-sub', name: 'Subcontractor', paint: 'plan-2', match: /Painting|Insulation|Fencing|Road/ },
+] as const;
+db.update(schema.projects)
+  .set({ barView: JSON.stringify({ colourBy: 'kind', labels: LABELS.map(({ id, name, paint }) => ({ id, name, paint })) }) })
+  .where(eq(schema.projects.id, PID)).run();
+for (const l of leaves) {
+  const hit = LABELS.find((x) => x.match.test(l.name));
+  if (hit) db.update(schema.wbsNodes).set({ barLabel: hit.id }).where(eq(schema.wbsNodes.id, l.id)).run();
+}
+
+// The plan as signed: locked once, as the planner's Lock as contract does.
+lockContractSqlite(PID, 'Contract signed, March 2026');
 
 /* ------------------------------------------------- 7. document registers */
 

@@ -302,7 +302,7 @@ export default function BarsPanel({
                     className="h-11 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[13px] outline-none focus:border-input"
                   />
                   <span className="shrink-0 text-[12px] text-muted-foreground">
-                    {tasks.filter((r) => labelOf.get(r.id) === l.id).length} rows
+                    {((n) => `${n} ${n === 1 ? 'row' : 'rows'}`)(tasks.filter((r) => labelOf.get(r.id) === l.id).length)}
                   </span>
                   <button
                     type="button"
