@@ -44,9 +44,9 @@ const {
   saveFieldProgressSqlite,
   saveWeekUpdatesSqlite,
   setLeafForecastSqlite,
-  setWaitsForSqlite,
   setWorkKindSqlite,
 } = await import('../lib/progress-sqlite.ts');
+const { setLinksSqlite } = await import('../lib/links-sqlite.ts');
 const { STAGE_ORDER } = await import('../lib/register-shared.ts');
 const { buildProjectDashboardData } = await import('../lib/dashboard-db.ts');
 const { computeRollup, computeGrandTotal, promoteNestedSpkContracts } = await import('../lib/rollup.ts');
@@ -621,7 +621,9 @@ const waits: [string, string[]][] = [
   ['Commissioning & Start Up', ['Pre-Commissioning (Flushing, Leak Test, Drying)']],
   ['Hydrotest Pipeline (4 Sections)', ['Welding', 'Lowering & Backfilling']],
 ];
-for (const [who, on] of waits) setWaitsForSqlite(PID, leaf(who).id, on.map((n) => leaf(n).id));
+// Every demo link is "after it finishes", no wait (lib/links.ts).
+for (const [who, on] of waits)
+  setLinksSqlite(PID, leaf(who).id, on.map((n) => ({ id: leaf(n).id, type: 'FS' as const, wait: 0 })));
 
 /* ------------------------------------------------- 7. document registers */
 

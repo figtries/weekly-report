@@ -161,8 +161,9 @@ check('analyseNetwork on 300 rows stays under 2 ms', avg < 2, `${avg.toFixed(2)}
 const { db, schema } = await import('../lib/sqlite.ts');
 const { getSheet } = await import('../lib/sheet.ts');
 const { eq } = await import('drizzle-orm');
-const linked = db.select().from(schema.wbsNodes).all().find((n) => n.waitsFor && n.waitsFor !== '[]');
-if (!linked) throw new Error('the fixture has no linked row; the local database had ten on 7 Oct 2026');
+// A row still holding links in the pre-7-Oct shape: a JSON array of bare ids.
+const linked = db.select().from(schema.wbsNodes).all().find((n) => n.waitsFor?.startsWith('["'));
+if (!linked) throw new Error('the fixture has no row with legacy links; the local database had ten on 7 Oct 2026');
 const sheet = getSheet(linked.projectId);
 const row = sheet.rows.find((x) => x.id === linked.id)!;
 check('a legacy row reads its links in the new shape', Array.isArray(row.links) && row.links.every((l) => l.type === 'FS' && l.wait === 0), j(row.links));
@@ -221,6 +222,19 @@ s3.startDate = s1.startDate; // starts with it, so before it finishes
 const v = validateWeek(data.db, data.weeks[0]);
 const finding = v.findings.find((f) => f.title.includes('before what they wait for') || f.title.includes('before what it waits for'));
 check('Check names an activity that starts before what it waits for', Boolean(finding?.rows?.some((x) => x.id === L3.id)), JSON.stringify(finding));
+
+/* ----------------------------------------------------------- arrow geometry */
+
+const { arrowPath, visibleEnd } = await import('../lib/gantt-arrows.ts');
+check('after it finishes: right end into left end', arrowPath('FS', { x1: 0, x2: 100, y: 10 }, { x1: 140, x2: 200, y: 50, milestone: false }, 28) === 'M100 10 H108 V50 H138');
+check('after it starts: out and in on the left', arrowPath('SS', { x1: 20, x2: 100, y: 10 }, { x1: 60, x2: 200, y: 50, milestone: false }, 28) === 'M20 10 H10 V50 H58');
+check('finishes after it finishes: out and in on the right', arrowPath('FF', { x1: 0, x2: 100, y: 10 }, { x1: 40, x2: 160, y: 50, milestone: false }, 28) === 'M100 10 H170 V50 H162');
+check('an arrow that doubles back runs between the rows', arrowPath('FS', { x1: 0, x2: 100, y: 10 }, { x1: 60, x2: 200, y: 50, milestone: false }, 28) === 'M100 10 H108 V24 H48 V50 H58');
+check('an arrow never leaves the chart on the left', arrowPath('SS', { x1: 0, x2: 100, y: 10 }, { x1: 4, x2: 200, y: 50, milestone: false }, 28) === 'M0 10 H2 V50 H2');
+const vis = new Map([['G', 0], ['A', 1]]);
+const par = new Map<string, string | null>([['G', null], ['A', 'G'], ['H', 'G']]);
+check('a hidden row ends on its shown group', j(visibleEnd('H', vis, par)) === j({ index: 0, collapsed: true }));
+check('a shown row ends on itself', j(visibleEnd('A', vis, par)) === j({ index: 1, collapsed: false }));
 
 /* ==== later tasks append their sections ABOVE this line ==== */
 

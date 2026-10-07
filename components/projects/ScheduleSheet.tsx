@@ -49,6 +49,7 @@ import {
 import BarStyleEditor from './BarStyleEditor';
 import ShiftPreviewBar from './ShiftPreview';
 import {
+  analyseNetwork,
   inferChains,
   shiftPreview,
   type ChainNode,
@@ -266,6 +267,7 @@ export default function ScheduleSheet({
   barStyleAuto = true,
   barStylePruned = [],
   weeks = [],
+  contract = false,
 }: {
   rows: SheetRow[];
   spanStart: string | null;
@@ -281,6 +283,8 @@ export default function ScheduleSheet({
   barStylePruned?: string[];
   /** Reporting weeks and their status, for the affected-weeks warning. */
   weeks?: WeekSpan[];
+  /** A contract is locked: the key names the grey bar under each task. */
+  contract?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
@@ -668,6 +672,20 @@ export default function ScheduleSheet({
     [rows]
   );
   const chainLinks = useMemo(() => inferChains(chainNodes), [chainNodes]);
+
+  // What the stored links say about the plan on screen: the same analysis the
+  // server ran in getSheet, recomputed the moment a date changes here.
+  const network = useMemo(() => analyseNetwork(rows), [rows]);
+  const parentOf = useMemo(() => new Map(rows.map((r) => [r.id, r.parentId])), [rows]);
+  // The outline and the tail follow the dates on screen, not the last payload.
+  const drawnRows = useMemo(
+    () =>
+      visible.map((r) => {
+        const n = network.rows.get(r.id);
+        return n && !r.isSummary ? { ...r, isCritical: n.setsProjectFinish, totalFloat: n.canSlip } : r;
+      }),
+    [visible, network]
+  );
 
   /**
    * The colour a row's bar came out, so the sheet can use the SAME one.
@@ -1621,7 +1639,7 @@ export default function ScheduleSheet({
         // waiting for. The way into the bar rules is not lost: select any row
         // and the strip above carries it.
         <div className={`shrink-0 ${pane === 'sheet' ? 'hidden md:block' : ''}`}>
-          <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} />
+          <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} network={network} contract={contract} />
         </div>
       )}
 
@@ -1864,7 +1882,10 @@ export default function ScheduleSheet({
           {/* The FULL list, plus the window. The surface has to keep its true
               height or every bar below the fold sits on the wrong line. */}
           <GanttChart
-            rows={visible}
+            rows={drawnRows}
+            network={network}
+            parentOf={parentOf}
+            onClear={() => setSelectedId(null)}
             spanStart={ganttStart}
             spanFinish={ganttFinish}
             rowH={ROW_H}

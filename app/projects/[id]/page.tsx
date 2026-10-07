@@ -223,6 +223,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           barStyleAuto={bars.auto}
           barStylePruned={bars.pruned}
           weeks={weeks}
+          contract={sheet.contract !== null}
         />
       </div>
     </RouteTransition>

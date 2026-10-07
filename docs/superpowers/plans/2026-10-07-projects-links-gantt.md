@@ -22,7 +22,7 @@
 - `/print/*`, Data Overall's screen, reports and exports are not touched.
 - UI is verified by pressing and looking: `node scripts/shoot.mjs <url> <out.png> [w] [h]` at 1440×900 and 390×844, open the PNG and look; press controls (puppeteer from the scratchpad: `createRequire('E:/Figtries/Prototype/Report/package.json')('puppeteer-core')`) and assert state before/after and after a reload. The Browser pane cannot screenshot here.
 - Merbau (`pdemo-merbau`) is local demo data. Use it to look and press; never commit `data/` changes; reset it afterwards with `node --import ./scripts/ts-resolve.mjs scripts/seed-demo.ts`.
-- Type-check with a scratch tsconfig that extends the project one and includes only `app/**`, `components/**`, `lib/**`, `types/**`, `next-env.d.ts` (other sessions' `.next*` types produce phantom errors).
+- Type-check with a scratch tsconfig that extends the project one and includes only `app/**`, `components/**`, `lib/**`, `types/**`, `scripts/**`, `next-env.d.ts` (`next build` type-checks `scripts/` too, which is how a stale `setWaitsForSqlite` in `seed-demo.ts` was caught; other sessions' `.next*` types produce phantom errors).
 - `npx next build > build.log 2>&1; echo $?` before any push. Never push without the user's yes.
 
 ## Performance budget (the user's condition: "smooth, ringan, mewah walaupun fiturnya banyak")
@@ -164,7 +164,11 @@ await browser.close();
 
 - [ ] **Step 2: Baseline** — build and start production (`set NEXT_DIST_DIR=.next-verify&& npx next build > build-base.log 2>&1; echo $?`, then `preview_start` `prod-verify`), run `node scripts/verify-projects-perf.mjs` three times, and write the median of each figure here. Read First Load JS for `/projects/[id]` from `build-base.log`. Time `analyseNetwork` is measured from Task 2 on.
 
-  Baseline (7 Oct 2026, prod build f3e054a, Merbau, 4 runs): LCP 1264 ms (1188-1312), jsKB 264, scroll 4000 px with long-task max 0-51 ms / total 0-51 ms, press ⋯ 38 ms (36-51). Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
+  Baseline (7 Oct 2026, prod build f3e054a, Merbau, 4 runs): LCP 1264 ms (1188-1312), jsKB 264, scroll 4000 px with long-task max 0-51 ms / total 0-51 ms, press ⋯ 38 ms (36-51).
+
+  HOW TO COMPARE (learned in Task 7): this machine's load moves the numbers more than the code does (the same baseline build read scroll total 0-51 ms in the morning and 82-127 ms in the afternoon). So every later check is an A/B, interleaved run by run, against the baseline commit built in a worktree: ,  inside it, served by the temporary launch config  on :3215 with  at the main . Budgets are deltas against that run's base median. Clean up at the end: , drop  from launch.json.
+
+  After Task 7 (A/B, 4 interleaved runs, medians base → new): LCP 1778 → 1648 ms, scroll long-task total 111 → 95 ms (max 82 → 106 once), press ⋯ 61 → 68 ms, jsKB 264 → 266. Inside budget. Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
 
 - [ ] **Step 3: Commit**
 
