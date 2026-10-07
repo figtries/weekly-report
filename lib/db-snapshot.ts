@@ -210,6 +210,7 @@ export function registerConnection(conn: Connection): void {
 const EXPECTED_COLUMNS: Array<{ table: string; column: string; decl: string }> = [
   { table: 'projects', column: 'alias', decl: 'text' },
   { table: 'projects', column: 'current_week', decl: 'integer' },
+  { table: 'projects', column: 'bar_view', decl: 'text' },
   { table: 'wbs_nodes', column: 'work_kind', decl: 'text' },
   { table: 'leaf_progress', column: 'source', decl: 'text' },
   { table: 'wbs_nodes', column: 'forecast_date', decl: 'text' },

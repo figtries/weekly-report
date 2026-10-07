@@ -69,6 +69,25 @@ check('nothing done: no solid', solid(segmentsOf([], 0)) === 0 && segmentsOf([],
 check('all done: one solid', segmentsOf([], 100).length === 1 && solid(segmentsOf([], 100)) === 1);
 check('gate: one labelled segment', segmentsOf([{ label: 'IFR', weight: 100, done: false }], 0)[0].label === 'IFR');
 
+// The column the panel writes, round-tripped on a copy of the real database.
+{
+  const { default: Database } = await import('better-sqlite3');
+  const { copyDbFixture } = await import('./db-fixture.ts');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const file = copyDbFixture('data/report.db', join(tmpdir(), `bar-view-${Date.now()}.db`));
+  const d = new Database(file);
+  const id = (d.prepare('select id from projects limit 1').get() as { id: string }).id;
+  d.prepare('update projects set bar_view = ? where id = ?').run(
+    JSON.stringify({ colourBy: 'one', colours: { one: 'plan-6' } }),
+    id
+  );
+  const back = parseBarView((d.prepare('select bar_view v from projects where id = ?').get(id) as { v: string }).v);
+  check('stored view reads back', back.colourBy === 'one' && back.colours.one === 'plan-6');
+  check('a project never written reads defaults', parseBarView(null).colourBy === 'kind');
+  d.close();
+}
+
 if (failed) {
   console.error(`${failed} failed`);
   process.exit(1);

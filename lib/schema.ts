@@ -72,6 +72,8 @@ export const projects = sqliteTable('projects', {
   weightBasis: text('weight_basis').$type<WeightBasis>().notNull().default('boq'),
   /** null = let the app choose from the plan. See BarPreset. */
   barPreset: text('bar_preset').$type<BarPreset>(),
+  /** The Bars panel's choices as JSON, read by lib/bar-view.ts. Null = defaults. */
+  barView: text('bar_view'),
   startDate: text('start_date'),
   finishDate: text('finish_date'),
   /**
