@@ -392,6 +392,39 @@ both `renumber()` copies. "Lock as contract" copies the plan once into a
 `contractual` baseline; nothing in the app unlocks it. Data Overall only reads
 links since 11287f1.
 
+**Bars read the plan, and the kind of work is the plan's** (7 Oct 2026, spec
+`docs/superpowers/specs/2026-10-07-projects-bars-and-kinds-design.md`, plan
+`docs/superpowers/plans/2026-10-07-projects-bars-and-kinds.md`). P6's twelve bar
+types became ONE bar and four marks: the bar is the plan's dates cut into its
+kind's stages (each as wide as its weight, so the solid length IS done), and
+Done / Forecast (red hatch + "+N d") / Contract / Can slip are switched on or
+off in the Bars panel, which is its own toolbar button beside Links. Colour
+says one thing, chosen there: kind of work (default), package, or one colour,
+each swatch changeable from the planner's eight tokens; red and amber are never
+offered (the forecast's and the target's). It is ONE JSON column,
+`projects.bar_view` (`lib/bar-view.ts`); the rule editor, `lib/bar-styles.ts`
+and the presets are gone, `bar_styles` and `bar_preset` stay in the schema
+unread. Done and Forecast come from `lib/bar-facts.ts`, which reads the same
+Database, progress and forecast as Data Overall, as of the current week, so the
+planner cannot disagree with it (`verify-bar-facts`). A pressed bar says its
+plan, done, finish and WHY in the selected-row strip (`lib/bar-sentence.ts`);
+that strip and the legend share `md:min-h-12`, or selecting a row shifts the
+list between a press's mousedown and its click. THE KIND OF WORK IS SET IN THE
+PLAN ONLY: the row panel's kind view (`KindView`, the same `WorkKindPicker`);
+a heading hands it to rows with no kind or still carrying its previous one
+(`lib/kind-plan.ts`, `reachOf` in `lib/kind-reach.ts` counts what the panel
+says it will touch); a new row takes its heading's kind. Before Save the view
+says, in project points, what recorded progress becomes. Data Overall shows
+the kind and links to `#row=<id>&open=kind`; it never asks.
+
+**A method or kind change must touch ONLY that row's ticks.**
+`setProgressMethodSqlite` deleted `milestone_progress` by WEEK id from
+12 Sep to 7 Oct 2026 (1aa90ad to 9160816), so changing one activity's kind wiped
+every activity's ticks in those weeks: on the demo, 66.01% actual became 17.82%
+(4,656 ticks to 188). `verify-kind-plan` now counts every other row's ticks.
+Data Overall's old kind Change went through the same path, so a deployed
+project whose kind was changed in that window may have lost ticks.
+
 **React Compiler is on, so the Projects screens keep refs out of render.** A
 ref touched inside a `.map()` callback, or in an inline function called while
 rendering, makes the compiler give up on the whole component (lint
@@ -487,8 +520,8 @@ warning boxes. LINKS ARE THE PLANNER'S, one activity at a time: EPC order
 only suggests. A one-press "Link" for the whole plan was shipped and removed
 the same day, because once it had run nothing on screen showed what it did.
 Since 7 Oct 2026 relations are MADE IN PROJECTS, with the plan, and Data
-Overall only reads them: the panel lists what an activity waits for and its
-one button opens the planner. The picker and "Use these" left it;
+Overall only reads them: the panel lists what an activity waits for only when
+it waits for something, with no button. The picker and "Use these" left it;
 `setWaitsForAction` stays for the planner to call.
 
 # Daily reports: today opens as yesterday
@@ -1067,8 +1100,9 @@ Papan 16 dan 17 selesai 6 September 2026 dalam delapan langkah; rencananya, tiap
 keputusan dan tiap angka yang diukur ada di
 `docs/superpowers/specs/2026-09-06-projects-redesign.md`. Yang paling mengikat
 kode: rantai antar-pekerjaan DITEBAK dari tanggal dan tidak pernah disimpan
-(`lib/chains.ts`), warna batang datang dari daftar aturan berurutan per proyek
-dan bukan dari kode (`lib/bar-styles.ts`), dan tanggal target adalah janji —
+(`lib/chains.ts`), warna batang datang dari pilihan proyek dan bukan dari kode
+(sejak 7 Okt 2026 `lib/bar-view.ts`, lihat "Bars read the plan"; daftar aturan
+`lib/bar-styles.ts` sudah dihapus), dan tanggal target adalah janji —
 satu-satunya tanggal yang boleh diketik di baris ringkasan, dan ia tidak pernah
 menggeser apa pun.
 
@@ -1077,18 +1111,13 @@ setelah dibuktikan pada proyek berisi lima baris: `assignColorGroups` memakai
 baris teratas sebagai "paket" tanpa memeriksa apakah baris itu cabang, jadi
 empat baris teratas — tiga di antaranya leaf — dapat empat warna berbeda, satu
 warna per baris. Sekarang sebuah paket harus CABANG, dan prinsip yang sama
-dipakai di `pruneStyles`: aturan yang cocok dengan SEMUA baris atau TIDAK SATU
-pun dibuang dari daftar, karena merah di setiap batang tidak mengatakan apa-apa
-dan satu baris di legenda yang tidak menunjuk apa pun lebih buruk lagi. Aturan
-yang ditulis tangan tidak pernah dipangkas — itu keputusan orangnya.
+dipakai `canColourByPackage` (`lib/bar-view.ts`): "Package" tidak ditawarkan
+pada rencana yang cuma punya satu paket, dan legenda hanya menyebut warna serta
+tanda yang benar-benar ada di grafik.
 
-**Dua daftar siap pakai, dan proyeknya boleh memilih sendiri.** `TYPE_PRESET`
-mewarnai menurut APA baris itu (ringkasan, milestone, kritis merah seperti MS
-Project, lewat target, belum berjadwal); `PACKAGE_PRESET` mewarnai menurut SPK
-tempat baris itu berada. `projects.bar_preset` NULL berarti aplikasi yang
-memilih — punya paket, pakai warna paket; belum, pakai warna jenis — sehingga
-menandai SPK kedua memindahkannya sendiri. Baris di `bar_styles` selalu menang
-di atas keduanya.
+**Dua daftar siap pakai** (`TYPE_PRESET`, `PACKAGE_PRESET`, `projects.bar_preset`)
+dihapus 7 Okt 2026 bersama editor aturannya; penggantinya panel Bars, lihat
+"Bars read the plan".
 
 **Baris beranak tidak pernah milestone.** Flag itu dipasang saat baris masih
 leaf dan basi begitu ada yang di-indent ke bawahnya; `renumber()` di
