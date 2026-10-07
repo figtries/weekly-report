@@ -209,6 +209,19 @@ db.update(schema.wbsNodes).set({ waitsFor: JSON.stringify([{ id: L1.id, type: 'F
 pruneLinks(proj);
 check('prune clears links on a group row', stored(branch.id) === null, String(stored(branch.id)));
 
+/* ------------------------------------------------------------------- check */
+
+const { validateWeek } = await import('../lib/analysis.ts');
+const { buildProjectDashboardData } = await import('../lib/dashboard-db.ts');
+setLinksSqlite(proj, L3.id, [{ id: L1.id, type: 'FS', wait: 0 }]);
+const data = buildProjectDashboardData(proj)!;
+const s1 = data.db.schedule!.find((s) => s.leafId === L1.id)!;
+const s3 = data.db.schedule!.find((s) => s.leafId === L3.id)!;
+s3.startDate = s1.startDate; // starts with it, so before it finishes
+const v = validateWeek(data.db, data.weeks[0]);
+const finding = v.findings.find((f) => f.title.includes('before what they wait for') || f.title.includes('before what it waits for'));
+check('Check names an activity that starts before what it waits for', Boolean(finding?.rows?.some((x) => x.id === L3.id)), JSON.stringify(finding));
+
 /* ==== later tasks append their sections ABOVE this line ==== */
 
 if (failed) {

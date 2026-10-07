@@ -12,6 +12,7 @@ import type { Database } from './types';
 import { toSi } from './currency';
 import { apportion, r2, shownDiff } from './figures';
 import { weightGate } from './weight-gate';
+import { analyseNetwork, type NetNode } from './chains';
 import {
   disagreement,
   earnedSchedule,
@@ -785,6 +786,53 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           detail: 'Earned value and the deferred figure can be stated in rupiah.',
         }
   );
+
+  // Links the typed plan breaks (spec 2026-10-07). Read with the same analysis
+  // the planner draws, so Check and the Gantt name the same rows.
+  {
+    const dates = new Map((db.schedule ?? []).map((s) => [s.leafId, s]));
+    const parents = new Set(db.wbsItems.map((i) => i.parentId).filter(Boolean));
+    const nodes: NetNode[] = db.wbsItems.map((i) => ({
+      id: i.id,
+      isLeaf: !parents.has(i.id),
+      isMilestone: Boolean(i.isMilestone),
+      startDate: dates.get(i.id)?.startDate ?? null,
+      finishDate: dates.get(i.id)?.finishDate ?? null,
+      links: i.waitLinks ?? (i.waitsFor ? i.waitsFor.map((id) => ({ id, type: 'FS' as const, wait: 0 })) : null),
+    }));
+    const net = analyseNetwork(nodes);
+    const names = new Map(db.wbsItems.map((i) => [i.id, i.deskripsi]));
+    const late = [...net.rows.entries()].filter(([, r]) => r.conflicts.length > 0);
+    findings.push(
+      late.length
+        ? {
+            level: 'warn',
+            title:
+              late.length === 1
+                ? '1 activity starts before what it waits for'
+                : `${late.length} activities start before what they wait for`,
+            detail: 'Their plan dates break a link made in Projects. Move them there, or change the link.',
+            rows: late.map(([id, r]) => ({
+              id,
+              label: names.get(id) ?? id,
+              value: `Waits for ${names.get(r.conflicts[0].fromId) ?? r.conflicts[0].fromId}`,
+            })),
+          }
+        : { level: 'ok', title: 'Links between activities agree with the plan', detail: 'No activity starts before what it waits for.' }
+    );
+    if (net.ignored.length) {
+      findings.push({
+        level: 'warn',
+        title: 'A link loops back',
+        detail: 'These links are ignored until one of them is removed in Projects.',
+        rows: net.ignored.map((l) => ({
+          id: l.toId,
+          label: names.get(l.toId) ?? l.toId,
+          value: `Waits for ${names.get(l.fromId) ?? l.fromId}`,
+        })),
+      });
+    }
+  }
 
   const errors = findings.filter((f) => f.level === 'error').length;
   const warnings = findings.filter((f) => f.level === 'warn').length;
