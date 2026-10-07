@@ -237,6 +237,8 @@ function PanelBody({
     toPct: number;
   } | null>(null);
   const [pickingPart, setPickingPart] = useState(false);
+  const [partWarn, setPartWarn] = useState(false);
+  const partRef = useRef<HTMLDivElement>(null);
   const isConstruction = node.workKind === 'construction';
   const ownPart = isConstruction ? node.workPart ?? null : null;
   const askingPart = isConstruction && !partOverride && (pickingPart || !ownPart);
@@ -272,6 +274,7 @@ function PanelBody({
       : changeFor({ id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct }, milestones);
     setPartOverride({ part: d.id, shape, milestones, steps, done, toPct });
     setPickingPart(false);
+    setPartWarn(false);
     setError(null);
   }
 
@@ -506,6 +509,14 @@ function PanelBody({
   function footerSave() {
     if (saving) return;
     const part = partOverride;
+    // THE PART IS ASKED ONCE AND REQUIRED (8 Oct 2026): without it Lucille
+    // cannot say which stages the figure stands for, and the forecast reads
+    // them. Said on the press, never before it; the figure stays free after.
+    if (!part && isConstruction && !ownPart) {
+      setPartWarn(true);
+      partRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
     if (!part) return saveOrConfirm();
     // A typed figure wins, as it does everywhere in this panel; otherwise the
     // rungs ticked since the part was picked, if they differ from what the
@@ -643,8 +654,8 @@ function PanelBody({
                 )}
               </div>
               {askingPart ? (
-                <div className="mb-4">
-                  <DisciplineTiles chosen={pickingPart ? ownPart : null} onPick={applyPart} />
+                <div ref={partRef} className="mb-4">
+                  <DisciplineTiles chosen={pickingPart ? ownPart : null} onPick={applyPart} warn={partWarn} />
                 </div>
               ) : (
                 isConstruction &&

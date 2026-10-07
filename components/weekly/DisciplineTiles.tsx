@@ -16,13 +16,26 @@ import { cn } from '@/lib/utils';
 export default function DisciplineTiles({
   chosen,
   onPick,
+  warn = false,
 }: {
   chosen: string | null;
   onPick: (disciplineId: string) => void;
+  /** Save was pressed with no part: red, and one sentence, until a tile is pressed. */
+  warn?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-input bg-card p-3">
+    <div
+      className={cn(
+        'rounded-2xl border bg-card p-3 transition-colors duration-200 ease-ios',
+        warn ? 'border-bad ring-2 ring-bad/15' : 'border-input'
+      )}
+    >
       <p className="text-[13px] text-foreground">Which part of construction?</p>
+      {warn && (
+        <p role="alert" className="mt-0.5 text-[12.5px] font-medium text-bad">
+          Pick which part first, then save.
+        </p>
+      )}
       <div className="mt-2 grid grid-cols-3 gap-1.5">
         {CONSTRUCTION_DISCIPLINES.map((d) => (
           <m.button
