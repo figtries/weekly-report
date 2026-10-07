@@ -372,6 +372,31 @@ export default function BarsPanel({
           )
         )}
 
+        <p className="mt-5 text-[13px] font-medium">Beside each bar</p>
+        <div className="mt-2 grid grid-cols-2 gap-1 rounded-[10px] border p-0.5">
+          {(
+            [
+              ['name', 'Name'],
+              ['name-pct', 'Name and done'],
+              ['dates', 'Dates'],
+              ['none', 'Nothing'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange({ ...view, beside: key })}
+              aria-pressed={view.beside === key}
+              className={`min-h-11 rounded-lg px-2 text-[13px] font-medium transition-colors duration-200 ease-ios ${
+                view.beside === key ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[13px] text-muted-foreground">Written to the right of each bar, always on show.</p>
+
         <p className="mt-5 text-[13px] font-medium">Show on the timeline</p>
         <div className="mt-2 divide-y rounded-[10px] border">
           {marks.map((mk) => {

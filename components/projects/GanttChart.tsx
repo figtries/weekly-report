@@ -356,48 +356,74 @@ export default function GanttChart({
    * locked) and a conflict (a red "!" and a pale band over the days the plan
    * breaks its link). The first three are marks the Bars panel turns on/off.
    */
+  /** What the Bars menu says to write beside a bar. */
+  const besideText = (r: SheetRow): string => {
+    if (view.beside === 'none') return '';
+    if (view.beside === 'dates') {
+      if (!r.startDate || !r.finishDate) return '';
+      return r.isMilestone
+        ? fmtDate(r.startDate)
+        : `${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays ?? daysBetween(r.startDate, r.finishDate) + 1} d`;
+    }
+    const pct = facts[r.id]?.donePct;
+    return view.beside === 'name-pct' && !r.isSummary && pct != null ? `${r.name} · ${Math.round(pct)}%` : r.name;
+  };
+
   const extras = (r: SheetRow, x: number, w: number, y: number) => {
     const c = network?.rows.get(r.id)?.conflicts[0];
     const ff = facts[r.id]?.forecastFinish;
     const late =
       view.marks.forecast && !r.isSummary && ff && r.finishDate && ff > r.finishDate ? daysBetween(r.finishDate, ff) : 0;
+    const slip = view.marks.slip && late === 0 && r.totalFloat != null && r.totalFloat > 0 && !r.isSummary ? r.totalFloat : 0;
+    const text = besideText(r);
     return (
       <>
-        {late > 0 && (
+        {/* One row that flows from the bar's end: the late hatch and its days,
+            or the slack tail and its days, then the text beside the bar. In
+            one container nothing has to guess another's width, so they cannot
+            overlap. Written out, never a hover tooltip (7 Oct 2026). */}
+        {(late > 0 || slip > 0 || text) && (
           <span
             aria-hidden
-            className="pointer-events-none absolute z-[3] flex items-center"
-            style={{ left: xOf(r.finishDate!) + scale, top: y + rowH / 2 - 6, height: 12 }}
+            // Above the arrows (z-6), so a link crossing the text passes behind it.
+            className="pointer-events-none absolute z-[7] flex items-center whitespace-nowrap"
+            style={{ left: x + w + (w === 0 ? 12 : 0), top: y + rowH / 2 - 6, height: 12 }}
           >
-            <span
-              className="h-3 rounded-r-[3px] border border-l-0 border-[var(--bad)]"
-              style={{
-                width: Math.max(late * scale, 3),
-                background: 'repeating-linear-gradient(135deg, var(--bad) 0 2px, transparent 2px 5px)',
-              }}
-            />
-            <span className="ml-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-[var(--bad)]">
-              +{late} d
-            </span>
-          </span>
-        )}
-        {view.marks.slip && late === 0 && r.totalFloat != null && r.totalFloat > 0 && !r.isSummary && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute z-[3] flex items-center"
-            style={{ left: x + w + 2, top: y + rowH / 2 - 4, height: 8 }}
-          >
-            <span className="border-t-[1.5px] border-dashed border-muted-foreground/60" style={{ width: Math.max(r.totalFloat * scale - 2, 4) }} />
-            <span className="h-2 w-[1.5px] bg-muted-foreground/60" />
-            <span className="ml-1 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-              +{r.totalFloat} {r.totalFloat === 1 ? 'day' : 'days'}
-            </span>
+            {late > 0 && (
+              <>
+                <span
+                  className="h-3 rounded-r-[3px] border border-l-0 border-[var(--bad)]"
+                  style={{
+                    width: Math.max(late * scale, 3),
+                    background: 'repeating-linear-gradient(135deg, var(--bad) 0 2px, transparent 2px 5px)',
+                  }}
+                />
+                <span className="ml-1 text-[10px] font-semibold tabular-nums text-[var(--bad)]">+{late} d</span>
+              </>
+            )}
+            {slip > 0 && (
+              <>
+                <span className="ml-0.5 border-t-[1.5px] border-dashed border-muted-foreground/60" style={{ width: Math.max(slip * scale - 2, 4) }} />
+                <span className="h-2 w-[1.5px] bg-muted-foreground/60" />
+                <span className="ml-1 text-[10px] tabular-nums text-muted-foreground">
+                  +{slip} {slip === 1 ? 'day' : 'days'}
+                </span>
+              </>
+            )}
+            {text && (
+              <span
+                className={`ml-1.5 rounded-[3px] bg-card/90 px-1 text-[11px] leading-4 ${
+                  r.id === selectedId ? 'font-medium text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {text}
+              </span>
+            )}
           </span>
         )}
         {view.marks.contract && r.contractStart && r.contractFinish && !r.isSummary && (
           <span
             aria-hidden
-            title={`Contract ${fmtDate(r.contractStart)} → ${fmtDate(r.contractFinish)}`}
             className="pointer-events-none absolute z-[2] rounded-full bg-muted-foreground/30"
             style={{
               left: xOf(r.contractStart),
@@ -528,7 +554,6 @@ export default function GanttChart({
         {todayX !== null && (
           <span
             aria-hidden
-            title="Today"
             className="pointer-events-none absolute top-0 z-10 w-0 border-l-[1.5px] border-dashed border-sky-500"
             style={{ left: todayX, height: bodyH }}
           >
@@ -550,11 +575,6 @@ export default function GanttChart({
             <span
               key={`t-${r.id}`}
               aria-hidden
-              title={
-                late
-                  ? `Target ${fmtDate(r.targetDate)}, finishes ${r.daysLate} days late`
-                  : `Target ${fmtDate(r.targetDate)}`
-              }
               className="absolute z-[5]"
               style={{
                 left: x - 4,
@@ -619,7 +639,6 @@ export default function GanttChart({
               <button
                 type="button"
                 onClick={() => onSelect(r.id)}
-                title={title}
                 aria-label={title}
                 className="absolute grid place-items-center"
                 // Clamped to the surface: a milestone on day one sat at -11 and
@@ -651,7 +670,6 @@ export default function GanttChart({
             <button
               type="button"
               onClick={() => onSelect(r.id)}
-              title={title}
               aria-label={title}
               className="group absolute block"
               style={{ left: x, top: y, width: w, height: rowH }}

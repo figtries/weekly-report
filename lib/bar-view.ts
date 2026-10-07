@@ -14,6 +14,8 @@ import type { BarPaint } from './schema';
 
 export type ColourBy = 'kind' | 'package' | 'label' | 'one';
 export type MarkKey = 'done' | 'forecast' | 'contract' | 'slip' | 'links';
+/** What is written to the right of each bar. */
+export type Beside = 'name' | 'name-pct' | 'dates' | 'none';
 
 /** A colour the user named themselves: it means whatever they decide. */
 export interface BarLabel {
@@ -28,6 +30,8 @@ export interface BarView {
   colours: { kind: Record<string, BarPaint>; package: Record<string, BarPaint>; one: BarPaint };
   /** The user's own labels, in the order they made them. */
   labels: BarLabel[];
+  /** Written beside each bar, so nothing has to be hovered to be read. */
+  beside: Beside;
 }
 
 /**
@@ -80,6 +84,7 @@ export const DEFAULT_BAR_VIEW: BarView = {
   marks: { done: true, forecast: true, contract: true, slip: false, links: true },
   colours: { kind: {}, package: {}, one: 'plan-5' },
   labels: [],
+  beside: 'name',
 };
 
 const MAX_LABELS = 24;
@@ -113,6 +118,7 @@ export function parseBarView(json: string | null): BarView {
     marks?: Record<string, unknown>;
     colours?: { kind?: unknown; package?: unknown; one?: unknown };
     labels?: unknown;
+    beside?: unknown;
   } = {};
   try {
     raw = json ? JSON.parse(json) : {};
@@ -136,6 +142,7 @@ export function parseBarView(json: string | null): BarView {
       one: ALLOWED.has(one) ? one : d.colours.one,
     },
     labels: labelsOf(raw.labels),
+    beside: raw.beside === 'name-pct' || raw.beside === 'dates' || raw.beside === 'none' || raw.beside === 'name' ? raw.beside : d.beside,
   };
 }
 
