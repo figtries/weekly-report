@@ -6,9 +6,6 @@ import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
 import type { ForecastView } from '@/lib/forecast-view';
-import { disciplineOf } from '@/lib/disciplines';
-import { deriveShape } from '@/components/weekly/ProgressEntry';
-import { type WorkKindPeer } from '@/components/weekly/WorkKindPicker';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { Expand } from '@/components/motion/Expand';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
@@ -219,37 +216,6 @@ export default function OverallMap({
   }, [map.units, pending]);
 
   const units = useMemo(() => withOptimistic(map.units, live), [map.units, live]);
-
-  /**
-   * Every leaf elsewhere in the tree that already has an answer, for the
-   * work-kind picker's suggestion. Computed off `map.units` (the server's own
-   * tree) rather than the optimistic `units` above: a work kind is never set
-   * optimistically, so recomputing this on every in-flight percentage would
-   * just be wasted walks over up to 285 rows. `ActivityPanel` cannot see its
-   * own siblings — it receives one node — so the peer list is built HERE,
-   * once, and handed down as a single prop.
-   */
-  const peers = useMemo(() => {
-    const out: WorkKindPeer[] = [];
-    function walk(n: MapNode) {
-      if (n.kind === 'leaf' && n.workKind) {
-        // All four shapes are suggestable now, 'manual' included: it stopped
-        // being only the escape hatch when it became one of the four answers
-        // the picker offers. The hatch itself never reaches here, because it
-        // leaves the row's stored method alone — a ladder overridden by a
-        // typed percent still reads back as 'steps'.
-        out.push({
-          name: n.name,
-          kindId: n.workKind,
-          shape: deriveShape(n),
-          disciplineId: n.workKind === 'construction' ? disciplineOf(n.milestones)?.id ?? null : null,
-        });
-      }
-      n.children.forEach(walk);
-    }
-    map.units.forEach(walk);
-    return out;
-  }, [map.units]);
 
   /** The reminder buttons that have anything to list, in reading order. */
   const reminderKinds = (
@@ -484,7 +450,6 @@ export default function OverallMap({
         canPrice={canPrice}
         projectHref={projectHref}
         currency={currency}
-        peers={peers}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
         planReady={figuresReady}
         onClose={() => setActiveId(null)}

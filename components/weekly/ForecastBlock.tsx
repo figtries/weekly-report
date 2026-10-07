@@ -1,7 +1,6 @@
 'use client';
 
 import { m } from 'framer-motion';
-import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { CalendarClock, Link2 } from 'lucide-react';
 
@@ -99,14 +98,11 @@ export default function ForecastBlock({
   view,
   week,
   projectId,
-  projectHref,
 }: {
   leafId: string;
   view: ForecastLeafView;
   week: number;
   projectId: string | null;
-  /** The planner, where this activity's links are made. */
-  projectHref: string | null;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -262,24 +258,18 @@ export default function ForecastBlock({
           </div>
         )}
 
-        {/* What has to finish before this one. READ ONLY since 7 Oct 2026:
-            relations belong to the plan and are made in Projects; Data
-            Overall only reads them, and its button opens the planner, the
-            same way the Schedule tile does. */}
-        <div className="mt-4 border-t border-border/60 pt-4">
-          <div className="flex items-start gap-3">
-            <Link2 className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-medium text-foreground">What has to finish before this one?</p>
-              <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
-                {view.waitsFor.length
-                  ? 'If one of these runs late, this activity moves with it.'
-                  : view.answered
-                    ? 'Nothing. It does not wait for another activity.'
-                    : 'Not set in the plan yet.'}
-              </p>
-
-              {view.waitsFor.length > 0 && (
+        {/* What has to finish before this one, READ from the plan (7 Oct 2026).
+            Relations are made in Projects; here they are only shown, and only
+            when there are some. No button: Data Overall processes the data. */}
+        {view.waitsFor.length > 0 && (
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <div className="flex items-start gap-3">
+              <Link2 className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-medium text-foreground">What has to finish before this one?</p>
+                <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                  If one of these runs late, this activity moves with it.
+                </p>
                 <ul className="mt-3 space-y-2.5">
                   {view.waitsFor.map((l) => (
                     <li key={l.id} className="flex items-center gap-2 text-[13px] leading-snug text-foreground">
@@ -291,18 +281,10 @@ export default function ForecastBlock({
                     </li>
                   ))}
                 </ul>
-              )}
-
-              {projectHref && (
-                <div className="mt-3 flex">
-                  <Link href={projectHref} className={pillPrimary}>
-                    {view.answered ? 'Change in plan' : 'Set in plan'}
-                  </Link>
-                </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {error && <p className="animate-fade-in-up rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">{error}</p>}

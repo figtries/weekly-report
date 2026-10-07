@@ -10,21 +10,16 @@ import {
   markNoProgressAction,
   saveFieldProgressAction,
   saveWeekUpdatesAction,
-  setWorkKindAction,
 } from '@/lib/actions';
 import type { MapNode } from '@/lib/overall-map';
-import type { Milestone } from '@/lib/types';
-import { BUILT_IN_KINDS, type Shape } from '@/lib/work-kind';
-import { changeFor } from '@/lib/work-kind-apply';
+import { BUILT_IN_KINDS } from '@/lib/work-kind';
 import { disciplineOf } from '@/lib/disciplines';
-import { stepIdOf } from '@/lib/forecast-epc';
 import { stageSentence } from '@/lib/stage-sentence';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { cn } from '@/lib/utils';
 import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
-import WorkKindPicker, { type WorkKindPeer, type WorkKindPickerHandle } from './WorkKindPicker';
 import ForecastBlock from './ForecastBlock';
 import type { ForecastLeafView } from '@/lib/forecast-view';
 import { formatMoney } from '@/lib/currency';
@@ -130,7 +125,6 @@ export default function ActivityPanel({
   canPrice,
   projectHref,
   currency,
-  peers,
   forecast = null,
   planReady = false,
   onClose,
@@ -149,8 +143,6 @@ export default function ActivityPanel({
   projectHref: string | null;
   /** The project's own currency, so a budget reads SGD on an SGD project and not Rp. */
   currency: string;
-  /** Every leaf elsewhere in the tree that already has an answer, for the work-kind picker. */
-  peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
   /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
@@ -173,7 +165,6 @@ export default function ActivityPanel({
         canPrice={canPrice}
         projectHref={projectHref}
         currency={currency}
-        peers={peers}
         forecast={forecast}
         planReady={planReady}
         onClose={onClose}
@@ -198,7 +189,6 @@ function PanelBody({
   canPrice,
   projectHref,
   currency,
-  peers,
   forecast = null,
   planReady = false,
   onClose,
@@ -211,7 +201,6 @@ function PanelBody({
   canPrice: boolean;
   projectHref: string | null;
   currency: string;
-  peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
   /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
@@ -220,85 +209,12 @@ function PanelBody({
   onSaved: (id: string, pct: number) => void;
 }) {
   /**
-   * Set on the TAP, so the form for the kind just chosen is on screen at once,
-   * and WRITTEN ON SAVE (2 Oct 2026). The press only shows the answer; the
-   * panel's one Save sends it, with whatever was ticked or typed on the new
-   * rungs. Closing the panel without Save leaves the row as it was.
+   * The kind of work is the PLAN's (7 Oct 2026). It is set in Projects, with
+   * the plan, and this panel only reads it: the stages it gives are what get
+   * ticked here. To change it, the panel links to the row in the planner.
    */
-  const [kindOverride, setKindOverride] = useState<{
-    kindId: string;
-    shape: Shape;
-    /** The rungs as the server stores them, `${nodeId}:${stepId}`. */
-    milestones: Milestone[];
-    /** The same rungs as the action takes them, step ids alone. */
-    steps: Milestone[];
-    /** Rungs the restatement awards, so the optimistic figure is the server's. */
-    done: string[];
-    /** The figure the restatement leaves, for the map once it is saved. */
-    toPct: number;
-    /** Whether Save has written it. */
-    saved: boolean;
-  } | null>(null);
-
-  /**
-   * Whether the picker is on screen because somebody ASKED for it, as opposed
-   * to because the row has never been answered.
-   *
-   * This is the whole fix for a one-way door. `asking` used to be read off the
-   * data alone, so the first Save closed the question for good: a row measured
-   * the wrong way could only be corrected through a disclosure that spoke a
-   * different language, and a row answered by accident could not be corrected
-   * at all. Now the question is a place the panel can go back to, and pressing
-   * the same answer returns from it having changed nothing.
-   */
-  const [picking, setPicking] = useState(false);
-  const answered = Boolean(node.workKind) || Boolean(kindOverride);
-  const asking = !answered || picking;
-  const effectiveNode: MapNode = kindOverride
-    ? {
-        ...node,
-        workKind: kindOverride.kindId,
-        method:
-          kindOverride.shape === 'qty'
-            ? 'qty'
-            : kindOverride.shape === 'manual'
-              ? 'lumpsum'
-              : 'milestone',
-        milestones: kindOverride.milestones.map((m) => ({
-          ...m,
-          done: kindOverride.done.includes(m.id),
-        })),
-        source: kindOverride.shape,
-      }
-    : node;
-
-  /**
-   * The answer is applied on the TAP; Save writes it (see `footerSave`).
-   *
-   * Nothing on this path needs the server's opinion: the rungs come from
-   * `ladderFor`, the same pure function the action itself calls.
-   */
-  function applyKind(kindId: string, kindShape: Shape, steps: Milestone[]) {
-    // The rungs carry the ids the server will give them, so a rung ticked
-    // before Save is one `saveFieldProgressSqlite` recognises when Save sends
-    // it; it drops any id the row does not have.
-    const milestones = steps.map((ms) => ({ ...ms, id: `${node.id}:${ms.id}` }));
-    // CHANGING HOW YOU MEASURE MUST NOT CHANGE WHAT WAS MEASURED, and the
-    // optimistic view has to keep that promise too. The server restates the
-    // figure into the new ladder's own terms through `changeFor`; showing an
-    // untouched ladder here instead read a row sitting at 100% as 0.0%, which
-    // is not only wrong on screen — the draft would have counted as dirty and
-    // Save would have written the zero over it.
-    const { done, toPct } = changeFor(
-      { id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct },
-      milestones
-    );
-    const next = { kindId, shape: kindShape, milestones, steps, done, toPct, saved: false };
-    setKindOverride(next);
-    setPicking(false);
-    setError(null);
-    return next;
-  }
+  const answered = Boolean(node.workKind);
+  const effectiveNode: MapNode = node;
 
   /**
    * The draft is RE-SEEDED when the row stops being measured the same way.
@@ -311,8 +227,8 @@ function PanelBody({
    * zero. Keyed state rather than an effect, and rather than remounting: a
    * remount would slide the sheet out and back for what is not a new row.
    *
-   * A work-kind pick reseeds it the same way, for the same reason: `seed`
-   * reads off `effectiveNode`, which changes the moment `kindOverride` lands.
+   * A kind of work changed in the plan reseeds it the same way, for the same
+   * reason: the method and the rungs are part of `seed`.
    *
    * And so does a change to the figure itself from UNDER the panel: a save in
    * the week log below can move this week too (a correction to an earlier week
@@ -524,58 +440,12 @@ function PanelBody({
   }
 
   /**
-   * THE ONE SAVE (2 Oct 2026). The kind-of-work question used to carry a Save
-   * of its own, which stacked a second blue Save right above this one, and it
-   * wrote the moment a kind was pressed. Now a press only APPLIES the answer
-   * on screen and this is the one place anything is written: the kind first,
-   * then what was ticked on its new rungs or typed in the figure, then the
-   * panel closes as after any Save. Pressed with the question still open, it
-   * applies the highlighted answer and writes it. With no new answer it is the
-   * foot's usual Save.
+   * The panel's one Save. The kind of work is the plan's since 7 Oct 2026:
+   * set in Projects, read here, so nothing about it is written from this panel.
    */
-  const pickerRef = useRef<WorkKindPickerHandle>(null);
   function footerSave() {
     if (saving) return;
-    let pending = kindOverride && !kindOverride.saved ? kindOverride : null;
-    // Applied by THIS press, so nothing can have been ticked on its rungs yet.
-    let freshly = false;
-    if (asking) {
-      const choice = pickerRef.current?.choice() ?? null;
-      if (choice === 'same') setPicking(false);
-      else if (choice) {
-        pending = applyKind(choice.kindId, choice.shape, choice.steps);
-        freshly = true;
-      }
-    }
-    if (!pending) return saveOrConfirm();
-
-    const kind = pending;
-    // A typed figure wins, as it does everywhere in this panel; otherwise the
-    // rungs ticked since the answer was applied, if they differ from what the
-    // restatement awarded.
-    const typed = manual && dirty;
-    const ticked = [...draft.milestonesDone].sort().join();
-    const ticks = !typed && !freshly && ticked !== [...kind.done].sort().join() ? draft.milestonesDone : null;
-    const finalPct = typed || ticks ? pct : kind.toPct;
-    const finalSource = typed ? 'manual' : kind.shape;
-    setError(null);
-    startSaving(async () => {
-      const res = await setWorkKindAction(node.id, node.name, kind.kindId, kind.shape, { steps: kind.steps }, projectId);
-      if (!res.ok) return setError(res.error ?? 'Could not save');
-      setKindOverride({ ...kind, saved: true });
-      if (typed) {
-        const r = await saveWeekUpdatesAction(week, {
-          [node.id]: { cumProgressPct: pct, note: draft.note || undefined, source: finalSource },
-        }, projectId);
-        if (!r.ok) return setError(r.error ?? 'Could not save');
-      } else if (ticks) {
-        const r = await saveFieldProgressAction(week, [
-          { leafId: node.id, milestonesDone: ticks, note: draft.note || undefined, source: finalSource },
-        ], projectId);
-        if (!r.ok) return setError(r.error ?? 'Could not save');
-      }
-      finish(finalPct);
-    });
+    saveOrConfirm();
   }
 
   function nothing() {
@@ -665,74 +535,43 @@ function PanelBody({
   
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
             <div className="rounded-2xl bg-muted/40 p-4">
-              {asking ? (
-                <WorkKindPicker
-                  ref={pickerRef}
-                  node={node}
-                  peers={peers}
-                  current={answered ? effectiveNode.workKind ?? null : null}
-                  context={trail.map((t) => t.name).reverse()}
-                  currentLadder={answered ? (effectiveNode.milestones ?? []).map((ms) => stepIdOf(ms.id)) : undefined}
-                  onPick={applyKind}
-                  onCancel={answered ? () => setPicking(false) : undefined}
-                />
-              ) : (
-                <>
-                  {/* The way back in, named with the same word the answer was
-                      given in. It sits above the form because it is what the
-                      form IS, not an action to take on it.
-  
-                      A BUTTON THAT SAYS SO. It was the answer and a chevron in
-                      plain text, which read as a heading: nobody pressed it to
-                      change the kind of work, because nothing on it said it
-                      could (23 Sep 2026). Now it is a bordered row, the same
-                      surface as the picker's own answers, naming what it holds
-                      and carrying the word "Change".
-  
-                      ONLY "CHANGE" IS THE BUTTON. The row used to be the button
-                      and light up as a whole, first grey (the same hover as every
-                      rung under it) and then a blue border, and both read as
-                      "all of this is lit" rather than "this is the action". Now
-                      the row is a plain label and the pill is the one thing that
-                      answers the pointer: faintly tinted at rest so a phone,
-                      which has no hover, still sees a button, and SOLID blue under
-                      the pointer (a deeper tint was measured and read as the same
-                      pill). 44px tall, so a thumb still finds it. */}
-                  <div className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] text-muted-foreground">Kind of work</span>
-                      <span className="block text-[14px] font-medium text-foreground">{kindLabel}</span>
-                    </span>
-                    {/* The exchange arrows, not a chevron: a › reads as "next",
-                        and this goes BACK to the question to swap the answer. */}
-                    <m.button
-                      {...pressMotion}
-                      type="button"
-                      onClick={() => setPicking(true)}
-                      className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
-                    >
-                      <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                      Change
-                    </m.button>
-                  </div>
-                  <ProgressEntry
-                    node={effectiveNode}
-                    draft={draft}
-                    setDraft={setDraft}
-                    shape={shape}
-                    /* Clearing the raw string matters as much as clearing the flag:
-                       the box may still be holding "42.5" from a moment ago, and
-                       a display that outranks the evidence would keep showing it
-                       over the rung that was just ticked. */
-                    onManualOff={() => {
-                      setManual(false);
-                      setTyping(null);
-                    }}
-                  />
-                  {planLine && (
-                    <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">{planLine}</p>
-                  )}
-                </>
+              {/* The kind of work, READ from the plan (7 Oct 2026). It is set in
+                  Projects with the rest of the plan; the pill takes you to that
+                  row there, its kind view already open. Same surface as before,
+                  so the row still reads as what the form below IS. */}
+              <div className="-mt-1 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] text-muted-foreground">Kind of work</span>
+                  <span className="block text-[14px] font-medium text-foreground">
+                    {answered ? kindLabel : 'Not set in the plan'}
+                  </span>
+                </span>
+                {projectHref && (
+                  <Link
+                    href={`${projectHref}#row=${encodeURIComponent(node.id)}&open=kind`}
+                    className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                  >
+                    <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                    {answered ? 'Change in plan' : 'Set in plan'}
+                  </Link>
+                )}
+              </div>
+              <ProgressEntry
+                node={effectiveNode}
+                draft={draft}
+                setDraft={setDraft}
+                shape={shape}
+                /* Clearing the raw string matters as much as clearing the flag:
+                   the box may still be holding "42.5" from a moment ago, and
+                   a display that outranks the evidence would keep showing it
+                   over the rung that was just ticked. */
+                onManualOff={() => {
+                  setManual(false);
+                  setTyping(null);
+                }}
+              />
+              {planLine && (
+                <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">{planLine}</p>
               )}
   
               {/* THE FIGURE IS THE INPUT. It was a read-only number with a pair
@@ -824,7 +663,6 @@ function PanelBody({
               <ForecastBlock
                 leafId={node.id}
                 view={forecast}
-                projectHref={projectHref}
                 week={week}
                 projectId={projectId}
               />
