@@ -95,7 +95,7 @@ export interface SheetRow {
    * `colorGroup` answers the same question as an index into a palette, which is
    * fine for painting and useless for a rule: a bar style that says "inside
    * SPK-007" must survive another unit being marked above it. This is the
-   * durable answer, and the one `lib/bar-styles.ts` matches on.
+   * durable answer, and the one a package colour is kept under (lib/bar-view.ts).
    */
   unitId: string | null;
   /** That unit's label, for a rule editor to show without a second lookup. */

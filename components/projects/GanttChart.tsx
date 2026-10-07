@@ -1,44 +1,34 @@
 'use client';
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { m } from 'framer-motion';
-import { SlidersHorizontal } from 'lucide-react';
-
-import { pressMotion } from '@/components/motion/Press';
+import { Flag } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
 import type { Network } from '@/lib/chains';
 import { arrowPath, visibleEnd } from '@/lib/gantt-arrows';
 import type { LinkType } from '@/lib/links';
 import { warmLinkDragCard } from './links-panel-loader';
-import {
-  DEFAULT_BAR_STYLES,
-  resolveBar,
-  usedStyles,
-  type BarPaint,
-  type BarStyle,
-  type ResolvedBar,
-} from '@/lib/bar-styles';
+import { KIND_KEYS, paintCss, paintOf, segmentsOf, type BarView, type ColourBy } from '@/lib/bar-view';
+import type { BarFact } from '@/lib/bar-facts';
+import { BUILT_IN_KINDS } from '@/lib/work-kind';
 
 /**
  * The timeline.
  *
- * **Colour does a job here, it does not decorate.** A bar's hue says which
- * PACKAGE it belongs to — SPK-002, SPK-003 and so on — so a plan of hundreds of
- * rows reads as a handful of streams running alongside each other instead of a
- * wall of identical grey. The grouping comes from the reporting units the report
- * is already built from (see `assignColorGroups`), the hues are assigned in
- * fixed order and never cycled, and a seventh group goes neutral rather than
- * repeating a colour and claiming two packages are one.
+ * **A bar is its plan** (7 Oct 2026, replacing the bar-style rule list). It is
+ * drawn from the plan's dates and cut into the stages of its kind of work
+ * (IFR / IFA / AFC, PO to On site), solid as each is ticked, so the solid
+ * length IS how much is done. What colour says is the planner's one choice
+ * (kind of work, package, or nothing; lib/bar-view.ts). Forecast, contract and
+ * slack are marks the planner turns on or off in the Bars panel.
  *
  * The palette is `--plan-1..6`, deliberately separate from `--chart-1..5`, which
  * already mean actual / plan / done / at risk / dormant elsewhere in this app.
- * All six passed the lightness, chroma, CVD-separation, normal-vision and
- * contrast checks against this surface.
+ * Red is the forecast's and never a bar colour.
  *
  * **Identity is never colour alone.** Every bar is direct-labelled by its own
  * row in the sheet on the same line, shape separates the three kinds (summary
- * bracket, task bar, milestone diamond), and a legend names each group.
+ * bracket, task bar, milestone diamond), and a legend names each colour.
  *
  * **Days-to-pixels is chosen per plan.** At a fixed 3px/day a three-day project
  * drew nine pixels of bar across a thousand-pixel pane.
@@ -50,65 +40,6 @@ const TARGET_PX = 1200;
 const MIN_PX_PER_DAY = 1.5;
 /** Never wider than this, or a two-week plan becomes a ruler nobody can scan. */
 const MAX_PX_PER_DAY = 90;
-
-export const PLAN_COLORS = [
-  'var(--plan-1)',
-  'var(--plan-2)',
-  'var(--plan-3)',
-  'var(--plan-4)',
-  'var(--plan-5)',
-  'var(--plan-6)',
-];
-
-export function planColor(group: number): string {
-  return group >= 0 && group < PLAN_COLORS.length ? PLAN_COLORS[group] : 'var(--muted-foreground)';
-}
-
-/**
- * A rule's paint, turned into a colour for THIS row.
- *
- * `unit` is the one that depends on the row: it means "the package's own
- * colour", which is how the old hard-coded behaviour survives as a rule rather
- * than as a law. Everything else is a fixed token.
- */
-export function paintColor(paint: BarPaint, row: SheetRow): string {
-  switch (paint) {
-    case 'unit':
-      return planColor(row.colorGroup);
-    case 'foreground':
-      return 'var(--foreground)';
-    case 'warn':
-      return 'var(--warn)';
-    case 'danger':
-      return 'var(--destructive)';
-    case 'ok':
-      return 'var(--ok)';
-    case 'muted':
-      return 'var(--muted-foreground)';
-    default:
-      return `var(--${paint})`;
-  }
-}
-
-/** The same, for a legend swatch that has no row behind it. */
-export function paintSwatch(paint: BarPaint): string {
-  switch (paint) {
-    case 'unit':
-      return 'var(--plan-1)';
-    case 'foreground':
-      return 'var(--foreground)';
-    case 'warn':
-      return 'var(--warn)';
-    case 'danger':
-      return 'var(--destructive)';
-    case 'ok':
-      return 'var(--ok)';
-    case 'muted':
-      return 'var(--muted-foreground)';
-    default:
-      return `var(--${paint})`;
-  }
-}
 
 function utc(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);
@@ -163,7 +94,9 @@ export default function GanttChart({
   headH,
   selectedId,
   onSelect,
-  styles = DEFAULT_BAR_STYLES,
+  view,
+  facts,
+  colourBy,
   range,
   fit = false,
   network = null,
@@ -178,8 +111,12 @@ export default function GanttChart({
   headH: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  /** The project's ordered rule list. Falls back to the defaults. */
-  styles?: BarStyle[];
+  /** The planner's Bars choices: what colour says, which marks show. */
+  view: BarView;
+  /** What each bar has to say: kind, stages, done, forecast (lib/bar-facts.ts). */
+  facts: Record<string, BarFact>;
+  /** `view.colourBy` as this plan can honour it (lib/bar-view.ts `effectiveColourBy`). */
+  colourBy: ColourBy;
   /**
    * Draw the whole span inside the pane instead of at a readable day width.
    *
@@ -256,11 +193,6 @@ export default function GanttChart({
   }
   const wayOf = (a: End, b: End): LinkType | null =>
     a === 'finish' && b === 'start' ? 'FS' : a === 'start' && b === 'start' ? 'SS' : a === 'finish' && b === 'finish' ? 'FF' : null;
-  // Read after mount, never at render: a server component prerenders into the
-  // static shell, so a build-time clock would drift a day further from the
-  // truth every day and "running today" would quietly stop being true.
-  const [today, setToday] = useState('');
-  useEffect(() => setToday(new Date().toISOString().slice(0, 10)), []);
   // The pane's own width, so a short plan can fill it. Measured rather than
   // guessed: the split divider moves, and so does the window.
   const paneRef = useRef<HTMLDivElement>(null);
@@ -414,16 +346,39 @@ export default function GanttChart({
   const shown = rows.slice(from, to);
 
   /**
-   * What sits beside a bar and is not the bar: how far it can slip (a dashed
-   * tail, only for a row linked through to the finish), the contract's dates
-   * (a thin grey bar beneath, once a contract is locked) and a conflict (a red
-   * "!" and a pale band over the days the plan breaks its link).
+   * What sits beside a bar and is not the bar: where the forecast finishes it
+   * past its plan (a red hatched extension with the days written after it),
+   * how far it can slip (a dashed tail, only for a row linked through to the
+   * finish), the contract's dates (a thin grey bar beneath, once a contract is
+   * locked) and a conflict (a red "!" and a pale band over the days the plan
+   * breaks its link). The first three are marks the Bars panel turns on/off.
    */
   const extras = (r: SheetRow, x: number, w: number, y: number) => {
     const c = network?.rows.get(r.id)?.conflicts[0];
+    const ff = facts[r.id]?.forecastFinish;
+    const late =
+      view.marks.forecast && !r.isSummary && ff && r.finishDate && ff > r.finishDate ? daysBetween(r.finishDate, ff) : 0;
     return (
       <>
-        {r.totalFloat != null && r.totalFloat > 0 && !r.isSummary && (
+        {late > 0 && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute z-[3] flex items-center"
+            style={{ left: xOf(r.finishDate!) + scale, top: y + rowH / 2 - 6, height: 12 }}
+          >
+            <span
+              className="h-3 rounded-r-[3px] border border-l-0 border-[var(--bad)]"
+              style={{
+                width: Math.max(late * scale, 3),
+                background: 'repeating-linear-gradient(135deg, var(--bad) 0 2px, transparent 2px 5px)',
+              }}
+            />
+            <span className="ml-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-[var(--bad)]">
+              +{late} d
+            </span>
+          </span>
+        )}
+        {view.marks.slip && late === 0 && r.totalFloat != null && r.totalFloat > 0 && !r.isSummary && (
           <span
             aria-hidden
             className="pointer-events-none absolute z-[3] flex items-center"
@@ -436,7 +391,7 @@ export default function GanttChart({
             </span>
           </span>
         )}
-        {r.contractStart && r.contractFinish && !r.isSummary && (
+        {view.marks.contract && r.contractStart && r.contractFinish && !r.isSummary && (
           <span
             aria-hidden
             title={`Contract ${fmtDate(r.contractStart)} → ${fmtDate(r.contractFinish)}`}
@@ -614,12 +569,10 @@ export default function GanttChart({
 
         {/* The overrun as LENGTH, not as a colour swap: the days past the target
             are hatched over the bar's tail, so the eye reads how far rather than
-            only that. Drawn when the matched RULE asks for hatching — it is a
-            property of the rule now, not of the code. */}
+            only that. */}
         {shown.map((r, k) => {
           const i = k + from;
           if (r.daysLate == null || !r.targetDate || !r.finishDate) return null;
-          if (!resolveBar(r, styles, today).hatched) return null;
           const x = daysBetween(spanStart, r.targetDate) * scale;
           const w = Math.max(daysBetween(r.targetDate, r.finishDate) * scale, 2);
           return (
@@ -644,19 +597,18 @@ export default function GanttChart({
           if (!r.startDate || !r.finishDate) return null;
           const x = daysBetween(spanStart, r.startDate) * scale;
           const y = i * rowH;
-          // The whole of what a bar looks like, decided by the FIRST rule in the
-          // project's list that describes this row. Nothing below reads the
-          // row's kind again — the rule already answered that.
-          const hit: ResolvedBar = resolveBar(r, styles, today);
-          const color = paintColor(hit.paint, r);
-          const kind =
-            hit.label === 'Work' ? '' : ` · ${hit.label}`;
-          const title =
-            hit.shape === 'diamond'
-              ? `${r.name} · ${fmtDate(r.startDate)}${kind}`
-              : `${r.name} · ${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays} d${kind}`;
+          const fact = facts[r.id];
+          const bracket = r.isSummary;
+          const diamond = r.isMilestone && !bracket;
+          // A bracket and a diamond are black whatever colour says: their shape
+          // is what identifies them, the way every planner already reads them.
+          const color =
+            bracket || diamond ? 'var(--foreground)' : paintCss(paintOf(r, fact?.kindId ?? null, view, colourBy));
+          const title = diamond
+            ? `${r.name} · ${fmtDate(r.startDate)}`
+            : `${r.name} · ${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays} d`;
 
-          if (hit.shape === 'diamond') {
+          if (diamond) {
             return (
               <Fragment key={r.id}>
               <button
@@ -680,7 +632,14 @@ export default function GanttChart({
           }
 
           const w = Math.max((daysBetween(r.startDate, r.finishDate) + 1) * scale, 3);
-          const bracket = hit.shape === 'bracket';
+          // The plan's own stages, solid where done. With Done switched off the
+          // bar is the plan alone, one solid piece.
+          const parts =
+            bracket || !view.marks.done
+              ? [{ label: '', from: 0, to: 1, done: true }]
+              : segmentsOf(fact?.rungs ?? [], fact?.donePct ?? 0);
+          const staged = (fact?.rungs.length ?? 0) > 1 && view.marks.done;
+          const onSite = fact?.kindId === 'procurement' && fact.rungs.at(-1)?.label === 'On site';
 
           return (
             <Fragment key={r.id}>
@@ -696,15 +655,38 @@ export default function GanttChart({
                   shape MS Project uses, so a plan is recognisable to anyone who
                   has seen one, and identity never rests on colour alone. */}
               <span
-                className="absolute left-0 rounded-[3px] transition-[width] duration-300 ease-ios"
-                style={{
-                  background: color,
-                  width: '100%',
-                  height: bracket ? 5 : 12,
-                  top: bracket ? rowH / 2 - 2 : rowH / 2 - 6,
-                  opacity: bracket ? 1 : 0.9,
-                }}
-              />
+                className={`absolute left-0 flex w-full overflow-hidden rounded-[3px] ${staged ? 'gap-px' : ''}`}
+                style={{ height: bracket ? 5 : 12, top: bracket ? rowH / 2 - 2 : rowH / 2 - 6 }}
+              >
+                {parts.map((p, n) => (
+                  <span
+                    key={n}
+                    className="relative flex h-full items-center overflow-hidden"
+                    style={{ flexBasis: `${(p.to - p.from) * 100}%`, flexGrow: 0, flexShrink: 1 }}
+                  >
+                    <span
+                      className="absolute inset-0"
+                      style={{ background: color, opacity: p.done ? (bracket ? 1 : 0.9) : 0.28 }}
+                    />
+                    {p.label && (p.to - p.from) * w >= 28 && (
+                      <span
+                        className={`relative truncate px-1 text-[9px] font-semibold leading-none ${
+                          p.done ? 'text-white' : 'text-foreground'
+                        }`}
+                      >
+                        {p.label}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </span>
+              {onSite && (
+                <Flag
+                  aria-hidden
+                  className="absolute size-3"
+                  style={{ right: -5, top: rowH / 2 - 18, color }}
+                />
+              )}
               {r.isCritical && !bracket && (
                 <span
                   aria-hidden
@@ -747,88 +729,86 @@ export default function GanttChart({
 }
 
 /**
- * The key, built from the rules that actually FIRED.
- *
- * Not from the rule list: a rule no row in this plan matches would be a line in
- * the key pointing at nothing on the chart. Not from the colour groups either,
- * which is what it used to be — the groups are only one rule's worth of meaning
- * now, and a project whose planner has put lateness above packages should see
- * that at the top of its key.
- *
- * Packages are still named individually where a `unit`-painted rule fired,
- * because that is the one paint whose colour differs per row, and identity may
- * never rest on a hue alone.
+ * The key: what each colour means, then each mark that is switched on AND
+ * actually on the chart. A line in the key pointing at nothing on the chart
+ * is worse than no line, so nothing is listed that this plan does not show.
  */
 export function GanttLegend({
   rows,
-  styles = DEFAULT_BAR_STYLES,
-  onEdit,
+  view,
+  facts,
+  colourBy,
   network = null,
   contract = false,
 }: {
   rows: SheetRow[];
-  styles?: BarStyle[];
-  /** Opens the rule editor. Absent on screens where the list is not editable. */
-  onEdit?: () => void;
+  view: BarView;
+  facts: Record<string, BarFact>;
+  colourBy: ColourBy;
   /** The links, so the key names only the marks this plan actually shows. */
   network?: Network | null;
   /** A contract is locked: the grey bar under each task means something. */
   contract?: boolean;
 }) {
-  // The same clock rule as the chart: read after mount, never at render.
-  const [today, setToday] = useState('');
-  useEffect(() => setToday(new Date().toISOString().slice(0, 10)), []);
+  const tasks = rows.filter((r) => !r.isSummary && !r.isMilestone);
 
-  const used = useMemo(() => usedStyles(rows, styles, today), [rows, styles, today]);
-  const groups = rows.filter((r) => r.groupLabel !== null);
-  const showsPackages = used.some((u) => u.style.paint === 'unit') && groups.length >= 2;
+  const colours = useMemo(() => {
+    if (colourBy === 'one') return [];
+    if (colourBy === 'package') {
+      return rows
+        .filter((r) => r.groupLabel !== null)
+        .map((g) => ({ key: g.id, label: g.groupLabel!, css: paintCss(paintOf(g, null, view, 'package')) }));
+    }
+    const present = new Set(tasks.map((r) => facts[r.id]?.kindId ?? 'none'));
+    return KIND_KEYS.filter((k) => present.has(k)).map((k) => ({
+      key: k,
+      label: BUILT_IN_KINDS.find((b) => b.id === k)?.label ?? 'Kind not set',
+      css: paintCss(paintOf({ colorGroup: -1, unitId: null }, k === 'none' ? null : k, view, 'kind')),
+    }));
+    // `tasks` is derived from `rows`, which is listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, facts, view, colourBy]);
 
-  // The key can be empty — one package and no rule firing has nothing to
-  // explain. The way IN to the rules must not vanish with it, which is exactly
-  // how "where do I change the colours" became unanswerable.
-  const hasKey = used.length > 0 || groups.length >= 2;
-  if (!hasKey && !onEdit) return null;
+  const anyDone = view.marks.done && tasks.some((r) => (facts[r.id]?.donePct ?? 0) > 0);
+  const anyLate =
+    view.marks.forecast &&
+    tasks.some((r) => {
+      const ff = facts[r.id]?.forecastFinish;
+      return ff && r.finishDate && ff > r.finishDate;
+    });
+  const item = 'flex items-center gap-1.5 text-[11px] text-muted-foreground';
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
-      {showsPackages &&
-        groups.map((g) => (
-          <span key={g.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span
-              aria-hidden
-              className="size-2.5 rounded-[2px]"
-              style={{ background: planColor(g.colorGroup) }}
-            />
-            {g.groupLabel}
-          </span>
-        ))}
+      {colours.map((c) => (
+        <span key={c.key} className={item}>
+          <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: c.css }} />
+          {c.label}
+        </span>
+      ))}
 
-      {used
-        // The plain package bar is already explained by the swatches above, so
-        // naming it again would be the same key twice. A bracket or a diamond
-        // is NOT the same key — those carry shape, which colour cannot say.
-        .filter(
-          (u) =>
-            !(
-              u.style.paint === 'unit' &&
-              showsPackages &&
-              (u.style.shape === 'bar' || u.style.shape === 'auto') &&
-              !u.style.hatched
-            )
-        )
-        .map(({ style, count }) => (
-          <span
-            key={style.id}
-            title={`${count} row${count === 1 ? '' : 's'}`}
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-          >
-            <Swatch style={style} />
-            {style.label}
+      {anyDone && (
+        <span className={item}>
+          <span aria-hidden className="flex h-2 w-4 overflow-hidden rounded-[2px]">
+            <span className="w-1/2 bg-foreground/80" />
+            <span className="w-1/2 bg-foreground/25" />
           </span>
-        ))}
+          Done so far
+        </span>
+      )}
+      {anyLate && (
+        <span className={item}>
+          <span
+            aria-hidden
+            className="h-2 w-3 rounded-r-[2px] border border-l-0 border-[var(--bad)]"
+            style={{ background: 'repeating-linear-gradient(135deg, var(--bad) 0 2px, transparent 2px 4px)' }}
+          />
+          Late, days past the plan
+        </span>
+      )}
 
       {rows.some((r) => r.targetDate) && (
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className={item}>
           <span
             aria-hidden
             style={{
@@ -846,13 +826,13 @@ export function GanttLegend({
 
       {/* The marks the links add, each named only when the plan shows one. */}
       {rows.some((r) => r.isCritical) && (
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span aria-hidden className="h-2 w-3 rounded-[2px] bg-[var(--plan-1)] ring-2 ring-[var(--bad)]" />
+        <span className={item}>
+          <span aria-hidden className="h-2 w-3 rounded-[2px] bg-muted ring-2 ring-[var(--bad)]" />
           Sets the project finish
         </span>
       )}
-      {rows.some((r) => r.totalFloat != null && r.totalFloat > 0) && (
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      {view.marks.slip && rows.some((r) => r.totalFloat != null && r.totalFloat > 0) && (
+        <span className={item}>
           <span aria-hidden className="flex items-center">
             <span className="w-3 border-t-[1.5px] border-dashed border-muted-foreground/60" />
             <span className="h-2 w-[1.5px] bg-muted-foreground/60" />
@@ -860,88 +840,24 @@ export function GanttLegend({
           Can slip
         </span>
       )}
-      {contract && (
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      {view.marks.contract && contract && (
+        <span className={item}>
           <span aria-hidden className="h-1 w-3 rounded-full bg-muted-foreground/30" />
           Contract
         </span>
       )}
       {network && [...network.rows.values()].some((r) => r.conflicts.length > 0) && (
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className={item}>
           <span aria-hidden className="grid size-3 place-items-center rounded-full bg-[var(--bad)] text-[8px] font-bold text-white">
             !
           </span>
           Starts before what it waits for
         </span>
       )}
-      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span className={item}>
         <span aria-hidden className="h-3 border-l-[1.5px] border-dashed border-sky-500" />
         Today
       </span>
-
-      {/* Stranded at the right of an empty strip it read as a caption, so it
-          only takes the right-hand end once there is a key to sit beside. */}
-      {onEdit && <BarStylesButton onClick={onEdit} className={hasKey ? 'ml-auto' : ''} />}
     </div>
-  );
-}
-
-/**
- * The way in to the rules — and the only one, so it is drawn as a control.
- *
- * It used to be muted grey text with no border, and people read it as a label
- * rather than something to press: the answer to "where do I set the bar
- * colours" was on screen the whole time and still could not be found. It now
- * carries a border, a surface and the app's 44px press target, and it LEADS
- * WITH THREE OF THE PLAN COLOURS — the swatches say what is behind it before
- * the label is read, which two words never managed on their own.
- */
-export function BarStylesButton({
-  onClick,
-  className = '',
-}: {
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <m.button
-      type="button"
-      onClick={onClick}
-      {...pressMotion}
-      title="Colours, shapes and rules for the bars"
-      className={`flex h-11 shrink-0 items-center gap-2 rounded-lg border bg-background px-3 text-xs font-semibold shadow-xs transition-colors duration-200 ease-ios hover:bg-muted ${className}`}
-    >
-      <span aria-hidden className="flex items-center">
-        {PLAN_COLORS.slice(0, 3).map((c, i) => (
-          <span
-            key={c}
-            className="size-3 rounded-[3px] ring-1 ring-background"
-            style={{ background: c, marginLeft: i === 0 ? 0 : -4 }}
-          />
-        ))}
-      </span>
-      Bar styles
-      <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-    </m.button>
-  );
-}
-
-/** The rule's own drawing, at legend size — shape as well as colour. */
-function Swatch({ style }: { style: BarStyle }) {
-  const bg = paintSwatch(style.paint);
-  if (style.shape === 'diamond') {
-    return <span aria-hidden className="size-2 rotate-45 rounded-[1px]" style={{ background: bg }} />;
-  }
-  return (
-    <span
-      aria-hidden
-      className="w-3 rounded-[1px]"
-      style={{
-        background: style.hatched
-          ? `repeating-linear-gradient(45deg, ${bg} 0 2px, transparent 2px 4px), ${bg}`
-          : bg,
-        height: style.shape === 'bracket' ? 3 : 8,
-      }}
-    />
   );
 }

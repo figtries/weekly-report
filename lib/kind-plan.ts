@@ -18,6 +18,7 @@ import { setWorkKindSqlite } from './progress-sqlite';
 import { ladderFor } from './work-kind-apply';
 import { BUILT_IN_KINDS, shapeOf, type Shape } from './work-kind';
 import { disciplineOf, findDiscipline } from './disciplines';
+import { reachOf } from './kind-reach';
 import type { Milestone, ProgressMethod } from './types';
 
 const methodFor = (s: Shape): ProgressMethod => (s === 'qty' ? 'qty' : s === 'manual' ? 'lumpsum' : 'milestone');
@@ -58,30 +59,6 @@ function childrenOf(nodes: Node[]): Map<string, Node[]> {
     else kids.set(n.parentId, [n]);
   }
   return kids;
-}
-
-/**
- * The rows under a heading that a new kind would reach, without writing them.
- * The panel counts these for "Applies to the N rows under it"; the write below
- * walks the same way, so the number said is the number written.
- */
-export function reachOf(
-  heading: { id: string; kind: string | null },
-  kindId: string,
-  kids: Map<string, { id: string; kind: string | null }[]>
-): string[] {
-  const out: string[] = [];
-  const walk = (id: string) => {
-    for (const c of kids.get(id) ?? []) {
-      const follows = c.kind == null || c.kind === heading.kind;
-      const isHeading = kids.has(c.id);
-      if (isHeading && !follows) continue; // a heading with its own kind governs its subtree
-      if (follows && c.kind !== kindId) out.push(c.id);
-      if (isHeading) walk(c.id);
-    }
-  };
-  walk(heading.id);
-  return out;
 }
 
 /** Set a row's kind; on a heading, hand it down. Returns the ids written. */

@@ -1,5 +1,7 @@
 import { createElement, type ComponentProps, type ComponentType } from 'react';
 
+import type BarsPanelType from './BarsPanel';
+import type KindViewType from './KindView';
 import type LinkDragCardType from './LinkDragCard';
 import type LinksPanelType from './LinksPanel';
 
@@ -53,4 +55,36 @@ export function loadedLinkDragCard(): ComponentType<CardProps> | null {
  */
 export function ReadyLinkDragCard(props: CardProps) {
   return card ? createElement(card, props) : null;
+}
+
+/** The same, for the Bars panel: warmed when the page goes idle, opened once loaded. */
+type BarsProps = ComponentProps<typeof BarsPanelType>;
+let bars: ComponentType<BarsProps> | null = null;
+let barsPending: Promise<void> | null = null;
+
+export function warmBarsPanel(): Promise<void> {
+  barsPending ??= import('./BarsPanel').then((m) => {
+    bars = m.default;
+  });
+  return barsPending;
+}
+
+export function ReadyBarsPanel(props: BarsProps) {
+  return bars ? createElement(bars, props) : null;
+}
+
+/** And for the row panel's kind of work view, which carries the picker and its icons. */
+type KindProps = ComponentProps<typeof KindViewType>;
+let kind: ComponentType<KindProps> | null = null;
+let kindPending: Promise<void> | null = null;
+
+export function warmKindView(): Promise<void> {
+  kindPending ??= import('./KindView').then((m) => {
+    kind = m.default;
+  });
+  return kindPending;
+}
+
+export function ReadyKindView(props: KindProps) {
+  return kind ? createElement(kind, props) : null;
 }

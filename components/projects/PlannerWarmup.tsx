@@ -41,7 +41,7 @@ export default function PlannerWarmup({ hasProjects }: { hasProjects: boolean })
     let cancelled = false;
     const warm = () => {
       if (cancelled) return;
-      // The three that carry the weight. RowMenu, BarStyleEditor and PasteRows
+      // The three that carry the weight. RowMenu, BarsPanel and PasteRows
       // are left out on purpose: they are behind a tap the planner has not
       // received yet, and pulling them here would spend the quiet moment on
       // code that is not on the path to first paint.

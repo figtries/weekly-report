@@ -69,6 +69,47 @@ check('nothing done: no solid', solid(segmentsOf([], 0)) === 0 && segmentsOf([],
 check('all done: one solid', segmentsOf([], 100).length === 1 && solid(segmentsOf([], 100)) === 1);
 check('gate: one labelled segment', segmentsOf([{ label: 'IFR', weight: 100, done: false }], 0)[0].label === 'IFR');
 
+// What a pressed bar says: every clause only when it has something to say.
+{
+  const { barSentence } = await import('../lib/bar-sentence.ts');
+  const row = {
+    isSummary: false,
+    isMilestone: false,
+    startDate: '2026-03-23',
+    finishDate: '2026-05-17',
+    contractStart: null as string | null,
+    contractFinish: null as string | null,
+  };
+  const fact = {
+    kindId: 'engineering',
+    shape: 'steps' as const,
+    disciplineId: null,
+    donePct: 80,
+    rungs: ladder,
+    ladder: ['ifr', 'ifa', 'afc'],
+    forecastFinish: '2026-05-24',
+    planFinish: '2026-05-17',
+    reason: 'it waits for Process Design Basis',
+  };
+  const late = barSentence(row, fact, { setsFinish: true });
+  check(
+    'late bar sentence',
+    late ===
+      'Plan 23 Mar → 17 May · Done 80% (IFR, IFA) · Finishes 24 May, 7 days late because it waits for Process Design Basis · Sets the project finish',
+    late
+  );
+  const onPlan = barSentence(
+    { ...row, contractStart: '2026-03-18', contractFinish: '2026-05-12' },
+    { ...fact, forecastFinish: '2026-05-17', reason: null, donePct: 0, rungs: [] },
+    { setsFinish: false }
+  );
+  check('on-plan bar sentence', onPlan === 'Plan 23 Mar → 17 May · Finishes on plan · Contract 18 Mar → 12 May', onPlan);
+  const bare = barSentence(row, undefined, { setsFinish: false });
+  check('bar with no facts', bare === 'Plan 23 Mar → 17 May', bare);
+  const ms = barSentence({ ...row, isMilestone: true }, undefined, { setsFinish: false });
+  check('milestone sentence', ms === 'On 23 Mar', ms);
+}
+
 // The column the panel writes, round-tripped on a copy of the real database.
 {
   const { default: Database } = await import('better-sqlite3');

@@ -15,7 +15,8 @@ import { getSheet, getWeekSpans } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
 import { currentWeekForProject } from '@/lib/data';
 import ValueStrip from '@/components/projects/ValueStrip';
-import { getBarStyles } from '@/lib/bar-styles-read';
+import { getBarView } from '@/lib/bar-view-read';
+import { getBarFacts } from '@/lib/bar-facts';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
@@ -94,7 +95,9 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   const contents = getProjectContents(id);
   const sheet = getSheet(id);
   const weights = getWeightSummary(id);
-  const bars = getBarStyles(id, sheet.rows);
+  // Both after `params`: the facts read the clock for the current week.
+  const barView = getBarView(id);
+  const barFacts = getBarFacts(id).facts;
   const weeks = getWeekSpans(id);
   const isOpen = (await getActiveProjectId()) === id;
   // The week Data Overall opens on, for the button beside this title — and only
@@ -224,10 +227,8 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           projectStart={project.startDate}
           projectFinish={project.finishDate}
           projectId={id}
-          barStyles={bars.styles}
-          barStyleSource={bars.source}
-          barStyleAuto={bars.auto}
-          barStylePruned={bars.pruned}
+          barView={barView}
+          barFacts={barFacts}
           weeks={weeks}
           contract={sheet.contract !== null}
         />

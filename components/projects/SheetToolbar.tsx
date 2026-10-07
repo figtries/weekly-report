@@ -2,9 +2,11 @@
 
 import { m } from 'framer-motion';
 import {
+  ChartNoAxesGantt,
   ChevronsLeft,
   ChevronsRight,
   CornerDownRight,
+  Link2,
   ListTree,
   Plus,
   Search,
@@ -42,6 +44,9 @@ export default function SheetToolbar({
   onDelete,
   allCollapsed,
   onToggleAll,
+  canLink,
+  onLinks,
+  onBars,
   pane,
   setPane,
   slot,
@@ -60,6 +65,12 @@ export default function SheetToolbar({
   onDelete: () => void;
   allCollapsed: boolean;
   onToggleAll: () => void;
+  /** An activity is selected: a heading has no links of its own. */
+  canLink: boolean;
+  /** The selected row's links (the panel the row's ⋯ also opens). */
+  onLinks: () => void;
+  /** What every bar shows: colours and marks. */
+  onBars: () => void;
   pane: 'sheet' | 'gantt';
   setPane: (p: 'sheet' | 'gantt') => void;
   /** Paste-from-Excel sits here rather than being wired through six props. */
@@ -129,6 +140,27 @@ export default function SheetToolbar({
         label="Undo"
         hint="Ctrl+Z"
         disabled={!canUndo}
+        compact
+      />
+
+      <span className="mx-0.5 hidden h-6 w-px bg-border sm:block" aria-hidden />
+
+      {/* Links and Bars out in the open: the links lived only behind each
+          row's ⋯, which is the hiding place this bar was written to end, and
+          the bars had a dialog reached from the legend (7 Oct 2026). */}
+      <Action
+        onClick={onLinks}
+        icon={<Link2 className="size-4" />}
+        label="Links"
+        title="What the selected activity waits for, and what waits for it"
+        disabled={!canLink}
+        compact
+      />
+      <Action
+        onClick={onBars}
+        icon={<ChartNoAxesGantt className="size-4" />}
+        label="Bars"
+        title="What colour says on the timeline, and which marks show"
         compact
       />
 

@@ -46,7 +46,6 @@ import {
   outdentRowAction,
   undoDeleteRowAction,
 } from '@/lib/sheet-structure';
-import BarStyleEditor from './BarStyleEditor';
 import ShiftPreviewBar from './ShiftPreview';
 import {
   analyseNetwork,
@@ -57,10 +56,20 @@ import {
 } from '@/lib/chains';
 import ConflictStrip from './ConflictStrip';
 import { suggestionsFor } from '@/lib/link-suggestions';
-import { ReadyLinkDragCard, warmLinkDragCard, warmLinksPanel } from './links-panel-loader';
+import {
+  ReadyBarsPanel,
+  ReadyLinkDragCard,
+  warmBarsPanel,
+  warmKindView,
+  warmLinkDragCard,
+  warmLinksPanel,
+} from './links-panel-loader';
+import { barSentence } from '@/lib/bar-sentence';
 import type { LinkType } from '@/lib/links';
-import GanttChart, { BarStylesButton, GanttLegend, paintColor } from './GanttChart';
-import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
+import GanttChart, { GanttLegend } from './GanttChart';
+import { DEFAULT_BAR_VIEW, effectiveColourBy, paintCss, paintOf as barPaintOf, type BarView } from '@/lib/bar-view';
+import type { BarFact } from '@/lib/bar-facts';
+import { setBarViewAction } from '@/lib/bar-view-actions';
 import { groupAmount, stripAmount } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
@@ -265,10 +274,8 @@ export default function ScheduleSheet({
   projectStart,
   projectFinish,
   projectId,
-  barStyles = DEFAULT_BAR_STYLES,
-  barStyleSource = 'type',
-  barStyleAuto = true,
-  barStylePruned = [],
+  barView = DEFAULT_BAR_VIEW,
+  barFacts = {},
   weeks = [],
   contract = false,
 }: {
@@ -279,11 +286,10 @@ export default function ScheduleSheet({
   projectFinish: string | null;
   /* `currency` left with the Price column: the sheet has no money on it now. */
   projectId: string;
-  /** The project's ordered rule list; a ready-made one until someone edits it. */
-  barStyles?: BarStyle[];
-  barStyleSource?: 'custom' | BarPreset;
-  barStyleAuto?: boolean;
-  barStylePruned?: string[];
+  /** The Bars panel's choices (lib/bar-view.ts). A seed, like `rows`. */
+  barView?: BarView;
+  /** What each bar has to say, as of the current week (lib/bar-facts.ts). A seed too. */
+  barFacts?: Record<string, BarFact>;
   /** Reporting weeks and their status, for the affected-weeks warning. */
   weeks?: WeekSpan[];
   /** A contract is locked: the key names the grey bar under each task. */
@@ -298,7 +304,7 @@ export default function ScheduleSheet({
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
-  const [menuMode, setMenuMode] = useState<'menu' | 'delete' | 'links'>('menu');
+  const [menuMode, setMenuMode] = useState<'menu' | 'delete' | 'links' | 'kind'>('menu');
   // A link drawn on the Gantt, waiting for its card's Save.
   const [pendingLink, setPendingLink] = useState<{ fromId: string; toId: string; type: LinkType } | null>(null);
   // Worked out here, not in an inline function called during render: that is
@@ -306,7 +312,9 @@ export default function ScheduleSheet({
   const linkFrom = pendingLink ? rows.find((r) => r.id === pendingLink.fromId) : undefined;
   const linkTo = pendingLink ? rows.find((r) => r.id === pendingLink.toId) : undefined;
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
-  const [stylesOpen, setStylesOpen] = useState(false);
+  const [view, setView] = useState(barView);
+  const [facts, setFacts] = useState(barFacts);
+  const [barsOpen, setBarsOpen] = useState(false);
   const [fitTimeline, setFitTimeline] = useState(false);
   const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
   const [query, setQuery] = useState('');
@@ -328,11 +336,6 @@ export default function ScheduleSheet({
   // frame of a short list, which is why this is not tuned down to the twenty a
   // phone would prefer.
   const [range, setRange] = useState({ start: 0, end: INITIAL_WINDOW });
-  // Read after mount, never at render: this page prerenders into the static
-  // shell, so a build-time clock would drift a day further from the truth every
-  // day and "running today" would quietly stop being true.
-  const [today, setToday] = useState('');
-  useEffect(() => setToday(new Date().toISOString().slice(0, 10)), []);
   // Declared here rather than beside the mirror below, because the window
   // arithmetic reads the scroller's own height.
   const leftRef = useRef<HTMLDivElement>(null);
@@ -668,6 +671,36 @@ export default function ScheduleSheet({
     el.scrollTo({ top: target, behavior: far ? 'auto' : 'smooth' });
   }, [visible]);
 
+  // Data Overall's "Set in plan" / "Change in plan" lands here as
+  // `#row=<id>&open=kind`: the row is opened up, scrolled to, selected, and its
+  // kind of work view opens. A hash, because a searchParam on this route would
+  // need its own <Suspense> under cacheComponents.
+  useEffect(() => {
+    const hash = window.location.hash;
+    const m = /row=([^&]+)/.exec(hash);
+    if (!m) return;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    const id = decodeURIComponent(m[1]);
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+    const up = new Map(rows.map((r) => [r.id, r.parentId]));
+    revealRef.current = id;
+    setCollapsed((c) => {
+      const next = new Set(c);
+      for (let p = row.parentId; p; p = up.get(p) ?? null) next.delete(p);
+      return next;
+    });
+    setSelectedId(id);
+    if (/open=kind/.test(hash)) {
+      void warmKindView().then(() => {
+        setMenuRow(row);
+        setMenuMode('kind');
+      });
+    }
+    // Once, on arrival: the hash is gone after the first read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const windowed = useMemo(
     () => visible.slice(range.start, Math.min(range.end, visible.length)),
     [visible, range]
@@ -686,7 +719,11 @@ export default function ScheduleSheet({
   // Warm the Links panel's chunk once the page is idle, off every press path:
   // warming it as the menu opened cost the menu ~30 ms (A/B, 7 Oct 2026).
   useEffect(() => {
-    const warm = () => void warmLinksPanel();
+    const warm = () => {
+      void warmLinksPanel();
+      void warmBarsPanel();
+      void warmKindView();
+    };
     if ('requestIdleCallback' in window) {
       const id = window.requestIdleCallback(warm, { timeout: 4000 });
       return () => window.cancelIdleCallback(id);
@@ -710,11 +747,30 @@ export default function ScheduleSheet({
    * The stripe beside each outline code used to read `planColor(colorGroup)`
    * directly, which meant it kept saying "which package" while the timeline had
    * moved on to saying "critical" or "summary" — two colours for one row, in
-   * two panes six inches apart. It asks the rule engine now, like the chart.
+   * two panes six inches apart. It asks the same function the chart does.
    */
+  const colourBy = effectiveColourBy(view, rows);
   const paintOf = useCallback(
-    (row: SheetRow) => paintColor(resolveBar(row, barStyles, today).paint, row),
-    [barStyles, today]
+    (row: SheetRow) =>
+      row.isSummary || row.isMilestone
+        ? 'var(--foreground)'
+        : paintCss(barPaintOf(row, facts[row.id]?.kindId ?? null, view, colourBy)),
+    [facts, view, colourBy]
+  );
+
+  /** A Bars press: drawn at once, saved behind it, put back if the save fails. */
+  const changeView = useCallback(
+    (next: BarView) => {
+      const before = view;
+      setView(next);
+      void setBarViewAction(projectId, next).then((res) => {
+        if (!res.ok) {
+          setView(before);
+          setError(res.error);
+        }
+      });
+    },
+    [view, projectId]
   );
   const nameById = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
 
@@ -1599,6 +1655,13 @@ export default function ScheduleSheet({
             c.size > 0 ? new Set() : new Set(rows.filter((r) => r.isSummary).map((r) => r.id))
           )
         }
+        canLink={!!selected && !selected.isSummary}
+        onLinks={() => {
+          if (!selected || selected.isSummary) return;
+          setMenuRow(selected);
+          setMenuMode('links');
+        }}
+        onBars={() => void warmBarsPanel().then(() => setBarsOpen(true))}
         pane={pane}
         setPane={setPane}
         query={query}
@@ -1639,7 +1702,7 @@ export default function ScheduleSheet({
           initial={{ opacity: 0, y: -3 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18 }}
-          className="flex shrink-0 items-center gap-2 border-b bg-muted/60 px-3 py-1.5 text-[11px]"
+          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px]"
         >
           <span
             aria-hidden
@@ -1647,18 +1710,15 @@ export default function ScheduleSheet({
             style={{ background: paintOf(selected) }}
           />
           <span className="shrink-0 tabular-nums text-muted-foreground">{selected.code}</span>
-          <span className="truncate font-medium">{selected.name}</span>
-          <span className="ml-auto hidden shrink-0 tabular-nums text-muted-foreground sm:block">
-            {selected.isMilestone
-              ? fmtDate(selected.startDate)
-              : selected.durationDays != null
-                ? `${selected.durationDays} d · ${fmtDate(selected.startDate)} → ${fmtDate(selected.finishDate)}`
-                : 'no dates yet'}
+          <span className="min-w-0 flex-1 truncate font-medium">{selected.name}</span>
+          {/* What the pressed bar shows, said in one line (7 Oct 2026): the
+              plan, what is done, when it finishes and why. Its own line, so a
+              phone reads all of it instead of an ellipsis. */}
+          <span className="w-full pl-3 leading-snug text-muted-foreground">
+            {barSentence(selected, facts[selected.id], {
+              setsFinish: network.rows.get(selected.id)?.setsProjectFinish ?? false,
+            }) || 'No dates yet'}
           </span>
-          {/* This strip REPLACES the legend, and the legend is where the bar
-              rules are reached from — so without this the way in disappears
-              the moment anyone touches a row, which is most of the time. */}
-          <BarStylesButton onClick={() => setStylesOpen(true)} className="ml-auto sm:ml-1" />
         </m.div>
       ) : (
         // Under 768px the two panes take turns, so on the List tab this row was
@@ -1667,7 +1727,7 @@ export default function ScheduleSheet({
         // waiting for. The way into the bar rules is not lost: select any row
         // and the strip above carries it.
         <div className={`shrink-0 ${pane === 'sheet' ? 'hidden md:block' : ''}`}>
-          <GanttLegend rows={rows} styles={barStyles} onEdit={() => setStylesOpen(true)} network={network} contract={contract} />
+          <GanttLegend rows={rows} view={view} facts={facts} colourBy={colourBy} network={network} contract={contract} />
         </div>
       )}
 
@@ -1933,7 +1993,9 @@ export default function ScheduleSheet({
             headH={HEAD_H}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            styles={barStyles}
+            view={view}
+            facts={facts}
+            colourBy={colourBy}
             range={range}
             fit={fitTimeline}
           />
@@ -2000,6 +2062,12 @@ export default function ScheduleSheet({
           rows={rows}
           names={nameById}
           suggestions={suggestions.get(menuRow.id) ?? []}
+          facts={facts}
+          view={view}
+          onKindSaved={(sheet, next) => {
+            applySheet(sheet);
+            setFacts(next);
+          }}
           onLinksSaved={(sheet, touched) => {
             applySheet(sheet);
             // A link the plan already breaks: offer the move at once.
@@ -2015,21 +2083,18 @@ export default function ScheduleSheet({
         />
       )}
 
-      <BarStyleEditor
-        projectId={projectId}
-        styles={barStyles}
-        source={barStyleSource}
-        auto={barStyleAuto}
-        pruned={barStylePruned}
-        // Only the units this plan actually has, and by ID — a rule that says
-        // "inside SPK-007" has to survive another unit being marked above it.
-        units={rows
-          .filter((r) => r.isReportingUnit)
-          .map((r) => ({ id: r.id, name: r.unitLabel || r.name }))}
-        open={stylesOpen}
-        onClose={() => setStylesOpen(false)}
-        onChanged={applySheet}
-      />
+      {/* Opened only once its chunk is in (see the Bars press), so it renders
+          without suspending, the way the Links panel does. */}
+      {barsOpen && (
+        <ReadyBarsPanel
+          view={view}
+          rows={rows}
+          facts={facts}
+          contract={contract}
+          onChange={changeView}
+          onClose={() => setBarsOpen(false)}
+        />
+      )}
     </div>
   );
 }

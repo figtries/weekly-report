@@ -11,12 +11,18 @@ import {
   MoveDown,
   MoveUp,
   Plus,
+  Shapes,
   Tag,
   Trash2,
 } from 'lucide-react';
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
 import type { Network } from '@/lib/chains';
+import type { BarFact } from '@/lib/bar-facts';
+import type { BarView } from '@/lib/bar-view';
+import { BUILT_IN_KINDS } from '@/lib/work-kind';
+import { findDiscipline } from '@/lib/disciplines';
+import { ReadyKindView, warmKindView } from './links-panel-loader';
 
 // Lazy: the planner's first load does not carry the Links panel. ScheduleSheet
 // warms the chunk when the page goes idle, so neither opening this menu nor
@@ -82,10 +88,18 @@ export default function RowMenu({
   names,
   suggestions,
   onLinksSaved,
+  facts,
+  view,
+  onKindSaved,
 }: {
   row: SheetRow;
-  /** 'delete' when the sheet opened this panel to ask about a row with children; 'links' from the conflict strip. */
-  initialMode?: 'menu' | 'delete' | 'links';
+  /** 'delete' when the sheet opened this panel to ask about a row with children; 'links' from the conflict strip; 'kind' from Data Overall's link. */
+  initialMode?: 'menu' | 'delete' | 'links' | 'kind';
+  /** What each bar has to say (lib/bar-facts.ts), for the kind of work view. */
+  facts: Record<string, BarFact>;
+  view: BarView;
+  /** A kind was saved: the plan and the bars as the server now has them. */
+  onKindSaved: (sheet: Sheet, facts: Record<string, BarFact>) => void;
   projectId: string;
   /** The links read against the plan, for the Links view. */
   network: Network;
@@ -149,7 +163,10 @@ export default function RowMenu({
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [unitValue, setUnitValue] = useState('');
-  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links'>(initialMode);
+  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind'>(initialMode);
+  const fact = facts[row.id];
+  const kindName = fact?.kindId ? BUILT_IN_KINDS.find((k) => k.id === fact.kindId)?.label ?? null : null;
+  const discipline = fact?.disciplineId ? findDiscipline(fact.disciplineId)?.short : null;
 
   const run = (
     fn: () => Promise<Res>,
@@ -274,6 +291,16 @@ export default function RowMenu({
 
         {mode === 'menu' && (
           <div className="mt-3 space-y-0.5">
+            {/* What the work IS, asked while planning (7 Oct 2026). Data
+                Overall reads it and only ticks its stages. */}
+            <Item
+              icon={<Shapes className="size-4" />}
+              onClick={() => void warmKindView().then(() => setMode('kind'))}
+              disabled={pending}
+            >
+              Kind of work:{' '}
+              {kindName ? `${kindName}${discipline ? ` · ${discipline}` : ''}` : 'not set'}
+            </Item>
             {!row.isSummary && (
               <>
                 <Item icon={<Link2 className="size-4" />} onClick={() => setMode('links')} disabled={pending} linksEntry>
@@ -283,6 +310,7 @@ export default function RowMenu({
                 <Divider />
               </>
             )}
+            {row.isSummary && <Divider />}
             <Item
               icon={<Plus className="size-4" />}
               onClick={() => {
@@ -439,6 +467,21 @@ export default function RowMenu({
           </Suspense>
           );
         })()}
+
+        {mode === 'kind' && (
+          <ReadyKindView
+            row={row}
+            rows={rows}
+            facts={facts}
+            view={view}
+            projectId={projectId}
+            onBack={() => (initialMode === 'kind' ? onClose() : setMode('menu'))}
+            onSaved={(sheet, next) => {
+              onKindSaved(sheet, next);
+              onClose();
+            }}
+          />
+        )}
 
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">

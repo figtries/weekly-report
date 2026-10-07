@@ -108,6 +108,15 @@ export function effectiveColourBy(view: BarView, rows: { colorGroup: number }[])
   return view.colourBy === 'package' && !canColourByPackage(rows) ? 'kind' : view.colourBy;
 }
 
+/**
+ * Which package colour a row reads. The unit's id where the plan marks units,
+ * so a colour survives another unit being marked above it; the group's place
+ * where packages are only the plan's top branches.
+ */
+export function packageKey(row: { colorGroup: number; unitId: string | null }): string {
+  return row.unitId ?? `g${row.colorGroup}`;
+}
+
 export function paintOf(
   row: { colorGroup: number; unitId: string | null },
   kindId: string | null,
@@ -115,9 +124,7 @@ export function paintOf(
   colourBy: ColourBy
 ): BarPaint {
   if (colourBy === 'one') return view.colours.one;
-  if (colourBy === 'package') {
-    return (row.unitId ? view.colours.package[row.unitId] : undefined) ?? packagePaint(row.colorGroup);
-  }
+  if (colourBy === 'package') return view.colours.package[packageKey(row)] ?? packagePaint(row.colorGroup);
   const k = kindId ?? 'none';
   return view.colours.kind[k] ?? DEFAULT_KIND_PAINT[k] ?? 'muted';
 }
