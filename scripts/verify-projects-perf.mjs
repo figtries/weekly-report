@@ -96,9 +96,9 @@ async function pressUntil(page, selector, text) {
   const long = await page.evaluate(() => window.__long);
   out.scrollLongMax = Math.round(Math.max(0, ...long));
   out.scrollLongTotal = Math.round(long.reduce((a, b) => a + b, 0));
-  out.pressMenu = await pressUntil(page, 'button[aria-label^="Actions for row 1.1.1"]', 'Add row below');
+  out.pressMenu = await pressUntil(page, 'button[aria-label="Actions for row 1.1.1.1"]', 'Add row below');
   out.pressLinks = (await page.$('[data-links-entry]'))
-    ? await pressUntil(page, '[data-links-entry]', 'Waits for')
+    ? await pressUntil(page, '[data-links-entry]', 'Add what it waits for')
     : 'n/a (before Task 9)';
   await page.close();
 }

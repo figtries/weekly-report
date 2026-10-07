@@ -56,6 +56,8 @@ import {
   type WeekSpan,
 } from '@/lib/chains';
 import ConflictStrip from './ConflictStrip';
+import { suggestionsFor } from '@/lib/link-suggestions';
+import { warmLinksPanel } from './links-panel-loader';
 import GanttChart, { BarStylesButton, GanttLegend, paintColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
 import { groupAmount, stripAmount } from '@/lib/currency';
@@ -295,7 +297,7 @@ export default function ScheduleSheet({
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
-  const [menuMode, setMenuMode] = useState<'menu' | 'delete'>('menu');
+  const [menuMode, setMenuMode] = useState<'menu' | 'delete' | 'links'>('menu');
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [fitTimeline, setFitTimeline] = useState(false);
@@ -661,6 +663,20 @@ export default function ScheduleSheet({
   // server ran in getSheet, recomputed the moment a date changes here.
   const network = useMemo(() => analyseNetwork(rows), [rows]);
   const parentOf = useMemo(() => new Map(rows.map((r) => [r.id, r.parentId])), [rows]);
+  // The date-chain guesses for rows nobody has linked; the Links panel adds EPC
+  // order's when it opens.
+  const suggestions = useMemo(() => suggestionsFor(rows), [rows]);
+  // Warm the Links panel's chunk once the page is idle, off every press path:
+  // warming it as the menu opened cost the menu ~30 ms (A/B, 7 Oct 2026).
+  useEffect(() => {
+    const warm = () => void warmLinksPanel();
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(warm, 2000);
+    return () => clearTimeout(t);
+  }, []);
   // The outline and the tail follow the dates on screen, not the last payload.
   const drawnRows = useMemo(
     () =>
@@ -1654,7 +1670,7 @@ export default function ScheduleSheet({
         onOpen={(id) => {
           setSelectedId(id);
           setMenuRow(rows.find((r) => r.id === id) ?? null);
-          setMenuMode('menu'); // the Links view lands in Task 9
+          setMenuMode('links');
         }}
       />
 
@@ -1936,6 +1952,23 @@ export default function ScheduleSheet({
             syncRows();
           }}
           onAdd={(asChild) => addRow(menuRow.id, asChild)}
+          projectId={projectId}
+          network={network}
+          rows={rows}
+          names={nameById}
+          suggestions={suggestions.get(menuRow.id) ?? []}
+          onLinksSaved={(sheet, touched) => {
+            applySheet(sheet);
+            // A link the plan already breaks: offer the move at once.
+            const followers = conflictMoves(sheet.rows, touched, new Map(sheet.rows.map((r) => [r.id, r.name])));
+            if (followers.length) {
+              setShift({
+                rowId: touched[0],
+                rowName: nameById.get(touched[0]) ?? '',
+                preview: { moved: [], followers, fromDate: null, toDate: null, fromIds: touched },
+              });
+            }
+          }}
         />
       )}
 

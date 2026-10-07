@@ -168,7 +168,9 @@ await browser.close();
 
   HOW TO COMPARE (learned in Task 7): this machine's load moves the numbers more than the code does (the same baseline build read scroll total 0-51 ms in the morning and 82-127 ms in the afternoon). So every later check is an A/B, interleaved run by run, against the baseline commit built in a worktree: `git worktree add .worktrees/base 19e373a`, then `NEXT_DIST_DIR=.next-base npx next build` inside it, served by the temporary launch config `prod-base-ab` on :3215 with `REPORT_DB_PATH` at the main `data/report.db`. Budgets are deltas against that run's base median. Clean up at the end: `git worktree remove .worktrees/base`, drop `prod-base-ab` from launch.json. (Never put backticks inside a double-quoted shell string: bash runs them.)
 
-  After Task 7 (A/B, 4 interleaved runs, medians base → new): LCP 1778 → 1648 ms, scroll long-task total 111 → 95 ms (max 82 → 106 once), press ⋯ 61 → 68 ms, jsKB 264 → 266. Inside budget. Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
+  After Task 7 (A/B, 4 interleaved runs, medians base → new): LCP 1778 → 1648 ms, scroll long-task total 111 → 95 ms (max 82 → 106 once), press ⋯ 61 → 68 ms, jsKB 264 → 266. Inside budget.
+
+  After Task 9 (A/B, 3 runs, medians base → new): LCP 1568 → 1676 ms (+7%), jsKB 264 → 273, scroll long-task total 116 → 51 ms, press ⋯ on an activity 61 → 79 ms, press Links 125 ms (99-139). Two costs found and removed on the way: warming the panel chunk as the menu opened cost the menu ~30 ms (moved to requestIdleCallback in ScheduleSheet), and next/dynamic plus React 19's Suspense reveal throttle made Links take ~400 ms while doing ~40 ms of work (now a warmed module rendered without suspending, components/projects/links-panel-loader.ts). Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
 
 - [ ] **Step 3: Commit**
 

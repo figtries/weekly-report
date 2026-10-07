@@ -135,6 +135,15 @@ check('why: finishes after it finishes + wait', why('E').text === 'Finishes 16 M
 check('why: a conflict is red', why('D').conflict && why('D').text === 'Starts 8 Apr, before B finishes (19 Apr).', why('D').text);
 check('why: no links', why('A').text === 'Not linked yet. Its dates are typed.', why('A').text);
 const pair = (b: NetNode) => new Map([['A', node('A', '2026-01-01', '2026-01-10')], ['B', b]]);
+// A conflict on a link with a wait names the date the link allows, not the
+// predecessor's own start: found pressing the panel on 7 Oct 2026.
+const ssLate = node('B', '2026-01-02', '2026-01-08', [{ id: 'A', type: 'SS', wait: 3 }]);
+const ssLateNet = analyseNetwork([...pair(ssLate).values()]);
+check(
+  'why: a conflict with a wait names what the link allows',
+  whySentence('B', ssLateNet, pair(ssLate), new Map([['A', 'A']])).text === 'Starts 2 Jan, 2 days before A allows (4 Jan).',
+  whySentence('B', ssLateNet, pair(ssLate), new Map([['A', 'A']])).text
+);
 const ssB = node('B', '2026-01-01', '2026-01-05', [{ id: 'A', type: 'SS', wait: 0 }]);
 const ss0 = analyseNetwork([...pair(ssB).values()]);
 check('why: after it starts, no wait', whySentence('B', ss0, pair(ssB), new Map([['A', 'A']])).text === 'Starts 1 Jan, when A starts.', whySentence('B', ss0, pair(ssB), new Map([['A', 'A']])).text);
@@ -241,6 +250,19 @@ const vis = new Map([['G', 0], ['A', 1]]);
 const par = new Map<string, string | null>([['G', null], ['A', 'G'], ['H', 'G']]);
 check('a hidden row ends on its shown group', j(visibleEnd('H', vis, par)) === j({ index: 0, collapsed: true }));
 check('a shown row ends on itself', j(visibleEnd('A', vis, par)) === j({ index: 1, collapsed: false }));
+
+/* ------------------------------------------------------------- suggestions */
+
+const { suggestionsFor } = await import('../lib/link-suggestions.ts');
+const sugRows = [
+  { id: 'p', parentId: 'g', isLeaf: true, startDate: '2026-01-01', finishDate: '2026-01-10', links: null },
+  { id: 'q', parentId: 'g', isLeaf: true, startDate: '2026-01-11', finishDate: '2026-01-20', links: null },
+  { id: 'r', parentId: 'g', isLeaf: true, startDate: '2026-01-21', finishDate: '2026-01-30', links: [] },
+  { id: 'z', parentId: 'h', isLeaf: true, startDate: null, finishDate: null, links: null },
+];
+const sug = suggestionsFor(sugRows, { q: ['z', 'p', 'nope'] });
+check('a row never asked gets the date guess and EPC order, once each', j(sug.get('q')) === j(['p', 'z']), j([...sug]));
+check('a row that answered, even "nothing", gets no suggestion', !sug.has('r'));
 
 /* ==== later tasks append their sections ABOVE this line ==== */
 

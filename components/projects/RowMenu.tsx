@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { Suspense, useState, useTransition } from 'react';
+import dynamic from 'next/dynamic';
 import {
   ChevronsLeft,
   ChevronsRight,
   CornerDownRight,
   Diamond,
+  Link2,
   MoveDown,
   MoveUp,
   Plus,
@@ -14,6 +16,13 @@ import {
 } from 'lucide-react';
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
+import type { Network } from '@/lib/chains';
+
+// Lazy: the planner's first load does not carry the Links panel. ScheduleSheet
+// warms the chunk when the page goes idle, so neither opening this menu nor
+// pressing Links waits for it.
+const LinksPanel = dynamic(() => import('./LinksPanel'), { ssr: false });
+import { loadedLinksPanel } from './links-panel-loader';
 import {
   predictDelete,
   predictFlags,
@@ -67,10 +76,24 @@ export default function RowMenu({
   onPredict,
   onFailed,
   onAdd,
+  projectId,
+  network,
+  rows,
+  names,
+  suggestions,
+  onLinksSaved,
 }: {
   row: SheetRow;
-  /** 'delete' when the sheet opened this panel to ask about a row with children. */
-  initialMode?: 'menu' | 'delete';
+  /** 'delete' when the sheet opened this panel to ask about a row with children; 'links' from the conflict strip. */
+  initialMode?: 'menu' | 'delete' | 'links';
+  projectId: string;
+  /** The links read against the plan, for the Links view. */
+  network: Network;
+  rows: SheetRow[];
+  names: Map<string, string>;
+  /** The date-chain guesses for this row (lib/link-suggestions.ts). */
+  suggestions: string[];
+  onLinksSaved: (sheet: Sheet, touched: string[]) => void;
   onClose: () => void;
   /**
    * Something changed. The SHEET comes with it when the action carried one,
@@ -126,7 +149,7 @@ export default function RowMenu({
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [unitValue, setUnitValue] = useState('');
-  const [mode, setMode] = useState<'menu' | 'unit' | 'delete'>(initialMode);
+  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links'>(initialMode);
 
   const run = (
     fn: () => Promise<Res>,
@@ -251,6 +274,15 @@ export default function RowMenu({
 
         {mode === 'menu' && (
           <div className="mt-3 space-y-0.5">
+            {!row.isSummary && (
+              <>
+                <Item icon={<Link2 className="size-4" />} onClick={() => setMode('links')} disabled={pending} linksEntry>
+                  Links: Waits for {row.links?.length ?? 0} · Holds up{' '}
+                  {rows.filter((r) => r.links?.some((l) => l.id === row.id)).length}
+                </Item>
+                <Divider />
+              </>
+            )}
             <Item
               icon={<Plus className="size-4" />}
               onClick={() => {
@@ -385,6 +417,29 @@ export default function RowMenu({
           </div>
         )}
 
+        {mode === 'links' && (() => {
+          // Already warmed: render it straight away, no Suspense, no reveal
+          // throttle. Not yet: the lazy one, once.
+          const Panel = loadedLinksPanel() ?? LinksPanel;
+          return (
+          <Suspense fallback={null}>
+            <Panel
+              projectId={projectId}
+              row={row}
+              rows={rows}
+              network={network}
+              names={names}
+              suggestions={suggestions}
+              onBack={() => (initialMode === 'links' ? onClose() : setMode('menu'))}
+              onSaved={(sheet, touched) => {
+                onLinksSaved(sheet, touched);
+                onClose();
+              }}
+            />
+          </Suspense>
+          );
+        })()}
+
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">
             <p className="text-xs leading-relaxed text-muted-foreground">
@@ -498,6 +553,7 @@ function Item({
   disabled,
   danger,
   hint,
+  linksEntry,
 }: {
   children: React.ReactNode;
   icon: React.ReactNode;
@@ -505,12 +561,15 @@ function Item({
   disabled?: boolean;
   danger?: boolean;
   hint?: string;
+  /** Marks the Links entry for the perf probe (scripts/verify-projects-perf.mjs). */
+  linksEntry?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-links-entry={linksEntry || undefined}
       className={`flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 ${
         danger ? 'text-destructive' : ''
       }`}

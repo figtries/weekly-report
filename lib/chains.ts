@@ -416,6 +416,14 @@ export function whySentence(
   const a = nodes.get(tight.fromId) as Dated;
   const name = names.get(tight.fromId) ?? tight.fromId;
   if (tight.slack < 0) {
+    // With a wait, the date to beat is the one the link allows, not the
+    // predecessor's own start or finish: say that date and how far off it is.
+    if (tight.wait > 0) {
+      const off = dayWord(-tight.slack);
+      return tight.type === 'FF'
+        ? { text: `Finishes ${short(n.finishDate)}, ${off} before ${name} allows (${short(tight.bound)}).`, conflict: true }
+        : { text: `Starts ${short(n.startDate)}, ${off} before ${name} allows (${short(tight.bound)}).`, conflict: true };
+    }
     if (tight.type === 'FF') return { text: `Finishes ${short(n.finishDate)}, before ${name} finishes (${short(a.finishDate)}).`, conflict: true };
     if (tight.type === 'SS') return { text: `Starts ${short(n.startDate)}, before ${name} starts (${short(a.startDate)}).`, conflict: true };
     return { text: `Starts ${short(n.startDate)}, before ${name} finishes (${short(a.finishDate)}).`, conflict: true };
