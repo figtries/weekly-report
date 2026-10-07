@@ -10,10 +10,14 @@ import {
   markNoProgressAction,
   saveFieldProgressAction,
   saveWeekUpdatesAction,
+  setWorkKindAction,
 } from '@/lib/actions';
 import type { MapNode } from '@/lib/overall-map';
-import { BUILT_IN_KINDS } from '@/lib/work-kind';
-import { disciplineOf } from '@/lib/disciplines';
+import type { Milestone } from '@/lib/types';
+import { BUILT_IN_KINDS, shapeOf, type Shape } from '@/lib/work-kind';
+import { changeFor, ladderFor } from '@/lib/work-kind-apply';
+import { OTHER, disciplineOf, findDiscipline } from '@/lib/disciplines';
+import DisciplineTiles from './DisciplineTiles';
 import { stageSentence } from '@/lib/stage-sentence';
 import { pressMotion } from '@/components/motion/Press';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
@@ -212,9 +216,55 @@ function PanelBody({
    * The kind of work is the PLAN's (7 Oct 2026). It is set in Projects, with
    * the plan, and this panel only reads it: the stages it gives are what get
    * ticked here. To change it, the panel links to the row in the planner.
+   *
+   * WHICH PART OF CONSTRUCTION is asked HERE (8 Oct 2026): the plan stops at
+   * the kind, because the planner does not know yet and answered Other on
+   * every row. A construction row the plan gave no stages shows the tiles
+   * until somebody picks one. The pick shows its stages at once (the figure
+   * restated into them, never raised); the panel's one Save writes it.
    */
   const answered = Boolean(node.workKind);
-  const effectiveNode: MapNode = node;
+  const [partOverride, setPartOverride] = useState<{
+    shape: Shape;
+    /** The rungs as the server stores them, `${nodeId}:${stepId}`. */
+    milestones: Milestone[];
+    /** The same rungs as the action takes them, step ids alone. */
+    steps: Milestone[];
+    /** Rungs the restatement awards, so the optimistic figure is the server's. */
+    done: string[];
+    toPct: number;
+  } | null>(null);
+  const [pickingPart, setPickingPart] = useState(false);
+  const isConstruction = node.workKind === 'construction';
+  const ownPart = isConstruction ? disciplineOf(node.milestones)?.id ?? null : null;
+  const askingPart = isConstruction && !partOverride && (pickingPart || !(node.milestones ?? []).length);
+  const effectiveNode: MapNode = partOverride
+    ? {
+        ...node,
+        method: 'milestone',
+        milestones: partOverride.milestones.map((ms) => ({ ...ms, done: partOverride.done.includes(ms.id) })),
+        source: partOverride.shape,
+      }
+    : node;
+
+  function applyPart(disciplineId: string) {
+    if (disciplineId === ownPart) return setPickingPart(false);
+    const d = findDiscipline(disciplineId) ?? OTHER;
+    const shape = shapeOf(node.name, d);
+    const steps = ladderFor('construction', shape, node.name, BUILT_IN_KINDS, d.id);
+    // The ids the server will give them, so a rung ticked before Save is one
+    // `saveFieldProgressSqlite` recognises.
+    const milestones = steps.map((ms) => ({ ...ms, id: `${node.id}:${ms.id}` }));
+    // CHANGING HOW YOU MEASURE MUST NOT CHANGE WHAT WAS MEASURED: the figure
+    // on screen is the restatement the server will write, not an empty ladder.
+    const { done, toPct } = changeFor(
+      { id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct },
+      milestones
+    );
+    setPartOverride({ shape, milestones, steps, done, toPct });
+    setPickingPart(false);
+    setError(null);
+  }
 
   /**
    * The draft is RE-SEEDED when the row stops being measured the same way.
@@ -267,10 +317,9 @@ function PanelBody({
   // carry the word they replied with. The shape is the fallback for a row the
   // importer or the planner set a method on without anyone being asked.
   // A construction row also names its discipline, read from its own rungs.
+  // A construction row's part has its own line under it (8 Oct 2026).
   const discipline = effectiveNode.workKind === 'construction' ? disciplineOf(effectiveNode.milestones) : null;
-  const kindLabel = discipline
-    ? `Construction · ${discipline.short}`
-    : BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
+  const kindLabel = BUILT_IN_KINDS.find((k) => k.id === effectiveNode.workKind)?.label ?? SHAPE_LABEL[shape];
 
   // The raw string in the percent box while it has focus. See the input.
   const [typing, setTyping] = useState<string | null>(null);
@@ -440,12 +489,40 @@ function PanelBody({
   }
 
   /**
-   * The panel's one Save. The kind of work is the plan's since 7 Oct 2026:
-   * set in Projects, read here, so nothing about it is written from this panel.
+   * The panel's one Save. The kind of work is the plan's since 7 Oct 2026, so
+   * nothing about it is written here, except the part of construction picked
+   * above (8 Oct 2026): that first, then whatever was ticked on its stages or
+   * typed in the figure.
    */
   function footerSave() {
     if (saving) return;
-    saveOrConfirm();
+    const part = partOverride;
+    if (!part) return saveOrConfirm();
+    // A typed figure wins, as it does everywhere in this panel; otherwise the
+    // rungs ticked since the part was picked, if they differ from what the
+    // restatement awarded.
+    const typed = manual && dirty;
+    const ticked = [...draft.milestonesDone].sort().join();
+    const ticks = !typed && ticked !== [...part.done].sort().join() ? draft.milestonesDone : null;
+    const finalPct = typed || ticks ? pct : part.toPct;
+    const finalSource = typed ? 'manual' : part.shape;
+    setError(null);
+    startSaving(async () => {
+      const res = await setWorkKindAction(node.id, node.name, 'construction', part.shape, { steps: part.steps }, projectId);
+      if (!res.ok) return setError(res.error ?? 'Could not save');
+      if (typed) {
+        const r = await saveWeekUpdatesAction(week, {
+          [node.id]: { cumProgressPct: pct, note: draft.note || undefined, source: finalSource },
+        }, projectId);
+        if (!r.ok) return setError(r.error ?? 'Could not save');
+      } else if (ticks) {
+        const r = await saveFieldProgressAction(week, [
+          { leafId: node.id, milestonesDone: ticks, note: draft.note || undefined, source: finalSource },
+        ], projectId);
+        if (!r.ok) return setError(r.error ?? 'Could not save');
+      }
+      finish(finalPct);
+    });
   }
 
   function nothing() {
@@ -556,6 +633,33 @@ function PanelBody({
                   </Link>
                 )}
               </div>
+              {askingPart ? (
+                <div className="mb-4">
+                  <DisciplineTiles chosen={pickingPart ? ownPart : null} onPick={applyPart} />
+                </div>
+              ) : (
+                isConstruction &&
+                discipline && (
+                  <div className="-mt-2 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-muted-foreground">Part of construction</span>
+                      <span className="block text-[14px] font-medium text-foreground">{discipline.label}</span>
+                    </span>
+                    <m.button
+                      {...pressMotion}
+                      type="button"
+                      onClick={() => {
+                        setPartOverride(null);
+                        setPickingPart(true);
+                      }}
+                      className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                    >
+                      <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      Change
+                    </m.button>
+                  </div>
+                )
+              )}
               <ProgressEntry
                 node={effectiveNode}
                 draft={draft}

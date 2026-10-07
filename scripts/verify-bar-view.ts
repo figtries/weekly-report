@@ -27,8 +27,8 @@ check('null reads as defaults', JSON.stringify(v) === JSON.stringify(DEFAULT_BAR
 check('a new project starts on one colour', v.colourBy === 'one');
 check('default marks', v.marks.done && v.marks.forecast && v.marks.contract && !v.marks.slip && v.marks.links);
 check(
-  'palette has 8, no red or amber',
-  PALETTE.length === 8 && !PALETTE.some((p) => (['danger', 'warn'] as string[]).includes(p.key))
+  'palette has 12 (two full rows of six), no red or amber',
+  PALETTE.length === 12 &&!PALETTE.some((p) => (['danger', 'warn'] as string[]).includes(p.key))
 );
 check('garbage json reads as defaults', JSON.stringify(parseBarView('{nope')) === JSON.stringify(DEFAULT_BAR_VIEW));
 check(

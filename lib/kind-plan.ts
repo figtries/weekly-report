@@ -35,6 +35,15 @@ function writeLeaf(
   setWorkKindSqlite(id, kindId, methodFor(shape), shape === 'qty' ? {} : { milestones });
 }
 
+/**
+ * Construction with no part yet (8 Oct 2026): the plan asks only the kind, and
+ * Data Overall asks which part, which is what brings the stages. Until then a
+ * typed percent, so whatever was recorded stands as it was.
+ */
+function writeUnanswered(id: string, name: string) {
+  writeLeaf(id, name, 'construction', 'manual', null, []);
+}
+
 function nodesOf(projectId: string) {
   return db
     .select({
@@ -92,6 +101,8 @@ export function applyKindInPlan(
     const n = byId.get(id)!;
     if (kids.has(id)) {
       db.update(schema.wbsNodes).set({ workKind: kindId }).where(eq(schema.wbsNodes.id, id)).run();
+    } else if (kindId === 'construction' && !disciplineId) {
+      writeUnanswered(id, n.name);
     } else {
       writeLeaf(id, n.name, kindId, shapeOf(n.name, pattern), disciplineId);
     }
@@ -127,5 +138,6 @@ export function inheritKind(projectId: string, nodeId: string): void {
       if (disciplineId) break;
     }
   }
+  if (kind.id === 'construction' && !disciplineId) return writeUnanswered(nodeId, me.name);
   writeLeaf(nodeId, me.name, kind.id, shapeOf(me.name, findDiscipline(disciplineId) ?? kind), disciplineId);
 }

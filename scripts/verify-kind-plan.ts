@@ -94,6 +94,20 @@ if (piping) {
   check('piping discipline exists', false);
 }
 
+// Construction from the plan carries no part (8 Oct 2026): Data Overall asks
+// it, so the plan writes no stages and keeps the figure.
+add('kG', null, 'Mechanical works', false);
+add('kG1', 'kG', 'Pump installation', true);
+applyKindInPlan(P, 'kG', 'construction', 'manual', []);
+check(
+  'construction from the plan has no stages yet',
+  kindOf('kG1') === 'construction' && rungs('kG1').length === 0 && method('kG1') === 'lumpsum',
+  `${method('kG1')} ${rungs('kG1').length} rungs`
+);
+add('kG2', 'kG', 'New task', true);
+inheritKind(P, 'kG2');
+check('a new construction row with no part beside it has no stages', kindOf('kG2') === 'construction' && rungs('kG2').length === 0);
+
 check(
   'quantity is refused on a heading',
   (() => {
@@ -150,6 +164,18 @@ if (partial) {
   const after = pctOf(partial.id);
   check('a part-done row is never raised', after <= partial.p + 1e-9, `${partial.p} -> ${after}`);
   check('a part-done row keeps every stage it reached', partial.p < 50 || after >= 50, `${partial.p} -> ${after}`);
+}
+
+const ticked = sqlite
+  .prepare(
+    `select n.id, max(lp.cum_progress_pct) p from wbs_nodes n join leaf_progress lp on lp.node_id = n.id
+     where n.project_id = ? and n.progress_method = 'milestone' and n.is_leaf = 1
+     group by n.id having p > 0 limit 1`
+  )
+  .get(P) as { id: string; p: number } | undefined;
+if (ticked) {
+  applyKindInPlan(P, ticked.id, 'construction', 'manual', []);
+  check('a ticked row made construction keeps its figure exactly', Math.abs(pctOf(ticked.id) - ticked.p) < 1e-9, `${ticked.p} -> ${pctOf(ticked.id)}`);
 }
 
 if (failed) {

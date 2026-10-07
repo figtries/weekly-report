@@ -95,6 +95,13 @@
   --plan-4: #ea580c; /* orange-600  */
   --plan-5: #0284c7; /* sky-600     */
   --plan-6: #65a30d; /* lime-600    */
+  /* Four more for the Bars menu only (8 Oct 2026, he wanted two full rows of
+     swatches). Never a package's default: packages still take 1-6. No red,
+     amber or yellow: those are the forecast's and the target's. */
+  --plan-7: #7c3aed; /* violet-600  */
+  --plan-8: #db2777; /* pink-600    */
+  --plan-9: #15803d; /* green-700   */
+  --plan-10: #1e3a8a; /* blue-900, navy */
   /* VERDICT — the only two colours allowed to say whether the news is good.
      Kept apart from the chart ramp on purpose: --chart-1/2 answer "which line
      is this", these answer "is this all right". Every ahead/behind figure and
@@ -180,6 +187,10 @@
   --color-plan-4: var(--plan-4);
   --color-plan-5: var(--plan-5);
   --color-plan-6: var(--plan-6);
+  --color-plan-7: var(--plan-7);
+  --color-plan-8: var(--plan-8);
+  --color-plan-9: var(--plan-9);
+  --color-plan-10: var(--plan-10);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-bad: var(--bad);

@@ -300,7 +300,8 @@ export type BarPaint =
   | 'danger'
   | 'ok'
   | 'muted'
-  | 'plan-1' | 'plan-2' | 'plan-3' | 'plan-4' | 'plan-5' | 'plan-6';
+  | 'plan-1' | 'plan-2' | 'plan-3' | 'plan-4' | 'plan-5' | 'plan-6'
+  | 'plan-7' | 'plan-8' | 'plan-9' | 'plan-10';
 
 /**
  * Which ready-made list a project is reading, when it has no rules of its own.

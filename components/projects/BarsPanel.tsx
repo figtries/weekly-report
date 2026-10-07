@@ -244,7 +244,7 @@ export default function BarsPanel({
   );
   const palette = (key: string, current: BarPaint, apply: (p: BarPaint) => void) =>
     picking === key && (
-      <div className="animate-fade-in-up flex flex-wrap gap-2 pb-2 pt-1">
+      <div className="animate-fade-in-up grid grid-cols-6 gap-2 pb-2 pt-1">
         {PALETTE.map((p) => (
           <button
             key={p.key}
@@ -255,7 +255,7 @@ export default function BarsPanel({
             }}
             aria-label={p.label}
             title={p.label}
-            className={`size-11 rounded-lg ring-offset-2 ring-offset-card ${
+            className={`aspect-square min-h-11 w-full rounded-lg ring-offset-2 ring-offset-card ${
               p.key === current ? 'ring-2 ring-foreground' : 'ring-1 ring-border'
             }`}
             style={{ background: paintCss(p.key) }}

@@ -408,8 +408,10 @@ heading's paints the rows under it without one) or One colour, which is where
 a new project starts. Every shape and mark is explained in "What the bars
 mean", in short plain words. Headings stay black. Link arrows always show,
 nothing fades when a bar is pressed; Links is a switch in the menu. Swatches
-come from the planner's eight tokens; red and amber are never offered (the
-forecast's and the target's). It is ONE JSON column,
+come from twelve tokens (`--plan-1..10`, black, grey), laid out six to a row
+so the grid closes two full rows edge to edge (8 Oct 2026: eight left a lone
+swatch and a gap); red, amber and yellow are never offered (the forecast's and
+the target's). Packages still default to `--plan-1..6`. It is ONE JSON column,
 `projects.bar_view` (`lib/bar-view.ts`); the rule editor, `lib/bar-styles.ts`
 and the presets are gone, `bar_styles` and `bar_preset` stay in the schema
 unread. Done and Forecast come from `lib/bar-facts.ts`, which reads the same
@@ -426,7 +428,18 @@ a heading hands it to rows with no kind or still carrying its previous one
 (`lib/kind-plan.ts`, `reachOf` in `lib/kind-reach.ts` counts what the panel
 says it will touch); a new row takes its heading's kind. Before Save the view
 says, in project points, what recorded progress becomes. Data Overall shows
-the kind and links to `#row=<id>&open=kind`; it never asks.
+the kind and links to `#row=<id>&open=kind`; it never asks the kind.
+THE PLAN ASKS ONLY THE KIND; THE DETAIL IS ASKED IN DATA OVERALL (8 Oct 2026).
+Asked in the plan, which part of construction it is went to Other on every
+row, because the planner does not know yet. So Construction from the plan is
+written with no stages, as a typed percent that keeps whatever was recorded
+(`writeUnanswered` in `lib/kind-plan.ts`; a new row still takes a sibling's
+part). Data Overall's panel shows "Which part of construction?"
+(`DisciplineTiles`) on a construction row with no stages, nothing pre-chosen;
+a pick shows its stages at once with the figure restated into them (never
+raised), and the panel's one Save writes it through `setWorkKindAction`. An
+answered row reads "Part of construction" with Change. Any detail question a
+kind gains later belongs there too, not in the plan.
 
 **A method or kind change must touch ONLY that row's ticks.**
 `setProgressMethodSqlite` deleted `milestone_progress` by WEEK id from

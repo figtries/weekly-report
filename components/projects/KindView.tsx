@@ -13,7 +13,6 @@ import { reachOf } from '@/lib/kind-reach';
 import { changeFor, impactOf, ladderFor } from '@/lib/work-kind-apply';
 import { setKindInPlanAction } from '@/lib/kind-plan-actions';
 import { BUILT_IN_KINDS, shapeOf, type Shape } from '@/lib/work-kind';
-import { disciplineOf, findDiscipline } from '@/lib/disciplines';
 import type { Milestone } from '@/lib/types';
 
 const fmt1 = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
@@ -54,17 +53,11 @@ export default function KindView({
     () =>
       rows.flatMap((r) => {
         const f = facts[r.id];
-        return !r.isSummary && f?.kindId && f.shape
-          ? [{ name: r.name, kindId: f.kindId, shape: f.shape, disciplineId: f.disciplineId }]
-          : [];
+        return !r.isSummary && f?.kindId && f.shape ? [{ name: r.name, kindId: f.kindId, shape: f.shape }] : [];
       }),
     [rows, facts]
   );
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
-  const context: string[] = [];
-  for (let p = row.parentId ? byId.get(row.parentId) : undefined; p; p = p.parentId ? byId.get(p.parentId) : undefined) {
-    context.push(p.name);
-  }
 
   // On a heading, the rows the answer would reach, by the same walk the write uses.
   const reach = useMemo(() => {
@@ -85,18 +78,18 @@ export default function KindView({
   // What recorded progress becomes, said BEFORE Save, in the project's own
   // points: a kind change restates each row to the last stage it has fully
   // reached, and how far that moves the project is the person's call to make.
+  // Construction has no stages until Data Overall gives the part, so nothing
+  // recorded moves.
   let impact: string | null = null;
-  if (pick && pick.shape !== 'qty') {
+  if (pick && pick.shape !== 'qty' && pick.kindId !== 'construction') {
     const kind = BUILT_IN_KINDS.find((k) => k.id === pick.kindId);
-    const disciplineId = pick.kindId === 'construction' ? disciplineOf(pick.steps)?.id ?? null : null;
-    const pattern = findDiscipline(disciplineId) ?? kind;
     // The same ladder each row will get from the server (lib/kind-plan.ts).
     const changes = (row.isSummary ? reach ?? [] : [row.id]).flatMap((id) => {
       const r = byId.get(id);
       const pct = facts[id]?.donePct ?? 0;
-      if (!r || r.isSummary || pct <= 0 || !pattern) return [];
+      if (!r || r.isSummary || pct <= 0 || !kind) return [];
       const steps = row.isSummary
-        ? ladderFor(pick.kindId, shapeOf(r.name, pattern), r.name, BUILT_IN_KINDS, disciplineId)
+        ? ladderFor(pick.kindId, shapeOf(r.name, kind), r.name, BUILT_IN_KINDS)
         : pick.steps;
       return steps.length ? [changeFor({ id, name: r.name, bobot: r.bobot ?? 0, pct }, steps)] : [];
     });
@@ -156,8 +149,6 @@ export default function KindView({
           node={{ id: row.id, name: row.name }}
           peers={peers}
           current={fact?.kindId ?? null}
-          context={context}
-          currentLadder={fact?.ladder}
           onPick={(kindId, shape, steps) => setPick({ kindId, shape, steps })}
           onCancel={() => setPick(null)}
         />
@@ -182,6 +173,12 @@ export default function KindView({
             Each stage turns solid when it is ticked in Data Overall.
           </p>
         </div>
+      )}
+
+      {(pick?.kindId ?? fact?.kindId) === 'construction' && previewSteps.length === 0 && (
+        <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+          Which part of construction it is gets asked in Data Overall. Its stages come with the answer.
+        </p>
       )}
 
       {impact && <p className="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-[13px] leading-snug text-warn">{impact}</p>}

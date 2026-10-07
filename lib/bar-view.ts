@@ -37,7 +37,8 @@ export interface BarView {
 /**
  * The planner's own tokens, and only those. Red is the forecast's and amber
  * the target date's: a red bar would hide its own red hatch, so neither is a
- * colour a bar can be given.
+ * colour a bar can be given. Twelve, so the menu's grid of six closes two full
+ * rows (8 Oct 2026); the first six are the ones a new label cycles through.
  */
 export const PALETTE: { key: BarPaint; label: string }[] = [
   { key: 'plan-1', label: 'Indigo' },
@@ -46,6 +47,10 @@ export const PALETTE: { key: BarPaint; label: string }[] = [
   { key: 'plan-4', label: 'Orange' },
   { key: 'plan-5', label: 'Sky' },
   { key: 'plan-6', label: 'Lime' },
+  { key: 'plan-7', label: 'Violet' },
+  { key: 'plan-8', label: 'Pink' },
+  { key: 'plan-9', label: 'Green' },
+  { key: 'plan-10', label: 'Navy' },
   { key: 'foreground', label: 'Black' },
   { key: 'muted', label: 'Grey' },
 ];
