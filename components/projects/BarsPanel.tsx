@@ -7,10 +7,10 @@ import { X } from 'lucide-react';
 import { pressMotion } from '@/components/motion/Press';
 import type { SheetRow } from '@/lib/sheet';
 import type { BarFact } from '@/lib/bar-facts';
-import { BUILT_IN_KINDS } from '@/lib/work-kind';
 import {
   DEFAULT_BAR_VIEW,
   KIND_KEYS,
+  KIND_LABEL,
   PALETTE,
   canColourByPackage,
   effectiveColourBy,
@@ -73,7 +73,7 @@ export default function BarsPanel({
             }))
         : KIND_KEYS.map((k) => ({
             key: k,
-            label: BUILT_IN_KINDS.find((b) => b.id === k)?.label ?? 'Kind not set',
+            label: KIND_LABEL[k],
             count: tasks.filter((r) => (facts[r.id]?.kindId ?? 'none') === k).length,
             paint: paintOf({ colorGroup: -1, unitId: null }, k === 'none' ? null : k, view, 'kind'),
           }));
@@ -133,7 +133,10 @@ export default function BarsPanel({
     {
       key: 'slip',
       label: 'Can slip',
-      help: 'A dashed tail is how many days it can move before the project finish moves.',
+      // A switch that changes nothing on the chart reads as broken, so say why.
+      help: rows.some((r) => !r.isSummary && (r.totalFloat ?? 0) > 0)
+        ? 'A dashed tail is how many days it can move before the project finish moves.'
+        : 'None in this plan yet. It shows once activities are linked through to the finish.',
       mark: (
         <span className="flex items-center">
           <span className="h-3 w-4 rounded-[3px] bg-[var(--plan-1)]" />

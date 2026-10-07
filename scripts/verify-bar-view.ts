@@ -84,6 +84,7 @@ check('gate: one labelled segment', segmentsOf([{ label: 'IFR', weight: 100, don
     kindId: 'engineering',
     shape: 'steps' as const,
     disciplineId: null,
+    disciplineShort: null,
     donePct: 80,
     rungs: ladder,
     ladder: ['ifr', 'ifa', 'afc'],

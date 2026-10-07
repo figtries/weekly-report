@@ -8,9 +8,8 @@ import type { Network } from '@/lib/chains';
 import { arrowPath, visibleEnd } from '@/lib/gantt-arrows';
 import type { LinkType } from '@/lib/links';
 import { warmLinkDragCard } from './links-panel-loader';
-import { KIND_KEYS, paintCss, paintOf, segmentsOf, type BarView, type ColourBy } from '@/lib/bar-view';
+import { KIND_KEYS, KIND_LABEL, paintCss, paintOf, segmentsOf, type BarView, type ColourBy } from '@/lib/bar-view';
 import type { BarFact } from '@/lib/bar-facts';
-import { BUILT_IN_KINDS } from '@/lib/work-kind';
 
 /**
  * The timeline.
@@ -762,7 +761,7 @@ export function GanttLegend({
     const present = new Set(tasks.map((r) => facts[r.id]?.kindId ?? 'none'));
     return KIND_KEYS.filter((k) => present.has(k)).map((k) => ({
       key: k,
-      label: BUILT_IN_KINDS.find((b) => b.id === k)?.label ?? 'Kind not set',
+      label: KIND_LABEL[k],
       css: paintCss(paintOf({ colorGroup: -1, unitId: null }, k === 'none' ? null : k, view, 'kind')),
     }));
     // `tasks` is derived from `rows`, which is listed.
@@ -779,7 +778,9 @@ export function GanttLegend({
   const item = 'flex items-center gap-1.5 text-[11px] text-muted-foreground';
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
+    // `md:min-h-12`: as tall as the selected-row strip that takes its place,
+    // so selecting a row moves nothing under the pointer.
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 md:min-h-12">
       {colours.map((c) => (
         <span key={c.key} className={item}>
           <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: c.css }} />

@@ -1702,7 +1702,10 @@ export default function ScheduleSheet({
           initial={{ opacity: 0, y: -3 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18 }}
-          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px]"
+          // The same height as the legend it replaces from md (GanttLegend's
+          // `md:min-h-12`): a strip taller than the key shifted every row down
+          // between a press's mousedown and its click, and the click missed.
+          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px] md:min-h-12"
         >
           <span
             aria-hidden

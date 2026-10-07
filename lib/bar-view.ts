@@ -40,6 +40,19 @@ const ALLOWED = new Set<BarPaint>(PALETTE.map((p) => p.key));
 
 /** `none` is a row nobody has given a kind yet. */
 export const KIND_KEYS = ['engineering', 'procurement', 'construction', 'commissioning', 'none'] as const;
+
+/**
+ * The kinds' names, here rather than read off lib/work-kind.ts, so the
+ * planner's first load does not carry every kind's ladder and hints just to
+ * print five words. The kind picker, which needs the ladders, loads lazily.
+ */
+export const KIND_LABEL: Record<string, string> = {
+  engineering: 'Engineering',
+  procurement: 'Procurement',
+  construction: 'Construction',
+  commissioning: 'Commissioning',
+  none: 'Kind not set',
+};
 export const DEFAULT_KIND_PAINT: Record<string, BarPaint> = {
   engineering: 'plan-1',
   procurement: 'plan-3',

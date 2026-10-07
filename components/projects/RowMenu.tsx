@@ -20,8 +20,7 @@ import type { Sheet, SheetRow } from '@/lib/sheet';
 import type { Network } from '@/lib/chains';
 import type { BarFact } from '@/lib/bar-facts';
 import type { BarView } from '@/lib/bar-view';
-import { BUILT_IN_KINDS } from '@/lib/work-kind';
-import { findDiscipline } from '@/lib/disciplines';
+import { KIND_LABEL } from '@/lib/bar-view';
 import { ReadyKindView, warmKindView } from './links-panel-loader';
 
 // Lazy: the planner's first load does not carry the Links panel. ScheduleSheet
@@ -165,8 +164,8 @@ export default function RowMenu({
   const [unitValue, setUnitValue] = useState('');
   const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind'>(initialMode);
   const fact = facts[row.id];
-  const kindName = fact?.kindId ? BUILT_IN_KINDS.find((k) => k.id === fact.kindId)?.label ?? null : null;
-  const discipline = fact?.disciplineId ? findDiscipline(fact.disciplineId)?.short : null;
+  const kindName = fact?.kindId ? KIND_LABEL[fact.kindId] ?? null : null;
+  const discipline = fact?.disciplineShort ?? null;
 
   const run = (
     fn: () => Promise<Res>,

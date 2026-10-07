@@ -23,6 +23,8 @@ export interface BarFact {
   /** Leaves only; null on a heading or on a row nobody has given a kind. */
   shape: Shape | null;
   disciplineId: string | null;
+  /** The discipline's short name, for a label without loading the disciplines. */
+  disciplineShort: string | null;
   donePct: number;
   rungs: Rung[];
   /** Step ids of the rungs, for the kind picker's `currentLadder`. */
@@ -78,10 +80,12 @@ export function getBarFacts(projectId: string, today: Date = new Date()): BarFac
               : 'steps'
             : 'manual';
     const f = leaf ? view?.leaves[item.id] : undefined;
+    const discipline = item.workKind === 'construction' ? disciplineOf(ms) : null;
     facts[item.id] = {
       kindId: item.workKind ?? null,
       shape,
-      disciplineId: item.workKind === 'construction' ? disciplineOf(ms)?.id ?? null : null,
+      disciplineId: discipline?.id ?? null,
+      disciplineShort: discipline?.short ?? null,
       donePct: leaf ? resolveLeafProgress(item, snap) : 0,
       rungs: ms.map((m) => ({ label: m.label, weight: m.weight, done: done.has(m.id) })),
       ladder: ms.map((m) => stepIdOf(m.id)),
