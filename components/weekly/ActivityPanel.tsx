@@ -669,21 +669,27 @@ function PanelBody({
                   </div>
                 )
               )}
-              <ProgressEntry
-                node={effectiveNode}
-                draft={draft}
-                setDraft={setDraft}
-                shape={shape}
-                /* Clearing the raw string matters as much as clearing the flag:
-                   the box may still be holding "42.5" from a moment ago, and
-                   a display that outranks the evidence would keep showing it
-                   over the rung that was just ticked. */
-                onManualOff={() => {
-                  setManual(false);
-                  setTyping(null);
-                }}
-              />
-              {planLine && (
+              {/* The stages come AFTER the part (8 Oct 2026): with the part not
+                  known, nobody can say how far it got in them, and the generic
+                  ladder under the question read as an answer. The figure below
+                  stays, so a typed percent is never held back. */}
+              {!askingPart && (
+                <ProgressEntry
+                  node={effectiveNode}
+                  draft={draft}
+                  setDraft={setDraft}
+                  shape={shape}
+                  /* Clearing the raw string matters as much as clearing the flag:
+                     the box may still be holding "42.5" from a moment ago, and
+                     a display that outranks the evidence would keep showing it
+                     over the rung that was just ticked. */
+                  onManualOff={() => {
+                    setManual(false);
+                    setTyping(null);
+                  }}
+                />
+              )}
+              {planLine && !askingPart && (
                 <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">{planLine}</p>
               )}
   

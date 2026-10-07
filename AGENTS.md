@@ -418,7 +418,7 @@ unread. Done and Forecast come from `lib/bar-facts.ts`, which reads the same
 Database, progress and forecast as Data Overall, as of the current week, so the
 planner cannot disagree with it (`verify-bar-facts`). A pressed bar says its
 plan, done, finish and WHY in the selected-row strip (`lib/bar-sentence.ts`);
-that strip and the legend share `md:min-h-12`, or selecting a row shifts the
+that strip and the legend share `md:min-h-13` (52px, the height of the bands above them), or selecting a row shifts the
 list between a press's mousedown and its click. Stage NAMES are written only
 on the pressed bar (on every bar they buried the late hatch; he agreed). Links
 in the toolbar is pressable for any selected row; on a heading the press says

@@ -816,9 +816,9 @@ export function GanttLegend({
   const item = 'flex items-center gap-1.5 text-[11px] text-muted-foreground';
 
   return (
-    // `md:min-h-12`: as tall as the selected-row strip that takes its place,
+    // `md:min-h-13`: as tall as the selected-row strip that takes its place,
     // so selecting a row moves nothing under the pointer.
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 sm:px-6 md:min-h-12">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 sm:px-6 md:min-h-13">
       {colours.map((c) => (
         <span key={c.key} className={item}>
           <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: c.css }} />

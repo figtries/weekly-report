@@ -162,11 +162,15 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
                   name in a grey chip, and he asked for it gone (8 Oct 2026). It
                   is still the project's handle everywhere else. */}
               <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">{project.name}</h1>
+              {/* On a phone the client takes a line and the facts the next, so a
+                  wrap never starts a line with "·" (8 Oct 2026). Above 640px
+                  it is one line again. */}
               <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                <span>{project.clientName || 'No client named yet'}</span>
+                <span className="basis-full sm:basis-auto">{project.clientName || 'No client named yet'}</span>
                 {facts.map((f, i) => (
                   <span key={f as string} className={i >= 3 ? 'hidden sm:inline' : ''}>
-                    · {f}
+                    <span className={i === 0 ? 'hidden sm:inline' : ''}>· </span>
+                    {f}
                   </span>
                 ))}
               </p>

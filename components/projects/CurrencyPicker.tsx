@@ -41,7 +41,7 @@ export default function CurrencyPicker({
         disabled={pending}
         onChange={(e) => setAsking(e.target.value)}
         aria-label="Currency"
-        className="bg-card hover:bg-muted"
+        className="bg-card pl-3 text-[13px] hover:bg-muted sm:h-9"
       >
         {CURRENCIES.map((c) => (
           <option key={c.code} value={c.code}>

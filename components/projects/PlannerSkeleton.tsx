@@ -115,7 +115,7 @@ export default function PlannerSkeleton() {
             the band. Eight pixels short, this strip held the whole plan 8px
             above where it lands. Above 640px it drops to 32px, the way every
             control in this app trades a thumb target for a pointer. */}
-        <Block className="h-11 w-16 rounded-lg sm:h-8" />
+        <Block className="h-11 w-16 rounded-lg sm:h-9" />
       </div>
 
       {/* The toolbar. Its buttons are 44px targets on a phone and 36px above,
@@ -127,7 +127,7 @@ export default function PlannerSkeleton() {
           desktop-only actions on a phone cost the same 70px in the other
           direction. Which buttons exist is as much of the shape as how wide
           they are — see TOOLBAR. */}
-      <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-0.5 border-b px-3 py-2 sm:px-6">
+      <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-0.5 border-b px-3 py-2 max-sm:justify-between max-sm:gap-y-2 sm:px-6">
         {TOOLBAR.map((t, i) =>
           t.startsWith('gap') ? (
             <span
@@ -143,11 +143,11 @@ export default function PlannerSkeleton() {
             it shares a line with the buttons. The real toolbar says the same
             thing in the same words, and a phone that pushed it right left a
             screen-wide hole beside it. */}
-        <div className="flex items-center gap-2 sm:ml-auto">
-          <Block className="h-11 w-28 rounded-lg sm:h-9 2xl:w-36" />
+        <div className="flex items-center gap-2 max-sm:w-full sm:ml-auto">
+          <Block className="h-11 w-full rounded-lg max-sm:flex-1 sm:h-9 sm:w-28 2xl:w-36" />
           {/* List / Timeline. Below 768px the two panes take turns, so this
               control is on screen exactly where the timeline pane is not. */}
-          <Block className="h-[3.125rem] w-32 rounded-lg sm:h-[2.625rem] md:hidden" />
+          <Block className="h-11 w-32 rounded-lg sm:h-9 md:hidden" />
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export default function PlannerSkeleton() {
           and ScheduleSheet hides the legend there — 60px spent naming colours
           for bars that are not on screen. Drawn unconditionally, this pushed
           the phone's first row 60px down and then let it snap back up. */}
-      <div className="hidden shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 sm:px-6 md:flex">
+      <div className="hidden shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 sm:px-6 md:flex md:min-h-13">
         <Block className="h-4 w-24" />
         <Block className="h-4 w-20" />
         <Block className="h-4 w-24" />

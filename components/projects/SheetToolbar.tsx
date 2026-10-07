@@ -83,7 +83,7 @@ export default function SheetToolbar({
   const has = selected !== null;
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-3 py-2 sm:px-6">
+    <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-3 py-2 max-sm:justify-between max-sm:gap-y-2 sm:px-6">
       <Action onClick={onAdd} icon={<Plus className="size-4" />} label="Add row" primary />
       <Action
         onClick={onAddChild}
@@ -166,12 +166,12 @@ export default function SheetToolbar({
       />
 
       {/* Right-aligned only where it shares a line with the buttons. On a
-          phone it wraps to its own row, and pushing it right there left a
-          hole the width of the screen beside it. */}
-      <span className="flex items-center gap-2 sm:ml-auto">
+          phone it takes its own row, edge to edge: the box grows to fill it
+          beside List / Timeline (8 Oct 2026). */}
+      <span className="flex items-center gap-2 max-sm:w-full sm:ml-auto">
         {/* A native input, not a component: the toolbar is already one row of
             controls and this is the only one people type into. */}
-        <span className="relative">
+        <span className="relative max-sm:flex-1">
           <Search
             aria-hidden
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -181,7 +181,7 @@ export default function SheetToolbar({
             onChange={(e) => onQuery(e.target.value)}
             placeholder="Find a row"
             aria-label="Find a row"
-            className={`h-11 w-28 rounded-lg border bg-card pl-7 text-[13px] outline-none transition-[width] duration-200 ease-ios focus:w-40 focus:border-foreground sm:h-9 sm:w-28 sm:focus:w-28 2xl:w-36 2xl:focus:w-56 ${query ? 'pr-7' : 'pr-2'}`}
+            className={`h-11 w-full rounded-lg border bg-card pl-7 text-[13px] outline-none transition-[width] duration-200 ease-ios focus:border-foreground sm:h-9 sm:w-28 sm:focus:w-28 2xl:w-36 2xl:focus:w-56 ${query ? 'pr-7' : 'pr-2'}`}
           />
           {query !== '' && (
             <button
@@ -208,7 +208,7 @@ export default function SheetToolbar({
               key={p}
               type="button"
               onClick={() => setPane(p)}
-              className={`h-11 rounded-md px-3 text-[13px] font-medium transition-colors sm:h-9 ${
+              className={`h-[38px] rounded-md px-3 text-[13px] font-medium transition-colors sm:h-[30px] ${
                 pane === p ? 'bg-foreground text-background' : 'text-muted-foreground'
               }`}
             >
