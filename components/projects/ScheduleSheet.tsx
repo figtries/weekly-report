@@ -57,7 +57,8 @@ import {
 } from '@/lib/chains';
 import ConflictStrip from './ConflictStrip';
 import { suggestionsFor } from '@/lib/link-suggestions';
-import { warmLinksPanel } from './links-panel-loader';
+import { ReadyLinkDragCard, warmLinkDragCard, warmLinksPanel } from './links-panel-loader';
+import type { LinkType } from '@/lib/links';
 import GanttChart, { BarStylesButton, GanttLegend, paintColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
 import { groupAmount, stripAmount } from '@/lib/currency';
@@ -298,6 +299,12 @@ export default function ScheduleSheet({
   const [pane, setPane] = useState<'sheet' | 'gantt'>('sheet');
   const [menuRow, setMenuRow] = useState<SheetRow | null>(null);
   const [menuMode, setMenuMode] = useState<'menu' | 'delete' | 'links'>('menu');
+  // A link drawn on the Gantt, waiting for its card's Save.
+  const [pendingLink, setPendingLink] = useState<{ fromId: string; toId: string; type: LinkType } | null>(null);
+  // Worked out here, not in an inline function called during render: that is
+  // what React Compiler reads as touching refs while rendering.
+  const linkFrom = pendingLink ? rows.find((r) => r.id === pendingLink.fromId) : undefined;
+  const linkTo = pendingLink ? rows.find((r) => r.id === pendingLink.toId) : undefined;
   const [splitRatio, setSplitRatio] = useState<number | null>(null);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [fitTimeline, setFitTimeline] = useState(false);
@@ -1907,6 +1914,9 @@ export default function ScheduleSheet({
             network={network}
             parentOf={parentOf}
             onClear={() => setSelectedId(null)}
+            // The card loads on the drag's first press; setting the link after
+            // that promise means a quick release still gets its card.
+            onLink={(fromId, toId, type) => void warmLinkDragCard().then(() => setPendingLink({ fromId, toId, type }))}
             spanStart={ganttStart}
             spanFinish={ganttFinish}
             rowH={ROW_H}
@@ -1920,6 +1930,29 @@ export default function ScheduleSheet({
           </div>
         </div>
       </div>
+
+      {/* Warmed on the drag's first press; pendingLink is set only once it has loaded (see onLink). */}
+      {pendingLink && linkFrom && linkTo && (
+        <ReadyLinkDragCard
+          from={linkFrom}
+          to={linkTo}
+          initialType={pendingLink.type}
+          rows={rows}
+          onCancel={() => setPendingLink(null)}
+          onDone={(sheet) => {
+            applySheet(sheet);
+            setPendingLink(null);
+            const followers = conflictMoves(sheet.rows, [linkFrom.id], new Map(sheet.rows.map((r) => [r.id, r.name])));
+            if (followers.length) {
+              setShift({
+                rowId: linkTo.id,
+                rowName: linkTo.name,
+                preview: { moved: [], followers, fromDate: null, toDate: null, fromIds: [linkFrom.id] },
+              });
+            }
+          }}
+        />
+      )}
 
       {menuRow && (
         <RowMenu

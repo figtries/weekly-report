@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { m } from 'framer-motion';
 import { SlidersHorizontal } from 'lucide-react';
 
@@ -9,6 +9,8 @@ import { pressMotion } from '@/components/motion/Press';
 import type { SheetRow } from '@/lib/sheet';
 import type { Network } from '@/lib/chains';
 import { arrowPath, visibleEnd } from '@/lib/gantt-arrows';
+import type { LinkType } from '@/lib/links';
+import { warmLinkDragCard } from './links-panel-loader';
 import {
   DEFAULT_BAR_STYLES,
   resolveBar,
@@ -167,6 +169,7 @@ export default function GanttChart({
   network = null,
   parentOf,
   onClear,
+  onLink,
 }: {
   rows: SheetRow[];
   spanStart: string | null;
@@ -198,8 +201,61 @@ export default function GanttChart({
   parentOf?: Map<string, string | null>;
   /** Pressing empty chart lets go of the pressed bar, so every arrow is even again. */
   onClear?: () => void;
+  /** A drag from one bar end to another (mouse only): the way the ends imply. */
+  onLink?: (fromId: string, toId: string, type: LinkType) => void;
 }) {
   const [todayX, setTodayX] = useState<number | null>(null);
+
+  // A mouse, not a finger: on touch a handle is a mis-tap waiting to happen,
+  // and the Links panel does the job there.
+  const fine = useSyncExternalStore(
+    (cb) => {
+      const q = window.matchMedia('(pointer: fine)');
+      q.addEventListener('change', cb);
+      return () => q.removeEventListener('change', cb);
+    },
+    () => window.matchMedia('(pointer: fine)').matches,
+    () => false
+  );
+  // A drag never goes through React state while it moves: the pointer fires
+  // ~120 times a second and re-rendering every bar that often is the jank the
+  // budget forbids. The line and the target ring are written straight into two
+  // SVG elements, once per frame. React hears about a drag twice: when it
+  // starts (to show the layer) and when it ends (onLink).
+  type End = 'start' | 'finish';
+  const dragRef = useRef<{ fromId: string; fromEnd: End; x0: number; y0: number; target: { id: string; end: End } | null } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const lineRef = useRef<SVGPathElement>(null);
+  const ringRef = useRef<SVGCircleElement>(null);
+  const frame = useRef(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const endDrag = () => {
+    dragRef.current = null;
+    cancelAnimationFrame(frame.current);
+    setDragging(false);
+  };
+  useEffect(() => {
+    if (!dragging) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        dragRef.current = null;
+        cancelAnimationFrame(frame.current);
+        setDragging(false);
+      }
+    };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [dragging]);
+  function startDrag(e: React.PointerEvent, fromId: string, fromEnd: End, x0: number, y0: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    bodyRef.current?.setPointerCapture(e.pointerId);
+    void warmLinkDragCard();
+    dragRef.current = { fromId, fromEnd, x0, y0, target: null };
+    setDragging(true);
+  }
+  const wayOf = (a: End, b: End): LinkType | null =>
+    a === 'finish' && b === 'start' ? 'FS' : a === 'start' && b === 'start' ? 'SS' : a === 'finish' && b === 'finish' ? 'FF' : null;
   // Read after mount, never at render: a server component prerenders into the
   // static shell, so a build-time clock would drift a day further from the
   // truth every day and "running today" would quietly stop being true.
@@ -436,10 +492,57 @@ export default function GanttChart({
       </div>
 
       <div
+        ref={bodyRef}
         className="relative"
         style={{ height: bodyH }}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClear?.();
+        }}
+        // One delegated handler, so nothing inside the bars' map touches a ref
+        // (React Compiler bails out of the whole chart if anything does).
+        onPointerDown={(e) => {
+          const h = (e.target as HTMLElement).closest<HTMLElement>('[data-link-handle]');
+          if (!h?.dataset.row) return;
+          startDrag(e, h.dataset.row, h.dataset.linkHandle as End, Number(h.dataset.x0), Number(h.dataset.y0));
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          if (!drag || !bodyRef.current) return;
+          const box = bodyRef.current.getBoundingClientRect();
+          const px = e.clientX - box.left;
+          const py = e.clientY - box.top;
+          const row = rows[Math.floor(py / rowH)];
+          let target: { id: string; end: End } | null = null;
+          let tx = 0;
+          if (row && row.id !== drag.fromId && !row.isSummary && row.startDate && row.finishDate) {
+            const sx = xOf(row.startDate);
+            const fx = xOf(row.finishDate) + scale;
+            const end: End = Math.abs(px - sx) <= Math.abs(px - fx) ? 'start' : 'finish';
+            if (Math.min(Math.abs(px - sx), Math.abs(px - fx)) <= 16 && wayOf(drag.fromEnd, end)) {
+              target = { id: row.id, end };
+              tx = end === 'start' ? sx : fx;
+            }
+          }
+          drag.target = target;
+          const ty = Math.floor(py / rowH) * rowH + rowH / 2;
+          cancelAnimationFrame(frame.current);
+          frame.current = requestAnimationFrame(() => {
+            lineRef.current?.setAttribute('d', `M${drag.x0} ${drag.y0} L${px} ${py}`);
+            if (ringRef.current) {
+              ringRef.current.setAttribute('cx', String(tx));
+              ringRef.current.setAttribute('cy', String(ty));
+              ringRef.current.style.opacity = target ? '1' : '0';
+            }
+          });
+        }}
+        onPointerUp={() => {
+          const drag = dragRef.current;
+          if (!drag) return;
+          if (drag.target && onLink) {
+            const way = wayOf(drag.fromEnd, drag.target.end);
+            if (way) onLink(drag.fromId, drag.target.id, way);
+          }
+          endDrag();
         }}
       >
         {months.map((m) => (
@@ -586,7 +689,7 @@ export default function GanttChart({
               onClick={() => onSelect(r.id)}
               title={title}
               aria-label={title}
-              className="absolute block"
+              className="group absolute block"
               style={{ left: x, top: y, width: w, height: rowH }}
             >
               {/* A summary is a thin bracket, a task a fuller rounded bar — the
@@ -609,6 +712,19 @@ export default function GanttChart({
                   style={{ top: rowH / 2 - 7, height: 14 }}
                 />
               )}
+              {fine && onLink && !bracket &&
+                (['start', 'finish'] as const).map((end) => (
+                  <span
+                    key={end}
+                    aria-hidden
+                    data-link-handle={end}
+                    data-row={r.id}
+                    data-x0={end === 'start' ? x : x + w}
+                    data-y0={y + rowH / 2}
+                    className="absolute top-1/2 z-[8] size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-card opacity-0 transition-opacity duration-200 ease-ios group-hover:opacity-100"
+                    style={{ [end === 'start' ? 'left' : 'right']: -6, borderColor: color }}
+                  />
+                ))}
             </button>
             {extras(r, x, w, y)}
             </Fragment>
@@ -616,6 +732,15 @@ export default function GanttChart({
         })}
 
         {arrowLayer}
+
+        {/* The drag's own layer, apart from the memoised arrows so starting a
+            drag does not rebuild them. Written to by the pointer handler. */}
+        {dragging && (
+          <svg aria-hidden className="pointer-events-none absolute left-0 top-0 z-[9] overflow-visible" width={width} height={bodyH}>
+            <path ref={lineRef} d="" stroke="var(--primary)" strokeWidth={1.75} strokeDasharray="4 3" fill="none" />
+            <circle ref={ringRef} r={7} fill="none" stroke="var(--primary)" strokeWidth={2} style={{ opacity: 0, transition: 'opacity 120ms var(--ease-ios)' }} />
+          </svg>
+        )}
       </div>
     </div>
   );

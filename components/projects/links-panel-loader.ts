@@ -1,5 +1,6 @@
-import type { ComponentProps, ComponentType } from 'react';
+import { createElement, type ComponentProps, type ComponentType } from 'react';
 
+import type LinkDragCardType from './LinkDragCard';
 import type LinksPanelType from './LinksPanel';
 
 /**
@@ -27,4 +28,29 @@ export function warmLinksPanel(): Promise<void> {
 
 export function loadedLinksPanel(): ComponentType<Props> | null {
   return loaded;
+}
+
+/** The same, for the card a Gantt drag opens: warmed on the drag's first press. */
+type CardProps = ComponentProps<typeof LinkDragCardType>;
+let card: ComponentType<CardProps> | null = null;
+let cardPending: Promise<void> | null = null;
+
+export function warmLinkDragCard(): Promise<void> {
+  cardPending ??= import('./LinkDragCard').then((m) => {
+    card = m.default;
+  });
+  return cardPending;
+}
+
+export function loadedLinkDragCard(): ComponentType<CardProps> | null {
+  return card;
+}
+
+/**
+ * A fixed component that renders the warmed card, so the screen never picks a
+ * component in render (React Compiler's static-components rule). Renders
+ * nothing until the card is loaded; ScheduleSheet only asks once it is.
+ */
+export function ReadyLinkDragCard(props: CardProps) {
+  return card ? createElement(card, props) : null;
 }

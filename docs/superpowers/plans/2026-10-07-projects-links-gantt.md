@@ -170,7 +170,9 @@ await browser.close();
 
   After Task 7 (A/B, 4 interleaved runs, medians base → new): LCP 1778 → 1648 ms, scroll long-task total 111 → 95 ms (max 82 → 106 once), press ⋯ 61 → 68 ms, jsKB 264 → 266. Inside budget.
 
-  After Task 9 (A/B, 3 runs, medians base → new): LCP 1568 → 1676 ms (+7%), jsKB 264 → 273, scroll long-task total 116 → 51 ms, press ⋯ on an activity 61 → 79 ms, press Links 125 ms (99-139). Two costs found and removed on the way: warming the panel chunk as the menu opened cost the menu ~30 ms (moved to requestIdleCallback in ScheduleSheet), and next/dynamic plus React 19's Suspense reveal throttle made Links take ~400 ms while doing ~40 ms of work (now a warmed module rendered without suspending, components/projects/links-panel-loader.ts). Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
+  After Task 9 (A/B, 3 runs, medians base → new): LCP 1568 → 1676 ms (+7%), jsKB 264 → 273, scroll long-task total 116 → 51 ms, press ⋯ on an activity 61 → 79 ms, press Links 125 ms (99-139). Two costs found and removed on the way: warming the panel chunk as the menu opened cost the menu ~30 ms (moved to requestIdleCallback in ScheduleSheet), and next/dynamic plus React 19's Suspense reveal throttle made Links take ~400 ms while doing ~40 ms of work (now a warmed module rendered without suspending, components/projects/links-panel-loader.ts).
+
+  After Task 10 (A/B, 3 runs, medians base → new): LCP 1488 → 1348 ms, jsKB 264 → 275, scroll long-task total 206 → 80 ms, press ⋯ 91 → 77 ms, press Links 118 ms, drag long-task max 0 ms (60 pointer moves at 1440). React Compiler is on (next.config reactCompiler): GanttChart must not touch a ref inside the bars map, so the handles carry data-* and ONE delegated onPointerDown on the body starts a drag; the drag card is a module-level ReadyLinkDragCard, never a component picked in render. Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
 
 - [ ] **Step 3: Commit**
 
