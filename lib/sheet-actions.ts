@@ -7,6 +7,7 @@ import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
 import { boxAbove, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
 import { saveRowLinksSqlite } from './links-sqlite';
+import { lockContractSqlite } from './contract-sqlite';
 import type { StoredLink } from './links';
 import { conflictMoves } from './chains';
 import { projectOfNode, syncDerivedWeights } from './weights-auto';
@@ -480,6 +481,21 @@ export async function saveRowLinksAction(
     saveRowLinksSqlite(projectId, nodeId, waitsFor, holdsUp);
     await landed();
     return { ok: true, sheet: getSheet(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** "Lock as contract" in the Projects header. Nothing in the app unlocks it. */
+export async function lockContractAction(
+  projectId: string,
+  reason: string
+): Promise<{ ok: true; rows: number } | { ok: false; error: string }> {
+  await beforeWrite();
+  try {
+    const { rows } = lockContractSqlite(projectId, reason);
+    await landed();
+    return { ok: true, rows };
   } catch (e) {
     return fail(e);
   }

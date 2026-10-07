@@ -475,6 +475,16 @@ export default function ScheduleSheet({
     refreshQuiet();
   }, [projectId, applyRows, refreshQuiet]);
 
+  // A contract locked from the header arrives as a new `contract` prop. The
+  // rows are this sheet's own (seeded once), so read them again to draw the
+  // contract bars under the tasks.
+  const contractSeen = useRef(contract);
+  useEffect(() => {
+    if (contract === contractSeen.current) return;
+    contractSeen.current = contract;
+    syncRows();
+  }, [contract, syncRows]);
+
   /**
    * A writer that already has the rows hands them over; one that does not sends
    * this to go and get them. The row menu's own actions return a sheet for the

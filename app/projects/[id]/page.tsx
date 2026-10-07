@@ -6,6 +6,7 @@ import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
 import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
+import LockContract from '@/components/projects/LockContract';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
@@ -145,6 +146,11 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
             </Link>
             <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3">
               <ProjectDetails project={project} />
+              <LockContract
+                projectId={id}
+                lockedAt={sheet.contract?.lockedAt ?? null}
+                activities={sheet.rows.filter((r) => r.isLeaf && r.startDate).length}
+              />
               <OpenProjectButton id={id} isOpen={isOpen} openWeek={openWeek} />
             </div>
             <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">

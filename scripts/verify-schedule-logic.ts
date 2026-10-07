@@ -264,6 +264,22 @@ const sug = suggestionsFor(sugRows, { q: ['z', 'p', 'nope'] });
 check('a row never asked gets the date guess and EPC order, once each', j(sug.get('q')) === j(['p', 'z']), j([...sug]));
 check('a row that answered, even "nothing", gets no suggestion', !sug.has('r'));
 
+/* ---------------------------------------------------------------- contract */
+
+const { lockContractSqlite } = await import('../lib/contract-sqlite.ts');
+check('a reason is required', refuses(() => lockContractSqlite(proj, '   '), 'reason'));
+const lockedAt = lockContractSqlite(proj, 'Signed kick-off plan');
+const afterLock = getSheet(proj);
+const scheduledLeaves = afterLock.rows.filter((x) => x.isLeaf && x.startDate);
+check('every scheduled activity is copied', lockedAt.rows === scheduledLeaves.length, `${lockedAt.rows} vs ${scheduledLeaves.length}`);
+check(
+  'the sheet reads the contract',
+  afterLock.contract?.reason === 'Signed kick-off plan' &&
+    scheduledLeaves.every((x) => x.contractStart === x.startDate && x.contractFinish === x.finishDate)
+);
+check('a second lock is refused', refuses(() => lockContractSqlite(proj, 'again'), 'already'));
+check('the plan still writes to the active baseline', afterLock.baselineId === sheet.baselineId);
+
 /* ==== later tasks append their sections ABOVE this line ==== */
 
 if (failed) {
