@@ -1287,7 +1287,7 @@ node --import ./scripts/ts-resolve.mjs scripts/verify-priority-actions.ts
 ```
 Expected: all PASS. Because the 3-day tolerance is gone, a "path"/"driven by" check on a fixture whose links had 1-3 days of room may change. For EVERY failing check: print old and new value, add a line under "Moved figures" below (check name, old, new, reason: "room in the plan no longer counts as driving"), and only then update that one expectation. If more than three checks move, STOP and report to the user with the list instead of updating.
 
-  Moved figures: _(filled in during execution)_
+  Moved figures: none. All 78 checks of verify-forecast, 11 of verify-forecast-store and 35 of verify-priority-actions pass unchanged with the tolerance gone (7 Oct 2026).
 
 - [ ] **Step 5: Commit**
 

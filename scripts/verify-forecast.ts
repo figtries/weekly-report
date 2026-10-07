@@ -170,7 +170,7 @@ const leaf = (id: string, order: number, s: string, f: string, extra: Partial<Fo
   id, order, planStart: s, planFinish: f, pct: 0, rungs: [], qty: null, finishedAt: null, typed: null, waitsFor: [], ...extra,
 });
 {
-  const B = leaf('B', 2, '2027-01-20', '2027-01-30', { waitsFor: ['A'] });
+  const B = leaf('B', 2, '2027-01-20', '2027-01-30', { waitsFor: [{ id: 'A', type: 'FS', wait: 0 }] });
   const inGap = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { typed: { date: '2027-01-15', source: 'vendor', rungId: null } }), B], '2026-12-31')!;
   check('a slip inside a planned gap moves nothing', inGap.leaves.get('B')!.finish === '2027-01-30' && inGap.leaves.get('B')!.push === 0, inGap.leaves.get('B')!.finish);
   check('a predecessor with float is not the path', inGap.chain.join() === 'B', inGap.chain.join());
@@ -178,10 +178,32 @@ const leaf = (id: string, order: number, s: string, f: string, extra: Partial<Fo
   check('a slip past the gap pushes by what is left of it', past.leaves.get('B')!.finish === '2027-02-05' && past.leaves.get('B')!.push === 6, past.leaves.get('B')!.finish);
   check('the pushing predecessor is on the path', past.chain.join() === 'A,B', past.chain.join());
   const overlap = forecastProject(
-    [leaf('A', 1, '2027-01-01', '2027-01-31', { typed: { date: '2027-02-07', source: 'site', rungId: null } }), leaf('B', 2, '2027-01-20', '2027-02-10', { waitsFor: ['A'] })],
+    [leaf('A', 1, '2027-01-01', '2027-01-31', { typed: { date: '2027-02-07', source: 'site', rungId: null } }), leaf('B', 2, '2027-01-20', '2027-02-10', { waitsFor: [{ id: 'A', type: 'FS', wait: 0 }] })],
     '2026-12-31'
   )!;
   check('a planned overlap keeps its offset', overlap.leaves.get('B')!.finish === '2027-02-17', overlap.leaves.get('B')!.finish);
+}
+{
+  // After it starts + 3: A has not started and is pushed 10 days by P, so B moves too.
+  const P = leaf('P', 0, '2026-12-01', '2026-12-31', { typed: { date: '2027-01-10', source: 'site', rungId: null } });
+  const A = leaf('A', 1, '2027-01-01', '2027-01-20', { waitsFor: [{ id: 'P', type: 'FS', wait: 0 }] });
+  const B = leaf('B', 2, '2027-01-04', '2027-01-30', { waitsFor: [{ id: 'A', type: 'SS', wait: 3 }] });
+  const f = forecastProject([P, A, B], '2026-12-20')!;
+  check('after it starts: a predecessor that starts late pushes the follower', f.leaves.get('B')!.push === 10, JSON.stringify(f.leaves.get('B')));
+}
+{
+  // Finishes after it finishes + 2: A finishes 5 days late.
+  const A = leaf('A', 1, '2027-01-01', '2027-01-20', { typed: { date: '2027-01-25', source: 'vendor', rungId: null } });
+  const B = leaf('B', 2, '2027-01-05', '2027-01-22', { waitsFor: [{ id: 'A', type: 'FF', wait: 2 }] });
+  const f = forecastProject([A, B], '2026-12-31')!;
+  check('finishes after it finishes + wait: no earlier than A + wait', f.leaves.get('B')!.finish === '2027-01-27', f.leaves.get('B')!.finish);
+}
+{
+  // After it finishes + 5: two days late against a five-day wait still pushes two days.
+  const A = leaf('A', 1, '2027-01-01', '2027-01-10', { typed: { date: '2027-01-12', source: 'vendor', rungId: null } });
+  const B = leaf('B', 2, '2027-01-16', '2027-01-25', { waitsFor: [{ id: 'A', type: 'FS', wait: 5 }] });
+  const f = forecastProject([A, B], '2026-12-31')!;
+  check('after it finishes + wait: the wait is not room', f.leaves.get('B')!.push === 2, String(f.leaves.get('B')!.push));
 }
 {
   const q = forecastProject([leaf('Q', 1, '2026-01-01', '2026-12-31', { pct: 40, qty: { total: 100, done: 40, firstMovedWeekEnd: '2026-06-07' } })], '2026-07-05')!;
@@ -195,7 +217,7 @@ const leaf = (id: string, order: number, s: string, f: string, extra: Partial<Fo
   check('a typed date on a rung already ticked is ignored', stale.leaves.get('M')!.basis === 'plan', stale.leaves.get('M')!.basis);
   const done = forecastProject([leaf('X', 1, '2026-01-01', '2026-06-30', { pct: 100, finishedAt: '2026-03-01' })], '2026-07-05')!;
   check('a finished activity finished when it did', done.finish === '2026-03-01' && done.leaves.get('X')!.basis === 'done');
-  const loop = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { waitsFor: ['B'] }), leaf('B', 2, '2027-01-11', '2027-01-20', { waitsFor: ['A'] })], '2026-12-31');
+  const loop = forecastProject([leaf('A', 1, '2027-01-01', '2027-01-10', { waitsFor: [{ id: 'B', type: 'FS', wait: 0 }] }), leaf('B', 2, '2027-01-11', '2027-01-20', { waitsFor: [{ id: 'A', type: 'FS', wait: 0 }] })], '2026-12-31');
   check('a loop in the links does not hang or throw', loop !== null && loop.leaves.size === 2);
   const late = forecastProject([leaf('S', 1, '2026-01-01', '2026-01-10')], '2026-02-01')!;
   check('a start that should have happened lands today', late.finish === '2026-02-11', late.finish);

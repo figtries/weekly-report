@@ -57,7 +57,8 @@ export function forecastFromDb(db: Database, week: number): ForecastRead | null 
         item.forecast && item.forecast.week <= week
           ? { date: item.forecast.date, source: item.forecast.source, rungId: item.forecast.rungId }
           : null,
-      waitsFor: item.waitsFor ?? [],
+      // db.json-shaped fixtures carry ids only; those read as "after it finishes".
+      waitsFor: item.waitLinks ?? (item.waitsFor ?? []).map((id) => ({ id, type: 'FS' as const, wait: 0 })),
     });
   }
 

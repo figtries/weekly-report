@@ -17,13 +17,9 @@
  * lib/progress.ts; nothing here computes one.
  */
 
-const MS_PER_DAY = 86_400_000;
+import type { StoredLink } from './links';
 
-/**
- * Within this many days a predecessor still DRIVES what waits for it, so the
- * path runs through it. The weekend-plus-a-day of `MAX_GAP` in lib/chains.ts.
- */
-const DRIVING_SLACK_DAYS = 3;
+const MS_PER_DAY = 86_400_000;
 
 export type ForecastSource = 'vendor' | 'site' | 'client';
 
@@ -52,8 +48,8 @@ export interface ForecastLeafInput {
   finishedAt: string | null;
   /** A date somebody outside the app gave, for one rung or (rungId null) the finish. */
   typed: { date: string; source: ForecastSource; rungId: string | null } | null;
-  /** Confirmed links only. */
-  waitsFor: string[];
+  /** Confirmed links only, with their way and wait (lib/links.ts). */
+  waitsFor: StoredLink[];
 }
 
 export interface LeafForecast {
@@ -62,7 +58,7 @@ export interface LeafForecast {
   finish: string;
   /** Days its predecessors moved it; 0 or less when nothing did. */
   push: number;
-  /** The predecessor holding it, when one is within the driving slack. */
+  /** The predecessor holding it, when its link has no room left. */
   drivenBy: string | null;
   basis: StepBasis;
   source: ForecastSource | null;
@@ -127,20 +123,36 @@ export function forecastProject(inputs: ForecastLeafInput[], statusDate: string)
     const PF = dayOf(leaf.planFinish);
     const duration = Math.max(1, PF - PS + 1);
 
-    // How far a predecessor's finish runs past what this activity allowed for:
-    // its own planned finish where the two overlap (the offset is kept), the
-    // day before this one starts where there is a gap (the gap is float).
+    // How far a predecessor runs past what this activity allowed for it, by
+    // the link's way. Measured against the PLAN on both sides, so an overlap
+    // the plan already had keeps its offset and room the plan left (the gap)
+    // is used first. A link drives only when nothing is left of that room
+    // (7 Oct 2026: links carry their wait now; the old 3-day tolerance was for
+    // links guessed from dates).
     let push = 0;
     let drivenBy: string | null = null;
     let nearest = -Infinity;
-    for (const pid of leaf.waitsFor) {
-      const pred = visit(pid);
+    for (const link of leaf.waitsFor) {
+      const pred = visit(link.id);
       if (!pred) continue;
-      const value = pred.day - Math.max(dayOf(byId.get(pid)!.planFinish), PS - 1);
+      const p = byId.get(link.id)!;
+      const pPS = dayOf(p.planStart);
+      const pPF = dayOf(p.planFinish);
+      let value: number;
+      if (link.type === 'SS') {
+        // Started (or done) is not late to start; not started starts when its
+        // own push lets it, never before the status date.
+        const predStart = p.pct > 0 || pred.basis === 'done' ? pPS : Math.max(pPS + Math.max(0, pred.push), D + 1);
+        value = predStart - Math.max(pPS, PS - link.wait);
+      } else if (link.type === 'FF') {
+        value = pred.day - Math.max(pPF, PF - link.wait);
+      } else {
+        value = pred.day - Math.max(pPF, PS - 1 - link.wait);
+      }
       push = Math.max(push, value);
       if (value > nearest) {
         nearest = value;
-        drivenBy = value >= -DRIVING_SLACK_DAYS ? pid : null;
+        drivenBy = value >= 0 ? link.id : null;
       }
     }
 
