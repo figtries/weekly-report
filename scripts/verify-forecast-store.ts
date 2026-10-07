@@ -20,7 +20,11 @@ process.env.REPORT_DB_PATH = work;
 
 const { db, schema } = await import('../lib/sqlite.ts');
 const { buildProjectDashboardData } = await import('../lib/dashboard-db.ts');
-const { setLeafForecastSqlite, setWaitsForSqlite } = await import('../lib/progress-sqlite.ts');
+const { setLeafForecastSqlite } = await import('../lib/progress-sqlite.ts');
+const { setLinksSqlite } = await import('../lib/links-sqlite.ts');
+// Links are written with a way and a wait since 7 Oct 2026; these ids are all "after it finishes".
+const setWaitsForSqlite = (p: string, id: string, ids: string[]) =>
+  setLinksSqlite(p, id, ids.map((x) => ({ id: x, type: 'FS' as const, wait: 0 })));
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {

@@ -468,23 +468,8 @@ export function setLeafForecastSqlite(
     .run();
 }
 
-/**
- * What this activity waits for, as a person confirmed it. Empty is stored as
- * `[]`, not NULL: "waits for nothing" is an answer, and NULL means nobody was
- * asked yet, which is when the panel offers EPC order's guess (`unansweredLinks`).
- */
-export function setWaitsForSqlite(projectId: string, nodeId: string, ids: string[]): void {
-  leafOfProject(projectId, nodeId);
-  const unique = [...new Set(ids)];
-  for (const id of unique) {
-    if (id === nodeId) throw new Error('An activity cannot wait for itself');
-    leafOfProject(projectId, id);
-  }
-  db.update(schema.wbsNodes)
-    .set({ waitsFor: JSON.stringify(unique) })
-    .where(eq(schema.wbsNodes.id, nodeId))
-    .run();
-}
+// Links between activities are written by lib/links-sqlite.ts (since 7 Oct
+// 2026 they are made in Projects, with a way and a wait).
 
 /* ------------------------------------------------------ one leaf, many weeks */
 

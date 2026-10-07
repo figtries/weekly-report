@@ -5,7 +5,9 @@ import { and, eq } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
-import { boxAbove, coverChildren, getActiveBaselineId, rowSpan } from './sheet';
+import { boxAbove, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
+import { saveRowLinksSqlite } from './links-sqlite';
+import type { StoredLink } from './links';
 import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
 import { projectOfNode, syncDerivedWeights } from './weights-auto';
 import { budgetRefusal } from './weights-read';
@@ -525,6 +527,27 @@ export async function shiftFollowersAction(
 
     await landed();
     return { ok: true, moved };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * The Links panel's Save, and the Gantt drag card's. Answers with the sheet as
+ * it now stands, so the planner redraws from what was actually stored.
+ */
+export async function saveRowLinksAction(
+  nodeId: string,
+  waitsFor: StoredLink[],
+  holdsUp: StoredLink[]
+): Promise<{ ok: true; sheet: Sheet } | { ok: false; error: string }> {
+  await beforeWrite();
+  try {
+    const projectId = projectOfNode(nodeId);
+    if (!projectId) throw new Error('Row not found');
+    saveRowLinksSqlite(projectId, nodeId, waitsFor, holdsUp);
+    await landed();
+    return { ok: true, sheet: getSheet(projectId) };
   } catch (e) {
     return fail(e);
   }

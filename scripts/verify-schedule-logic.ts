@@ -170,6 +170,45 @@ check('a group row never carries links', sheet.rows.filter((x) => x.isSummary).e
 check('no contract yet', sheet.contract === null && sheet.rows.every((x) => x.contractStart === null));
 check('a group row has no can-slip figure', sheet.rows.filter((x) => x.isSummary).every((x) => x.totalFloat === null && !x.isCritical));
 
+/* ------------------------------------------------------------ writing links */
+
+const { setLinksSqlite, saveRowLinksSqlite, pruneLinks } = await import('../lib/links-sqlite.ts');
+const proj = linked.projectId;
+const dated = sheet.rows.filter((x) => x.isLeaf && x.startDate);
+if (dated.length < 3) throw new Error('the linked project needs three scheduled activities');
+const [L1, L2, L3] = dated;
+const branch = sheet.rows.find((x) => x.isSummary)!;
+const stored = (id: string) => db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, id)).all()[0].waitsFor;
+const refuses = (fn: () => void, word: string) => {
+  try {
+    fn();
+    return false;
+  } catch (e) {
+    return String((e as Error).message).toLowerCase().includes(word);
+  }
+};
+// Start clean: these three may already hold links in the fixture.
+for (const x of [L1, L2, L3]) db.update(schema.wbsNodes).set({ waitsFor: null }).where(eq(schema.wbsNodes.id, x.id)).run();
+
+setLinksSqlite(proj, L2.id, [{ id: L1.id, type: 'SS', wait: 3 }]);
+check('a link is stored in the new shape', stored(L2.id) === JSON.stringify([{ id: L1.id, type: 'SS', wait: 3 }]), stored(L2.id) ?? '');
+check('itself is refused', refuses(() => setLinksSqlite(proj, L1.id, [{ id: L1.id, type: 'FS', wait: 0 }]), 'itself'));
+check('a group row is refused', refuses(() => setLinksSqlite(proj, L1.id, [{ id: branch.id, type: 'FS', wait: 0 }]), 'group'));
+check('a loop is refused and named', refuses(() => setLinksSqlite(proj, L1.id, [{ id: L2.id, type: 'FS', wait: 0 }]), 'loop'));
+check('an unknown id is refused', refuses(() => setLinksSqlite(proj, L1.id, [{ id: 'nope', type: 'FS', wait: 0 }]), 'not found'));
+
+saveRowLinksSqlite(proj, L2.id, [{ id: L1.id, type: 'FS', wait: 0 }], [{ id: L3.id, type: 'FF', wait: 2 }]);
+check('holds up writes into the follower', (parseLinks(stored(L3.id)) ?? []).some((l) => l.id === L2.id && l.type === 'FF' && l.wait === 2), stored(L3.id) ?? '');
+saveRowLinksSqlite(proj, L2.id, [{ id: L1.id, type: 'FS', wait: 0 }], []);
+check('dropping it from holds up removes it from the follower', !(parseLinks(stored(L3.id)) ?? []).some((l) => l.id === L2.id), stored(L3.id) ?? '');
+
+db.update(schema.wbsNodes).set({ waitsFor: JSON.stringify([{ id: 'gone', type: 'FS', wait: 0 }, { id: L1.id, type: 'FS', wait: 0 }]) }).where(eq(schema.wbsNodes.id, L3.id)).run();
+pruneLinks(proj);
+check('prune drops a link to a row that no longer exists', j(parseLinks(stored(L3.id))) === j([{ id: L1.id, type: 'FS', wait: 0 }]), stored(L3.id) ?? '');
+db.update(schema.wbsNodes).set({ waitsFor: JSON.stringify([{ id: L1.id, type: 'FS', wait: 0 }]) }).where(eq(schema.wbsNodes.id, branch.id)).run();
+pruneLinks(proj);
+check('prune clears links on a group row', stored(branch.id) === null, String(stored(branch.id)));
+
 /* ==== later tasks append their sections ABOVE this line ==== */
 
 if (failed) {

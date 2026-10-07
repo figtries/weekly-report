@@ -144,7 +144,17 @@ export interface Network {
 
 type Dated = NetNode & { startDate: string; finishDate: string };
 
-const dayNo = (iso: string) => Math.round(utc(iso) / MS_PER_DAY);
+// Cached: the same few hundred dates are read thousands of times per pass,
+// and a plan's dates are a bounded set.
+const dayCache = new Map<string, number>();
+const dayNo = (iso: string) => {
+  let d = dayCache.get(iso);
+  if (d === undefined) {
+    d = Math.round(utc(iso) / MS_PER_DAY);
+    dayCache.set(iso, d);
+  }
+  return d;
+};
 const isoOf = (day: number) => new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
 
 function scheduled(n: NetNode | undefined): n is Dated {
@@ -178,33 +188,40 @@ function liveLinks(nodes: NetNode[]): { live: Edge[]; ignored: { fromId: string;
       candidates.push({ from: l.id, to: b.id, type: l.type, wait: l.wait });
     }
   }
-  // Edges go in in plan order then stored order; one whose target already
-  // reaches its source would close a loop and is set aside. Deterministic.
-  const out = new Map<string, string[]>();
-  const reaches = (start: string, goal: string): boolean => {
-    const seen = new Set<string>();
-    const stack = [start];
-    while (stack.length) {
-      const id = stack.pop()!;
-      if (id === goal) return true;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      stack.push(...(out.get(id) ?? []));
-    }
-    return false;
-  };
-  const live: Edge[] = [];
-  const ignored: { fromId: string; toId: string }[] = [];
+  // One depth-first walk, in plan order then stored order: an edge back into
+  // a row still on the walk's stack closes a loop and is set aside. O(V + E)
+  // and deterministic; the planner reruns this on every date change.
+  const out = new Map<string, Edge[]>();
   for (const c of candidates) {
-    if (reaches(c.to, c.from)) {
-      ignored.push({ fromId: c.from, toId: c.to });
-      continue;
-    }
-    live.push(c);
     const list = out.get(c.from);
-    if (list) list.push(c.to);
-    else out.set(c.from, [c.to]);
+    if (list) list.push(c);
+    else out.set(c.from, [c]);
   }
+  const back = new Set<Edge>();
+  const state = new Map<string, 1 | 2>(); // 1 on the stack, 2 finished
+  for (const n of nodes) {
+    if (state.has(n.id)) continue;
+    const stack: { id: string; i: number }[] = [{ id: n.id, i: 0 }];
+    state.set(n.id, 1);
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const edges = out.get(top.id) ?? [];
+      if (top.i >= edges.length) {
+        state.set(top.id, 2);
+        stack.pop();
+        continue;
+      }
+      const e = edges[top.i++];
+      const s = state.get(e.to);
+      if (s === 1) back.add(e);
+      else if (s === undefined) {
+        state.set(e.to, 1);
+        stack.push({ id: e.to, i: 0 });
+      }
+    }
+  }
+  const live = candidates.filter((c) => !back.has(c));
+  const ignored = candidates.filter((c) => back.has(c)).map((c) => ({ fromId: c.from, toId: c.to }));
   return { live, ignored };
 }
 

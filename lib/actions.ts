@@ -20,7 +20,6 @@ import {
   saveWeekUpdatesSqlite,
   setLeafForecastSqlite,
   setProgressMethodSqlite,
-  setWaitsForSqlite,
   setWorkKindSqlite,
   SignedWeeksError,
   type LeafWeekBefore,
@@ -281,17 +280,6 @@ export async function setLeafForecastAction(
 ): Promise<ActionResult> {
   const projectId = await sqliteProject(forProject);
   if (projectId) return sqliteWrite(() => setLeafForecastSqlite(projectId, leafId, value, week));
-  return NO_PROJECT_OPEN;
-}
-
-/** What an activity waits for, as a person confirmed it. */
-export async function setWaitsForAction(
-  leafId: string,
-  ids: string[],
-  forProject?: string | null
-): Promise<ActionResult> {
-  const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => setWaitsForSqlite(projectId, leafId, ids));
   return NO_PROJECT_OPEN;
 }
 

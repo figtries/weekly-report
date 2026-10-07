@@ -14,6 +14,7 @@ import {
   sqlite,
 } from './sqlite';
 import { boxAt, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
+import { pruneLinks } from './links-sqlite';
 import { syncDerivedWeights } from './weights-auto';
 
 /**
@@ -198,6 +199,10 @@ function renumber(projectId: string, tx: Writer = db) {
   // of work inside it and froze every date under it. See `coverChildren`.
   const baselineId = getActiveBaselineId(projectId);
   if (baselineId) coverChildren(projectId, baselineId, tx);
+
+  // AND THE LINKS: a group row carries none, and none point at a row that is
+  // gone or has become a group. See pruneLinks.
+  pruneLinks(projectId, tx);
 
   // AND THE WEIGHTS, because this pass is what decides which rows are leaves.
   // Indenting a row makes its parent a branch and the parent's weight belongs

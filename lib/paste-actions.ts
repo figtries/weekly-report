@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema, sqlite } from './sqlite';
 import { coverChildren, getActiveBaselineId } from './sheet';
+import { pruneLinks } from './links-sqlite';
 import { syncDerivedWeights } from './weights-auto';
 import { completeDates, parsePaste, type ParseResult } from './paste';
 
@@ -286,4 +287,8 @@ function renumberProject(projectId: string, tx: Writer) {
   // And the same rule again: a package covers what the paste put inside it.
   const baselineId = getActiveBaselineId(projectId);
   if (baselineId) coverChildren(projectId, baselineId, tx);
+
+  // AND THE LINKS: a group row carries none, and none point at a row that is
+  // gone or has become a group. See pruneLinks.
+  pruneLinks(projectId, tx);
 }
