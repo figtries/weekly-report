@@ -36,7 +36,7 @@ Measured, never assumed, on a PRODUCTION build (`set NEXT_DIST_DIR=.next-verify&
 | Planner scroll, 10 steps | no long task > 100 ms; total long-task time ≤ baseline + 50 ms |
 | Desktop (1440, 1× CPU) bar-end drag, 60 pointer moves | no long task > 50 ms |
 | LCP of `/projects/pdemo-merbau` | ≤ baseline + 10% |
-| First Load JS of `/projects/[id]` (build output) | ≤ baseline + 15 kB |
+| JS the page loads (`jsKB`, encoded, resource timing — Next 16 prints no First Load JS) | ≤ baseline + 15 kB |
 | `analyseNetwork` on 300 rows / 300 links (node) | ≤ 2 ms average over 100 runs |
 
 How it stays inside, by construction:
@@ -164,7 +164,7 @@ await browser.close();
 
 - [ ] **Step 2: Baseline** — build and start production (`set NEXT_DIST_DIR=.next-verify&& npx next build > build-base.log 2>&1; echo $?`, then `preview_start` `prod-verify`), run `node scripts/verify-projects-perf.mjs` three times, and write the median of each figure here. Read First Load JS for `/projects/[id]` from `build-base.log`. Time `analyseNetwork` is measured from Task 2 on.
 
-  Baseline (7 Oct 2026): _(filled in during execution)_
+  Baseline (7 Oct 2026, prod build f3e054a, Merbau, 4 runs): LCP 1264 ms (1188-1312), jsKB 264, scroll 4000 px with long-task max 0-51 ms / total 0-51 ms, press ⋯ 38 ms (36-51). Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
 
 - [ ] **Step 3: Commit**
 
