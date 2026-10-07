@@ -40,6 +40,7 @@ const { deriveWeights } = await import('../lib/weights.ts');
 const { loadWeightNodes } = await import('../lib/weights-read.ts');
 const { inclusiveDays, leafPlanFraction } = await import('../lib/plan-curve.ts');
 const { BUILT_IN_KINDS } = await import('../lib/work-kind.ts');
+const { findDiscipline } = await import('../lib/disciplines.ts');
 const {
   saveFieldProgressSqlite,
   saveWeekUpdatesSqlite,
@@ -529,12 +530,85 @@ syncDerivedWeights(PID);
 /* --------------------------------------------- 4. how each row is measured */
 
 const KIND = Object.fromEntries(BUILT_IN_KINDS.map((k) => [k.id, k]));
-// Every activity is measured by its kind's own ladder, exactly as the template defines it.
 const LADDER: Partial<Record<Phase, string>> = { eng: 'engineering', proc: 'procurement', cons: 'construction', comm: 'commissioning' };
+
+/**
+ * Which part of construction each activity is, answered the way the site
+ * engineer would in Data Overall (8 Oct 2026). Written out, not guessed: a
+ * demo where every construction row read "Other" at 100% made no sense.
+ */
+const PART: Record<string, string> = {
+  'Land Clearing & Grading': 'civil',
+  'Temporary Facilities (Site Office & Warehouse)': 'civil',
+  'Access Road & Internal Road': 'civil',
+  'Piling Works': 'civil',
+  'Equipment Foundations': 'civil',
+  'Pipe Rack Foundations': 'civil',
+  'Drainage & Oily Water Sewer': 'civil',
+  'Concrete Paving & Bund Wall': 'civil',
+  'Pipe Rack Erection': 'steel',
+  'Compressor Shelter Erection': 'steel',
+  'Platform, Ladder & Stairs': 'steel',
+  'Separator & Vessel Installation': 'mechanical',
+  'Heat Exchanger & Air Cooler Installation': 'mechanical',
+  'TEG Unit Installation': 'mechanical',
+  'Metering Skid Installation': 'mechanical',
+  'Compressor Package Setting & Alignment': 'mechanical',
+  'Piping Prefabrication': 'piping',
+  'Piping Erection': 'piping',
+  'Painting & Insulation': 'painting',
+  'Hydrotest': 'testing',
+  'Cable Tray & Cable Laying': 'ei',
+  'Instrument Installation': 'ei',
+  'Instrument Tubing & Hook-up': 'ei',
+  'Loop Check': 'ei',
+  'Land Acquisition Support & Permits': 'other',
+  'ROW Clearing & Grading': 'pipeline',
+  'Stringing': 'pipeline',
+  'Welding': 'pipeline',
+  'NDT Radiography': 'pipeline',
+  'Field Joint Coating': 'pipeline',
+  'Trenching': 'pipeline',
+  'Lowering & Backfilling': 'pipeline',
+  'Tie-in Works': 'piping',
+  'Pipeline Marker & ROW Reinstatement': 'pipeline',
+  'Road Crossing by Boring (4 Locations)': 'pipeline',
+  'River Crossing by HDD (Sungai Lalan)': 'pipeline',
+  'Hydrotest Pipeline (4 Sections)': 'testing',
+  'Gauging & Caliper Pig Run': 'testing',
+  'Dewatering & Drying': 'testing',
+  'Anode Bed & Test Post Installation': 'pipeline',
+  'CP Survey & Energize': 'pipeline',
+  'Earthing Grid Installation': 'ei',
+  'Generator Foundation': 'civil',
+  'Cable Trench & Cable Pulling': 'ei',
+  'Switchgear & Transformer Installation': 'ei',
+  'Generator Setting & Alignment': 'mechanical',
+  'Area Lighting & Small Power': 'ei',
+  'Termination & Insulation Test': 'ei',
+  'Foundation & Tie Beam': 'civil',
+  'Structure (Column, Beam, Slab)': 'civil',
+  'Wall, Roof & Finishing': 'civil',
+  'Building MEP (Plumbing, Lighting, HVAC Duct)': 'other',
+  'Warehouse & Workshop': 'civil',
+  'Guard House & Perimeter Fence': 'civil',
+  'Landscaping & Parking Area': 'civil',
+  'Fire Hydrant Network': 'piping',
+  'DCS / ESD Panel Installation': 'ei',
+  'HVAC Installation': 'mechanical',
+  'F&G Detector Installation': 'ei',
+};
+const partOf = (l: Leaf): string | null => {
+  if (l.phase !== 'cons') return null;
+  const p = PART[l.name];
+  if (!p || !findDiscipline(p)) throw new Error(`No part of construction for "${l.name}"`);
+  return p;
+};
+// Every activity is measured by its kind's ladder; a construction one by its part's.
+const stepsOf = (l: Leaf) => (l.phase === 'cons' ? findDiscipline(partOf(l))!.steps : KIND[LADDER[l.phase]!].steps);
 for (const l of leaves) {
   if (l.phase === 'ms') continue;
-  const kind = KIND[LADDER[l.phase]!];
-  setWorkKindSqlite(l.id, kind.id, 'milestone', { milestones: kind.steps });
+  setWorkKindSqlite(l.id, LADDER[l.phase]!, 'milestone', { milestones: stepsOf(l).map((m) => ({ ...m })) }, partOf(l));
 }
 
 /* ------------------------------------------------ 5. thirty weeks of site */
@@ -558,10 +632,9 @@ const pctOf = (l: Leaf, w: number, prev: number): number => {
 
 /** The rungs a percent has climbed: whole rungs only, in order. */
 const rungsFor = (l: Leaf, pct: number): string[] => {
-  const kind = KIND[LADDER[l.phase]!];
   const done: string[] = [];
   let acc = 0;
-  for (const m of kind.steps) {
+  for (const m of stepsOf(l)) {
     if (acc + m.weight <= pct + 10) {
       acc += m.weight;
       done.push(m.id);
@@ -587,9 +660,8 @@ for (let w = 1; w <= CURRENT_WEEK; w += 1) {
       lump[l.id] = { cumProgressPct: pct, ...(note ? { note } : {}) };
     } else {
       const rungs = rungsFor(l, pct);
-      const kind = KIND[LADDER[l.phase]!];
       for (const r of rungs) l.rungWeek[r] ??= w;
-      pct = kind.steps.filter((s) => rungs.includes(s.id)).reduce((s, m) => s + m.weight, 0);
+      pct = stepsOf(l).filter((s) => rungs.includes(s.id)).reduce((s, m) => s + m.weight, 0);
       field.push({ leafId: l.id, milestonesDone: rungs.map((r) => `${l.id}:${r}`), ...(note ? { note } : {}) });
     }
     standing.set(l.id, pct);
