@@ -9,6 +9,7 @@ import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
 import { isKnownCurrency } from './currency';
 import { deriveInitial, INITIAL_LENGTH } from './initial';
+import { FIELDS, fieldOf } from './fields';
 import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
 import { OPEN_PROJECT_COOKIE, OPEN_PROJECT_COOKIE_MAX_AGE } from './projects';
 import { relayWeeks, weekRowsFor } from './week-grid';
@@ -76,6 +77,8 @@ export async function createProjectAction(input: {
    * rather than rejected — there is nothing to tell a caller off about.
    */
   alias?: string | null;
+  /** The project's field (lib/fields.ts); EPC when absent. */
+  field?: string | null;
   clientName?: string;
   /** Not asked for at creation — it belongs to the project page, once one exists. */
   contractorName?: string;
@@ -131,6 +134,7 @@ export async function createProjectAction(input: {
           finishDate: input.finishDate,
           updatedAt: now,
           contractValue: input.contractValue ?? null,
+          field: fieldOf(input.field).id,
           currency: input.currency && isKnownCurrency(input.currency) ? input.currency : 'IDR',
           // Weight comes from prices, and there are none yet. `even` is the
           // honest label until a BOQ exists — see AGENTS.md.
@@ -347,7 +351,9 @@ export type ProjectField =
   | 'signatureRightName'
   | 'contractValue'
   | 'startDate'
-  | 'finishDate';
+  | 'finishDate'
+  /** The project's field (lib/fields.ts). Only known ids are stored. */
+  | 'field';
 
 export async function updateProjectFieldAction(
   projectId: string,
@@ -360,6 +366,7 @@ export async function updateProjectFieldAction(
     let next: string | number | null = raw || null;
 
     if (field === 'name' && !raw) throw new Error('A project needs a name');
+    if (field === 'field' && !FIELDS.some((f) => f.id === raw)) throw new Error('Pick one of the fields on the list');
 
     // The same shaping the creation path does, for the same reason: `maxLength`
     // on the input is a courtesy to whoever is typing, not a rule. Cleared on

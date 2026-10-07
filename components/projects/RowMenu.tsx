@@ -20,7 +20,7 @@ import type { Sheet, SheetRow } from '@/lib/sheet';
 import type { Network } from '@/lib/chains';
 import type { BarFact } from '@/lib/bar-facts';
 import type { BarView } from '@/lib/bar-view';
-import { KIND_LABEL } from '@/lib/bar-view';
+import { KIND_LABEL, paintCss } from '@/lib/bar-view';
 import { ReadyKindView, warmKindView } from './links-panel-loader';
 
 // Lazy: the planner's first load does not carry the Links panel. ScheduleSheet
@@ -90,6 +90,8 @@ export default function RowMenu({
   facts,
   view,
   onKindSaved,
+  onLabel,
+  onOpenBars,
 }: {
   row: SheetRow;
   /** 'delete' when the sheet opened this panel to ask about a row with children; 'links' from the conflict strip; 'kind' from Data Overall's link. */
@@ -99,6 +101,10 @@ export default function RowMenu({
   view: BarView;
   /** A kind was saved: the plan and the bars as the server now has them. */
   onKindSaved: (sheet: Sheet, facts: Record<string, BarFact>) => void;
+  /** Put one of the user's labels on this row, or none. */
+  onLabel: (labelId: string | null) => void;
+  /** Where labels are made. */
+  onOpenBars: () => void;
   projectId: string;
   /** The links read against the plan, for the Links view. */
   network: Network;
@@ -162,10 +168,11 @@ export default function RowMenu({
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [unitValue, setUnitValue] = useState('');
-  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind'>(initialMode);
+  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind' | 'label'>(initialMode);
   const fact = facts[row.id];
   const kindName = fact?.kindId ? KIND_LABEL[fact.kindId] ?? null : null;
   const discipline = fact?.disciplineShort ?? null;
+  const ownLabel = view.labels.find((l) => l.id === row.barLabel) ?? null;
 
   const run = (
     fn: () => Promise<Res>,
@@ -309,6 +316,15 @@ export default function RowMenu({
                 <Divider />
               </>
             )}
+            {/* The user's own colour for this bar. On a heading it paints the
+                rows under it that have none of their own. */}
+            <Item
+              icon={<span className="size-4 rounded-[4px] ring-1 ring-border" style={{ background: ownLabel ? paintCss(ownLabel.paint) : 'transparent' }} />}
+              onClick={() => setMode('label')}
+              disabled={pending}
+            >
+              Bar label: {ownLabel ? ownLabel.name : 'none'}
+            </Item>
             {row.isSummary && <Divider />}
             <Item
               icon={<Plus className="size-4" />}
@@ -466,6 +482,52 @@ export default function RowMenu({
           </Suspense>
           );
         })()}
+
+        {mode === 'label' && (
+          <div className="mt-3 space-y-1">
+            <p className="text-[13px] text-muted-foreground">
+              {row.isSummary
+                ? 'Pick a label. Rows under this heading without their own label take it.'
+                : 'Pick a label for this bar.'}
+            </p>
+            {view.labels.map((l) => (
+              <Item
+                key={l.id}
+                icon={<span className="size-4 rounded-[4px]" style={{ background: paintCss(l.paint) }} />}
+                onClick={() => {
+                  onLabel(l.id);
+                  onClose();
+                }}
+              >
+                {l.name}
+                {l.id === row.barLabel ? ' (now)' : ''}
+              </Item>
+            ))}
+            {view.labels.length === 0 && (
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-[13px] text-muted-foreground">
+                No labels yet. Make them in Bars, then come back.
+              </p>
+            )}
+            {row.barLabel && (
+              <Item
+                icon={<span className="size-4 rounded-[4px] ring-1 ring-border" />}
+                onClick={() => {
+                  onLabel(null);
+                  onClose();
+                }}
+              >
+                No label
+              </Item>
+            )}
+            <Divider />
+            <Item icon={<span className="size-4" />} onClick={onOpenBars}>
+              Make or change labels in Bars
+            </Item>
+            <Item icon={<span className="size-4" />} onClick={() => setMode('menu')}>
+              Back
+            </Item>
+          </div>
+        )}
 
         {mode === 'kind' && (
           <ReadyKindView

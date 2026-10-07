@@ -67,7 +67,8 @@ import {
 import { barSentence } from '@/lib/bar-sentence';
 import type { LinkType } from '@/lib/links';
 import GanttChart, { GanttLegend } from './GanttChart';
-import { DEFAULT_BAR_VIEW, effectiveColourBy, paintCss, paintOf as barPaintOf, type BarView } from '@/lib/bar-view';
+import { DEFAULT_BAR_VIEW, labelsByRow, paintCss, paintOf as barPaintOf, type BarView } from '@/lib/bar-view';
+import { setBarLabelAction } from '@/lib/bar-view-actions';
 import type { BarFact } from '@/lib/bar-facts';
 import { setBarViewAction } from '@/lib/bar-view-actions';
 import { groupAmount, stripAmount } from '@/lib/currency';
@@ -276,6 +277,7 @@ export default function ScheduleSheet({
   projectId,
   barView = DEFAULT_BAR_VIEW,
   barFacts = {},
+  fieldKinds = [],
   weeks = [],
   contract = false,
 }: {
@@ -290,6 +292,8 @@ export default function ScheduleSheet({
   barView?: BarView;
   /** What each bar has to say, as of the current week (lib/bar-facts.ts). A seed too. */
   barFacts?: Record<string, BarFact>;
+  /** The kinds of work this project's field has (lib/fields.ts), for the Bars menu. */
+  fieldKinds?: string[];
   /** Reporting weeks and their status, for the affected-weeks warning. */
   weeks?: WeekSpan[];
   /** A contract is locked: the key names the grey bar under each task. */
@@ -752,13 +756,15 @@ export default function ScheduleSheet({
    * moved on to saying "critical" or "summary" — two colours for one row, in
    * two panes six inches apart. It asks the same function the chart does.
    */
-  const colourBy = effectiveColourBy(view, rows);
+  const colourBy = view.colourBy;
+  // Each row's label, its own or its heading's.
+  const labelMap = useMemo(() => labelsByRow(rows), [rows]);
   const paintOf = useCallback(
     (row: SheetRow) =>
       row.isSummary || row.isMilestone
         ? 'var(--foreground)'
-        : paintCss(barPaintOf(row, facts[row.id]?.kindId ?? null, view, colourBy)),
-    [facts, view, colourBy]
+        : paintCss(barPaintOf(row, facts[row.id]?.kindId ?? null, view, colourBy, labelMap.get(row.id) ?? null)),
+    [facts, view, colourBy, labelMap]
   );
 
   /** A Bars press: drawn at once, saved behind it, put back if the save fails. */
@@ -780,6 +786,21 @@ export default function ScheduleSheet({
   const patch = useCallback((rowId: string, next: Partial<SheetRow>) => {
     setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, ...next } : r)));
   }, []);
+
+  /** A row's own bar label: drawn at once, saved behind it, put back if refused. */
+  const setRowLabel = useCallback(
+    (rowId: string, labelId: string | null) => {
+      const before = rows.find((r) => r.id === rowId)?.barLabel ?? null;
+      patch(rowId, { barLabel: labelId });
+      void setBarLabelAction(projectId, rowId, labelId).then((res) => {
+        if (!res.ok) {
+          patch(rowId, { barLabel: before });
+          setError(res.error);
+        }
+      });
+    },
+    [rows, projectId, patch]
+  );
 
   const valueOf = (row: SheetRow, field: Field): string =>
     field === 'name'
@@ -1736,7 +1757,7 @@ export default function ScheduleSheet({
         // waiting for. The way into the bar rules is not lost: select any row
         // and the strip above carries it.
         <div className={`shrink-0 ${pane === 'sheet' ? 'hidden md:block' : ''}`}>
-          <GanttLegend rows={rows} view={view} facts={facts} colourBy={colourBy} network={network} contract={contract} />
+          <GanttLegend rows={rows} view={view} facts={facts} colourBy={colourBy} labels={labelMap} network={network} contract={contract} />
         </div>
       )}
 
@@ -2015,6 +2036,7 @@ export default function ScheduleSheet({
             view={view}
             facts={facts}
             colourBy={colourBy}
+            labels={labelMap}
             range={range}
             fit={fitTimeline}
           />
@@ -2083,6 +2105,11 @@ export default function ScheduleSheet({
           suggestions={suggestions.get(menuRow.id) ?? []}
           facts={facts}
           view={view}
+          onLabel={(labelId) => setRowLabel(menuRow.id, labelId)}
+          onOpenBars={() => {
+            setMenuRow(null);
+            void warmBarsPanel().then(() => setBarsOpen(true));
+          }}
           onKindSaved={(sheet, next) => {
             applySheet(sheet);
             setFacts(next);
@@ -2107,6 +2134,7 @@ export default function ScheduleSheet({
       {barsOpen && (
         <ReadyBarsPanel
           view={view}
+          fieldKinds={fieldKinds}
           rows={rows}
           facts={facts}
           contract={contract}

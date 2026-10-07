@@ -11,6 +11,7 @@ import { formatMoney } from '@/lib/currency';
 import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
 import { SIGNATURE_PARTS, signaturePart, type SignatureField } from '@/lib/signature';
 import { updateProjectFieldAction, type ProjectField } from '@/lib/project-actions';
+import { FIELDS as ENERGY_FIELDS, fieldOf } from '@/lib/fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -52,19 +53,22 @@ interface Project {
   currency: string;
   startDate: string | null;
   finishDate: string | null;
+  /** lib/fields.ts; null reads as EPC. */
+  field: string | null;
 }
 
 const FIELDS: {
   key: ProjectField;
   label: string;
   hint?: string;
-  type?: 'text' | 'date' | 'number';
+  type?: 'text' | 'date' | 'number' | 'field';
   /** Caps the input, for the initial. */
   maxLength?: number;
   /** Uppercases as you type, for the initial. */
   upper?: boolean;
 }[] = [
   { key: 'name', label: 'Project name' },
+  { key: 'field', label: 'Field', hint: 'The line of energy work. It sets the kinds of work a row can be.', type: 'field' },
   {
     key: 'alias',
     label: 'Project initial',
@@ -132,6 +136,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
     // The four signature halves are not columns: two JSON columns hold them,
     // so they are read through the one module that knows that shape.
     if (k in SIGNATURE_PARTS) return signaturePart(project, k as SignatureField);
+    if (k === 'field') return fieldOf(project.field).id;
     const v = project[k as keyof Project];
     if (v == null) return '';
     return String(v);
@@ -222,7 +227,21 @@ export default function ProjectDetails({ project }: { project: Project }) {
                         {/* The contract value is the one field that groups as
                             it is typed: ten raw digits are unreadable, and the
                             same figure is printed under it a moment later. */}
-                        {f.type === 'number' ? (
+                        {f.type === 'field' ? (
+                          <select
+                            id={`pd-${f.key}`}
+                            defaultValue={valueOf(f.key)}
+                            disabled={pending}
+                            onChange={(e) => commit(f.key, e.target.value)}
+                            className="h-11 w-full rounded-md border bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 md:text-sm"
+                          >
+                            {ENERGY_FIELDS.map((fd) => (
+                              <option key={fd.id} value={fd.id}>
+                                {fd.label}: {fd.help}
+                              </option>
+                            ))}
+                          </select>
+                        ) : f.type === 'number' ? (
                           <MoneyInput
                             id={`pd-${f.key}`}
                             defaultValue={valueOf(f.key)}

@@ -96,6 +96,7 @@ export default function GanttChart({
   view,
   facts,
   colourBy,
+  labels,
   range,
   fit = false,
   network = null,
@@ -114,8 +115,10 @@ export default function GanttChart({
   view: BarView;
   /** What each bar has to say: kind, stages, done, forecast (lib/bar-facts.ts). */
   facts: Record<string, BarFact>;
-  /** `view.colourBy` as this plan can honour it (lib/bar-view.ts `effectiveColourBy`). */
+  /** What colour says on this plan (`view.colourBy`). */
   colourBy: ColourBy;
+  /** Each row's label, its own or its heading's (lib/bar-view.ts `labelsByRow`). */
+  labels: Map<string, string | null>;
   /**
    * Draw the whole span inside the pane instead of at a readable day width.
    *
@@ -264,10 +267,12 @@ export default function GanttChart({
   const endsOf = (r: SheetRow) => ({ x1: xOf(r.startDate!), x2: xOf(r.finishDate!) + scale });
 
   // Every arrow in ONE svg, built only when what it draws changes, never on
-  // hover or scroll. Pressing a bar eases its own arrows up and fades the rest
-  // (CSS transitions on the app's one curve), so a dense plan stays readable.
+  // hover or scroll. ALWAYS VISIBLE (7 Oct 2026): an arrow you only see after
+  // pressing its bar is one nobody responds to. Pressing a bar thickens its own
+  // arrows and fades nothing; the Bars menu can switch them all off.
+  const showLinks = view.marks.links;
   const arrowLayer = useMemo(() => {
-    if (!network || !spanStart || !network.links.length) return null;
+    if (!showLinks || !network || !spanStart || !network.links.length) return null;
     const visibleIndex = new Map(rows.map((r, i) => [r.id, i]));
     const parents = parentOf ?? new Map<string, string | null>();
     return (
@@ -287,19 +292,18 @@ export default function GanttChart({
           const rb = rows[b.index];
           if (!ra.startDate || !ra.finishDate || !rb.startDate || !rb.finishDate) return null;
           const lit = selectedId != null && (l.fromId === selectedId || l.toId === selectedId);
-          const dim = selectedId != null && !lit;
           const bad = l.slack < 0;
           const onPath = Boolean(network.rows.get(l.fromId)?.setsProjectFinish && network.rows.get(l.toId)?.setsProjectFinish);
           const kind = bad ? 'bad' : lit ? 'lit' : onPath ? 'path' : 'muted';
           const to = { ...endsOf(rb), y: b.index * rowH + rowH / 2, milestone: rb.isMilestone && !b.collapsed };
           return (
-            <g key={`${l.fromId}>${l.toId}`} opacity={dim ? 0.25 : 1} className="transition-opacity duration-200 ease-ios">
+            <g key={`${l.fromId}>${l.toId}`}>
               <path
                 d={arrowPath(l.type, { ...endsOf(ra), y: a.index * rowH + rowH / 2 }, to, rowH)}
                 fill="none"
                 stroke={bad ? 'var(--bad)' : kind === 'muted' ? 'var(--muted-foreground)' : 'var(--foreground)'}
-                strokeOpacity={kind === 'muted' ? 0.55 : kind === 'path' ? 0.7 : 1}
-                strokeWidth={lit || bad ? 1.75 : 1.1}
+                strokeOpacity={kind === 'muted' ? 0.85 : 1}
+                strokeWidth={lit ? 2.25 : bad ? 1.75 : 1.35}
                 strokeDasharray={bad || a.collapsed || b.collapsed ? '4 3' : undefined}
                 markerEnd={`url(#ah-${kind})`}
                 className="transition-[stroke-width,stroke-opacity] duration-200 ease-ios"
@@ -328,7 +332,7 @@ export default function GanttChart({
     );
     // xOf and endsOf are derived from spanStart and scale, both listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [network, rows, scale, spanStart, selectedId, parentOf, rowH, width, bodyH]);
+  }, [showLinks, network, rows, scale, spanStart, selectedId, parentOf, rowH, width, bodyH]);
 
   if (!spanStart) {
     return (
@@ -602,7 +606,9 @@ export default function GanttChart({
           // A bracket and a diamond are black whatever colour says: their shape
           // is what identifies them, the way every planner already reads them.
           const color =
-            bracket || diamond ? 'var(--foreground)' : paintCss(paintOf(r, fact?.kindId ?? null, view, colourBy));
+            bracket || diamond
+              ? 'var(--foreground)'
+              : paintCss(paintOf(r, fact?.kindId ?? null, view, colourBy, labels.get(r.id) ?? null));
           const title = diamond
             ? `${r.name} · ${fmtDate(r.startDate)}`
             : `${r.name} · ${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays} d`;
@@ -741,6 +747,7 @@ export function GanttLegend({
   view,
   facts,
   colourBy,
+  labels,
   network = null,
   contract = false,
 }: {
@@ -748,6 +755,7 @@ export function GanttLegend({
   view: BarView;
   facts: Record<string, BarFact>;
   colourBy: ColourBy;
+  labels: Map<string, string | null>;
   /** The links, so the key names only the marks this plan actually shows. */
   network?: Network | null;
   /** A contract is locked: the grey bar under each task means something. */
@@ -762,6 +770,14 @@ export function GanttLegend({
         .filter((r) => r.groupLabel !== null)
         .map((g) => ({ key: g.id, label: g.groupLabel!, css: paintCss(paintOf(g, null, view, 'package')) }));
     }
+    if (colourBy === 'label') {
+      // The user's own words, for the labels this plan actually uses.
+      const used = new Set(tasks.map((r) => labels.get(r.id) ?? null));
+      const own = view.labels
+        .filter((l) => used.has(l.id))
+        .map((l) => ({ key: l.id, label: l.name, css: paintCss(l.paint) }));
+      return used.has(null) ? [...own, { key: 'none', label: 'No label', css: paintCss('muted') }] : own;
+    }
     const present = new Set(tasks.map((r) => facts[r.id]?.kindId ?? 'none'));
     return KIND_KEYS.filter((k) => present.has(k)).map((k) => ({
       key: k,
@@ -770,7 +786,7 @@ export function GanttLegend({
     }));
     // `tasks` is derived from `rows`, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, facts, view, colourBy]);
+  }, [rows, facts, view, colourBy, labels]);
 
   const anyDone = view.marks.done && tasks.some((r) => (facts[r.id]?.donePct ?? 0) > 0);
   const anyLate =
@@ -826,6 +842,16 @@ export function GanttLegend({
             }}
           />
           Target date
+        </span>
+      )}
+
+      {view.marks.links && (network?.links.length ?? 0) > 0 && (
+        <span className={item}>
+          <svg aria-hidden width="16" height="8" viewBox="0 0 16 8">
+            <path d="M0 4 H12" stroke="var(--muted-foreground)" strokeWidth="1.5" />
+            <path d="M10 1 L15 4 L10 7 z" fill="var(--muted-foreground)" />
+          </svg>
+          Waits for
         </span>
       )}
 

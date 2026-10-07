@@ -17,6 +17,7 @@ import DateField from '@/components/ui/DateField';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { CURRENCIES } from '@/lib/currency';
 import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
+import { FIELDS as ENERGY_FIELDS } from '@/lib/fields';
 
 /**
  * Six fields, one screen, one Save — not a wizard.
@@ -54,6 +55,7 @@ export default function NewProjectDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [alias, setAlias] = useState('');
+  const [field, setField] = useState(ENERGY_FIELDS[0].id);
   const [client, setClient] = useState('');
   const [start, setStart] = useState('');
   const [finish, setFinish] = useState('');
@@ -102,6 +104,7 @@ export default function NewProjectDialog() {
       const res = await createProjectAction({
         name,
         alias,
+        field,
         clientName: client,
         startDate: start,
         finishDate: finish,
@@ -203,6 +206,25 @@ export default function NewProjectDialog() {
                       <p className="text-[11px] leading-relaxed text-muted-foreground">
                         Three letters, used wherever the full name will not fit. Leave it blank and
                         we use the one shown here.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="np-field">Field</Label>
+                      <select
+                        id="np-field"
+                        value={field}
+                        onChange={(e) => setField(e.target.value)}
+                        className="h-11 w-full rounded-md border bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
+                      >
+                        {ENERGY_FIELDS.map((fd) => (
+                          <option key={fd.id} value={fd.id}>
+                            {fd.label}: {fd.help}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        The line of energy work. More fields come later.
                       </p>
                     </div>
 

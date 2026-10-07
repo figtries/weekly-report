@@ -113,6 +113,8 @@ export interface SheetRow {
   /** The contract's dates for this row, once a contract is locked. */
   contractStart: string | null;
   contractFinish: string | null;
+  /** The user's own bar label on this row (an id in bar_view.labels), or null. */
+  barLabel: string | null;
 }
 
 /** Fixed order, never cycled. A plan with more groups than this shows the rest neutral. */
@@ -408,6 +410,7 @@ export function getSheet(projectId: string): Sheet {
         links: hasChildren ? null : parseLinks(n.waitsFor),
         contractStart: contractByNode.get(n.id)?.startDate ?? null,
         contractFinish: contractByNode.get(n.id)?.finishDate ?? null,
+        barLabel: n.barLabel ?? null,
       });
       if (n.price != null && n.price > 0) pricedRows += 1;
 

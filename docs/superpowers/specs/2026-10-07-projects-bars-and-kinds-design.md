@@ -224,3 +224,32 @@ the empty-state text and Set/Change in plan button of the links section in
 Working-day calendars, P6's early/late/necking bars, colouring headings by
 kind, setting the kind of several selected rows at once, and anything pushed
 before he says yes.
+
+## Addendum, 7 Oct 2026 evening: ground rules for the bars
+
+After seeing it built he said the bars felt "forced EPC" and that projects
+looked different from each other for no reason. Agreed, in his words "kita
+tugasnya bantu mereka dan menjelaskan", "jangan kita atur":
+
+1. **A project has a FIELD** (`projects.field`, `epc` the only one today),
+   asked when the project is made, changeable in Details. The kinds of work
+   come from the field (`lib/fields.ts`), not from code that assumes EPC.
+2. **The Bars menu is the same in every project.** Nothing is hidden or
+   locked: an option with nothing behind it says so ("No work packages yet").
+   Links in the toolbar is pressable on any selected row.
+3. **Colour is the user's.** Kind of work, Package, **My labels**, One colour.
+   My labels: the user names labels and gives each a colour; a row gets one in
+   its ⋯ panel; a label on a heading paints the rows under it that have none of
+   their own. Labels live in `bar_view`, a row's label in `wbs_nodes.bar_label`.
+   A new project starts on **One colour**: they choose.
+4. **Our shapes are explained** in the Bars menu ("What the bars mean"): each
+   drawn small with one short, plain sentence. The legend uses the same words.
+   No AI-sounding copy.
+5. **Headings stay black.**
+6. **Link arrows always show**, at a readable strength; a pressed bar thickens
+   its own and fades nothing. "Links" is a mark in the Bars menu, on by default.
+7. Stage names stay on the pressed bar only.
+
+The demo project (Merbau, `scripts/seed-demo.ts`, local only) is filled like a
+real one: links E → P → C with waits, a kind on every activity, a few labels,
+a locked contract.

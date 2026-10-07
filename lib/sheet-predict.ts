@@ -83,6 +83,7 @@ function blankRow(id: string, depth: number, parentId: string | null): SheetRow 
     links: null,
     contractStart: null,
     contractFinish: null,
+    barLabel: null,
   };
 }
 

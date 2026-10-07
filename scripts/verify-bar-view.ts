@@ -7,8 +7,8 @@
 import {
   DEFAULT_BAR_VIEW,
   PALETTE,
-  canColourByPackage,
-  effectiveColourBy,
+  hasPackages,
+  labelsByRow,
   paintOf,
   parseBarView,
   segmentsOf,
@@ -24,8 +24,8 @@ const solid = (s: { from: number; to: number; done: boolean }[]) =>
 
 const v = parseBarView(null);
 check('null reads as defaults', JSON.stringify(v) === JSON.stringify(DEFAULT_BAR_VIEW));
-check('default colours by kind', v.colourBy === 'kind');
-check('default marks', v.marks.done && v.marks.forecast && v.marks.contract && !v.marks.slip);
+check('a new project starts on one colour', v.colourBy === 'one');
+check('default marks', v.marks.done && v.marks.forecast && v.marks.contract && !v.marks.slip && v.marks.links);
 check(
   'palette has 8, no red or amber',
   PALETTE.length === 8 && !PALETTE.some((p) => (['danger', 'warn'] as string[]).includes(p.key))
@@ -46,12 +46,28 @@ check('kind override', paintOf(row, 'engineering', custom, 'kind') === 'plan-6')
 check('package default from group', paintOf(row, null, v, 'package') === 'plan-2');
 check('package override', paintOf(row, null, custom, 'package') === 'plan-4');
 check('one colour', paintOf(row, 'engineering', custom, 'one') === 'foreground');
-check(
-  'package needs two groups',
-  !canColourByPackage([{ colorGroup: 0 }, { colorGroup: -1 }]) && canColourByPackage([{ colorGroup: 0 }, { colorGroup: 1 }])
+check('packages are found or not, never hidden', hasPackages([{ colorGroup: 0 }]) && !hasPackages([{ colorGroup: -1 }]));
+const lv = parseBarView(
+  JSON.stringify({
+    colourBy: 'label',
+    labels: [
+      { id: 'a', name: '  Critical vendor  ', paint: 'plan-4' },
+      { id: 'b', name: 'Client scope', paint: 'danger' },
+      { id: 'a', name: 'dup', paint: 'plan-1' },
+      { name: 'no id' },
+    ],
+  })
 );
-const pkg = parseBarView(JSON.stringify({ colourBy: 'package' }));
-check('package falls back to kind on a one-package plan', effectiveColourBy(pkg, [{ colorGroup: 0 }]) === 'kind');
+check('labels read: trimmed, deduped, bad paint made grey', lv.labels.length === 2 && lv.labels[0].name === 'Critical vendor' && lv.labels[1].paint === 'muted', JSON.stringify(lv.labels));
+check('label colour', paintOf(row, 'engineering', lv, 'label', 'a') === 'plan-4');
+check('no label is grey', paintOf(row, 'engineering', lv, 'label', null) === 'muted');
+const tree = labelsByRow([
+  { id: 'h', parentId: null, barLabel: 'a' },
+  { id: 'x', parentId: 'h', barLabel: null },
+  { id: 'y', parentId: 'h', barLabel: 'b' },
+  { id: 'z', parentId: null, barLabel: null },
+]);
+check('a heading label paints rows with none of their own', tree.get('x') === 'a' && tree.get('y') === 'b' && tree.get('z') === null);
 
 const ladder = [
   { label: 'IFR', weight: 50, done: true },
@@ -126,7 +142,7 @@ check('gate: one labelled segment', segmentsOf([{ label: 'IFR', weight: 100, don
   );
   const back = parseBarView((d.prepare('select bar_view v from projects where id = ?').get(id) as { v: string }).v);
   check('stored view reads back', back.colourBy === 'one' && back.colours.one === 'plan-6');
-  check('a project never written reads defaults', parseBarView(null).colourBy === 'kind');
+  check('a project never written reads defaults', parseBarView(null).colourBy === 'one');
   d.close();
 }
 

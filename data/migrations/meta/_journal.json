@@ -127,6 +127,20 @@
       "when": 1791355248515,
       "tag": "0017_true_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791373556852,
+      "tag": "0018_harsh_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791373570876,
+      "tag": "0019_useful_albert_cleary",
+      "breakpoints": true
     }
   ]
 }

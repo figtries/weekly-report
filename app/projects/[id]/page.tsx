@@ -17,6 +17,7 @@ import { currentWeekForProject } from '@/lib/data';
 import ValueStrip from '@/components/projects/ValueStrip';
 import { getBarView } from '@/lib/bar-view-read';
 import { getBarFacts } from '@/lib/bar-facts';
+import { fieldOf } from '@/lib/fields';
 
 // No `dynamicParams` export here: under `cacheComponents` it is rejected
 // outright ("not compatible with nextConfig.cacheComponents"). Reading `params`
@@ -229,6 +230,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           projectId={id}
           barView={barView}
           barFacts={barFacts}
+          fieldKinds={fieldOf(project.field).kinds}
           weeks={weeks}
           contract={sheet.contract !== null}
         />

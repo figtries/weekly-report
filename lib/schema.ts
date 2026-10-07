@@ -74,6 +74,8 @@ export const projects = sqliteTable('projects', {
   barPreset: text('bar_preset').$type<BarPreset>(),
   /** The Bars panel's choices as JSON, read by lib/bar-view.ts. Null = defaults. */
   barView: text('bar_view'),
+  /** The project's field (lib/fields.ts). Null reads as EPC, the only one today. */
+  field: text('field'),
   startDate: text('start_date'),
   finishDate: text('finish_date'),
   /**
@@ -234,6 +236,8 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
    * See `lib/work-kind.ts`.
    */
   workKind: text('work_kind'),
+  /** The user's own bar label for this row (an id in the project's bar_view). */
+  barLabel: text('bar_label'),
 
   /**
    * When this activity's next rung (or, rung null, its finish) will happen

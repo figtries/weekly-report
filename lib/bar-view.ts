@@ -12,13 +12,22 @@
  */
 import type { BarPaint } from './schema';
 
-export type ColourBy = 'kind' | 'package' | 'one';
-export type MarkKey = 'done' | 'forecast' | 'contract' | 'slip';
+export type ColourBy = 'kind' | 'package' | 'label' | 'one';
+export type MarkKey = 'done' | 'forecast' | 'contract' | 'slip' | 'links';
+
+/** A colour the user named themselves: it means whatever they decide. */
+export interface BarLabel {
+  id: string;
+  name: string;
+  paint: BarPaint;
+}
 
 export interface BarView {
   colourBy: ColourBy;
   marks: Record<MarkKey, boolean>;
   colours: { kind: Record<string, BarPaint>; package: Record<string, BarPaint>; one: BarPaint };
+  /** The user's own labels, in the order they made them. */
+  labels: BarLabel[];
 }
 
 /**
@@ -51,7 +60,7 @@ export const KIND_LABEL: Record<string, string> = {
   procurement: 'Procurement',
   construction: 'Construction',
   commissioning: 'Commissioning',
-  none: 'Kind not set',
+  none: 'No kind set',
 };
 export const DEFAULT_KIND_PAINT: Record<string, BarPaint> = {
   engineering: 'plan-1',
@@ -61,11 +70,33 @@ export const DEFAULT_KIND_PAINT: Record<string, BarPaint> = {
   none: 'muted',
 };
 
+/**
+ * A new project starts on ONE colour: what colour should mean is the user's
+ * call, and the Bars menu explains the choices (7 Oct 2026, he said
+ * 'biarin mereka pilih sendiri').
+ */
 export const DEFAULT_BAR_VIEW: BarView = {
-  colourBy: 'kind',
-  marks: { done: true, forecast: true, contract: true, slip: false },
+  colourBy: 'one',
+  marks: { done: true, forecast: true, contract: true, slip: false, links: true },
   colours: { kind: {}, package: {}, one: 'plan-5' },
+  labels: [],
 };
+
+const MAX_LABELS = 24;
+
+function labelsOf(v: unknown): BarLabel[] {
+  if (!Array.isArray(v)) return [];
+  const out: BarLabel[] = [];
+  for (const l of v) {
+    if (!l || typeof l !== 'object') continue;
+    const { id, name, paint } = l as Record<string, unknown>;
+    if (typeof id !== 'string' || !id || typeof name !== 'string') continue;
+    if (out.some((o) => o.id === id)) continue;
+    out.push({ id, name: name.trim().slice(0, 40) || 'Label', paint: ALLOWED.has(paint as BarPaint) ? (paint as BarPaint) : 'muted' });
+    if (out.length >= MAX_LABELS) break;
+  }
+  return out;
+}
 
 function paints(v: unknown): Record<string, BarPaint> {
   const out: Record<string, BarPaint> = {};
@@ -81,6 +112,7 @@ export function parseBarView(json: string | null): BarView {
     colourBy?: unknown;
     marks?: Record<string, unknown>;
     colours?: { kind?: unknown; package?: unknown; one?: unknown };
+    labels?: unknown;
   } = {};
   try {
     raw = json ? JSON.parse(json) : {};
@@ -96,13 +128,14 @@ export function parseBarView(json: string | null): BarView {
   const by = raw.colourBy;
   const one = raw.colours?.one as BarPaint;
   return {
-    colourBy: by === 'package' || by === 'one' || by === 'kind' ? by : d.colourBy,
+    colourBy: by === 'package' || by === 'one' || by === 'kind' || by === 'label' ? by : d.colourBy,
     marks,
     colours: {
       kind: paints(raw.colours?.kind),
       package: paints(raw.colours?.package),
       one: ALLOWED.has(one) ? one : d.colours.one,
     },
+    labels: labelsOf(raw.labels),
   };
 }
 
@@ -111,14 +144,30 @@ export function packagePaint(colorGroup: number): BarPaint {
   return colorGroup >= 0 && colorGroup < 6 ? (`plan-${colorGroup + 1}` as BarPaint) : 'muted';
 }
 
-/** Two packages or more: a colour that cannot tell rows apart says nothing. */
-export function canColourByPackage(rows: { colorGroup: number }[]): boolean {
-  return new Set(rows.map((r) => r.colorGroup).filter((g) => g >= 0)).size >= 2;
+/**
+ * Whether the plan has work packages to colour by. The option is never hidden
+ * when it has none (every project gets the same menu); the menu says so.
+ */
+export function hasPackages(rows: { colorGroup: number }[]): boolean {
+  return rows.some((r) => r.colorGroup >= 0);
 }
 
-/** "By package" on a plan with one package falls back to kind rather than painting it all one colour. */
-export function effectiveColourBy(view: BarView, rows: { colorGroup: number }[]): ColourBy {
-  return view.colourBy === 'package' && !canColourByPackage(rows) ? 'kind' : view.colourBy;
+/**
+ * Each row's label: its own, or the nearest heading's above it. A label on a
+ * heading paints the rows under it that have none of their own.
+ */
+export function labelsByRow(rows: { id: string; parentId: string | null; barLabel: string | null }[]): Map<string, string | null> {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const out = new Map<string, string | null>();
+  const resolve = (id: string): string | null => {
+    if (out.has(id)) return out.get(id)!;
+    const r = byId.get(id);
+    const v = !r ? null : r.barLabel ?? (r.parentId ? resolve(r.parentId) : null);
+    out.set(id, v);
+    return v;
+  };
+  for (const r of rows) resolve(r.id);
+  return out;
 }
 
 /**
@@ -134,9 +183,11 @@ export function paintOf(
   row: { colorGroup: number; unitId: string | null },
   kindId: string | null,
   view: BarView,
-  colourBy: ColourBy
+  colourBy: ColourBy,
+  labelId: string | null = null
 ): BarPaint {
   if (colourBy === 'one') return view.colours.one;
+  if (colourBy === 'label') return view.labels.find((l) => l.id === labelId)?.paint ?? 'muted';
   if (colourBy === 'package') return view.colours.package[packageKey(row)] ?? packagePaint(row.colorGroup);
   const k = kindId ?? 'none';
   return view.colours.kind[k] ?? DEFAULT_KIND_PAINT[k] ?? 'muted';
