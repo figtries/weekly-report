@@ -17,6 +17,7 @@ const { sqlite } = await import('../lib/sqlite.ts');
 const { applyKindInPlan, inheritKind } = await import('../lib/kind-plan.ts');
 const { BUILT_IN_KINDS } = await import('../lib/work-kind.ts');
 const { findDiscipline, disciplineOf } = await import('../lib/disciplines.ts');
+const { setWorkKindSqlite } = await import('../lib/progress-sqlite.ts');
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail = '') => {
@@ -80,18 +81,42 @@ add('kE', 'kH', 'New task', true);
 inheritKind(P, 'kE');
 check('a new row takes its heading kind', kindOf('kE') === 'commissioning' && rungs('kE').length === 4, `${rungs('kE').length} rungs`);
 
+// The plan never says which part of construction (8 Oct 2026): not from the
+// steps a client sends, not from a sibling. Data Overall writes it.
+const partOf = (id: string) => (sqlite.prepare('select work_part p from wbs_nodes where id = ?').get(id) as { p: string | null }).p;
 const piping = findDiscipline('piping');
 if (piping) {
   applyKindInPlan(P, 'kD', 'construction', 'steps', piping.steps.map((s) => ({ ...s })));
+  check('the plan writes construction with no part and no stages', partOf('kD') === null && rungs('kD').length === 0);
+  setWorkKindSqlite('kD', 'construction', 'milestone', { milestones: piping.steps.map((s) => ({ ...s })) }, 'piping');
+  check('Data Overall writes the part with its stages', partOf('kD') === 'piping' && disciplineOf(rungs('kD'))?.id === 'piping');
   add('kF', 'kN', 'New task', true);
   inheritKind(P, 'kF');
   check(
-    'a new construction row takes a sibling discipline',
-    kindOf('kF') === 'construction' && disciplineOf(rungs('kF'))?.id === 'piping',
-    disciplineOf(rungs('kF'))?.id ?? 'none'
+    'a new construction row does not take a sibling part',
+    kindOf('kF') === 'construction' && partOf('kF') === null && rungs('kF').length === 0
   );
 } else {
   check('piping discipline exists', false);
+}
+
+// Other on a row already climbing the generic ladder is an answer: the part
+// is written and the ticks stay.
+const generic = sqlite
+  .prepare(
+    `select n.id from wbs_nodes n join milestones m on m.node_id = n.id join milestone_progress mp on mp.milestone_id = m.id
+     where n.project_id = ? and n.work_kind = 'construction' and n.progress_method = 'milestone'
+     group by n.id limit 1`
+  )
+  .get(P) as { id: string } | undefined;
+const other = findDiscipline('other');
+if (generic && other && disciplineOf(rungs(generic.id))?.id === 'other') {
+  const ticks = (id: string) =>
+    (sqlite.prepare('select count(*) c from milestone_progress mp join milestones m on m.id = mp.milestone_id where m.node_id = ?').get(id) as { c: number }).c;
+  const before = ticks(generic.id);
+  setWorkKindSqlite(generic.id, 'construction', 'milestone', { milestones: other.steps.map((s) => ({ ...s })) }, 'other');
+  check('Other on the generic ladder keeps every tick', ticks(generic.id) === before && before > 0, `${before} -> ${ticks(generic.id)}`);
+  check('and records the answer', partOf(generic.id) === 'other');
 }
 
 // Construction from the plan carries no part (8 Oct 2026): Data Overall asks

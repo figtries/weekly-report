@@ -17,7 +17,6 @@ import { db, schema } from './sqlite';
 import { setWorkKindSqlite } from './progress-sqlite';
 import { ladderFor } from './work-kind-apply';
 import { BUILT_IN_KINDS, shapeOf, type Shape } from './work-kind';
-import { disciplineOf, findDiscipline } from './disciplines';
 import { reachOf } from './kind-reach';
 import type { Milestone, ProgressMethod } from './types';
 
@@ -28,10 +27,9 @@ function writeLeaf(
   name: string,
   kindId: string,
   shape: Shape,
-  disciplineId: string | null,
   steps?: Milestone[]
 ) {
-  const milestones = steps ?? ladderFor(kindId, shape, name, BUILT_IN_KINDS, disciplineId);
+  const milestones = steps ?? ladderFor(kindId, shape, name, BUILT_IN_KINDS);
   setWorkKindSqlite(id, kindId, methodFor(shape), shape === 'qty' ? {} : { milestones });
 }
 
@@ -41,7 +39,7 @@ function writeLeaf(
  * typed percent, so whatever was recorded stands as it was.
  */
 function writeUnanswered(id: string, name: string) {
-  writeLeaf(id, name, 'construction', 'manual', null, []);
+  writeLeaf(id, name, 'construction', 'manual', []);
 }
 
 function nodesOf(projectId: string) {
@@ -84,15 +82,14 @@ export function applyKindInPlan(
   const kids = childrenOf(nodes);
 
   if (!kids.has(nodeId)) {
-    writeLeaf(nodeId, target.name, kindId, shape, null, steps);
+    if (kindId === 'construction') writeUnanswered(nodeId, target.name);
+    else writeLeaf(nodeId, target.name, kindId, shape, steps);
     return [nodeId];
   }
 
   if (shape === 'qty') throw new Error('Set quantities row by row: each one needs its own total.');
   const kind = BUILT_IN_KINDS.find((k) => k.id === kindId);
   if (!kind) throw new Error('Unknown kind of work');
-  const disciplineId = kindId === 'construction' ? disciplineOf(steps)?.id ?? null : null;
-  const pattern = findDiscipline(disciplineId) ?? kind;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const reach = reachOf(target, kindId, kids);
 
@@ -101,19 +98,19 @@ export function applyKindInPlan(
     const n = byId.get(id)!;
     if (kids.has(id)) {
       db.update(schema.wbsNodes).set({ workKind: kindId }).where(eq(schema.wbsNodes.id, id)).run();
-    } else if (kindId === 'construction' && !disciplineId) {
+    } else if (kindId === 'construction') {
       writeUnanswered(id, n.name);
     } else {
-      writeLeaf(id, n.name, kindId, shapeOf(n.name, pattern), disciplineId);
+      writeLeaf(id, n.name, kindId, shapeOf(n.name, kind));
     }
   }
   return [nodeId, ...reach];
 }
 
 /**
- * A new row under a heading takes the nearest heading's kind. For construction
- * it takes a sibling's discipline too, because a heading stores the kind and
- * the discipline lives in its rows' rungs.
+ * A new row under a heading takes the nearest heading's kind. A construction
+ * row's part is never guessed from its siblings: nobody has said it yet, so
+ * Data Overall asks (8 Oct 2026).
  */
 export function inheritKind(projectId: string, nodeId: string): void {
   const all = nodesOf(projectId);
@@ -124,20 +121,6 @@ export function inheritKind(projectId: string, nodeId: string): void {
   while (p && !p.kind) p = p.parentId ? byId.get(p.parentId) : undefined;
   const kind = p?.kind ? BUILT_IN_KINDS.find((k) => k.id === p!.kind) : undefined;
   if (!kind) return;
-
-  let disciplineId: string | null = null;
-  if (kind.id === 'construction') {
-    for (const s of all) {
-      if (s.parentId !== me.parentId || s.id === nodeId || s.kind !== 'construction') continue;
-      const ms = db
-        .select({ id: schema.milestones.id })
-        .from(schema.milestones)
-        .where(eq(schema.milestones.nodeId, s.id))
-        .all();
-      disciplineId = disciplineOf(ms)?.id ?? null;
-      if (disciplineId) break;
-    }
-  }
-  if (kind.id === 'construction' && !disciplineId) return writeUnanswered(nodeId, me.name);
-  writeLeaf(nodeId, me.name, kind.id, shapeOf(me.name, findDiscipline(disciplineId) ?? kind), disciplineId);
+  if (kind.id === 'construction') return writeUnanswered(nodeId, me.name);
+  writeLeaf(nodeId, me.name, kind.id, shapeOf(me.name, kind));
 }

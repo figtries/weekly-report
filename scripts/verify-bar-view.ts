@@ -99,11 +99,8 @@ check('gate: one labelled segment', segmentsOf([{ label: 'IFR', weight: 100, don
   const fact = {
     kindId: 'engineering',
     shape: 'steps' as const,
-    disciplineId: null,
-    disciplineShort: null,
     donePct: 80,
     rungs: ladder,
-    ladder: ['ifr', 'ifa', 'afc'],
     forecastFinish: '2026-05-24',
     planFinish: '2026-05-17',
     reason: 'it waits for Process Design Basis',

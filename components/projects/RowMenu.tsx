@@ -171,7 +171,6 @@ export default function RowMenu({
   const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind' | 'label'>(initialMode);
   const fact = facts[row.id];
   const kindName = fact?.kindId ? KIND_LABEL[fact.kindId] ?? null : null;
-  const discipline = fact?.disciplineShort ?? null;
   const ownLabel = view.labels.find((l) => l.id === row.barLabel) ?? null;
 
   const run = (
@@ -305,7 +304,7 @@ export default function RowMenu({
               disabled={pending}
             >
               Kind of work:{' '}
-              {kindName ? `${kindName}${discipline ? ` · ${discipline}` : ''}` : 'not set'}
+              {kindName ?? 'not set'}
             </Item>
             {!row.isSummary && (
               <>

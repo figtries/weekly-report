@@ -250,7 +250,7 @@ export async function setWorkKindAction(
   rowName: string,
   kindId: string,
   shape: Shape,
-  opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null } = {},
+  opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null; part?: string | null } = {},
   forProject?: string | null
 ): Promise<ActionResult> {
   // One door for all four forms, because the panel now asks one question. A
@@ -263,7 +263,7 @@ export async function setWorkKindAction(
     shape === 'qty' ? { vol: opts.vol, satuan: opts.satuan } : { milestones };
 
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts));
+  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts, opts.part ?? null));
   return NO_PROJECT_OPEN;
 }
 

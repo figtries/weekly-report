@@ -31,6 +31,8 @@ export interface WbsItem {
   milestones?: Milestone[];
   /** Which kind of work this row is. See `lib/work-kind.ts`. Null until asked. */
   workKind?: string | null;
+  /** Construction only: which part, or null until Data Overall is told. */
+  workPart?: string | null;
   /**
    * SPK / package / lot / area. The SQLite store's first-class
    * `is_reporting_unit` flag, carried through so `getSummaryRows` can group by

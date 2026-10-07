@@ -90,6 +90,8 @@ export interface MapNode {
   method?: ProgressMethod;
   /** Which kind of work this row is, or null if nobody has been asked yet. */
   workKind?: string | null;
+  /** Construction only: which part, or null until somebody says. */
+  workPart?: string | null;
   /** What the person recorded beside this week's figure. */
   note?: string | null;
   /** How this week's figure was arrived at. */
@@ -158,6 +160,7 @@ function leafDetail(
   return {
     method,
     workKind: node.workKind ?? null,
+    workPart: node.workPart ?? null,
     note: snap?.note ?? null,
     source: snap?.source ?? null,
     qtyDone: snap?.qtyDone ?? 0,

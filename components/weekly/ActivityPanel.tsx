@@ -219,12 +219,14 @@ function PanelBody({
    *
    * WHICH PART OF CONSTRUCTION is asked HERE (8 Oct 2026): the plan stops at
    * the kind, because the planner does not know yet and answered Other on
-   * every row. A construction row the plan gave no stages shows the tiles
-   * until somebody picks one. The pick shows its stages at once (the figure
+   * every row. Until somebody here says (`workPart`, never read off the rungs:
+   * the generic ladder every row got by default reads as Other), the tiles
+   * show with nothing chosen. A pick shows its stages at once (the figure
    * restated into them, never raised); the panel's one Save writes it.
    */
   const answered = Boolean(node.workKind);
   const [partOverride, setPartOverride] = useState<{
+    part: string;
     shape: Shape;
     /** The rungs as the server stores them, `${nodeId}:${stepId}`. */
     milestones: Milestone[];
@@ -236,8 +238,9 @@ function PanelBody({
   } | null>(null);
   const [pickingPart, setPickingPart] = useState(false);
   const isConstruction = node.workKind === 'construction';
-  const ownPart = isConstruction ? disciplineOf(node.milestones)?.id ?? null : null;
-  const askingPart = isConstruction && !partOverride && (pickingPart || !(node.milestones ?? []).length);
+  const ownPart = isConstruction ? node.workPart ?? null : null;
+  const askingPart = isConstruction && !partOverride && (pickingPart || !ownPart);
+  const partLabel = findDiscipline(partOverride?.part ?? ownPart)?.label ?? null;
   const effectiveNode: MapNode = partOverride
     ? {
         ...node,
@@ -255,13 +258,19 @@ function PanelBody({
     // The ids the server will give them, so a rung ticked before Save is one
     // `saveFieldProgressSqlite` recognises.
     const milestones = steps.map((ms) => ({ ...ms, id: `${node.id}:${ms.id}` }));
+    // The rungs it already climbs (Other on the generic ladder): an answer,
+    // and the ticks stay exactly as they are, as the server keeps them.
+    const own = node.milestones ?? [];
+    const same =
+      node.method === 'milestone' &&
+      own.length === milestones.length &&
+      own.every((ms, i) => ms.id === milestones[i].id && ms.weight === milestones[i].weight);
     // CHANGING HOW YOU MEASURE MUST NOT CHANGE WHAT WAS MEASURED: the figure
     // on screen is the restatement the server will write, not an empty ladder.
-    const { done, toPct } = changeFor(
-      { id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct },
-      milestones
-    );
-    setPartOverride({ shape, milestones, steps, done, toPct });
+    const { done, toPct } = same
+      ? { done: own.filter((ms) => ms.done).map((ms) => ms.id), toPct: node.actualPct }
+      : changeFor({ id: node.id, name: node.name, bobot: node.weight, pct: node.actualPct }, milestones);
+    setPartOverride({ part: d.id, shape, milestones, steps, done, toPct });
     setPickingPart(false);
     setError(null);
   }
@@ -508,7 +517,7 @@ function PanelBody({
     const finalSource = typed ? 'manual' : part.shape;
     setError(null);
     startSaving(async () => {
-      const res = await setWorkKindAction(node.id, node.name, 'construction', part.shape, { steps: part.steps }, projectId);
+      const res = await setWorkKindAction(node.id, node.name, 'construction', part.shape, { steps: part.steps, part: part.part }, projectId);
       if (!res.ok) return setError(res.error ?? 'Could not save');
       if (typed) {
         const r = await saveWeekUpdatesAction(week, {
@@ -639,11 +648,11 @@ function PanelBody({
                 </div>
               ) : (
                 isConstruction &&
-                discipline && (
+                partLabel && (
                   <div className="-mt-2 mb-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-input bg-card py-1.5 pl-3.5 pr-1.5">
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] text-muted-foreground">Part of construction</span>
-                      <span className="block text-[14px] font-medium text-foreground">{discipline.label}</span>
+                      <span className="block text-[14px] font-medium text-foreground">{partLabel}</span>
                     </span>
                     <m.button
                       {...pressMotion}

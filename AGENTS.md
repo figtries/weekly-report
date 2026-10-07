@@ -433,13 +433,20 @@ THE PLAN ASKS ONLY THE KIND; THE DETAIL IS ASKED IN DATA OVERALL (8 Oct 2026).
 Asked in the plan, which part of construction it is went to Other on every
 row, because the planner does not know yet. So Construction from the plan is
 written with no stages, as a typed percent that keeps whatever was recorded
-(`writeUnanswered` in `lib/kind-plan.ts`; a new row still takes a sibling's
-part). Data Overall's panel shows "Which part of construction?"
-(`DisciplineTiles`) on a construction row with no stages, nothing pre-chosen;
-a pick shows its stages at once with the figure restated into them (never
-raised), and the panel's one Save writes it through `setWorkKindAction`. An
-answered row reads "Part of construction" with Change. Any detail question a
-kind gains later belongs there too, not in the plan.
+(`writeUnanswered` in `lib/kind-plan.ts`), and never with a part: not from the
+client's steps, not from a sibling. THE PART IS ITS OWN COLUMN,
+`wbs_nodes.work_part` (null = nobody said), never read off the rungs: the
+generic construction ladder every row got by default IS Other's ladder, so a
+row nobody answered read "Construction · Other" in the planner and opened on
+Other in Data Overall (he rejected both, 8 Oct 2026). The planner shows the kind
+only. Data Overall's panel shows "Which part of construction?"
+(`DisciplineTiles`) while `work_part` is null, nothing pre-chosen; a pick shows
+its stages at once with the figure restated into them (never raised), and the
+panel's one Save writes stages and part through `setWorkKindAction`. Picking
+the ladder a row already climbs (Other on the generic one) only records the
+answer: `setWorkKindSqlite` leaves the rungs and their ticks alone. An answered
+row reads "Part of construction" with Change. Any detail question a kind gains
+later belongs there too, not in the plan.
 
 **A method or kind change must touch ONLY that row's ticks.**
 `setProgressMethodSqlite` deleted `milestone_progress` by WEEK id from

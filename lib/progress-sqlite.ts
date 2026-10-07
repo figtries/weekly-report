@@ -415,11 +415,33 @@ export function setWorkKindSqlite(
   nodeId: string,
   kindId: string,
   method: ProgressMethod,
-  opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
+  opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {},
+  /** Construction's part, as Data Overall was told it. Null everywhere else. */
+  part: string | null = null
 ): void {
-  setProgressMethodSqlite(nodeId, method, opts);
+  // The same ladder again (Other picked on a row already on the generic
+  // ladder) is an answer, not a re-measure: the rungs and their ticks stay.
+  const node = db
+    .select({ method: schema.wbsNodes.progressMethod })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.id, nodeId))
+    .all()[0];
+  const own = db
+    .select({ id: schema.milestones.id, weight: schema.milestones.weight })
+    .from(schema.milestones)
+    .where(eq(schema.milestones.nodeId, nodeId))
+    .orderBy(schema.milestones.order)
+    .all();
+  const next = opts.milestones ?? [];
+  const sameLadder =
+    method === 'milestone' &&
+    node?.method === 'milestone' &&
+    own.length > 0 &&
+    own.length === next.length &&
+    own.every((m, i) => m.id === `${nodeId}:${next[i].id}` && m.weight === next[i].weight);
+  if (!sameLadder) setProgressMethodSqlite(nodeId, method, opts);
   db.update(schema.wbsNodes)
-    .set({ workKind: kindId })
+    .set({ workKind: kindId, workPart: kindId === 'construction' ? part : null })
     .where(eq(schema.wbsNodes.id, nodeId))
     .run();
 }

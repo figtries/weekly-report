@@ -1,0 +1,1 @@
+ALTER TABLE `wbs_nodes` ADD `work_part` text;

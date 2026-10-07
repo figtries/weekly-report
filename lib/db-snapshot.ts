@@ -214,6 +214,7 @@ const EXPECTED_COLUMNS: Array<{ table: string; column: string; decl: string }> =
   { table: 'projects', column: 'field', decl: 'text' },
   { table: 'wbs_nodes', column: 'bar_label', decl: 'text' },
   { table: 'wbs_nodes', column: 'work_kind', decl: 'text' },
+  { table: 'wbs_nodes', column: 'work_part', decl: 'text' },
   { table: 'leaf_progress', column: 'source', decl: 'text' },
   { table: 'wbs_nodes', column: 'forecast_date', decl: 'text' },
   { table: 'wbs_nodes', column: 'forecast_source', decl: 'text' },

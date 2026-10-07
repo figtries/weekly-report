@@ -175,9 +175,9 @@ export default function KindView({
         </div>
       )}
 
-      {(pick?.kindId ?? fact?.kindId) === 'construction' && previewSteps.length === 0 && (
+      {(pick?.kindId ?? fact?.kindId) === 'construction' && (
         <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-          Which part of construction it is gets asked in Data Overall. Its stages come with the answer.
+          Which part of construction it is, and its stages, are set in Data Overall.
         </p>
       )}
 

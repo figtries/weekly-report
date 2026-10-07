@@ -13,8 +13,6 @@ import { buildProjectDashboardData } from './dashboard-db';
 import { currentWeekOf } from './current-week';
 import { resolveLeafProgress } from './progress';
 import { buildForecastView, type ForecastReason } from './forecast-view';
-import { disciplineOf } from './disciplines';
-import { stepIdOf } from './forecast-epc';
 import type { Rung } from './bar-view';
 import type { Shape } from './work-kind';
 
@@ -22,13 +20,8 @@ export interface BarFact {
   kindId: string | null;
   /** Leaves only; null on a heading or on a row nobody has given a kind. */
   shape: Shape | null;
-  disciplineId: string | null;
-  /** The discipline's short name, for a label without loading the disciplines. */
-  disciplineShort: string | null;
   donePct: number;
   rungs: Rung[];
-  /** Step ids of the rungs, for the kind picker's `currentLadder`. */
-  ladder: string[];
   forecastFinish: string | null;
   planFinish: string | null;
   /** Why the forecast is late, in words; null when it is not. */
@@ -80,15 +73,11 @@ export function getBarFacts(projectId: string, today: Date = new Date()): BarFac
               : 'steps'
             : 'manual';
     const f = leaf ? view?.leaves[item.id] : undefined;
-    const discipline = item.workKind === 'construction' ? disciplineOf(ms) : null;
     facts[item.id] = {
       kindId: item.workKind ?? null,
       shape,
-      disciplineId: discipline?.id ?? null,
-      disciplineShort: discipline?.short ?? null,
       donePct: leaf ? resolveLeafProgress(item, snap) : 0,
       rungs: ms.map((m) => ({ label: m.label, weight: m.weight, done: done.has(m.id) })),
-      ladder: ms.map((m) => stepIdOf(m.id)),
       forecastFinish: f?.finish ?? null,
       planFinish: f?.planFinish ?? null,
       reason: f && f.finish > f.planFinish ? reasonText(f.reason) : null,

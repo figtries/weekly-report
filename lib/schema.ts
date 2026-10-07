@@ -236,6 +236,13 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
    * See `lib/work-kind.ts`.
    */
   workKind: text('work_kind'),
+  /**
+   * Construction only: which part (a discipline id, `lib/disciplines.ts`).
+   * Null means nobody has said, and Data Overall asks. The plan never writes
+   * it (8 Oct 2026): read off the rungs instead, the generic ladder every row
+   * got by default was indistinguishable from somebody answering Other.
+   */
+  workPart: text('work_part'),
   /** The user's own bar label for this row (an id in the project's bar_view). */
   barLabel: text('bar_label'),
 

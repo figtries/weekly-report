@@ -161,6 +161,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     // so every SQLite row came to the panel unanswered and it asked again on
     // every open (PHSS Samberah, 23 Sep 2026).
     workKind: n.workKind,
+    workPart: n.workPart,
     // The flag the planner's row menu writes. Dropping it here is what made
     // "Make it a reporting unit" change nothing on the dashboard or on the
     // Overall Summary sheet for every project made inside the app.
