@@ -166,7 +166,7 @@ await browser.close();
 
   Baseline (7 Oct 2026, prod build f3e054a, Merbau, 4 runs): LCP 1264 ms (1188-1312), jsKB 264, scroll 4000 px with long-task max 0-51 ms / total 0-51 ms, press ⋯ 38 ms (36-51).
 
-  HOW TO COMPARE (learned in Task 7): this machine's load moves the numbers more than the code does (the same baseline build read scroll total 0-51 ms in the morning and 82-127 ms in the afternoon). So every later check is an A/B, interleaved run by run, against the baseline commit built in a worktree: ,  inside it, served by the temporary launch config  on :3215 with  at the main . Budgets are deltas against that run's base median. Clean up at the end: , drop  from launch.json.
+  HOW TO COMPARE (learned in Task 7): this machine's load moves the numbers more than the code does (the same baseline build read scroll total 0-51 ms in the morning and 82-127 ms in the afternoon). So every later check is an A/B, interleaved run by run, against the baseline commit built in a worktree: `git worktree add .worktrees/base 19e373a`, then `NEXT_DIST_DIR=.next-base npx next build` inside it, served by the temporary launch config `prod-base-ab` on :3215 with `REPORT_DB_PATH` at the main `data/report.db`. Budgets are deltas against that run's base median. Clean up at the end: `git worktree remove .worktrees/base`, drop `prod-base-ab` from launch.json. (Never put backticks inside a double-quoted shell string: bash runs them.)
 
   After Task 7 (A/B, 4 interleaved runs, medians base → new): LCP 1778 → 1648 ms, scroll long-task total 111 → 95 ms (max 82 → 106 once), press ⋯ 61 → 68 ms, jsKB 264 → 266. Inside budget. Note: next build type-checks `scripts/`, so never edit files while a build runs, and read the log for "Failed", not the exit code of a wrapper.
 
