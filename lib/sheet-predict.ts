@@ -80,6 +80,9 @@ function blankRow(id: string, depth: number, parentId: string | null): SheetRow 
     unitName: null,
     totalFloat: null,
     isCritical: false,
+    links: null,
+    contractStart: null,
+    contractFinish: null,
   };
 }
 

@@ -34,7 +34,8 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import { inclusiveDays } from './plan-curve';
-import { computeFloat, inferChains, type ChainNode, type WeekSpan } from './chains';
+import { analyseNetwork, type WeekSpan } from './chains';
+import { parseLinks, type StoredLink } from './links';
 
 export interface SheetRow {
   id: string;
@@ -100,13 +101,18 @@ export interface SheetRow {
   /** That unit's label, for a rule editor to show without a second lookup. */
   unitName: string | null;
   /**
-   * Days this row could slip before the project's own finish moves, on the
-   * chain inferred from the dates. Null on a summary, whose dates are its
-   * children's and which therefore has no float of its own.
+   * Days this row can slip before the project finish moves, through its links.
+   * Null on a group row and on a row not linked through to the finish (see
+   * `analyseNetwork` in lib/chains.ts).
    */
   totalFloat: number | null;
   /** Zero float: delaying this row by a day moves the end of the project. */
   isCritical: boolean;
+  /** This row's own links (what it waits for). Null: never asked. Always null on a group row. */
+  links: StoredLink[] | null;
+  /** The contract's dates for this row, once a contract is locked. */
+  contractStart: string | null;
+  contractFinish: string | null;
 }
 
 /** Fixed order, never cycled. A plan with more groups than this shows the rest neutral. */
@@ -122,6 +128,8 @@ export interface Sheet {
   spanStart: string | null;
   spanFinish: string | null;
   pricedRows: number;
+  /** Set once the plan has been locked as the contract. */
+  contract: { lockedAt: string; reason: string | null } | null;
 }
 
 export function getActiveBaselineId(projectId: string): string | null {
@@ -326,6 +334,22 @@ export function getSheet(projectId: string): Sheet {
     : [];
   const schedByNode = new Map(schedules.map((s) => [s.nodeId, s]));
 
+  const contractRow = db
+    .select()
+    .from(schema.baselines)
+    .where(and(eq(schema.baselines.projectId, projectId), eq(schema.baselines.kind, 'contractual')))
+    .all()[0];
+  const contractByNode = new Map(
+    contractRow
+      ? db
+          .select()
+          .from(schema.nodeSchedules)
+          .where(eq(schema.nodeSchedules.baselineId, contractRow.id))
+          .all()
+          .map((s) => [s.nodeId, s] as const)
+      : []
+  );
+
   const childrenOf = new Map<string | null, typeof nodes>();
   for (const n of nodes) {
     const key = n.parentId ?? null;
@@ -381,6 +405,9 @@ export function getSheet(projectId: string): Sheet {
         unitName: null,
         totalFloat: null,
         isCritical: false,
+        links: hasChildren ? null : parseLinks(n.waitsFor),
+        contractStart: contractByNode.get(n.id)?.startDate ?? null,
+        contractFinish: contractByNode.get(n.id)?.finishDate ?? null,
       });
       if (n.price != null && n.price > 0) pricedRows += 1;
 
@@ -428,23 +455,14 @@ export function getSheet(projectId: string): Sheet {
   const span = walk(null, 0, '');
   assignColorGroups(rows, nodes);
 
-  // Criticality, from the chain the dates already describe. Inferred rather
-  // than stored — see lib/chains.ts — so it costs one pass and can never go
-  // stale against the dates it came from.
-  const chainNodes: ChainNode[] = rows.map((r, i) => ({
-    id: r.id,
-    parentId: r.parentId,
-    order: i,
-    isLeaf: r.isLeaf,
-    startDate: r.startDate,
-    finishDate: r.finishDate,
-  }));
-  const floats = computeFloat(chainNodes, inferChains(chainNodes));
+  // What the stored links say about the typed plan — see analyseNetwork. A
+  // SheetRow carries exactly the NetNode fields, so the rows go in as they are.
+  const net = analyseNetwork(rows);
   for (const r of rows) {
-    const f = floats.get(r.id);
-    if (!f || r.isSummary) continue;
-    r.totalFloat = f.totalFloat;
-    r.isCritical = f.isCritical;
+    const logic = net.rows.get(r.id);
+    if (!logic || r.isSummary) continue;
+    r.totalFloat = logic.canSlip;
+    r.isCritical = logic.setsProjectFinish;
   }
 
   return {
@@ -455,6 +473,7 @@ export function getSheet(projectId: string): Sheet {
     spanStart: span.start,
     spanFinish: span.finish,
     pricedRows,
+    contract: contractRow ? { lockedAt: contractRow.approvedAt ?? contractRow.createdAt, reason: contractRow.reason } : null,
   };
 }
 

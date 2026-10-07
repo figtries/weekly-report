@@ -49,6 +49,127 @@ check(
     j([{ id: 'a', type: 'FS', wait: 1 }])
 );
 
+/* ------------------------------------------------------------- the network */
+
+const { analyseNetwork, conflictMoves, whySentence, wouldLoop } = await import('../lib/chains.ts');
+type NetNode = import('../lib/chains.ts').NetNode;
+
+const node = (id: string, s: string | null, f: string | null, links: NetNode['links'] = null, extra: Partial<NetNode> = {}): NetNode => ({
+  id, isLeaf: true, isMilestone: false, startDate: s, finishDate: f, links, ...extra,
+});
+// The session's 7-row example: A=PFD, B=H&MB (SS+7 from A), C=P&ID (FS from A),
+// D=Datasheet (FS from B, starts too early), E=HAZOP (FF+6 from C), M=IFC (FS from E).
+const plan: NetNode[] = [
+  { id: 'S', isLeaf: false, isMilestone: false, startDate: '2026-03-09', finishDate: '2026-05-16', links: [{ id: 'A', type: 'FS', wait: 0 }] },
+  node('A', '2026-03-09', '2026-04-12'),
+  node('B', '2026-03-16', '2026-04-19', [{ id: 'A', type: 'SS', wait: 7 }]),
+  node('C', '2026-04-13', '2026-05-10', [{ id: 'A', type: 'FS', wait: 0 }]),
+  node('D', '2026-04-08', '2026-05-03', [{ id: 'B', type: 'FS', wait: 0 }]),
+  node('E', '2026-04-27', '2026-05-16', [{ id: 'C', type: 'FF', wait: 6 }]),
+  node('M', '2026-05-16', '2026-05-16', [{ id: 'E', type: 'FS', wait: 0 }], { isMilestone: true }),
+];
+const net = analyseNetwork(plan);
+const r = (id: string) => net.rows.get(id)!;
+
+check('a group row carries no links, even if stored', !net.links.some((l) => l.toId === 'S' || l.fromId === 'S'));
+check('after it finishes, 0 slack, sets the date', j(r('C').setsDateBy) === j(['A']), j(r('C').incoming));
+check('after it starts + 7, 0 slack, sets the date', j(r('B').setsDateBy) === j(['A']), j(r('B').incoming));
+check('finishes after it finishes + 6 sets the date', j(r('E').setsDateBy) === j(['C']), j(r('E').incoming));
+check('a milestone may sit on its predecessor finish day', j(r('M').setsDateBy) === j(['E']), j(r('M').incoming));
+check('starting too early is a conflict of the exact size', r('D').conflicts.length === 1 && r('D').conflicts[0].slack === -12, j(r('D').conflicts));
+check('the project finish is the latest leaf finish', net.projectFinish === '2026-05-16');
+check(
+  'the finishing chain sets the project finish',
+  ['A', 'C', 'E', 'M'].every((id) => r(id).setsProjectFinish),
+  j(['A', 'C', 'E', 'M'].map((id) => r(id).canSlip))
+);
+check('a row nothing waits for gets no figure', r('D').canSlip === null && !r('D').reachesFinish);
+check('a row whose only follower does not reach the finish gets no figure', r('B').canSlip === null);
+
+const two = analyseNetwork([
+  node('P', '2026-01-01', '2026-01-10'),
+  node('Q', '2026-01-05', '2026-01-10'),
+  node('R', '2026-01-11', '2026-01-20', [{ id: 'P', type: 'FS', wait: 0 }, { id: 'Q', type: 'FS', wait: 0 }]),
+]);
+check('two predecessors can both set the date', j(two.rows.get('R')!.setsDateBy) === j(['P', 'Q']));
+
+const branches = (wait: number) =>
+  analyseNetwork([
+    node('A', '2026-01-01', '2026-01-10'),
+    node('B', '2026-01-11', '2026-01-30', [{ id: 'A', type: 'FS', wait: 0 }]),
+    node('C', '2026-01-11', '2026-01-20', [{ id: 'A', type: 'FS', wait: 0 }]),
+    node('D', '2026-01-31', '2026-02-05', [{ id: 'B', type: 'FS', wait: 0 }, { id: 'C', type: 'FS', wait }]),
+  ]);
+check('a branch with room can slip by its room', branches(0).rows.get('C')!.canSlip === 10, String(branches(0).rows.get('C')!.canSlip));
+check('the longest branch cannot slip', branches(0).rows.get('B')!.canSlip === 0 && branches(0).rows.get('B')!.setsProjectFinish);
+check('a wait eats the room', branches(4).rows.get('C')!.canSlip === 6, String(branches(4).rows.get('C')!.canSlip));
+
+const loopNet = analyseNetwork([
+  node('A', '2026-01-01', '2026-01-10', [{ id: 'C', type: 'FS', wait: 0 }]),
+  node('B', '2026-01-11', '2026-01-20', [{ id: 'A', type: 'FS', wait: 0 }]),
+  node('C', '2026-01-21', '2026-01-30', [{ id: 'B', type: 'FS', wait: 0 }]),
+]);
+check('a stored loop is ignored, one link only', loopNet.ignored.length === 1, j(loopNet.ignored));
+const ab = [node('A', '2026-01-01', '2026-01-10'), node('B', '2026-01-11', '2026-01-20', [{ id: 'A', type: 'FS', wait: 0 }])];
+check('wouldLoop names the way round', j(wouldLoop(ab, 'B', 'A')) === j(['B', 'A', 'B']), j(wouldLoop(ab, 'B', 'A')));
+check('wouldLoop refuses itself', j(wouldLoop(ab, 'A', 'A')) === j(['A', 'A']));
+check('no loop, no path', wouldLoop(ab, 'A', 'B') === null);
+
+const names = new Map(plan.map((n) => [n.id, n.id]));
+const moves = conflictMoves(plan.map((n) => (n.id === 'A' ? { ...n, finishDate: '2026-04-20' } : n)), ['A'], names);
+const mv = new Map(moves.map((m) => [m.id, m]));
+check('a later predecessor moves its follower by exactly the overrun', mv.get('C')?.days === 8, j(mv.get('C')));
+check('the move cascades', mv.get('E')?.days === 8 && mv.get('M')?.days === 8, j(moves));
+check('a follower with room is not moved', !mv.has('B'));
+check('a duration is kept', mv.get('C')?.toFinish === '2026-05-18', j(mv.get('C')));
+check(
+  'nothing is ever moved earlier',
+  conflictMoves(plan.map((n) => (n.id === 'A' ? { ...n, finishDate: '2026-04-01' } : n)), ['A'], names).length === 0
+);
+
+const nodeMap = new Map(plan.map((n) => [n.id, n]));
+const why = (id: string) => whySentence(id, net, nodeMap, names);
+check('why: after it finishes', why('C').text === 'Starts 13 Apr because A finishes 12 Apr.', why('C').text);
+check('why: after it starts + wait', why('B').text === 'Starts 16 Mar, 7 days after A starts.', why('B').text);
+check('why: finishes after it finishes + wait', why('E').text === 'Finishes 16 May, 6 days after C finishes.', why('E').text);
+check('why: a conflict is red', why('D').conflict && why('D').text === 'Starts 8 Apr, before B finishes (19 Apr).', why('D').text);
+check('why: no links', why('A').text === 'Not linked yet. Its dates are typed.', why('A').text);
+const pair = (b: NetNode) => new Map([['A', node('A', '2026-01-01', '2026-01-10')], ['B', b]]);
+const ssB = node('B', '2026-01-01', '2026-01-05', [{ id: 'A', type: 'SS', wait: 0 }]);
+const ss0 = analyseNetwork([...pair(ssB).values()]);
+check('why: after it starts, no wait', whySentence('B', ss0, pair(ssB), new Map([['A', 'A']])).text === 'Starts 1 Jan, when A starts.', whySentence('B', ss0, pair(ssB), new Map([['A', 'A']])).text);
+const roomB = node('B', '2026-01-20', '2026-01-25', [{ id: 'A', type: 'FS', wait: 0 }]);
+const room = analyseNetwork([...pair(roomB).values()]);
+check('why: room', whySentence('B', room, pair(roomB), new Map([['A', 'A']])).text === 'Starts 20 Jan; A would allow 11 Jan.', whySentence('B', room, pair(roomB), new Map([['A', 'A']])).text);
+
+// Budget: the planner reruns this on every date change.
+const big: NetNode[] = Array.from({ length: 300 }, (_, i) =>
+  node(
+    `n${i}`,
+    `2026-${String(1 + (i % 12)).padStart(2, '0')}-01`,
+    `2026-${String(1 + (i % 12)).padStart(2, '0')}-20`,
+    i ? [{ id: `n${Math.floor(i / 2)}`, type: (['FS', 'SS', 'FF'] as const)[i % 3], wait: i % 5 }] : null
+  )
+);
+const t0 = performance.now();
+for (let k = 0; k < 100; k += 1) analyseNetwork(big);
+const avg = (performance.now() - t0) / 100;
+check('analyseNetwork on 300 rows stays under 2 ms', avg < 2, `${avg.toFixed(2)} ms`);
+
+/* --------------------------------------------------- rows carry their links */
+
+const { db, schema } = await import('../lib/sqlite.ts');
+const { getSheet } = await import('../lib/sheet.ts');
+const { eq } = await import('drizzle-orm');
+const linked = db.select().from(schema.wbsNodes).all().find((n) => n.waitsFor && n.waitsFor !== '[]');
+if (!linked) throw new Error('the fixture has no linked row; the local database had ten on 7 Oct 2026');
+const sheet = getSheet(linked.projectId);
+const row = sheet.rows.find((x) => x.id === linked.id)!;
+check('a legacy row reads its links in the new shape', Array.isArray(row.links) && row.links.every((l) => l.type === 'FS' && l.wait === 0), j(row.links));
+check('a group row never carries links', sheet.rows.filter((x) => x.isSummary).every((x) => x.links === null));
+check('no contract yet', sheet.contract === null && sheet.rows.every((x) => x.contractStart === null));
+check('a group row has no can-slip figure', sheet.rows.filter((x) => x.isSummary).every((x) => x.totalFloat === null && !x.isCritical));
+
 /* ==== later tasks append their sections ABOVE this line ==== */
 
 if (failed) {

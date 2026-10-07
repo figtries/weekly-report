@@ -37,6 +37,7 @@ import { getActiveBaselineId } from './sheet';
 import { db as sqlite, schema } from './sqlite';
 import { parseSignature } from './signature';
 import { deriveWeights } from './weights';
+import { parseLinks } from './links';
 import type {
   ChangeLogEntry,
   Database,
@@ -79,16 +80,6 @@ function legacyMethod(m: string | null): ProgressMethod {
   return m === 'qty' || m === 'milestone' ? m : 'lumpsum';
 }
 
-/** `waits_for` is a JSON array of ids. Anything else reads as no links, never as an error. */
-function parseIds(raw: string | null): string[] | undefined {
-  if (!raw) return undefined;
-  try {
-    const v: unknown = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 const FORECAST_SOURCES = new Set(['vendor', 'site', 'client']);
 
@@ -180,7 +171,12 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     isMilestone: n.isMilestone,
     // What only a person knows, for the forecast (lib/forecast.ts): what this
     // waits for, and the date somebody outside the app gave for it.
-    waitsFor: parseIds(n.waitsFor),
+    // Ids for the readers that only ask "waits for whom", the full links
+    // (way and wait, lib/links.ts) for the forecast and Check.
+    ...(() => {
+      const links = parseLinks(n.waitsFor);
+      return links === null ? {} : { waitsFor: links.map((l) => l.id), waitLinks: links };
+    })(),
     forecast: forecastOf(n),
   }));
 

@@ -26,6 +26,8 @@
  * a script removed with that project on 26 Sep 2026.
  */
 
+import type { LinkType, StoredLink } from './links';
+
 const MS_PER_DAY = 86_400_000;
 
 /** A weekend plus a day. Beyond this the two jobs are not waiting on each other. */
@@ -82,83 +84,346 @@ export function inferChains(nodes: ChainNode[]): Link[] {
   return links;
 }
 
-/* ------------------------------------------------------------- criticality */
+/* ---------------------------------------------------------------- network */
 
-export interface Float {
-  /** Days this row could slip before the project's own finish moves. */
-  totalFloat: number;
-  isCritical: boolean;
+/**
+ * The stored links, read against the TYPED plan (7 Oct 2026, spec
+ * docs/superpowers/specs/2026-10-07-projects-links-gantt-design.md).
+ *
+ * The plan's dates are not computed from the links: they are a promise
+ * somebody typed. So no forward pass is run; each link is CHECKED. Its slack is
+ * how far the waiting side sits past the bound the link sets: below zero is a
+ * conflict, zero means the link is what sets that date.
+ *
+ * Only leaves carry links. A row with children has no dates of its own, and a
+ * link on it would be a link to everything inside it.
+ */
+export interface NetNode {
+  id: string;
+  isLeaf: boolean;
+  isMilestone: boolean;
+  startDate: string | null;
+  finishDate: string | null;
+  /** This row's own `waits_for`: the links INTO it. Null = never asked. */
+  links: StoredLink[] | null;
+}
+
+export interface LinkState {
+  fromId: string;
+  toId: string;
+  type: LinkType;
+  wait: number;
+  /** Days the waiting side sits past `bound`; negative is a conflict. */
+  slack: number;
+  /** The earliest the waiting side (its start, or its finish for FF) may be. */
+  bound: string;
+}
+
+export interface RowLogic {
+  incoming: LinkState[];
+  outgoing: LinkState[];
+  /** Predecessors whose link has slack 0: they set this row's date. */
+  setsDateBy: string[];
+  conflicts: LinkState[];
+  /** Linked, through what it holds up, to an activity that ends the project. */
+  reachesFinish: boolean;
+  /** Days it can slip before the project finish moves; null off the finish. */
+  canSlip: number | null;
+  setsProjectFinish: boolean;
+  /** The latest it may finish without moving the project finish; null off it. */
+  lateFinish: string | null;
+}
+
+export interface Network {
+  rows: Map<string, RowLogic>;
+  links: LinkState[];
+  /** Links that close a loop. Ignored by everything, named by Check. */
+  ignored: { fromId: string; toId: string }[];
+  projectFinish: string | null;
+}
+
+type Dated = NetNode & { startDate: string; finishDate: string };
+
+const dayNo = (iso: string) => Math.round(utc(iso) / MS_PER_DAY);
+const isoOf = (day: number) => new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
+
+function scheduled(n: NetNode | undefined): n is Dated {
+  return Boolean(n && n.isLeaf && n.startDate && n.finishDate);
+}
+
+/** The bound a link sets on its waiting side, and that side's day. */
+function measure(a: Dated, b: Dated, type: LinkType, wait: number): { bound: number; side: number } {
+  if (type === 'SS') return { bound: dayNo(a.startDate) + wait, side: dayNo(b.startDate) };
+  if (type === 'FF') return { bound: dayNo(a.finishDate) + wait, side: dayNo(b.finishDate) };
+  // FS. A milestone is an event at the END of its date, so a milestone that
+  // waits for A may sit on A's own finish day.
+  return { bound: dayNo(a.finishDate) + (b.isMilestone ? 0 : 1) + wait, side: dayNo(b.startDate) };
+}
+
+interface Edge {
+  from: string;
+  to: string;
+  type: LinkType;
+  wait: number;
+}
+
+/** Links between scheduled leaves, minus the ones that close a loop. */
+function liveLinks(nodes: NetNode[]): { live: Edge[]; ignored: { fromId: string; toId: string }[] } {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const candidates: Edge[] = [];
+  for (const b of nodes) {
+    if (!scheduled(b)) continue;
+    for (const l of b.links ?? []) {
+      if (l.id === b.id || !scheduled(byId.get(l.id))) continue;
+      candidates.push({ from: l.id, to: b.id, type: l.type, wait: l.wait });
+    }
+  }
+  // Edges go in in plan order then stored order; one whose target already
+  // reaches its source would close a loop and is set aside. Deterministic.
+  const out = new Map<string, string[]>();
+  const reaches = (start: string, goal: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [start];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (id === goal) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      stack.push(...(out.get(id) ?? []));
+    }
+    return false;
+  };
+  const live: Edge[] = [];
+  const ignored: { fromId: string; toId: string }[] = [];
+  for (const c of candidates) {
+    if (reaches(c.to, c.from)) {
+      ignored.push({ fromId: c.from, toId: c.to });
+      continue;
+    }
+    live.push(c);
+    const list = out.get(c.from);
+    if (list) list.push(c.to);
+    else out.set(c.from, [c.to]);
+  }
+  return { live, ignored };
+}
+
+export function analyseNetwork(nodes: NetNode[]): Network {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const { live, ignored } = liveLinks(nodes);
+
+  const rows = new Map<string, RowLogic>();
+  for (const n of nodes) {
+    if (!scheduled(n)) continue;
+    rows.set(n.id, {
+      incoming: [], outgoing: [], setsDateBy: [], conflicts: [],
+      reachesFinish: false, canSlip: null, setsProjectFinish: false, lateFinish: null,
+    });
+  }
+
+  const links: LinkState[] = live.map((c) => {
+    const { bound, side } = measure(byId.get(c.from) as Dated, byId.get(c.to) as Dated, c.type, c.wait);
+    return { fromId: c.from, toId: c.to, type: c.type, wait: c.wait, slack: side - bound, bound: isoOf(bound) };
+  });
+  for (const l of links) {
+    rows.get(l.fromId)!.outgoing.push(l);
+    const into = rows.get(l.toId)!;
+    into.incoming.push(l);
+    if (l.slack === 0) into.setsDateBy.push(l.fromId);
+    if (l.slack < 0) into.conflicts.push(l);
+  }
+
+  let last: number | null = null;
+  for (const id of rows.keys()) {
+    const f = dayNo((byId.get(id) as Dated).finishDate);
+    if (last === null || f > last) last = f;
+  }
+
+  // Backward pass over the links that lead to the finish. The live graph has
+  // no loops, so the recursion ends.
+  const reach = new Map<string, boolean>();
+  const reachesFinish = (id: string): boolean => {
+    const known = reach.get(id);
+    if (known !== undefined) return known;
+    const finishing = dayNo((byId.get(id) as Dated).finishDate) === last;
+    const value = finishing || rows.get(id)!.outgoing.some((l) => reachesFinish(l.toId));
+    reach.set(id, value);
+    return value;
+  };
+  const lf = new Map<string, number>();
+  const lateFinish = (id: string): number => {
+    const known = lf.get(id);
+    if (known !== undefined) return known;
+    const n = byId.get(id) as Dated;
+    const dur = dayNo(n.finishDate) - dayNo(n.startDate) + 1;
+    let value = dayNo(n.finishDate) === last ? last! : Infinity;
+    for (const l of rows.get(id)!.outgoing) {
+      if (!reachesFinish(l.toId)) continue;
+      const s = byId.get(l.toId) as Dated;
+      const sLF = lateFinish(l.toId);
+      const sLS = sLF - (dayNo(s.finishDate) - dayNo(s.startDate));
+      const candidate =
+        l.type === 'SS'
+          ? sLS - l.wait + dur - 1
+          : l.type === 'FF'
+            ? sLF - l.wait
+            : sLS - (s.isMilestone ? 0 : 1) - l.wait;
+      if (candidate < value) value = candidate;
+    }
+    lf.set(id, value);
+    return value;
+  };
+
+  for (const [id, row] of rows) {
+    row.reachesFinish = reachesFinish(id);
+    if (!row.reachesFinish) continue;
+    const late = lateFinish(id);
+    row.lateFinish = isoOf(late);
+    row.canSlip = late - dayNo((byId.get(id) as Dated).finishDate);
+    row.setsProjectFinish = row.canSlip <= 0;
+  }
+
+  return { rows, links, ignored, projectFinish: last === null ? null : isoOf(last) };
 }
 
 /**
- * Critical path, on the inferred network.
- *
- * The dates in the plan ARE the early dates — this app does not schedule, it
- * records a schedule — so the forward pass is already done. What is computed
- * here is the backward pass: how late each row could finish without pushing the
- * project's own finish, and the float that falls out of it. Zero float is
- * critical.
- *
- * A row with no successors is only held by the project finish, which is exactly
- * right: the last job in a chain that ends in March has months of float against
- * a project that ends in December, and should not be drawn as critical.
- *
- * Summaries are excluded. A summary's dates are its children's, so it can have
- * no float of its own — it is critical exactly when one of its children is, and
- * saying so twice would double-paint the chart.
+ * Whether "toId waits for fromId" would close a loop, and the way round if so:
+ * [fromId, toId, …, fromId]. A row waiting for itself is [id, id].
  */
-export function computeFloat(nodes: ChainNode[], links: Link[]): Map<string, Float> {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const successors = new Map<string, Link[]>();
-  for (const l of links) {
-    const list = successors.get(l.fromId);
-    if (list) list.push(l);
-    else successors.set(l.fromId, [l]);
+export function wouldLoop(nodes: NetNode[], fromId: string, toId: string): string[] | null {
+  if (fromId === toId) return [fromId, fromId];
+  const next = new Map<string, string[]>();
+  for (const e of liveLinks(nodes).live) {
+    const list = next.get(e.from);
+    if (list) list.push(e.to);
+    else next.set(e.from, [e.to]);
   }
-
-  const scheduled = nodes.filter((n) => n.isLeaf && n.startDate && n.finishDate);
-  const projectFinish = scheduled.reduce<string | null>(
-    (acc, n) => (!acc || n.finishDate! > acc ? n.finishDate! : acc),
-    null
-  );
-  const out = new Map<string, Float>();
-  if (!projectFinish) return out;
-
-  // Backward pass, memoised. The graph is a forest of chains — same-parent,
-  // consecutive-sibling links cannot cycle — so recursion terminates, and the
-  // seen-set is belt and braces against a malformed input.
-  const lateFinish = new Map<string, string>();
-  const seen = new Set<string>();
-  function lf(id: string): string {
-    const cached = lateFinish.get(id);
-    if (cached) return cached;
-    if (seen.has(id)) return projectFinish!;
-    seen.add(id);
-
-    const outgoing = (successors.get(id) ?? []).filter((l) => {
-      const s = byId.get(l.toId);
-      return s?.isLeaf && s.startDate && s.finishDate;
-    });
-    let value = projectFinish!;
-    for (const l of outgoing) {
-      const succ = byId.get(l.toId)!;
-      const succLateFinish = lf(succ.id);
-      const duration = days(succ.startDate!, succ.finishDate!);
-      // The successor's late start, minus the gap, minus one: the last day this
-      // row may finish on without pushing it.
-      const candidate = addDays(succLateFinish, -(duration + l.gapDays + 1));
-      if (candidate < value) value = candidate;
+  // A way from toId back to fromId already exists? Then fromId → toId closes it.
+  const prev = new Map<string, string>();
+  const seen = new Set([toId]);
+  const queue = [toId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (id === fromId) {
+      const path = [fromId];
+      let cur = fromId;
+      while (cur !== toId) {
+        cur = prev.get(cur)!;
+        path.unshift(cur);
+      }
+      return [fromId, ...path];
     }
-    lateFinish.set(id, value);
-    return value;
+    for (const n of next.get(id) ?? []) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      prev.set(n, id);
+      queue.push(n);
+    }
   }
+  return null;
+}
 
-  for (const n of scheduled) {
-    const late = lf(n.id);
-    const float = days(n.finishDate!, late);
-    out.set(n.id, { totalFloat: float, isCritical: float <= 0 });
+/**
+ * What has to move LATER, and by how much, after the rows in `fromIds` moved.
+ *
+ * Walks forward from them over the live links; a follower whose links now
+ * give it negative slack moves by exactly the largest overrun, keeps its
+ * duration, and is walked from in turn. Never earlier: room a predecessor
+ * gives back stays room.
+ */
+export function conflictMoves(nodes: NetNode[], fromIds: string[], names: Map<string, string>): ShiftRow[] {
+  const work = new Map(nodes.map((n) => [n.id, { ...n }]));
+  const { live } = liveLinks(nodes);
+  const liveKey = new Set(live.map((e) => `${e.from}>${e.to}`));
+  const out = new Map<string, string[]>();
+  for (const e of live) {
+    const list = out.get(e.from);
+    if (list) list.push(e.to);
+    else out.set(e.from, [e.to]);
   }
-  return out;
+  const shift = new Map<string, number>();
+  const queue = [...fromIds];
+  for (let guard = 0; queue.length && guard < 100_000; guard += 1) {
+    const id = queue.shift()!;
+    for (const to of out.get(id) ?? []) {
+      const b = work.get(to)!;
+      if (!scheduled(b)) continue;
+      let need = 0;
+      for (const l of b.links ?? []) {
+        const a = work.get(l.id);
+        if (!scheduled(a) || !liveKey.has(`${l.id}>${to}`)) continue;
+        const { bound, side } = measure(a, b, l.type, l.wait);
+        need = Math.max(need, bound - side);
+      }
+      if (need <= 0) continue;
+      b.startDate = addDays(b.startDate, need);
+      b.finishDate = addDays(b.finishDate, need);
+      shift.set(to, (shift.get(to) ?? 0) + need);
+      queue.push(to);
+    }
+  }
+  const order = new Map(nodes.map((n, i) => [n.id, i]));
+  const original = new Map(nodes.map((n) => [n.id, n]));
+  return [...shift.entries()]
+    .sort((a, b) => (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0))
+    .map(([id, moved]) => {
+      const n = original.get(id) as Dated;
+      return {
+        id,
+        name: names.get(id) ?? id,
+        fromStart: n.startDate,
+        toStart: addDays(n.startDate, moved),
+        fromFinish: n.finishDate,
+        toFinish: addDays(n.finishDate, moved),
+        days: moved,
+      };
+    });
+}
+
+const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const short = (iso: string) => SHORT.format(new Date(utc(iso)));
+const dayWord = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+
+/** One sentence: why this row's date is what it is. Plain words only. */
+export function whySentence(
+  id: string,
+  net: Network,
+  nodes: Map<string, NetNode>,
+  names: Map<string, string>
+): { text: string; conflict: boolean } {
+  const row = net.rows.get(id);
+  const n = nodes.get(id);
+  if (!row || !n?.startDate || !n.finishDate) return { text: 'Not scheduled yet.', conflict: false };
+  if (!row.incoming.length) return { text: 'Not linked yet. Its dates are typed.', conflict: false };
+  const tight = [...row.incoming].sort((a, b) => a.slack - b.slack)[0];
+  const a = nodes.get(tight.fromId) as Dated;
+  const name = names.get(tight.fromId) ?? tight.fromId;
+  if (tight.slack < 0) {
+    if (tight.type === 'FF') return { text: `Finishes ${short(n.finishDate)}, before ${name} finishes (${short(a.finishDate)}).`, conflict: true };
+    if (tight.type === 'SS') return { text: `Starts ${short(n.startDate)}, before ${name} starts (${short(a.startDate)}).`, conflict: true };
+    return { text: `Starts ${short(n.startDate)}, before ${name} finishes (${short(a.finishDate)}).`, conflict: true };
+  }
+  if (tight.slack > 0) {
+    return tight.type === 'FF'
+      ? { text: `Finishes ${short(n.finishDate)}; ${name} would allow ${short(tight.bound)}.`, conflict: false }
+      : { text: `Starts ${short(n.startDate)}; ${name} would allow ${short(tight.bound)}.`, conflict: false };
+  }
+  if (tight.type === 'SS')
+    return {
+      text: tight.wait ? `Starts ${short(n.startDate)}, ${dayWord(tight.wait)} after ${name} starts.` : `Starts ${short(n.startDate)}, when ${name} starts.`,
+      conflict: false,
+    };
+  if (tight.type === 'FF')
+    return {
+      text: tight.wait ? `Finishes ${short(n.finishDate)}, ${dayWord(tight.wait)} after ${name} finishes.` : `Finishes ${short(n.finishDate)}, when ${name} finishes.`,
+      conflict: false,
+    };
+  return {
+    text: tight.wait
+      ? `Starts ${short(n.startDate)}, ${dayWord(tight.wait)} after ${name} finishes.`
+      : `Starts ${short(n.startDate)} because ${name} finishes ${short(a.finishDate)}.`,
+    conflict: false,
+  };
 }
 
 /* ------------------------------------------------------------ shift preview */

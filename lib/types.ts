@@ -1,3 +1,4 @@
+import type { StoredLink } from './links';
 /**
  * How a leaf's progress is arrived at.
  *
@@ -52,6 +53,8 @@ export interface WbsItem {
    * never land here on their own.
    */
   waitsFor?: string[];
+  /** The same links with their way and wait (lib/links.ts). The forecast and Check read these. */
+  waitLinks?: StoredLink[];
   /**
    * When the next rung (or, rungId null, the finish) will happen according to
    * someone outside the app: a vendor's promised date, the site, the client's
