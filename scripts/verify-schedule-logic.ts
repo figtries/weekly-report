@@ -179,6 +179,12 @@ const { eq } = await import('drizzle-orm');
 // A row still holding links in the pre-7-Oct shape: a JSON array of bare ids.
 const linked = db.select().from(schema.wbsNodes).all().find((n) => n.waitsFor?.startsWith('["'));
 if (!linked) throw new Error('the fixture has no row with legacy links; the local database had ten on 7 Oct 2026');
+// The fixture is a copy of the local database, which may already hold a
+// contract from pressing Lock by hand; start this project without one.
+const { and } = await import('drizzle-orm');
+db.delete(schema.baselines)
+  .where(and(eq(schema.baselines.projectId, linked.projectId), eq(schema.baselines.kind, 'contractual')))
+  .run();
 const sheet = getSheet(linked.projectId);
 const row = sheet.rows.find((x) => x.id === linked.id)!;
 check('a legacy row reads its links in the new shape', Array.isArray(row.links) && row.links.every((l) => l.type === 'FS' && l.wait === 0), j(row.links));

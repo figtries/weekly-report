@@ -374,6 +374,37 @@ button at `?only=control`, which renders no sheet — and `lib/pdf.ts` waits for
 `.print-sheet-a4`, so the request hangs rather than failing. Set the flag
 deliberately.
 
+**Links are made in Projects and checked, never scheduled** (7 Oct 2026, spec
+`docs/superpowers/specs/2026-10-07-projects-links-gantt-design.md`, plan
+`docs/superpowers/plans/2026-10-07-projects-links-gantt.md`). Three ways
+(after it finishes / after it starts / finishes after it finishes) with a wait
+of 0+ days, stored as `{id, type, wait}` in `wbs_nodes.waits_for` on the row
+that waits; a bare string id from before reads as FS + 0 (`lib/links.ts`).
+`analyseNetwork` in `lib/chains.ts` is the one reading: `getSheet`,
+`validateWeek`, the Gantt and the Links panel all call it, and the forecast
+pushes by the same way and wait. Plan dates stay typed; a link the plan
+breaks is offered a move (later only, by exactly the overrun) and, declined,
+stays red, in the strip over the planner and in Check. "Can slip" shows only
+for rows linked through to the finish: the old rule gave every unlinked row
+float to the project end. The screen never says FS/SS/FF, lag, float or
+critical. `lib/links-sqlite.ts` is the only writer and `pruneLinks` runs in
+both `renumber()` copies. "Lock as contract" copies the plan once into a
+`contractual` baseline; nothing in the app unlocks it. Data Overall only reads
+links since 11287f1.
+
+**React Compiler is on, so the Projects screens keep refs out of render.** A
+ref touched inside a `.map()` callback, or in an inline function called while
+rendering, makes the compiler give up on the whole component (lint
+`react-hooks/refs`). The Gantt's drag handles carry `data-*` and one delegated
+`onPointerDown` starts a drag; its line moves through refs in
+`requestAnimationFrame`, never React state. Overlays that must open instantly
+(Links panel, drag card) are warmed when idle and rendered without suspending
+(`components/projects/links-panel-loader.ts`): `next/dynamic` suspends once
+even from cache, and React 19 throttles the reveal (~300 ms). Every change to
+this page is measured A/B against a baseline build with
+`scripts/verify-projects-perf.mjs`; this machine's load moves the numbers more
+than the code does, so never compare against a figure taken at another time.
+
 # No figure until the weights close, and every figure adds up
 
 Decided 26 Sep 2026 from a card-by-card breakdown of the dashboard against
