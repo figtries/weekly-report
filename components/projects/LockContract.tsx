@@ -9,12 +9,10 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { MOTION } from '@/lib/design';
 import { lockContractAction } from '@/lib/sheet-actions';
 
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
-
 /**
- * Lock today's plan as the contract, once. Afterwards it only says when it
- * was locked: there is no unlock in the app (revisions are board item 18).
- * Sits beside Details and matches it, so the two read as a pair.
+ * Lock today's plan as the contract, once. Afterwards it is gone: there is no
+ * unlock in the app (revisions are board item 18). Sits beside Details and
+ * matches it, so the two read as a pair.
  */
 export default function LockContract({
   projectId,
@@ -31,14 +29,10 @@ export default function LockContract({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  if (lockedAt) {
-    return (
-      <span className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground sm:h-9">
-        <Lock className="size-3.5" aria-hidden />
-        Contract locked {DATE.format(new Date(lockedAt.slice(0, 10) + 'T00:00:00Z'))}
-      </span>
-    );
-  }
+  // Once locked there is nothing to press, and a grey sentence between two
+  // buttons read as clutter (8 Oct 2026). The contract still shows where it
+  // matters: its mark on the timeline and its dates in the row strip.
+  if (lockedAt) return null;
 
   return (
     <>
@@ -47,9 +41,9 @@ export default function LockContract({
         onClick={() => setOpen(true)}
         whileTap={{ scale: 0.97 }}
         transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-muted sm:h-9"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-muted sm:h-9"
       >
-        <Lock className="size-3.5" />
+        <Lock className="size-4 text-muted-foreground" />
         Lock as contract
       </m.button>
       <ConfirmDialog

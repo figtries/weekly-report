@@ -140,7 +140,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
               children, one instance of each — a second copy behind a
               `sm:hidden` would mean two ProjectDetails dialogs mounted, each
               with its own state, on every project page. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-start">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
               href="/projects"
               className="order-1 mr-auto inline-flex h-11 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full"
@@ -158,21 +158,11 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
               <OpenProjectButton id={id} isOpen={isOpen} openWeek={openWeek} />
             </div>
             <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">
-              {/* The badge is INLINE, inside the heading, not a flex sibling of
-                  it. As a flex row the heading needed `truncate` to stay on one
-                  line, and at 390px that cut a seventy-character contract title
-                  down to "Jasa Pengadaan Instrument dan Con…" where it used to
-                  wrap and be readable in full. Inline, it sits at the start of
-                  the first line and the title wraps exactly as it did before. */}
-              <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">
-                {project.alias && (
-                  <span className="mr-2 inline-block rounded bg-muted px-1.5 py-px align-[0.15em] text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {project.alias}
-                  </span>
-                )}
-                {project.name}
-              </h1>
-              <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+              {/* The name alone: the three-letter initial beside it was a second
+                  name in a grey chip, and he asked for it gone (8 Oct 2026). It
+                  is still the project's handle everywhere else. */}
+              <h1 className="text-base font-semibold leading-tight tracking-tight sm:text-lg">{project.name}</h1>
+              <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 <span>{project.clientName || 'No client named yet'}</span>
                 {facts.map((f, i) => (
                   <span key={f as string} className={i >= 3 ? 'hidden sm:inline' : ''}>

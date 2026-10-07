@@ -62,7 +62,7 @@ export default function PlannerSkeleton() {
           taller than the one it stands in for, and the whole plan slid up when
           the words arrived. */}
       <header className="shrink-0 border-b px-3 py-2 sm:px-6 sm:py-3">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-start">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
             href="/projects"
             className="order-1 mr-auto inline-flex h-11 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full"
@@ -71,12 +71,12 @@ export default function PlannerSkeleton() {
             All projects
           </Link>
           <div className="order-2 flex shrink-0 animate-pulse items-center gap-2 sm:order-3">
-            <Block className="h-9 w-20 rounded-lg" />
+            <Block className="h-11 w-[90px] rounded-lg sm:h-9" />
             {/* "Data Overall" on a phone, "Go to Data Overall" above it —
                 measured at 126px and 165px. Sized to the OPEN project's button
                 rather than to "Open this project" (58 / 137), which is the same
                 choice this block already made when the words were "Dashboard". */}
-            <Block className="h-9 w-32 rounded-lg sm:w-40" />
+            <Block className="h-11 w-32 rounded-lg sm:h-9 sm:w-40" />
           </div>
           {/* `sm:w-[38rem] sm:max-w-full` IS THE WRAP, not decoration. The real
               title block is `sm:w-auto`, so the width flexbox lays this row out
@@ -118,24 +118,25 @@ export default function PlannerSkeleton() {
         <Block className="h-11 w-16 rounded-lg sm:h-8" />
       </div>
 
-      {/* The toolbar. Its buttons are 44px targets, and it WRAPS TO TWO ROWS at
-          every width — the actions, then the search, which carries `sm:ml-auto`
-          and is pushed onto a line of its own. Photographed side by side, a
+      {/* The toolbar. Its buttons are 44px targets on a phone and 36px above,
+          and since 8 Oct 2026 it is ONE row from 1280 up (two on a phone and
+          below 1280: the actions, then the search, which carries `sm:ml-auto`).
+          Widths are the real buttons', measured. Photographed side by side, a
           one-row placeholder here left the sheet 70px too high and the whole
           page hopped down when the real bar landed; drawing the four
           desktop-only actions on a phone cost the same 70px in the other
           direction. Which buttons exist is as much of the shape as how wide
           they are — see TOOLBAR. */}
-      <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-1 border-b px-2 py-1.5 sm:px-3">
+      <div className="flex shrink-0 animate-pulse flex-wrap items-center gap-0.5 border-b px-3 py-2 sm:px-6">
         {TOOLBAR.map((t, i) =>
           t.startsWith('gap') ? (
             <span
               key={i}
-              className={`mx-0.5 h-6 w-px bg-border ${t === 'gap-lg' ? 'hidden sm:block' : ''}`}
+              className={`mx-1 h-5 w-px bg-border ${t === 'gap-lg' ? 'hidden sm:block' : ''}`}
               aria-hidden
             />
           ) : (
-            <Block key={i} className={`h-11 rounded-lg ${t}`} />
+            <Block key={i} className={`h-11 rounded-lg sm:h-9 ${t}`} />
           )
         )}
         {/* `sm:ml-auto`, not `ml-auto` — the search is pushed right only where
@@ -143,8 +144,7 @@ export default function PlannerSkeleton() {
             thing in the same words, and a phone that pushed it right left a
             screen-wide hole beside it. */}
         <div className="flex items-center gap-2 sm:ml-auto">
-          <Block className="h-11 w-28 rounded-lg sm:h-9 sm:w-36" />
-          <Block className="hidden h-4 w-14 sm:block" />
+          <Block className="h-11 w-28 rounded-lg sm:h-9 2xl:w-36" />
           {/* List / Timeline. Below 768px the two panes take turns, so this
               control is on screen exactly where the timeline pane is not. */}
           <Block className="h-[3.125rem] w-32 rounded-lg sm:h-[2.625rem] md:hidden" />
@@ -159,7 +159,7 @@ export default function PlannerSkeleton() {
           and ScheduleSheet hides the legend there — 60px spent naming colours
           for bars that are not on screen. Drawn unconditionally, this pushed
           the phone's first row 60px down and then let it snap back up. */}
-      <div className="hidden shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 md:flex">
+      <div className="hidden shrink-0 animate-pulse flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5 sm:px-6 md:flex">
         <Block className="h-4 w-24" />
         <Block className="h-4 w-20" />
         <Block className="h-4 w-24" />
@@ -298,16 +298,19 @@ const GRID = `${GRID_SM} ${GRID_LG}`;
  * why every entry still carries two widths.
  */
 const TOOLBAR = [
-  'w-24 sm:w-28', // Add row — the only one that keeps its label on a phone
-  'hidden sm:block sm:w-32', // Add inside — desktop only
-  'w-11 sm:w-24', // Import
+  'w-[90px]', // Add row — the only one that keeps its label on a phone
+  'hidden sm:block sm:w-[104px]', // Add inside — desktop only
+  'w-8 sm:w-[79px]', // Import
   'gap',
-  'hidden sm:block sm:w-28', // Indent — desktop only
-  'hidden sm:block sm:w-36', // Outdent — desktop only
-  'hidden sm:block sm:w-24', // Delete — desktop only
+  'hidden sm:block sm:w-[77px]', // Indent — desktop only
+  'hidden sm:block sm:w-[88px]', // Outdent — desktop only
+  'hidden sm:block sm:w-[78px]', // Delete — desktop only
   'gap-lg',
-  'w-11 sm:w-32', // Collapse all
-  'w-11 sm:w-28', // Undo
+  'w-8 sm:w-[109px]', // Collapse all
+  'w-8 2xl:w-[71px]', // Undo — an icon alone below 1536
+  'gap-lg',
+  'w-8 sm:w-[71px]', // Links
+  'w-8 sm:w-[66px]', // Bars
 ] as const;
 
 /**

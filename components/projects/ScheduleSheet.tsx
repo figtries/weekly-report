@@ -1709,7 +1709,7 @@ export default function ScheduleSheet({
                 onClick={open}
                 {...pressMotion}
                 title="Read the plan from a workbook, or paste rows copied out of one"
-                className="flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors duration-200 ease-ios hover:bg-muted"
+                className="flex h-11 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium transition-colors duration-200 ease-ios hover:bg-muted sm:h-9"
               >
                 <ClipboardPaste className="size-4" />
                 <span className="hidden sm:inline">Import</span>
@@ -1732,7 +1732,7 @@ export default function ScheduleSheet({
           // The same height as the legend it replaces from md (GanttLegend's
           // `md:min-h-12`): a strip taller than the key shifted every row down
           // between a press's mousedown and its click, and the click missed.
-          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px] md:min-h-12"
+          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px] sm:px-6 md:min-h-12"
         >
           <span
             aria-hidden
