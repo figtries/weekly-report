@@ -50,12 +50,12 @@ import BarStyleEditor from './BarStyleEditor';
 import ShiftPreviewBar from './ShiftPreview';
 import {
   analyseNetwork,
-  inferChains,
-  shiftPreview,
-  type ChainNode,
+  conflictMoves,
   type ShiftPreview as Shift,
+  type ShiftRow,
   type WeekSpan,
 } from '@/lib/chains';
+import ConflictStrip from './ConflictStrip';
 import GanttChart, { BarStylesButton, GanttLegend, paintColor } from './GanttChart';
 import { DEFAULT_BAR_STYLES, resolveBar, type BarPreset, type BarStyle } from '@/lib/bar-styles';
 import { groupAmount, stripAmount } from '@/lib/currency';
@@ -656,22 +656,6 @@ export default function ScheduleSheet({
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
 
-  // The chain, inferred on the client from the same rows the sheet is drawing.
-  // Nothing is stored and nothing is fetched — see lib/chains.ts — so a preview
-  // is instant and can never disagree with the dates on screen.
-  const chainNodes = useMemo<ChainNode[]>(
-    () =>
-      rows.map((r, i) => ({
-        id: r.id,
-        parentId: r.parentId,
-        order: i,
-        isLeaf: r.isLeaf,
-        startDate: r.startDate,
-        finishDate: r.finishDate,
-      })),
-    [rows]
-  );
-  const chainLinks = useMemo(() => inferChains(chainNodes), [chainNodes]);
 
   // What the stored links say about the plan on screen: the same analysis the
   // server ran in getSheet, recomputed the moment a date changes here.
@@ -814,21 +798,32 @@ export default function ScheduleSheet({
             durationDays: res.durationDays,
           });
           // Decision ④: the edit has already landed. What appears now is what
-          // the person could not have known — what follows this row, and which
-          // reported weeks the change lands in.
-          const delta =
-            row.startDate && res.startDate
-              ? Math.round(
-                  (Date.parse(res.startDate + 'T00:00:00Z') -
-                    Date.parse(row.startDate + 'T00:00:00Z')) /
-                    MS_PER_DAY
-                )
-              : 0;
-          if (delta !== 0) {
+          // the person could not have known: which followers it now pushes past
+          // their links (lib/chains.ts conflictMoves), and which reported weeks
+          // the change lands in.
+          const after = rows.map((r) =>
+            r.id === row.id ? { ...r, startDate: res.startDate, finishDate: res.finishDate } : r
+          );
+          const followers = conflictMoves(after, [row.id], nameById);
+          const self: ShiftRow | null =
+            row.startDate && row.finishDate && res.startDate && res.finishDate
+              ? {
+                  id: row.id,
+                  name: row.name,
+                  fromStart: row.startDate,
+                  toStart: res.startDate,
+                  fromFinish: row.finishDate,
+                  toFinish: res.finishDate,
+                  days: Math.round(
+                    (Date.parse(res.startDate + 'T00:00:00Z') - Date.parse(row.startDate + 'T00:00:00Z')) / MS_PER_DAY
+                  ),
+                }
+              : null;
+          if (self && (followers.length > 0 || self.fromStart !== self.toStart || self.fromFinish !== self.toFinish)) {
             setShift({
               rowId: row.id,
               rowName: row.name,
-              preview: shiftPreview(chainNodes, chainLinks, nameById, row.id, delta),
+              preview: { moved: [self], followers, fromDate: null, toDate: null },
             });
           }
         }
@@ -839,7 +834,7 @@ export default function ScheduleSheet({
           ]);
       });
     },
-    [patch, chainNodes, chainLinks, nameById, overlay, queued, resolveId]
+    [patch, rows, nameById, overlay, queued, resolveId]
   );
 
   /**
@@ -1653,6 +1648,16 @@ export default function ScheduleSheet({
         </m.p>
       )}
 
+      <ConflictStrip
+        network={network}
+        names={nameById}
+        onOpen={(id) => {
+          setSelectedId(id);
+          setMenuRow(rows.find((r) => r.id === id) ?? null);
+          setMenuMode('menu'); // the Links view lands in Task 9
+        }}
+      />
+
       {shift && (
         <ShiftPreviewBar
           projectId={projectId}
@@ -1660,9 +1665,9 @@ export default function ScheduleSheet({
           rowName={shift.rowName}
           shift={shift.preview}
           weeks={weeks}
-          onApplied={() => {
+          onApplied={(sheet) => {
             setShift(null);
-            syncRows();
+            applySheet(sheet);
           }}
           onDismiss={() => setShift(null)}
         />

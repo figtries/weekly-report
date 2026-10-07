@@ -468,74 +468,10 @@ export interface ShiftPreview {
    */
   fromDate: string | null;
   toDate: string | null;
+  /** The rows to walk forward from when the offer is taken; the moved row when absent. */
+  fromIds?: string[];
 }
 
-/**
- * What else moves if this row moves.
- *
- * Follows the inferred chain forward and shifts every successor by the SAME
- * number of days, keeping each gap exactly as it was. It does not re-level, does
- * not compress, and never shortens anything: a plan revision that quietly
- * changed a duration while claiming to move a date would be the worst kind of
- * help.
- */
-export function shiftPreview(
-  nodes: ChainNode[],
-  links: Link[],
-  names: Map<string, string>,
-  rowId: string,
-  deltaDays: number
-): ShiftPreview {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const successors = new Map<string, string[]>();
-  for (const l of links) {
-    const list = successors.get(l.fromId);
-    if (list) list.push(l.toId);
-    else successors.set(l.fromId, [l.toId]);
-  }
-
-  const order = new Map(nodes.map((n, i) => [n.id, i]));
-  const touched = new Set<string>();
-  const queue = [rowId];
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const next of successors.get(id) ?? []) {
-      if (touched.has(next)) continue;
-      touched.add(next);
-      queue.push(next);
-    }
-  }
-
-  const row = (id: string): ShiftRow | null => {
-    const n = byId.get(id);
-    if (!n?.startDate) return null;
-    const finish = n.finishDate ?? n.startDate;
-    return {
-      id,
-      name: names.get(id) ?? id,
-      fromStart: n.startDate,
-      toStart: addDays(n.startDate, deltaDays),
-      fromFinish: finish,
-      toFinish: addDays(finish, deltaDays),
-      days: deltaDays,
-    };
-  };
-
-  const self = row(rowId);
-  const followers = [...touched]
-    .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
-    .map(row)
-    .filter((r): r is ShiftRow => r !== null);
-
-  const all = [...(self ? [self] : []), ...followers];
-  const dates = all.flatMap((r) => [r.fromStart, r.toStart, r.fromFinish, r.toFinish]);
-  return {
-    moved: self ? [self] : [],
-    followers,
-    fromDate: dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null,
-    toDate: dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null,
-  };
-}
 
 /* ------------------------------------------------------- the weeks it moves */
 

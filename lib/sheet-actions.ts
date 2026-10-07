@@ -8,7 +8,7 @@ import { inclusiveDays } from './plan-curve';
 import { boxAbove, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
 import { saveRowLinksSqlite } from './links-sqlite';
 import type { StoredLink } from './links';
-import { addDays as chainAddDays, inferChains, type ChainNode } from './chains';
+import { conflictMoves } from './chains';
 import { projectOfNode, syncDerivedWeights } from './weights-auto';
 import { budgetRefusal } from './weights-read';
 
@@ -426,107 +426,39 @@ export async function setMilestoneAction(nodeId: string, on: boolean): Promise<S
 }
 
 /**
- * Move everything that follows a row, by the same number of days.
+ * Move what now starts before what it waits for: later, by exactly the
+ * overrun, durations kept, cascading, after the rows in `fromIds` moved.
  *
- * The chain comes from `lib/chains.ts` — inferred from the dates, never stored —
- * and it is re-inferred HERE rather than trusted from the client, because a
- * payload naming its own list of rows to move is a payload that can move any row
- * it likes.
- *
- * Gaps are preserved exactly. Nothing is compressed and no duration changes: a
- * revision that quietly shortened a job while claiming to move a date would be
- * the worst kind of help.
+ * The moves are worked out HERE from the stored links and dates, not taken
+ * from the browser: a payload naming its own rows to move could move any row
+ * it liked. Never earlier (see `conflictMoves` in lib/chains.ts).
  */
-export async function shiftFollowersAction(
+export async function moveFollowersAction(
   projectId: string,
-  nodeId: string,
-  deltaDays: number
-): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
+  fromIds: string[]
+): Promise<{ ok: true; moved: number; sheet: Sheet } | { ok: false; error: string }> {
   await beforeWrite();
   try {
-    if (!Number.isFinite(deltaDays) || deltaDays === 0) return { ok: true, moved: 0 };
-    if (Math.abs(deltaDays) > 3650) throw new Error('That is more than ten years');
-
     const baselineId = getActiveBaselineId(projectId);
     if (!baselineId) throw new Error('This project has no schedule yet');
-
-    const nodes = db
-      .select({
-        id: schema.wbsNodes.id,
-        parentId: schema.wbsNodes.parentId,
-        order: schema.wbsNodes.order,
-        isLeaf: schema.wbsNodes.isLeaf,
-      })
-      .from(schema.wbsNodes)
-      .where(eq(schema.wbsNodes.projectId, projectId))
-      .orderBy(schema.wbsNodes.order)
-      .all();
-
-    const scheds = db
-      .select()
-      .from(schema.nodeSchedules)
-      .where(eq(schema.nodeSchedules.baselineId, baselineId))
-      .all();
-    const byNode = new Map(scheds.map((s) => [s.nodeId, s]));
-
-    // The chain is inferred from the dates as they were BEFORE the move, by
-    // putting the edited row back where it came from.
-    //
-    // This is not a nicety. The link that makes a row worth following is
-    // exactly the link the move breaks: push IFR five days later and it now
-    // finishes AFTER IFA starts, so a graph built from the dates as they are
-    // finds no chain at all and nothing follows anything. The client showed the
-    // person a chain that existed a moment ago; this reproduces it rather than
-    // trusting a list of row ids from the browser.
-    const chainNodes: ChainNode[] = nodes.map((n) => {
-      const s = byNode.get(n.id);
-      const rewind = n.id === nodeId ? -deltaDays : 0;
-      return {
-        id: n.id,
-        parentId: n.parentId ?? null,
-        order: n.order,
-        isLeaf: n.isLeaf,
-        startDate: s ? chainAddDays(s.startDate, rewind) : null,
-        finishDate: s ? chainAddDays(s.finishDate, rewind) : null,
-      };
-    });
-
-    const links = inferChains(chainNodes);
-    const successors = new Map<string, string[]>();
-    for (const l of links) {
-      const list = successors.get(l.fromId);
-      if (list) list.push(l.toId);
-      else successors.set(l.fromId, [l.toId]);
-    }
-    const moving = new Set<string>();
-    const queue = [nodeId];
-    while (queue.length) {
-      const id = queue.shift()!;
-      for (const next of successors.get(id) ?? []) {
-        if (moving.has(next)) continue;
-        moving.add(next);
-        queue.push(next);
-      }
-    }
-
-    let moved = 0;
+    const sheet = getSheet(projectId);
+    const known = new Set(sheet.rows.map((r) => r.id));
+    const moves = conflictMoves(
+      sheet.rows,
+      fromIds.filter((id) => known.has(id)),
+      new Map(sheet.rows.map((r) => [r.id, r.name]))
+    );
     db.transaction((tx) => {
-      for (const id of moving) {
-        const s = byNode.get(id);
-        if (!s) continue;
+      for (const m of moves) {
         tx.update(schema.nodeSchedules)
-          .set({
-            startDate: chainAddDays(s.startDate, deltaDays),
-            finishDate: chainAddDays(s.finishDate, deltaDays),
-          })
-          .where(eq(schema.nodeSchedules.id, s.id))
+          .set({ startDate: m.toStart, finishDate: m.toFinish })
+          .where(and(eq(schema.nodeSchedules.baselineId, baselineId), eq(schema.nodeSchedules.nodeId, m.id)))
           .run();
-        moved += 1;
       }
+      if (moves.length) coverChildren(projectId, baselineId, tx);
     });
-
     await landed();
-    return { ok: true, moved };
+    return { ok: true, moved: moves.length, sheet: getSheet(projectId) };
   } catch (e) {
     return fail(e);
   }

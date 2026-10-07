@@ -7,7 +7,10 @@ import { ArrowRight, CalendarClock, CheckCircle2, TriangleAlert } from 'lucide-r
 import { MOTION } from '@/lib/design';
 import type { ShiftPreview as Shift, WeekSpan } from '@/lib/chains';
 import { weeksTouched } from '@/lib/chains';
-import { shiftFollowersAction } from '@/lib/sheet-actions';
+import { moveFollowersAction } from '@/lib/sheet-actions';
+import type { Sheet } from '@/lib/sheet';
+
+const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 /**
  * What else this date change does, said after the fact rather than before it.
@@ -18,10 +21,11 @@ import { shiftFollowersAction } from '@/lib/sheet-actions';
  * lands first. Then this appears, with the two things the person could not have
  * known:
  *
- * **What follows it.** The chain is inferred from the dates — see
- * `lib/chains.ts` — so a row that had work queued behind it can drag that work
- * along, keeping every gap exactly as it was. It is offered, never done: the
- * chain is a guess, and a guess does not get to move twelve rows on its own.
+ * **What it pushes.** Links are stored now (lib/links.ts, made in Projects),
+ * so a row that moved can push what waits for it past the link. The offer
+ * moves each follower by the smallest amount that clears its link, durations
+ * kept; it is offered, never done. "Keep dates" leaves the conflict visible
+ * in the strip over the planner and on the Gantt.
  *
  * **Which weeks it moves.** The plan curve is derived from these dates, so
  * shifting one today changes the planned figure for a week that was approved
@@ -44,7 +48,7 @@ export default function ShiftPreviewBar({
   rowName: string;
   shift: Shift;
   weeks: WeekSpan[];
-  onApplied: () => void;
+  onApplied: (sheet: Sheet) => void;
   onDismiss: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -83,9 +87,13 @@ export default function ShiftPreviewBar({
         <span className="flex items-center gap-1.5 text-xs">
           <CalendarClock className="size-3.5 shrink-0 text-muted-foreground" />
           <strong className="max-w-[14rem] truncate font-medium">{rowName}</strong>
-          <span className="tabular-nums text-muted-foreground">
-            moved {delta > 0 ? `${delta} days later` : `${Math.abs(delta)} days earlier`}
-          </span>
+          {self && (
+            <span className="tabular-nums text-muted-foreground">
+              {delta === 0
+                ? `now finishes ${SHORT.format(new Date(self.toFinish + 'T00:00:00Z'))}`
+                : `moved ${delta > 0 ? `${delta} days later` : `${Math.abs(delta)} days earlier`}`}
+            </span>
+          )}
         </span>
 
         {touched.all.length > 0 && (
@@ -106,15 +114,9 @@ export default function ShiftPreviewBar({
         {hasFollowers && (
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              <strong className="tabular-nums text-foreground">{shift.followers.length}</strong>{' '}
-              {shift.followers.length === 1 ? 'row follows' : 'rows follow'} it:{' '}
-              <span className="truncate">
-                {shift.followers
-                  .slice(0, 3)
-                  .map((f) => f.name)
-                  .join(' → ')}
-                {shift.followers.length > 3 ? ' → …' : ''}
-              </span>
+              <strong className="text-foreground">{shift.followers[0].name}</strong>
+              {shift.followers.length > 1 ? ` and ${shift.followers.length - 1} after it` : ''} now{' '}
+              {shift.followers.length === 1 ? 'starts before what it waits for.' : 'start before what they wait for.'}
             </span>
             <m.button
               type="button"
@@ -122,21 +124,21 @@ export default function ShiftPreviewBar({
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {
-                  const res = await shiftFollowersAction(projectId, rowId, delta);
-                  if (res.ok) onApplied();
+                  const res = await moveFollowersAction(projectId, shift.fromIds ?? [rowId]);
+                  if (res.ok) onApplied(res.sheet);
                 })
               }
               className="btn-primary flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium"
             >
               <CheckCircle2 className="size-3.5" />
-              {pending ? 'Moving…' : 'Move them too'}
+              {pending ? 'Moving…' : `Move ${shift.followers.length} ${shift.followers.length === 1 ? 'row' : 'rows'}`}
             </m.button>
             <button
               type="button"
               onClick={onDismiss}
               className="h-9 rounded-lg px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
             >
-              Leave them
+              Keep dates
             </button>
           </span>
         )}
