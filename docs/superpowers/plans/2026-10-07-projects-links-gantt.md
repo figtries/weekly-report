@@ -25,6 +25,154 @@
 - Type-check with a scratch tsconfig that extends the project one and includes only `app/**`, `components/**`, `lib/**`, `types/**`, `next-env.d.ts` (other sessions' `.next*` types produce phantom errors).
 - `npx next build > build.log 2>&1; echo $?` before any push. Never push without the user's yes.
 
+## Performance budget (the user's condition: "smooth, ringan, mewah walaupun fiturnya banyak")
+
+Measured, never assumed, on a PRODUCTION build (`set NEXT_DIST_DIR=.next-verify&& npx next build`, then `preview_start` `prod-verify` on :3211), phone profile (390×844, 4× CPU) unless noted, with `scripts/verify-projects-perf.mjs` (Task 0). Task 0 records the baseline in this file; Tasks 7, 9, 10 and 12 re-run it and must stay inside:
+
+| Measure | Budget |
+|---|---|
+| Press ⋯ → row panel on screen | ≤ 150 ms, and ≤ baseline + 20% |
+| Press "Links: …" → Links panel on screen | ≤ 150 ms |
+| Planner scroll, 10 steps | no long task > 100 ms; total long-task time ≤ baseline + 50 ms |
+| Desktop (1440, 1× CPU) bar-end drag, 60 pointer moves | no long task > 50 ms |
+| LCP of `/projects/pdemo-merbau` | ≤ baseline + 10% |
+| First Load JS of `/projects/[id]` (build output) | ≤ baseline + 15 kB |
+| `analyseNetwork` on 300 rows / 300 links (node) | ≤ 2 ms average over 100 runs |
+
+How it stays inside, by construction:
+- `LinksPanel` and `LinkDragCard` load through `next/dynamic` each inside its own `<Suspense fallback={null}>` (AGENTS "Lazy-load the overlays"; a dynamic overlay without its own boundary flashed the week bar to skeleton on 4 Oct 2026).
+- EPC suggestions are fetched by a GET route only when a never-asked row's Links panel opens; the page itself computes nothing extra. The date-chain guesses show at once; EPC ones join when they arrive.
+- The arrow layer is one memoised SVG (`useMemo` on network, visible rows, scale, selection); hover never re-renders it.
+- A drag moves its dashed line by writing the SVG path's `d` through a ref inside `requestAnimationFrame` — no React state per pointer move. React state changes only on press and release.
+- Motion is the app's one curve (`--ease-ios`, `MOTION` in `lib/design.ts`): arrows fade with `transition-opacity duration-200`, the pressed arrows thicken with `transition-[stroke-width,opacity]`. Nothing animates layout, nothing pops in after hydration (entrance is CSS, per AGENTS).
+- "Mewah" means quiet and exact, not decorated: hairline arrows, one red for what matters, tabular figures, generous spacing, no spinner that appears for less than 300 ms.
+
+---
+
+### Task 0: Measure the page as it is now
+
+**Files:**
+- Create: `scripts/verify-projects-perf.mjs`
+
+- [ ] **Step 1: Write the probe**
+
+```js
+/**
+ * How the Projects page feels: press, scroll, drag and load, measured from
+ * INSIDE the page, on a production build. Budget and baseline live in
+ * docs/superpowers/plans/2026-10-07-projects-links-gantt.md.
+ *
+ * Usage: node scripts/verify-projects-perf.mjs [baseUrl] [projectId]
+ */
+import { existsSync } from 'node:fs';
+import puppeteer from 'puppeteer-core';
+
+const base = process.argv[2] ?? 'http://localhost:3211';
+const project = process.argv[3] ?? 'pdemo-merbau';
+const exe = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe'].find(existsSync);
+const browser = await puppeteer.launch({ executablePath: exe, headless: true });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const out = {};
+
+async function open(phone) {
+  const page = await browser.newPage();
+  await page.setViewport(phone ? { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { width: 1440, height: 900 });
+  const cdp = await page.createCDPSession();
+  if (phone) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  await page.evaluateOnNewDocument(() => {
+    window.__long = [];
+    new PerformanceObserver((l) => window.__long.push(...l.getEntries().map((e) => e.duration))).observe({ type: 'longtask', buffered: true });
+    window.__lcp = 0;
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lcp = e.startTime; }).observe({ type: 'largest-contentful-paint', buffered: true });
+  });
+  await page.goto(`${base}/projects/${project}`, { waitUntil: 'networkidle0', timeout: 120_000 });
+  await sleep(1500);
+  return page;
+}
+
+/** Press, then time until `text` is on screen, from inside the page. */
+async function pressUntil(page, selector, text) {
+  return page.evaluate(
+    (selector, text) =>
+      new Promise((resolve) => {
+        const el = document.querySelector(selector);
+        if (!el) return resolve(null);
+        const t0 = performance.now();
+        const done = () => document.body.innerText.includes(text);
+        const mo = new MutationObserver(() => {
+          if (done()) {
+            mo.disconnect();
+            requestAnimationFrame(() => resolve(Math.round(performance.now() - t0)));
+          }
+        });
+        mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+        el.click();
+        setTimeout(() => { mo.disconnect(); resolve(null); }, 5000);
+      }),
+    selector,
+    text
+  );
+}
+
+// Phone: load, scroll, press.
+{
+  const page = await open(true);
+  out.lcp = Math.round(await page.evaluate(() => window.__lcp));
+  await page.evaluate(() => (window.__long = []));
+  await page.evaluate(async () => {
+    const scrollers = [...document.querySelectorAll('main *')].filter((e) => e.scrollHeight > e.clientHeight + 200 && getComputedStyle(e).overflowY !== 'visible');
+    const s = scrollers.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+    for (let i = 0; i < 10; i += 1) {
+      s.scrollBy(0, 400);
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    s.scrollTo(0, 0);
+  });
+  await sleep(500);
+  const long = await page.evaluate(() => window.__long);
+  out.scrollLongMax = Math.round(Math.max(0, ...long));
+  out.scrollLongTotal = Math.round(long.reduce((a, b) => a + b, 0));
+  out.pressMenu = await pressUntil(page, 'button[aria-label^="Actions for row 1.1.1"]', 'Add row below');
+  out.pressLinks = await page.evaluate(() => [...document.querySelectorAll('button')].some((b) => b.innerText.startsWith('Links:')))
+    ? await pressUntil(page, 'button[data-links-entry]', 'Waits for')
+    : 'n/a (before Task 9)';
+  await page.close();
+}
+
+// Desktop: a drag across the Gantt (only once handles exist, Task 10).
+{
+  const page = await open(false);
+  const handle = await page.$('[data-link-handle="finish"]');
+  if (handle) {
+    const box = await handle.boundingBox();
+    await page.evaluate(() => (window.__long = []));
+    await page.mouse.move(box.x + 4, box.y + 4);
+    await page.mouse.down();
+    for (let i = 0; i < 60; i += 1) await page.mouse.move(box.x + 4 + i * 3, box.y + 4 + i * 2);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    const long = await page.evaluate(() => window.__long);
+    out.dragLongMax = Math.round(Math.max(0, ...long));
+  } else out.dragLongMax = 'n/a (before Task 10)';
+  await page.close();
+}
+
+console.log(JSON.stringify(out, null, 2));
+await browser.close();
+```
+  (The Links entry gets `data-links-entry` in Task 9 and each drag handle `data-link-handle="start|finish"` in Task 10; add those attributes there.)
+
+- [ ] **Step 2: Baseline** — build and start production (`set NEXT_DIST_DIR=.next-verify&& npx next build > build-base.log 2>&1; echo $?`, then `preview_start` `prod-verify`), run `node scripts/verify-projects-perf.mjs` three times, and write the median of each figure here. Read First Load JS for `/projects/[id]` from `build-base.log`. Time `analyseNetwork` is measured from Task 2 on.
+
+  Baseline (7 Oct 2026): _(filled in during execution)_
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add scripts/verify-projects-perf.mjs docs/superpowers/plans/2026-10-07-projects-links-gantt.md
+git commit -m "Projects perf probe and its baseline"
+```
+
 ---
 
 ### Task 1: The link shape and its parser
@@ -317,6 +465,15 @@ const ss0 = analyseNetwork([node('A', '2026-01-01', '2026-01-10'), node('B', '20
 check('why: after it starts, no wait', whySentence('B', ss0, new Map([['A', node('A', '2026-01-01', '2026-01-10')], ['B', node('B', '2026-01-01', '2026-01-05')]]), new Map([['A', 'A']])).text === 'Starts 1 Jan, when A starts.');
 const room = analyseNetwork([node('A', '2026-01-01', '2026-01-10'), node('B', '2026-01-20', '2026-01-25', [{ id: 'A', type: 'FS', wait: 0 }])]);
 check('why: room', whySentence('B', room, new Map([['A', node('A', '2026-01-01', '2026-01-10')], ['B', node('B', '2026-01-20', '2026-01-25')]]), new Map([['A', 'A']])).text === 'Starts 20 Jan; A would allow 11 Jan.');
+
+// Budget: the planner reruns this on every date change.
+const big: NetNode[] = Array.from({ length: 300 }, (_, i) =>
+  node(`n${i}`, `2026-${String(1 + (i % 12)).padStart(2, '0')}-01`, `2026-${String(1 + (i % 12)).padStart(2, '0')}-20`, i ? [{ id: `n${Math.floor(i / 2)}`, type: (['FS', 'SS', 'FF'] as const)[i % 3], wait: i % 5 }] : null)
+);
+const t0 = performance.now();
+for (let k = 0; k < 100; k += 1) analyseNetwork(big);
+const avg = (performance.now() - t0) / 100;
+check('analyseNetwork on 300 rows stays under 2 ms', avg < 2, `${avg.toFixed(2)} ms`);
 ```
 
 - [ ] **Step 2: Run it to see it fail**
@@ -1383,7 +1540,7 @@ Run → the geometry checks PASS.
   ```
   and in the diamond branch, add `ring-2 ring-[var(--bad)] ring-offset-1` to the diamond `<span>`'s classes when `r.isCritical`.
 
-  Arrows: as the LAST child of the body `<div className="relative" style={{ height: bodyH }}>`:
+  Arrows: build the layer ONCE per change of what it draws, so hover and scroll never rebuild it — `const arrowLayer = useMemo(() => network && ( …the SVG below… ), [network, rows, scale, spanStart, selectedId, parentOf, rowH, width, bodyH]);` — and render `{arrowLayer}` as the LAST child of the body `<div className="relative" style={{ height: bodyH }}>`. Give each `<g>` `className="transition-opacity duration-200 ease-ios"` and each `<path>` `className="transition-[stroke-width,stroke-opacity] duration-200 ease-ios"` so pressing a bar eases its arrows up instead of snapping. The SVG:
   ```tsx
   {network && (
     <svg aria-hidden className="pointer-events-none absolute left-0 top-0 z-[6] overflow-visible" width={width} height={bodyH}>
@@ -1466,6 +1623,8 @@ Run → the geometry checks PASS.
   ```bash
   node -e "const D=require('better-sqlite3');const db=new D('data/report.db');const r=db.prepare(\"select id,deskripsi from wbs_nodes where project_id='pdemo-merbau' and is_leaf=1 order by sort_order limit 4\").all();const set=db.prepare('update wbs_nodes set waits_for=? where id=?');set.run(JSON.stringify([{id:r[0].id,type:'SS',wait:7}]),r[1].id);set.run(JSON.stringify([{id:r[0].id,type:'FS',wait:0}]),r[2].id);set.run(JSON.stringify([{id:r[1].id,type:'FS',wait:0}]),r[3].id);console.log(r.map(x=>x.deskripsi))"
   ```
+  Then the budget: production build + `prod-verify`, `node scripts/verify-projects-perf.mjs` three times; scroll and LCP inside budget against the Task 0 baseline, written under it as "after Task 7". Over budget is a stop: find the cost (CDP trace, see memory "Animation perf recipe") before going on.
+
   Shoot `http://localhost:3000/projects/pdemo-merbau` at 1440×900 and 390×844 and LOOK: arrows elbow from the ends their way names; the SS arrow enters on the left with "+7 days"; red outlines only where a row sets the finish; dashed tails with "+N days" only on rows linked through to the finish; the Today line dashed sky; a conflict (row 4 starts before row 2 finishes in Merbau's plan) shows the red !, the pale band and a red dashed arrow. Nothing overlaps a label; fix and re-shoot until it reads cleanly.
 
 - [ ] **Step 7: Type-check, then commit**
@@ -1669,7 +1828,7 @@ git commit -m "A date that breaks a link is asked about; kept conflicts are list
 - Create: `components/projects/LinksPanel.tsx`
 - Modify: `components/projects/RowMenu.tsx`
 - Modify: `components/projects/ScheduleSheet.tsx`
-- Modify: `app/projects/[id]/page.tsx` (EPC suggestions prop)
+- Create: `app/api/projects/[id]/link-suggestions/route.ts` (EPC guesses, fetched when a panel opens)
 - Modify: `scripts/verify-schedule-logic.ts`
 
 **Interfaces:**
@@ -1682,7 +1841,7 @@ git commit -m "A date that breaks a link is asked about; kept conflicts are list
   initialMode?: 'menu' | 'delete' | 'links';
   network: Network; rows: SheetRow[]; names: Map<string, string>; suggestions: string[]; onLinksSaved: (sheet: Sheet, touched: string[]) => void;
   // ScheduleSheet new prop
-  epcSuggestions: Record<string, string[]>;
+  // LinksPanel also takes projectId: string, to fetch EPC guesses
   ```
 
 - [ ] **Step 1: Suggestions, tested** — above the marker line:
@@ -1739,13 +1898,30 @@ export function suggestionsFor(
 
   Run → PASS.
 
-  Page: in `app/projects/[id]/page.tsx`, after `const sheet = getSheet(id);`:
+  EPC order's guesses are NOT worked out on the page (that would make every planner load pay for them). They come from a GET route, fetched only when a never-asked activity's Links panel opens. Create `app/api/projects/[id]/link-suggestions/route.ts` — first read an existing GET route in this repo (`app/api/weeks/[week]/photos/route.ts`) and copy its header exactly (runtime, `connection()` / dynamic handling under `cacheComponents`, how params are awaited):
   ```ts
-  // EPC order's guesses for activities nobody has linked yet. Worked out here
-  // because they read work kinds and ladders the sheet does not carry.
-  const epcSuggestions = Object.fromEntries(unansweredLinks(buildProjectDashboardData(id)?.db.wbsItems ?? []));
+  import { NextResponse } from 'next/server';
+  import { connection } from 'next/server';
+
+  import { buildProjectDashboardData } from '@/lib/dashboard-db';
+  import { unansweredLinks } from '@/lib/forecast-epc';
+  import { ensureFreshDb } from '@/lib/db-snapshot';
+
+  /**
+   * EPC order's link guesses for activities nobody has answered, for the
+   * Links panel. A GET route and not a server action: a client READ goes
+   * through a route with a retry (memory: never read through a server action).
+   */
+  export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+    await connection();
+    const { id } = await params;
+    await ensureFreshDb();
+    const items = buildProjectDashboardData(id)?.db.wbsItems ?? [];
+    return NextResponse.json(Object.fromEntries(unansweredLinks(items)), { headers: { 'Cache-Control': 'no-store' } });
+  }
   ```
-  pass `epcSuggestions={epcSuggestions}` to `<ScheduleSheet>`; add the prop to ScheduleSheet's props. Measure the page before/after (`curl -s -o /dev/null -w "%{time_total}"` three times each on `/projects/pdemo-merbau`); if it is more than 80 ms slower on the median, say so to the user when the task is done.
+  (If `ensureFreshDb` is not the name of the snapshot re-check other read routes call, use the one they call.)
+  In `LinksPanel`, when `row.links === null`, fetch it once on mount with one retry, and merge: `const [epc, setEpc] = useState<string[]>([]); useEffect(() => { … fetch(\`/api/projects/${projectId}/link-suggestions\`) … setEpc(json[row.id] ?? []) … }, [row.id, row.links, projectId]);` — LinksPanel gains a `projectId: string` prop; the shown list is `[...suggestions, ...epc.filter((id) => !suggestions.includes(id))]`, date guesses first so the list never jumps above what is already on screen. A failed fetch shows nothing extra (the date guesses still stand); no error banner for a hint. `suggestionsFor` is then called WITHOUT the second argument in ScheduleSheet.
 
 - [ ] **Step 2: `components/projects/LinksPanel.tsx`**
 
@@ -1996,7 +2172,12 @@ export default function LinksPanel({
 
 - [ ] **Step 3: Wire `RowMenu.tsx`**
   - Mode union: `useState<'menu' | 'unit' | 'delete' | 'links'>(initialMode)`; prop `initialMode?: 'menu' | 'delete' | 'links'`.
-  - New props in the destructuring and type: `network: Network; rows: SheetRow[]; names: Map<string, string>; suggestions: string[]; onLinksSaved: (sheet: Sheet, touched: string[]) => void;` (import `type Network` from `@/lib/chains`, `LinksPanel` from `./LinksPanel`, `Link2` from lucide-react).
+  - New props in the destructuring and type: `projectId: string; network: Network; rows: SheetRow[]; names: Map<string, string>; suggestions: string[]; onLinksSaved: (sheet: Sheet, touched: string[]) => void;` (import `type Network` from `@/lib/chains`, `Link2` from lucide-react). Load the panel lazily so the planner's first load does not carry it:
+    ```ts
+    const LinksPanel = dynamic(() => import('./LinksPanel'), { ssr: false });
+    ```
+    and render it inside its own `<Suspense fallback={null}>` (memory "Lazy overlay needs its own Suspense"). Warm the chunk when the ⋯ menu opens — `useEffect(() => { void import('./LinksPanel'); }, []);` in RowMenu — so pressing "Links" never waits for the network.
+  - Give the Links `<Item>` the attribute `data-links-entry` (the perf probe presses it); if `Item` does not pass extra props through, add `{...rest}` to it.
   - First thing inside the `mode === 'menu'` list, for activities only:
     ```tsx
     {!row.isSummary && (
@@ -2026,7 +2207,7 @@ export default function LinksPanel({
     )}
     ```
   In `ScheduleSheet`:
-  - `const suggestions = useMemo(() => suggestionsFor(rows, epcSuggestions), [rows, epcSuggestions]);`
+  - `const suggestions = useMemo(() => suggestionsFor(rows), [rows]);` and pass `projectId={projectId}` to `<RowMenu>` (RowMenu passes it to `LinksPanel`).
   - widen the `menuMode` state type to include `'links'`; ConflictStrip's `onOpen` sets `'links'`.
   - pass to `<RowMenu>`: `network={network} rows={rows} names={nameById} suggestions={suggestions.get(menuRow.id) ?? []}` and
     ```tsx
@@ -2041,12 +2222,12 @@ export default function LinksPanel({
     ```
   - `ShiftPreviewBar` must render with `moved: []`: guard every `shift.moved[0]` / `self` use (no "moved N days" span, no week list from `self`).
 
-- [ ] **Step 4: Press it** — puppeteer, 390×844 and 1440×900: open Merbau, press ⋯ on an activity → "Links: Waits for 0 · Holds up 0"; press it → why sentence and chip visible; "+ Add what it waits for" → type part of a name → pick → way "After it starts", wait 3 → Save → panel closes; reopen → same values; reload → same; the Gantt draws an arrow entering on the left with "+3 days". Pick, for an activity that already holds this one up, the reverse direction → that entry is disabled "Would loop back". Change something and press Cancel → reload → nothing changed. Use a "Suggested" on a never-asked row → Save → stored. Shoot each state at both widths and look.
+- [ ] **Step 4: Press it** — puppeteer, 390×844 and 1440×900: open Merbau, press ⋯ on an activity → "Links: Waits for 0 · Holds up 0"; press it → why sentence and chip visible; "+ Add what it waits for" → type part of a name → pick → way "After it starts", wait 3 → Save → panel closes; reopen → same values; reload → same; the Gantt draws an arrow entering on the left with "+3 days". Pick, for an activity that already holds this one up, the reverse direction → that entry is disabled "Would loop back". Change something and press Cancel → reload → nothing changed. Use a "Suggested" on a never-asked row → Save → stored. Shoot each state at both widths and look. Then the budget: production build, `node scripts/verify-projects-perf.mjs` three times; "Press ⋯" and "Press Links" inside budget, First Load JS within baseline + 15 kB; write the medians under the baseline as "after Task 9".
 
 - [ ] **Step 5: Type-check, lint the touched files, commit**
 
 ```bash
-git add lib/link-suggestions.ts components/projects/LinksPanel.tsx components/projects/RowMenu.tsx components/projects/ScheduleSheet.tsx app/projects/[id]/page.tsx scripts/verify-schedule-logic.ts
+git add lib/link-suggestions.ts components/projects/LinksPanel.tsx components/projects/RowMenu.tsx components/projects/ScheduleSheet.tsx app/api/projects/[id]/link-suggestions/route.ts scripts/verify-schedule-logic.ts
 git commit -m "Links panel in the row menu: waits for, holds up, why, suggestions"
 ```
 
@@ -2164,39 +2345,69 @@ export default function LinkDragCard({
       () => false
     );
     type End = 'start' | 'finish';
-    const [drag, setDrag] = useState<{ fromId: string; fromEnd: End; x0: number; y0: number; x: number; y: number; target: { id: string; end: End } | null } | null>(null);
+    // A drag never goes through React state while it moves: the pointer fires
+    // ~120 times a second and re-rendering 185 bars that often is the jank the
+    // budget forbids. The line and the target ring are written straight into
+    // two SVG elements, once per frame. React hears about the drag twice: when
+    // it starts (to show the layer) and when it ends (onLink).
+    const dragRef = useRef<{ fromId: string; fromEnd: End; x0: number; y0: number; target: { id: string; end: End } | null } | null>(null);
+    const [dragging, setDragging] = useState(false);
+    const lineRef = useRef<SVGPathElement>(null);
+    const ringRef = useRef<SVGCircleElement>(null);
+    const frame = useRef(0);
     const bodyRef = useRef<HTMLDivElement>(null);
+    const endDrag = () => {
+      dragRef.current = null;
+      cancelAnimationFrame(frame.current);
+      setDragging(false);
+    };
     useEffect(() => {
-      if (!drag) return;
-      const esc = (e: KeyboardEvent) => e.key === 'Escape' && setDrag(null);
+      if (!dragging) return;
+      const esc = (e: KeyboardEvent) => e.key === 'Escape' && endDrag();
       window.addEventListener('keydown', esc);
       return () => window.removeEventListener('keydown', esc);
-    }, [drag]);
+    }, [dragging]);
     const wayOf = (a: End, b: End): LinkType | null => (a === 'finish' && b === 'start' ? 'FS' : a === 'start' && b === 'start' ? 'SS' : a === 'finish' && b === 'finish' ? 'FF' : null);
     ```
   - give the body div `ref={bodyRef}` and:
     ```tsx
     onPointerMove={(e) => {
+      const drag = dragRef.current;
       if (!drag || !bodyRef.current) return;
       const box = bodyRef.current.getBoundingClientRect();
       const x = e.clientX - box.left;
       const y = e.clientY - box.top;
       const row = rows[Math.floor(y / rowH)];
       let target: { id: string; end: End } | null = null;
+      let tx = 0;
       if (row && row.id !== drag.fromId && !row.isSummary && row.startDate && row.finishDate) {
         const sx = xOf(row.startDate);
         const fx = xOf(row.finishDate) + scale;
         const end: End = Math.abs(x - sx) <= Math.abs(x - fx) ? 'start' : 'finish';
-        if (Math.min(Math.abs(x - sx), Math.abs(x - fx)) <= 16 && wayOf(drag.fromEnd, end)) target = { id: row.id, end };
+        if (Math.min(Math.abs(x - sx), Math.abs(x - fx)) <= 16 && wayOf(drag.fromEnd, end)) {
+          target = { id: row.id, end };
+          tx = end === 'start' ? sx : fx;
+        }
       }
-      setDrag({ ...drag, x, y, target });
+      drag.target = target;
+      const ty = Math.floor(y / rowH) * rowH + rowH / 2;
+      cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() => {
+        lineRef.current?.setAttribute('d', `M${drag.x0} ${drag.y0} L${x} ${y}`);
+        if (ringRef.current) {
+          ringRef.current.setAttribute('cx', String(tx));
+          ringRef.current.setAttribute('cy', String(ty));
+          ringRef.current.style.opacity = target ? '1' : '0';
+        }
+      });
     }}
     onPointerUp={() => {
+      const drag = dragRef.current;
       if (drag?.target && onLink) {
         const way = wayOf(drag.fromEnd, drag.target.end);
         if (way) onLink(drag.fromId, drag.target.id, way);
       }
-      setDrag(null);
+      endDrag();
     }}
     ```
   - on each task bar button add the class `group`, and inside it, when `fine && onLink && !bracket`:
@@ -2205,32 +2416,32 @@ export default function LinkDragCard({
       <span
         key={end}
         aria-hidden
+        data-link-handle={end}
         onPointerDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
           bodyRef.current?.setPointerCapture(e.pointerId);
           const ex = end === 'start' ? x : x + w;
           const ey = y + rowH / 2;
-          setDrag({ fromId: r.id, fromEnd: end, x0: ex, y0: ey, x: ex, y: ey, target: null });
+          dragRef.current = { fromId: r.id, fromEnd: end, x0: ex, y0: ey, target: null };
+          setDragging(true);
         }}
         className="absolute top-1/2 z-[8] size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-card opacity-0 transition-opacity group-hover:opacity-100"
         style={{ [end === 'start' ? 'left' : 'right']: -6, borderColor: color }}
       />
     ))}
     ```
-  - while `drag` is set, inside the arrows SVG (render the SVG when `network || drag`), draw:
+  - a SEPARATE small SVG for the drag (not inside the memoised arrow layer, so starting a drag does not rebuild the arrows), rendered only while `dragging`, as a sibling of `{arrowLayer}`:
     ```tsx
-    {drag && (
-      <>
-        <path d={`M${drag.x0} ${drag.y0} L${drag.x} ${drag.y}`} stroke="var(--primary)" strokeWidth={1.75} strokeDasharray="4 3" fill="none" />
-        {drag.target && (() => {
-          const tr = rows.find((x) => x.id === drag.target!.id)!;
-          const tx = drag.target.end === 'start' ? xOf(tr.startDate!) : xOf(tr.finishDate!) + scale;
-          return <circle cx={tx} cy={rows.indexOf(tr) * rowH + rowH / 2} r={7} fill="none" stroke="var(--primary)" strokeWidth={2} />;
-        })()}
-      </>
+    {dragging && (
+      <svg aria-hidden className="pointer-events-none absolute left-0 top-0 z-[9] overflow-visible" width={width} height={bodyH}>
+        <path ref={lineRef} d="" stroke="var(--primary)" strokeWidth={1.75} strokeDasharray="4 3" fill="none" />
+        <circle ref={ringRef} r={7} fill="none" stroke="var(--primary)" strokeWidth={2} style={{ opacity: 0, transition: 'opacity 120ms var(--ease-ios)' }} />
+      </svg>
     )}
     ```
+  - The card in Step 3 loads lazily: in ScheduleSheet `const LinkDragCard = dynamic(() => import('./LinkDragCard'), { ssr: false });`, rendered inside its own `<Suspense fallback={null}>`; warm it with `void import('./LinkDragCard')` in the handle's `onPointerDown` so it is ready on release.
+  - After Step 4's presses, the budget: production build, `node scripts/verify-projects-perf.mjs` three times; "drag long task max" ≤ 50 ms; write the medians under the baseline as "after Task 10".
 
 - [ ] **Step 3: ScheduleSheet** — state `const [pendingLink, setPendingLink] = useState<{ fromId: string; toId: string; type: LinkType } | null>(null);`, pass `onLink={(fromId, toId, type) => setPendingLink({ fromId, toId, type })}` to `<GanttChart>`, and render:
   ```tsx
@@ -2484,7 +2695,7 @@ node scripts/verify-sheet-optimistic.mjs
 ```
 Expected: all PASS.
 
-- [ ] **Step 2: Screens, looked at** — Merbau with links, one kept conflict and a contract: Projects at 1440×900 and 390×844; Data Overall's activity panel ("What has to finish before this one?" lists the new links by name, read only).
+- [ ] **Step 2: Screens, looked at** — Merbau with links, one kept conflict and a contract: Projects at 1440×900 and 390×844; Data Overall's activity panel ("What has to finish before this one?" lists the new links by name, read only). Then the full budget table: production build, the probe three times, every row inside budget against the Task 0 baseline; write the final medians under it. Any row over budget is fixed before Step 4, not reported as done.
 
 - [ ] **Step 3: Build**
 
