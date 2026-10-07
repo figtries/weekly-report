@@ -15,6 +15,7 @@ import {
 } from './sqlite';
 import { boxAt, coverChildren, getActiveBaselineId, getSheet, rowSpan, type Sheet } from './sheet';
 import { pruneLinks } from './links-sqlite';
+import { inheritKind } from './kind-plan';
 import { syncDerivedWeights } from './weights-auto';
 
 /**
@@ -426,6 +427,8 @@ export async function addRowAction(
       renumber(projectId, tx);
       touchProject(projectId, tx);
     });
+    // Under a heading that has a kind of work, the new row has it too.
+    inheritKind(projectId, id);
     return { ok: true, newId: id, sheet: await settle(projectId) };
   } catch (e) {
     return fail(e);
