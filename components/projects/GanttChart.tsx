@@ -854,6 +854,22 @@ export function GanttLegend({
           Waits for
         </span>
       )}
+      {view.marks.links &&
+        network?.links.some((l) => network.rows.get(l.fromId)?.setsProjectFinish && network.rows.get(l.toId)?.setsProjectFinish) && (
+          <span className={item}>
+            <svg aria-hidden width="16" height="8" viewBox="0 0 16 8">
+              <path d="M0 4 H12" stroke="var(--foreground)" strokeWidth="1.5" />
+              <path d="M10 1 L15 4 L10 7 z" fill="var(--foreground)" />
+            </svg>
+            Finish chain
+          </span>
+        )}
+      {tasks.some((r) => facts[r.id]?.kindId === 'procurement' && facts[r.id]?.rungs.at(-1)?.label === 'On site') && (
+        <span className={item}>
+          <Flag aria-hidden className="size-3" />
+          On site date
+        </span>
+      )}
 
       {/* The marks the links add, each named only when the plan shows one. */}
       {rows.some((r) => r.isCritical) && (

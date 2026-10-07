@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { m } from 'framer-motion';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Flag, Plus, Trash2, X } from 'lucide-react';
 
 import { pressMotion } from '@/components/motion/Press';
 import type { SheetRow } from '@/lib/sheet';
@@ -178,9 +178,33 @@ export default function BarsPanel({
   ];
 
   // The shapes the app always draws, each in one short line.
+  const arrow = (stroke: string, width: number, dash?: string) => (
+    <svg width="32" height="10" viewBox="0 0 32 10" aria-hidden>
+      <path d="M1 5 H25" stroke={stroke} strokeWidth={width} strokeDasharray={dash} />
+      <path d="M24 1 L31 5 L24 9 z" fill={stroke} />
+    </svg>
+  );
   const meanings: { mark: React.ReactNode; text: string }[] = [
     { mark: <span className="h-1.5 w-8 rounded-[1px] bg-foreground" />, text: 'Heading. Spans the rows under it.' },
+    {
+      mark: (
+        <span className="flex h-3 w-8 gap-px overflow-hidden rounded-[3px]">
+          <span className="w-1/3 bg-[var(--plan-5)]" />
+          <span className="w-1/3 bg-[var(--plan-5)]" />
+          <span className="w-1/3 bg-[var(--plan-5)] opacity-30" />
+        </span>
+      ),
+      text: 'Cuts in a bar. Its stages, from its kind of work.',
+    },
     { mark: <span className="size-2.5 rotate-45 rounded-[1px] bg-foreground" />, text: 'Milestone. One date.' },
+    { mark: <Flag className="size-3.5 text-[var(--plan-3)]" />, text: 'Flag. The day it must be on site.' },
+    { mark: arrow('var(--muted-foreground)', 1.4), text: 'Grey arrow. This one waits for that one.' },
+    { mark: arrow('var(--foreground)', 1.4), text: 'Black arrow. The pressed bar\'s links, or the chain that sets the project finish.' },
+    { mark: arrow('var(--bad)', 1.6, '4 3'), text: 'Red dashed arrow. The dates break this link.' },
+    {
+      mark: <span className="whitespace-nowrap text-[10px] font-medium text-muted-foreground">+7 d</span>,
+      text: 'Days on an arrow. The wait between the two.',
+    },
     {
       mark: <span className="h-3 w-8 rounded-[3px] bg-[var(--plan-5)] ring-2 ring-[var(--bad)]" />,
       text: 'Red outline. This one sets the project finish.',
