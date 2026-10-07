@@ -667,7 +667,11 @@ export default function GanttChart({
                       className="absolute inset-0"
                       style={{ background: color, opacity: p.done ? (bracket ? 1 : 0.9) : 0.28 }}
                     />
-                    {p.label && (p.to - p.from) * w >= 28 && (
+                    {/* Names on the PRESSED bar only: on every bar they buried
+                        the late hatch and the red outline under "Installation"
+                        and "Conne…" (7 Oct 2026). The cuts and the solid/tint
+                        still show the stages on every bar. */}
+                    {p.label && r.id === selectedId && (p.to - p.from) * w >= 28 && (
                       <span
                         className={`relative truncate px-1 text-[9px] font-semibold leading-none ${
                           p.done ? 'text-white' : 'text-foreground'

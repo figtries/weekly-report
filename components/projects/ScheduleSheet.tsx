@@ -315,6 +315,9 @@ export default function ScheduleSheet({
   const [view, setView] = useState(barView);
   const [facts, setFacts] = useState(barFacts);
   const [barsOpen, setBarsOpen] = useState(false);
+  // The heading Links was pressed on; the hint shows only while that row is
+  // still the selected one, so picking an activity clears it without an effect.
+  const [linkHint, setLinkHint] = useState<string | null>(null);
   const [fitTimeline, setFitTimeline] = useState(false);
   const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
   const [query, setQuery] = useState('');
@@ -1655,9 +1658,12 @@ export default function ScheduleSheet({
             c.size > 0 ? new Set() : new Set(rows.filter((r) => r.isSummary).map((r) => r.id))
           )
         }
-        canLink={!!selected && !selected.isSummary}
+        canLink={!!selected}
         onLinks={() => {
-          if (!selected || selected.isSummary) return;
+          if (!selected) return;
+          // A heading has no links of its own. Disabled, the button read as
+          // broken (7 Oct 2026); pressed, it now says why, under the toolbar.
+          if (selected.isSummary) return setLinkHint(selected.id);
           setMenuRow(selected);
           setMenuMode('links');
         }}
@@ -1741,6 +1747,16 @@ export default function ScheduleSheet({
           className="shrink-0 border-b bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
           {error}
+        </m.p>
+      )}
+
+      {selected && linkHint === selected.id && (
+        <m.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="shrink-0 border-b bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          Links join activities, not headings. Pick an activity under {selected.name}.
         </m.p>
       )}
 

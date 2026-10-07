@@ -65,7 +65,7 @@ export default function SheetToolbar({
   onDelete: () => void;
   allCollapsed: boolean;
   onToggleAll: () => void;
-  /** An activity is selected: a heading has no links of its own. */
+  /** A row is selected. On a heading the press explains that links join activities. */
   canLink: boolean;
   /** The selected row's links (the panel the row's ⋯ also opens). */
   onLinks: () => void;
