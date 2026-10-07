@@ -486,7 +486,6 @@ export default function OverallMap({
         currency={currency}
         peers={peers}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
-        forecastOptions={forecast?.options}
         planReady={figuresReady}
         onClose={() => setActiveId(null)}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}

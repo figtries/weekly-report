@@ -453,9 +453,12 @@ date); a repeated ladder and typed-vs-ticks are still found but not listed
 until a history-safe restatement exists. The panel shows the forecast card,
 the next stage's date, and "What has to finish before this one?", and no
 warning boxes. LINKS ARE THE PLANNER'S, one activity at a time: EPC order
-only suggests ("Use these" is still a press, and the picker marks the
-suggestion). A one-press "Link" for the whole plan was shipped and removed
+only suggests. A one-press "Link" for the whole plan was shipped and removed
 the same day, because once it had run nothing on screen showed what it did.
+Since 7 Oct 2026 relations are MADE IN PROJECTS, with the plan, and Data
+Overall only reads them: the panel lists what an activity waits for and its
+one button opens the planner. The picker and "Use these" left it;
+`setWaitsForAction` stays for the planner to call.
 
 # Daily reports: today opens as yesterday
 

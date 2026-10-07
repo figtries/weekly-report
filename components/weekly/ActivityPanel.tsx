@@ -26,7 +26,7 @@ import ProgressEntry, { deriveShape, type EntryShape } from './ProgressEntry';
 import WeekLog, { forgetLeafLog } from './WeekLog';
 import WorkKindPicker, { type WorkKindPeer, type WorkKindPickerHandle } from './WorkKindPicker';
 import ForecastBlock from './ForecastBlock';
-import type { ForecastLeafView, LinkRef } from '@/lib/forecast-view';
+import type { ForecastLeafView } from '@/lib/forecast-view';
 import { formatMoney } from '@/lib/currency';
 
 /**
@@ -132,7 +132,6 @@ export default function ActivityPanel({
   currency,
   peers,
   forecast = null,
-  forecastOptions = [],
   planReady = false,
   onClose,
   onSaved,
@@ -154,8 +153,6 @@ export default function ActivityPanel({
   peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
-  /** Every scheduled activity, for "What has to finish before this one?". */
-  forecastOptions?: LinkRef[];
   /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
   planReady?: boolean;
   onClose: () => void;
@@ -178,7 +175,6 @@ export default function ActivityPanel({
         currency={currency}
         peers={peers}
         forecast={forecast}
-        forecastOptions={forecastOptions}
         planReady={planReady}
         onClose={onClose}
         onSaved={onSaved}
@@ -204,7 +200,6 @@ function PanelBody({
   currency,
   peers,
   forecast = null,
-  forecastOptions = [],
   planReady = false,
   onClose,
   onSaved,
@@ -219,8 +214,6 @@ function PanelBody({
   peers: WorkKindPeer[];
   /** This activity's forecast, when the weights close and there is a schedule. */
   forecast?: ForecastLeafView | null;
-  /** Every scheduled activity, for "What has to finish before this one?". */
-  forecastOptions?: LinkRef[];
   /** Whether plan figures may show: the weight gate (lib/weight-gate.ts) is open. */
   planReady?: boolean;
   onClose: () => void;
@@ -831,7 +824,7 @@ function PanelBody({
               <ForecastBlock
                 leafId={node.id}
                 view={forecast}
-                options={forecastOptions}
+                projectHref={projectHref}
                 week={week}
                 projectId={projectId}
               />

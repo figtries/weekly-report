@@ -1,11 +1,12 @@
 'use client';
 
 import { m } from 'framer-motion';
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { CalendarClock, Link2 } from 'lucide-react';
 
-import { setLeafForecastAction, setWaitsForAction } from '@/lib/actions';
-import type { ForecastLeafView, LinkRef, WaitRef } from '@/lib/forecast-view';
+import { setLeafForecastAction } from '@/lib/actions';
+import type { ForecastLeafView } from '@/lib/forecast-view';
 import DateField from '@/components/ui/DateField';
 import CodeChip from '@/components/ui/CodeChip';
 import { pressMotion } from '@/components/motion/Press';
@@ -20,10 +21,9 @@ import { cn } from '@/lib/utils';
  *
  * Nothing else, on purpose (28 Sep 2026). Up to four warning boxes above the
  * card made the panel hard going for somebody who came to fill in a figure;
- * the findings are listed once, over the map ("to check"). Links are made
- * HERE, one activity at a time, by the planner: a one-press "Link" for the
- * whole plan was built and removed the same day, because nobody could see
- * what it had done.
+ * the findings are listed once, over the map ("to check"). Links are READ
+ * here and made in Projects, with the plan (7 Oct 2026): Data Overall only
+ * works with the data.
  *
  * Every figure here was worked out on the server (lib/forecast-view.ts). This
  * component decides nothing; it shows, and it asks. Nothing changes without a
@@ -31,7 +31,6 @@ import { cn } from '@/lib/utils';
  * Cancel, the same way a budget is changed, and the panel's own Save at the
  * foot is left to the progress figure it has always meant.
  *
- * Native inputs in the picker: it can run to every activity in the plan.
  */
 
 type Source = 'vendor' | 'site' | 'client';
@@ -98,29 +97,26 @@ const chip = 'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabula
 export default function ForecastBlock({
   leafId,
   view,
-  options,
   week,
   projectId,
+  projectHref,
 }: {
   leafId: string;
   view: ForecastLeafView;
-  /** Every scheduled activity, in plan order, for the picker. */
-  options: LinkRef[];
   week: number;
   projectId: string | null;
+  /** The planner, where this activity's links are made. */
+  projectHref: string | null;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // One editor open at a time; `null` is reading.
-  const [editing, setEditing] = useState<'date' | 'links' | null>(null);
+  const [editing, setEditing] = useState<'date' | null>(null);
   const next = view.next;
   const typedHere = view.typed && next && view.typed.rungId === next.rungId ? view.typed : null;
   const [date, setDate] = useState(typedHere?.date ?? next?.planDate ?? '');
   const [source, setSource] = useState<Source>(typedHere?.source ?? 'vendor');
-  const [picked, setPicked] = useState<Set<string>>(() => new Set());
-  const offering = !view.answered && view.suggested.length > 0;
-  const suggestedIds = new Set(view.suggested.map((l) => l.id));
 
   function run(write: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -134,7 +130,6 @@ export default function ForecastBlock({
   const saveDate = () =>
     next && date && run(() => setLeafForecastAction(leafId, { date, source, rungId: next.rungId }, week, projectId));
   const backToPlan = () => run(() => setLeafForecastAction(leafId, null, week, projectId));
-  const saveLinks = (ids: string[]) => run(() => setWaitsForAction(leafId, ids, projectId));
 
   // Blue forecast over a thin red plan, on one scale: from whichever comes
   // first to whichever ends last.
@@ -267,119 +262,46 @@ export default function ForecastBlock({
           </div>
         )}
 
-        {/* What has to finish before this one. The planner's answer, never the
-            app's: EPC order only suggests, and "Use these" is still a press.
-            The question is the label and one plain sentence says what the
-            answer does, because "Waits for" alone was a term people had to
-            have explained to them (28 Sep 2026). */}
+        {/* What has to finish before this one. READ ONLY since 7 Oct 2026:
+            relations belong to the plan and are made in Projects; Data
+            Overall only reads them, and its button opens the planner, the
+            same way the Schedule tile does. */}
         <div className="mt-4 border-t border-border/60 pt-4">
           <div className="flex items-start gap-3">
             <Link2 className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-medium text-foreground">What has to finish before this one?</p>
-              {/* While picking, the picker's own line explains; one sentence at a time. */}
-              <p className={cn('mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground', editing === 'links' && 'hidden')}>
+              <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
                 {view.waitsFor.length
                   ? 'If one of these runs late, this activity moves with it.'
                   : view.answered
                     ? 'Nothing. It does not wait for another activity.'
-                    : offering
-                      ? 'Not answered yet. By EPC order it looks like:'
-                      : 'Not answered yet.'}
+                    : 'Not set in the plan yet.'}
               </p>
 
-              {(view.waitsFor.length > 0 || offering) && editing !== 'links' && (
+              {view.waitsFor.length > 0 && (
                 <ul className="mt-3 space-y-2.5">
-                  {(view.waitsFor.length ? view.waitsFor : view.suggested).map((l: LinkRef & Partial<WaitRef>) => (
+                  {view.waitsFor.map((l) => (
                     <li key={l.id} className="flex items-center gap-2 text-[13px] leading-snug text-foreground">
                       {l.code && <CodeChip>{l.code}</CodeChip>}
                       <span className="line-clamp-2 min-w-0 flex-1 break-words">{l.name}</span>
-                      {l.state && (
-                        <span className={cn(chip, l.state === 'late' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
-                          {l.state === 'late' ? `${l.lateWeeks} wk late` : l.state === 'done' ? 'Done' : 'On plan'}
-                        </span>
-                      )}
+                      <span className={cn(chip, l.state === 'late' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
+                        {l.state === 'late' ? `${l.lateWeeks} wk late` : l.state === 'done' ? 'Done' : 'On plan'}
+                      </span>
                     </li>
                   ))}
                 </ul>
               )}
 
-              {editing !== 'links' && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {offering && (
-                    <m.button
-                      {...pressMotion}
-                      type="button"
-                      disabled={pending}
-                      onClick={() => saveLinks(view.suggested.map((l) => l.id))}
-                      className={cn(pill, 'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60')}
-                    >
-                      {pending ? 'Saving…' : 'Use these'}
-                    </m.button>
-                  )}
-                  <m.button
-                    {...pressMotion}
-                    type="button"
-                    onClick={() => {
-                      setPicked(new Set((view.answered ? view.waitsFor : view.suggested).map((l) => l.id)));
-                      setEditing('links');
-                    }}
-                    className={pillPrimary}
-                  >
-                    {view.answered ? 'Change' : 'Choose'}
-                  </m.button>
+              {projectHref && (
+                <div className="mt-3 flex">
+                  <Link href={projectHref} className={pillPrimary}>
+                    {view.answered ? 'Change in plan' : 'Set in plan'}
+                  </Link>
                 </div>
               )}
             </div>
           </div>
-
-          {editing === 'links' && (
-            <div className="mt-4">
-              <p className="mb-2 text-[12.5px] leading-relaxed text-foreground">
-                Tick what has to finish first. Leave them all unticked if it waits for nothing.
-              </p>
-              <ul className="max-h-72 space-y-0.5 overflow-y-auto rounded-xl border border-border/60 p-1">
-                {options
-                  .filter((o) => o.id !== leafId)
-                  .map((o) => (
-                    <li key={o.id}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 hover:bg-muted/60">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-[var(--chart-1)]"
-                          checked={picked.has(o.id)}
-                          onChange={(e) =>
-                            setPicked((prev) => {
-                              const nextSet = new Set(prev);
-                              if (e.target.checked) nextSet.add(o.id);
-                              else nextSet.delete(o.id);
-                              return nextSet;
-                            })
-                          }
-                        />
-                        {o.code && <CodeChip>{o.code}</CodeChip>}
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{o.name}</span>
-                        {suggestedIds.has(o.id) && <span className={cn(chip, 'bg-chart-1/10 text-chart-1')}>Suggested</span>}
-                      </label>
-                    </li>
-                  ))}
-              </ul>
-              <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setEditing(null)} className={pillQuiet}>
-                  Cancel
-                </button>
-                <m.button
-                  {...pressMotion}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => saveLinks(options.filter((o) => picked.has(o.id)).map((o) => o.id))}
-                  className={cn(pillPrimary, 'disabled:opacity-40')}
-                >
-                  {pending ? 'Saving…' : 'Save'}
-                </m.button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
