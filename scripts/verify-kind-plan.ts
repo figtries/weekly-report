@@ -49,6 +49,18 @@ const rungs = (id: string) =>
 const method = (id: string) =>
   (sqlite.prepare('select progress_method m from wbs_nodes where id = ?').get(id) as { m: string }).m;
 
+// Every OTHER row's ticks, counted before anything changes kind. A kind change
+// once deleted every tick in every week the row had a figure in (7 Oct 2026).
+const othersTicks = (touched: string[]) =>
+  (
+    sqlite
+      .prepare(
+        `select count(*) c from milestone_progress mp join milestones m on m.id = mp.milestone_id
+         where m.node_id not in (${touched.map(() => '?').join(',') || "''"})`
+      )
+      .get(...touched) as { c: number }
+  ).c;
+
 const eng = BUILT_IN_KINDS.find((k) => k.id === 'engineering')!.steps;
 const written = applyKindInPlan(P, 'kH', 'engineering', 'steps', eng);
 check('heading takes the kind', kindOf('kH') === 'engineering');
@@ -105,8 +117,26 @@ const done100 = sqlite
   )
   .get(P) as { id: string } | undefined;
 if (done100) {
+  const before = othersTicks([done100.id]);
   applyKindInPlan(P, done100.id, 'engineering', 'steps', eng);
   check('a finished row stays finished', pctOf(done100.id) >= 100, `${pctOf(done100.id)}`);
+  const after = othersTicks([done100.id]);
+  check("one row's kind change leaves every other row's ticks", before === after && before > 0, `${before} -> ${after}`);
+}
+// A real heading with recorded ticks under it, changed twice.
+const heading = sqlite
+  .prepare(
+    `select p.id from wbs_nodes p join wbs_nodes c on c.parent_id = p.id
+     join milestones m on m.node_id = c.id join milestone_progress mp on mp.milestone_id = m.id
+     where p.project_id = ? group by p.id order by count(*) desc limit 1`
+  )
+  .get(P) as { id: string } | undefined;
+if (heading) {
+  const under = (sqlite.prepare('select id from wbs_nodes where parent_id = ?').all(heading.id) as { id: string }[]).map((r) => r.id);
+  const before = othersTicks([heading.id, ...under]);
+  applyKindInPlan(P, heading.id, 'commissioning', 'steps', com);
+  const after = othersTicks([heading.id, ...under]);
+  check('a heading kind change leaves rows outside it alone', before === after && before > 0, `${before} -> ${after}`);
 }
 const partial = sqlite
   .prepare(

@@ -311,15 +311,21 @@ export function setProgressMethodSqlite(
 
     // SWITCHING CLEARS THE OTHER METHOD'S EVIDENCE — a stale quantity sitting
     // behind a milestone item is a number nobody can explain later.
-    const weekIds = db
-      .select({ weekId: schema.leafProgress.weekId })
-      .from(schema.leafProgress)
-      .where(eq(schema.leafProgress.nodeId, nodeId))
+    //
+    // THIS ROW'S ticks only. It used to delete every tick in every week this
+    // row had a figure in, which is EVERY ROW's ticks in those weeks: changing
+    // one activity's kind of work took a project's actual from 66.01% to
+    // 17.82% (4,656 ticks down to 188, found 7 Oct 2026; the line dates from
+    // 12 Sep 2026). Scoped to this row's own rungs, by id.
+    const ownRungs = db
+      .select({ id: schema.milestones.id })
+      .from(schema.milestones)
+      .where(eq(schema.milestones.nodeId, nodeId))
       .all()
-      .map((r) => r.weekId);
-    if (weekIds.length) {
+      .map((r) => r.id);
+    if (ownRungs.length) {
       tx.delete(schema.milestoneProgress)
-        .where(inArray(schema.milestoneProgress.weekId, weekIds))
+        .where(inArray(schema.milestoneProgress.milestoneId, ownRungs))
         .run();
     }
     tx.delete(schema.milestones).where(eq(schema.milestones.nodeId, nodeId)).run();

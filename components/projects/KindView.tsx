@@ -10,9 +10,10 @@ import type { Sheet, SheetRow } from '@/lib/sheet';
 import type { BarFact } from '@/lib/bar-facts';
 import { paintCss, paintOf, segmentsOf, type BarView } from '@/lib/bar-view';
 import { reachOf } from '@/lib/kind-reach';
-import { changeFor } from '@/lib/work-kind-apply';
+import { changeFor, impactOf, ladderFor } from '@/lib/work-kind-apply';
 import { setKindInPlanAction } from '@/lib/kind-plan-actions';
-import type { Shape } from '@/lib/work-kind';
+import { BUILT_IN_KINDS, shapeOf, type Shape } from '@/lib/work-kind';
+import { disciplineOf, findDiscipline } from '@/lib/disciplines';
 import type { Milestone } from '@/lib/types';
 
 const fmt1 = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
@@ -81,19 +82,34 @@ export default function KindView({
     return reachOf(heading, pick?.kindId ?? '\u0000', kids).filter((id) => !byId.get(id)?.isSummary);
   }, [row, rows, facts, pick, byId]);
 
-  // What recorded progress becomes, said before Save rather than after.
+  // What recorded progress becomes, said BEFORE Save, in the project's own
+  // points: a kind change restates each row to the last stage it has fully
+  // reached, and how far that moves the project is the person's call to make.
   let impact: string | null = null;
   if (pick && pick.shape !== 'qty') {
-    if (!row.isSummary && (fact?.donePct ?? 0) > 0) {
-      const ch = changeFor({ id: row.id, name: row.name, bobot: 0, pct: fact!.donePct }, pick.steps);
-      if (pick.steps.length && Math.abs(ch.toPct - ch.fromPct) > 0.05) {
-        impact = `Its ${fmt1(ch.fromPct)}% becomes ${fmt1(ch.toPct)}%, the last stage it has fully reached.`;
-      }
-    } else if (reach) {
-      const moved = reach.filter((id) => (facts[id]?.donePct ?? 0) > 0).length;
-      if (moved) {
-        impact = `${moved} of the ${reach.length} ${reach.length === 1 ? 'row has' : 'rows have'} progress already. Each moves to the last stage it has fully reached.`;
-      }
+    const kind = BUILT_IN_KINDS.find((k) => k.id === pick.kindId);
+    const disciplineId = pick.kindId === 'construction' ? disciplineOf(pick.steps)?.id ?? null : null;
+    const pattern = findDiscipline(disciplineId) ?? kind;
+    // The same ladder each row will get from the server (lib/kind-plan.ts).
+    const changes = (row.isSummary ? reach ?? [] : [row.id]).flatMap((id) => {
+      const r = byId.get(id);
+      const pct = facts[id]?.donePct ?? 0;
+      if (!r || r.isSummary || pct <= 0 || !pattern) return [];
+      const steps = row.isSummary
+        ? ladderFor(pick.kindId, shapeOf(r.name, pattern), r.name, BUILT_IN_KINDS, disciplineId)
+        : pick.steps;
+      return steps.length ? [changeFor({ id, name: r.name, bobot: r.bobot ?? 0, pct }, steps)] : [];
+    });
+    const { movedRows, pointsDelta } = impactOf(changes);
+    const points =
+      Math.abs(pointsDelta) < 0.005
+        ? 'the project figure does not move'
+        : `the project moves ${pointsDelta > 0 ? '+' : ''}${pointsDelta.toFixed(2)} points`;
+    if (!row.isSummary && movedRows) {
+      const ch = changes[0];
+      impact = `Its ${fmt1(ch.fromPct)}% becomes ${fmt1(ch.toPct)}%, the last stage it has fully reached: ${points}.`;
+    } else if (row.isSummary && movedRows) {
+      impact = `${movedRows} of the ${reach?.length ?? 0} rows keep only the stages they have fully reached: ${points}.`;
     }
   }
 
