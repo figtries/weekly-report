@@ -75,13 +75,13 @@ export default function OpenProjectButton({
     return (
       <Link
         href={openWeek ? `/weekly/${openWeek}/overall` : DATA_OVERALL}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-ok px-3 text-[13px] font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-ok/90 hover:shadow-md sm:h-9"
+        aria-label="Go to Data Overall"
+        className="inline-flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-ok text-[13px] font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-ok/90 hover:shadow-md sm:h-9 sm:w-auto sm:px-3"
       >
         <Check className="size-4" />
-        {/* Short on a phone, where this button shares its line with the way
-            back and every pixel it takes is a row of the plan you cannot
-            see. The sentence is still there on any screen with room. */}
-        <span className="sm:hidden">Data Overall</span>
+        {/* An icon alone on a phone, as PDF and Details are, so the three
+            share the way back's line flush right. The sentence is still
+            there on any screen with room. */}
         <span className="hidden sm:inline">Go to Data Overall</span>
       </Link>
     );
