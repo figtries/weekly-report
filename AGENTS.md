@@ -191,8 +191,9 @@ user opening card after card for the heading it meant (SPK-001, short by IDR
 789,900,000). `weightIssues` in `lib/weights.ts` is the one list: past the
 contract, headings over, headings short, activities with no budget (never
 milestones), contract not in any package. `loadWeightFixes` words it with an
-href; the dashboard and report gate ("What to fix"), Data Overall's guide, the
-Weights strip and the project's value strip all read it, never their own.
+href; the dashboard and report gate ("What to fix"), Data Overall's guide and
+the Weights strip all read it, never their own. The project page shows the
+contract alone: the packages are held to it, so no "Matches the contract".
 Weights opens at `#row=<id>` (card open, row lit, scrolled clear of the sticky
 bar); its colours use the gate's `WEIGHT_TOLERANCE`, not 0.5, so 99.60% is
 never green while the reports hold their figures.

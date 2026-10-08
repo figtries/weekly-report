@@ -199,7 +199,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
           )}
         </header>
 
-        {weights && <ValueStrip summary={weights} projectId={id} week={openWeek} />}
+        {weights && <ValueStrip summary={weights} projectId={id} />}
 
         {/* Always the sheet, even with nothing in it. An empty project used to
             get a separate panel here, which meant the one screen where you
