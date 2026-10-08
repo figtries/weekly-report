@@ -226,11 +226,14 @@ export default function GanttPrint({
       ),
       label: 'Starts before what it waits for',
     });
-  if (todayX !== null) key.push({ mark: <path d="M12 0V11" stroke={TODAY} strokeWidth="1.5" strokeDasharray="3 2" />, label: 'Data date' });
+  if (todayX !== null) key.push({ mark: <path d="M12 0V11" stroke={TODAY} strokeWidth="1.5" strokeDasharray="3 2" />, label: `Data date ${fmtDay(today)}` });
   // Only what a reader cannot read off the chart itself (8 Oct 2026, "infonya
   // yg penting aja"): a heading's black bar and a link stub's row number
   // explain themselves, and the stub's "1.2 →" mark read as a glitch.
   const keyCols = legendColumns(key.map((k) => k.label));
+  // .gantt-key's rows (12px items, 6px gap) and 7px padding, set as its height
+  // so the frame the chart draws round it fits it exactly.
+  const keyH = key.length ? Math.ceil(key.length / keyCols) * 18 + 8 : 0;
   const legendH = legendHeight(key.map((k) => k.label));
 
   // ------------------------------------------------------------- the sheets
@@ -345,7 +348,7 @@ export default function GanttPrint({
               </p>
             )}
 
-            <div className="gantt-grid" style={{ height: svgH + SHEET.badge }}>
+            <div className="gantt-grid" style={{ height: svgH }}>
               <div className={`gantt-table${axis ? ' is-charted' : ''}`} style={{ width: tableW }}>
                 <div className="gantt-colhead" style={{ gridTemplateColumns: gridCols, height: SHEET.axis }}>
                   <span>#</span>
@@ -375,7 +378,7 @@ export default function GanttPrint({
               </div>
 
               {axis && (
-                <svg className="gantt-chart" style={{ left: tableW }} width={W} height={svgH + SHEET.badge} aria-hidden>
+                <svg className="gantt-chart" style={{ left: tableW }} width={W} height={svgH} aria-hidden>
                   <defs>
                     {(['muted', 'path', 'bad'] as const).map((k) => (
                       <marker key={k} id={`gp-ah-${k}-${n}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -405,8 +408,11 @@ export default function GanttPrint({
                     return <line key={`r-${i}`} x1={-tableW} x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.3" />;
                   })}
                   <line x1="0" y1={SHEET.axis - 0.5} x2={W} y2={SHEET.axis - 0.5} stroke={INK} />
-                  {/* the frame: table and calendar closed on every side, the right edge included */}
-                  <rect x={-tableW + 0.3} y="0.3" width={tableW + W - 0.6} height={svgH - 0.6} fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
+                  {/* the frame: table, calendar and the key under them as one closed table. Drawn
+                      here, in one SVG, because two SVGs are each snapped to whole pixels and their
+                      sub-pixel lines never meet */}
+                  <rect x={-tableW + 0.3} y="0.3" width={tableW + W - 0.6} height={svgH + keyH - 0.6} fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
+                  {keyH > 0 && <line x1={-tableW} x2={W} y1={svgH - 0.3} y2={svgH - 0.3} stroke="var(--gantt-line)" strokeWidth="0.6" />}
 
                   {/* targets first, so a bar running through one is not hidden by it */}
                   {page.map((i) => {
@@ -624,20 +630,13 @@ export default function GanttPrint({
                   {todayX !== null && (
                     <g>
                       <line x1={todayX} y1="20" x2={todayX} y2={svgH} stroke={TODAY} strokeWidth="1.4" strokeDasharray="4 3" />
-                      <rect x={Math.min(Math.max(todayX - 31, 0), W - 62)} y={svgH + 3} width="62" height="15" rx="3" fill={TODAY} />
-                      <text x={Math.min(Math.max(todayX, 31), W - 31)} y={svgH + 14} textAnchor="middle" fontSize="10" fontWeight="600" fill="#fff">
-                        {fmtDay(today)}
-                      </text>
                     </g>
                   )}
                 </svg>
               )}
             </div>
 
-            <div className="gantt-key" style={{ gridTemplateColumns: `repeat(${keyCols}, auto)` }}>
-              <svg className="gantt-key-frame" aria-hidden>
-                <rect width="100%" height="100%" fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
-              </svg>
+            <div className="gantt-key" style={{ gridTemplateColumns: `repeat(${keyCols}, auto)`, height: keyH }}>
               {key.map((k) => (
                 <span key={k.label}>
                   <svg width="26" height="12" viewBox="0 -1 26 12" aria-hidden>

@@ -1440,9 +1440,9 @@ a:active {
   background: #c6dcff;
 }
 /* columns from legendColumns in lib/gantt-print.ts, which budgets this gap and
-   the side padding */
+   the side padding. The key is the table's last band: the chart's SVG draws its
+   frame, to the height GanttPrint sets here. */
 .gantt-key {
-  position: relative;
   display: grid;
   justify-content: space-between;
   gap: 6px 20px;
@@ -1450,14 +1450,6 @@ a:active {
   font-size: 10.5px;
   line-height: 12px;
   color: #334155;
-}
-/* closed like the table's frame, and as thin: a CSS border rounds up to 1px */
-.gantt-key-frame {
-  position: absolute;
-  inset: 0.3px;
-  width: calc(100% - 0.6px);
-  height: calc(100% - 0.6px);
-  overflow: visible;
 }
 .gantt-key > span {
   display: inline-flex;

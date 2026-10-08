@@ -38,8 +38,6 @@ export const SHEET = {
   header: 58,
   axis: 40,
   footer: 30,
-  /** The day-line's date under the last row. */
-  badge: 20,
   /** "Continued from …" on a sheet that starts inside a heading. */
   continued: 20,
   lineH: 13,
@@ -171,7 +169,7 @@ export function legendHeight(labels: string[]): number {
  * child starts the next one: it moves over with it.
  */
 export function paginate(heights: number[], isHeading: boolean[], legendH: number): number[][] {
-  const budget = SHEET.height - SHEET.header - SHEET.axis - SHEET.footer - SHEET.badge - SHEET.continued - legendH;
+  const budget = SHEET.height - SHEET.header - SHEET.axis - SHEET.footer - SHEET.continued - legendH;
   const pages: number[][] = [];
   let page: number[] = [];
   let used = 0;
