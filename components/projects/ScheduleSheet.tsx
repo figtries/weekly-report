@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
+import { matchesSearch, searchWords } from '@/lib/search';
 import {
   isPending,
   predictAdd,
@@ -535,23 +536,28 @@ export default function ScheduleSheet({
    * branch is the one thing a search must never do.
    */
   const term = query.trim().toLowerCase();
-  const visible = useMemo(() => {
-    if (term.length >= 2) {
-      const hit = (r: SheetRow) =>
-        r.name.toLowerCase().includes(term) || r.code.includes(term) || r.wbsCode.toLowerCase().includes(term);
-      const keep = new Set<string>();
-      // Backwards, so a matched row can mark the ancestors already behind it.
-      const stack: SheetRow[] = [];
-      for (const r of rows) {
-        while (stack.length && stack[stack.length - 1].depth >= r.depth) stack.pop();
-        if (hit(r)) {
-          keep.add(r.id);
-          for (const a of stack) keep.add(a.id);
-        }
-        stack.push(r);
+  // One rule with every other search box (lib/search.ts): every word, anywhere
+  // in the row or the headings above it, so "civil" finds the rows under Civil.
+  const found = useMemo(() => {
+    if (term.length < 2) return null;
+    const words = searchWords(term);
+    const keep = new Set<string>();
+    let hits = 0;
+    // Backwards, so a matched row can mark the ancestors already behind it.
+    const stack: SheetRow[] = [];
+    for (const r of rows) {
+      while (stack.length && stack[stack.length - 1].depth >= r.depth) stack.pop();
+      if (matchesSearch(words, r.name, r.code, r.wbsCode, ...stack.map((a) => a.name))) {
+        hits++;
+        keep.add(r.id);
+        for (const a of stack) keep.add(a.id);
       }
-      return rows.filter((r) => keep.has(r.id));
+      stack.push(r);
     }
+    return { keep, hits };
+  }, [rows, term]);
+  const visible = useMemo(() => {
+    if (found) return rows.filter((r) => found.keep.has(r.id));
     if (collapsed.size === 0) return rows;
     const out: SheetRow[] = [];
     let hideBelow: number | null = null;
@@ -562,12 +568,9 @@ export default function ScheduleSheet({
       if (r.isSummary && collapsed.has(r.id)) hideBelow = r.depth;
     }
     return out;
-  }, [rows, collapsed, term]);
+  }, [rows, collapsed, found]);
 
-  const matchCount = useMemo(
-    () => (term.length >= 2 ? visible.filter((r) => r.name.toLowerCase().includes(term)).length : 0),
-    [visible, term]
-  );
+  const matchCount = found?.hits ?? 0;
 
   /**
    * Which rows are mounted, from the scroller's own position.

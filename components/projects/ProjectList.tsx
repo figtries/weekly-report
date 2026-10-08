@@ -14,6 +14,7 @@ import {
 } from '@/lib/project-actions';
 import MiniGantt from './MiniGantt';
 import { formatMoney } from '@/lib/currency';
+import { matchesSearch, searchWords } from '@/lib/search';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,11 +43,8 @@ export default function ProjectList({ all }: { all: ProjectCard[] }) {
   const projects = showArchived ? all : all.filter((p) => !p.archivedAt);
 
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) =>
-      [p.name, p.clientName, p.contractNo].some((v) => v?.toLowerCase().includes(q))
-    );
+    const words = searchWords(query);
+    return projects.filter((p) => matchesSearch(words, p.name, p.clientName, p.contractNo));
   }, [projects, query]);
 
   if (all.length === 0) {

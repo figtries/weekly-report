@@ -17,6 +17,7 @@ import { STAGE_LABEL, STAGE_ORDER, type DocumentCard, type Obstacle } from '@/li
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import type { RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
+import { matchesSearch, searchWords } from '@/lib/search';
 
 /**
  * RECORD TRANSMITTAL: one letter, every document in it (3 Oct 2026, variant A
@@ -155,11 +156,8 @@ export default function TransmittalDialog({
       .sort((a, b) => (b.card.out!.days ?? 0) - (a.card.out!.days ?? 0));
   }, [cards, obstacles, groupNames, direction]);
 
-  const q = query.trim().toLowerCase();
-  const shown = q === '' ? rows : rows.filter((r) =>
-    r.card.title.toLowerCase().includes(q)
-    || (r.card.docNo ?? '').toLowerCase().includes(q)
-    || r.group.toLowerCase().includes(q));
+  const words = searchWords(query);
+  const shown = rows.filter((r) => matchesSearch(words, r.card.title, r.card.docNo, r.group));
   const count = rows.filter((r) => ticked.has(r.card.id)).length;
 
   const switchTo = (next: 'out' | 'in') => {

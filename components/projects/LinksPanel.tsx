@@ -8,6 +8,7 @@ import { LINK_TYPES, MAX_WAIT, WAY_LABEL, type LinkType, type StoredLink } from 
 import type { Sheet, SheetRow } from '@/lib/sheet';
 import { saveRowLinksAction } from '@/lib/sheet-actions';
 import { cn } from '@/lib/utils';
+import { matchesSearch, searchWords } from '@/lib/search';
 import NativeSelect from '@/components/ui/NativeSelect';
 
 /**
@@ -172,9 +173,17 @@ export default function LinksPanel({
   const picker = (side: 'waits' | 'holds') => {
     const taken = new Set((side === 'waits' ? waits : holds).map((l) => l.id));
     const q = query.trim().toLowerCase();
+    const words = searchWords(q);
+    // A heading's name counts for the activities under it (lib/search.ts).
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const above = (r: SheetRow) => {
+      const names: string[] = [];
+      for (let p = r.parentId ? byId.get(r.parentId) : undefined; p; p = p.parentId ? byId.get(p.parentId) : undefined) names.push(p.name);
+      return names;
+    };
     const shown = rows
       .filter((r) => r.isLeaf && r.id !== row.id && !taken.has(r.id))
-      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.code.startsWith(q))
+      .filter((r) => !q || r.code.startsWith(q) || matchesSearch(words, r.name, ...above(r)))
       .slice(0, 50);
     return (
       <div className="mt-2 rounded-xl border p-2">

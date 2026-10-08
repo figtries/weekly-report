@@ -316,16 +316,17 @@ export function buildOverallMap({
  */
 export function matchingIds(
   units: MapNode[],
-  keep: (n: MapNode) => boolean
+  /** `above` is the row's ancestors, top first, so a search can match a heading's name. */
+  keep: (n: MapNode, above: MapNode[]) => boolean
 ): Set<string> {
   const out = new Set<string>();
-  function walk(n: MapNode, trail: string[]): boolean {
-    const nextTrail = [...trail, n.id];
-    let any = keep(n);
+  function walk(n: MapNode, trail: MapNode[]): boolean {
+    const nextTrail = [...trail, n];
+    let any = keep(n, trail);
     n.children.forEach((c) => {
       if (walk(c, nextTrail)) any = true;
     });
-    if (any) nextTrail.forEach((id) => out.add(id));
+    if (any) nextTrail.forEach((a) => out.add(a.id));
     return any;
   }
   units.forEach((u) => walk(u, []));

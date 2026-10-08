@@ -14,6 +14,7 @@ import { CODE_TONE, codeLabel, docRev, stageOf, type RegisterSettings } from '@/
 import type { ExistingNode } from '@/lib/builder-model';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
+import { matchesSearch, searchWords } from '@/lib/search';
 
 import { RegisterSetup } from './RegisterSetup';
 import { verdict } from './verdict';
@@ -159,9 +160,17 @@ export function RegisterWorkbench({
   /** Adding into a folded group unfolds it first, or the box would open where nobody can see it. */
   const expand = (id: string) => setCollapsed((c) => { if (!c.has(id)) return c; const n = new Set(c); n.delete(id); return n; });
 
-  const q = query.trim().toLowerCase();
+  const groupOf = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+  const words = searchWords(query);
+  const q = words.length > 0;
+  /** A search unfolds every group: a hit inside a folded one read as nothing found. */
+  const search = (v: string) => {
+    if (!q && searchWords(v).length > 0) setCollapsed(new Set());
+    setQuery(v);
+  };
   const visible = (c: DocumentCard) => {
-    if (q && !(c.title.toLowerCase().includes(q) || (c.docNo ?? '').toLowerCase().includes(q))) return false;
+    const g = groupOf.get(c.categoryId);
+    if (q && !matchesSearch(words, c.title, c.docNo, g?.name, g?.parentName)) return false;
     switch (filter) {
       case 'action': return needsAction(c);
       case 'us': return withUs(c);
@@ -348,7 +357,7 @@ export function RegisterWorkbench({
             <input
               autoFocus
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => search(e.target.value)}
               placeholder="Search number or title"
               aria-label="Search number or title"
               className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -383,7 +392,7 @@ export function RegisterWorkbench({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => search(e.target.value)}
               placeholder="Search number or title"
               aria-label="Search documents"
               className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -507,6 +516,11 @@ export function RegisterWorkbench({
               </div>
             );
           })}
+          {q && !all.some(visible) && (
+            <p className="px-4 py-8 text-center text-[14px] font-medium text-foreground">
+              No document{filter !== 'all' ? ` in ${chips.find((c) => c.key === filter)?.label}` : ''} matches &ldquo;{query.trim()}&rdquo;.
+            </p>
+          )}
         </div>
         {error && <p role="alert" className="border-t border-border/70 bg-bad-soft px-4 py-2.5 text-sm text-bad">{error}</p>}
       </section>

@@ -11,6 +11,7 @@ import { Expand } from '@/components/motion/Expand';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
 import { pressMotion } from '@/components/motion/Press';
 import { MOTION, verdictFill, verdictOf } from '@/lib/design';
+import { matchesSearch, searchWords } from '@/lib/search';
 import { findNode, matchingIds, trailOf, withOptimistic, type MapNode, type OverallMap as MapModel } from '@/lib/overall-map';
 import { cn } from '@/lib/utils';
 
@@ -227,20 +228,20 @@ export default function OverallMap({
     ] as const
   ).filter((r) => r.n > 0);
 
-  const needle = query.trim().toLowerCase();
+  const words = useMemo(() => searchWords(query), [query]);
   const filter = useMemo(() => {
-    if (!needle && !lens) return null;
-    return matchingIds(units, (n) => {
+    if (words.length === 0 && !lens) return null;
+    return matchingIds(units, (n, above) => {
       if (lens === 'due' && !n.dueCount) return false;
       // `source` is a leaf-only field (branches never carry one), so a branch
       // never matches this arm directly — it is pulled in as an ancestor of a
       // matching leaf instead, same as every branch above a "due" leaf.
       if (lens === 'manual' && n.source !== 'manual') return false;
       if (lens === 'blocking' && !blocking.has(n.id)) return false;
-      if (needle && !`${n.code} ${n.name}`.toLowerCase().includes(needle)) return false;
+      if (!matchesSearch(words, n.code, n.name, ...above.map((a) => a.name))) return false;
       return true;
     });
-  }, [units, needle, lens, blocking]);
+  }, [units, words, lens, blocking]);
 
   /**
    * A filter opens the map for you. Leaving it collapsed would show four

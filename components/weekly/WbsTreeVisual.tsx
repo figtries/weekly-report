@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { matchesSearch, searchWords } from '@/lib/search';
 
 /* ---------------------------------------------------------------------------
  * Detail Progress — the read-only "full story" of the data entered in Data
@@ -309,17 +310,17 @@ export default function WbsTreeVisual({
   }, [flatAll, pathBase]);
 
   const searchResults = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return null;
+    const words = searchWords(query);
+    if (words.length === 0) return null;
+    // A heading's name counts for the rows under it (lib/search.ts).
     return flatAll
       .filter(
         (n) =>
           n.children.length === 0 &&
           !isMilestone(n, weightsLocked) &&
-          n.deskripsi.toLowerCase().includes(q)
-      )
-      .slice(0, 20);
-  }, [flatAll, query]);
+          matchesSearch(words, n.deskripsi, n.wbsCode, ...ancestorsOf(n.id).map((a) => a.deskripsi))
+      );
+  }, [flatAll, query, ancestorsOf]);
 
   const toggleDetail = (id: string) =>
     setDetailOpen((prev) => {
@@ -372,10 +373,12 @@ export default function WbsTreeVisual({
         /* Search replaces the browser */
         <Level levelKey={levelKey} direction="fwd">
           <div className="mb-2.5 px-1 text-[13px] text-muted-foreground">
-            {searchResults.length === 0 ? 'No matching activities.' : `${searchResults.length} ${searchResults.length === 1 ? 'activity' : 'activities'} found`}
+            {searchResults.length === 0
+              ? 'No matching activities.'
+              : `${searchResults.length} ${searchResults.length === 1 ? 'activity' : 'activities'} found${searchResults.length > 20 ? ', showing the first 20' : ''}`}
           </div>
           <div className="space-y-2.5">
-          {searchResults.map((leaf, idx) => (
+          {searchResults.slice(0, 20).map((leaf, idx) => (
             <div key={leaf.id} className="animate-fade-in-up" style={{ animationDelay: cascade(idx) }}>
               <button
                 onClick={() => jumpToLeaf(leaf)}
