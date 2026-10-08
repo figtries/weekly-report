@@ -50,7 +50,36 @@ export interface RegisterNode {
   awaiting: number;
   longestWait: number | null;
   withUs: number;
+  /**
+   * Documents filed on this group itself while it also has sub-groups, with
+   * their own figures; null when there are none. A sub-group added to a
+   * discipline that already held documents left them here.
+   */
+  own: { documents: number; actual: number; plan: number | null } | null;
   children: RegisterNode[];
+}
+
+/** A group as the Data screen lists it: what its header reads, for the rows under it. */
+export interface DataGroup { id: string; name: string; parentName: string | null; node: RegisterNode; actual: number; plan: number | null }
+
+/**
+ * The Data screen's groups, in order: every group with no sub-groups, and a
+ * group's own row before its sub-groups when documents sit on it directly.
+ * Listing only the leaves hid those documents from Data while the Summary
+ * still counted them (8 Oct 2026). Never a document left out.
+ */
+export function dataGroups(tree: RegisterNode[]): DataGroup[] {
+  const out: DataGroup[] = [];
+  const walk = (node: RegisterNode, parentName: string | null) => {
+    if (node.children.length === 0) {
+      out.push({ id: node.id, name: node.name, parentName, node, actual: node.actual, plan: node.plan });
+      return;
+    }
+    if (node.own) out.push({ id: node.id, name: node.name, parentName, node, actual: node.own.actual, plan: node.own.plan });
+    for (const child of node.children) walk(child, node.name);
+  };
+  for (const root of tree) walk(root, null);
+  return out;
 }
 
 export interface RegisterSummary {

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { addCategory, addDocument, deleteCategory, renameCategory } from '@/lib/doc-actions';
 import { knownDiscipline, nextNumber, defaultRule, type NumberingRule } from '@/lib/register-numbering';
 import {
-  REGISTER_INFO, isDone, needsAction, withUs, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
+  REGISTER_INFO, isDone, needsAction, withUs, type DocumentCard, dataGroups, type DataGroup, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
 import { CODE_TONE, codeLabel, docRev, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { ExistingNode } from '@/lib/builder-model';
@@ -49,7 +49,7 @@ const DocumentSheet = dynamic(() => import('./DocumentSheet').then((x) => x.Docu
 type NumberingProps = { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
 type Filter = 'all' | 'action' | 'us' | 'them' | 'done' | 'info';
 
-interface Group { id: string; name: string; parentName: string | null; node: RegisterNode }
+type Group = DataGroup;
 
 const clamp = (n: number) => Math.min(100, Math.max(0, n));
 const fmt = (iso: string | null) =>
@@ -97,22 +97,14 @@ export function RegisterWorkbench({
   const against = overview.plan !== null ? verdict(overview.actual, overview.plan) : null;
   const other = edl ? 'client' : 'vendor';
 
-  const groups = useMemo(() => {
-    const out: Group[] = [];
-    const walk = (node: RegisterNode, parent: string | null) => {
-      if (node.children.length === 0) { out.push({ id: node.id, name: node.name, parentName: parent, node }); return; }
-      for (const child of node.children) walk(child, node.name);
-    };
-    for (const root of tree) walk(root, null);
-    return out;
-  }, [tree]);
+  const groups = useMemo(() => dataGroups(tree), [tree]);
 
   const all = useMemo(() => groups.flatMap((g) => cards[g.id] ?? []), [groups, cards]);
   // Done is a GROUP at 100%: a group with one document still out read 86.7%
   // under the Done tab, beside its finished siblings (8 Oct 2026).
   // The group's own figure decides, rounded as it is printed beside the bar.
   const doneIds = useMemo(() => new Set(groups.flatMap((g) =>
-    g.node.actual.toFixed(1) === '100.0' ? (cards[g.id] ?? []).filter(isDone).map((c) => c.id) : [],
+    g.actual.toFixed(1) === '100.0' ? (cards[g.id] ?? []).filter(isDone).map((c) => c.id) : [],
   )), [groups, cards]);
   const counts = useMemo(() => ({
     all: all.length,
@@ -440,23 +432,23 @@ export function RegisterWorkbench({
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{docs.length} docs</span>
                   </button>
                   <span className="shrink-0 text-[20px] font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums md:hidden">
-                    {g.node.actual.toFixed(1)}<span className="text-xs text-muted-foreground">%</span>
+                    {g.actual.toFixed(1)}<span className="text-xs text-muted-foreground">%</span>
                   </span>
                   {/* Phone: the bars across the card, its plan beside them. */}
                   <div className="flex basis-full items-center gap-2 md:hidden">
                     <span className="flex flex-1 flex-col gap-[3px]">
-                      <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
-                      {g.node.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.node.plan)}%` }} /></span>}
+                      <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.actual)}%` }} /></span>
+                      {g.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.plan)}%` }} /></span>}
                     </span>
-                    {g.node.plan !== null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">plan {g.node.plan.toFixed(1)}</span>}
+                    {g.plan !== null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">plan {g.plan.toFixed(1)}</span>}
                   </div>
                   <div className="ml-1 hidden items-center gap-2 md:flex">
                     <span className="flex w-16 flex-col gap-[2px]">
-                      <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.node.actual)}%` }} /></span>
-                      {g.node.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.node.plan)}%` }} /></span>}
+                      <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.actual)}%` }} /></span>
+                      {g.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.plan)}%` }} /></span>}
                     </span>
-                    <span className="text-xs font-semibold text-foreground tabular-nums">{g.node.actual.toFixed(1)}%</span>
-                    {g.node.plan !== null && <span className="text-xs text-muted-foreground tabular-nums">/ {g.node.plan.toFixed(1)}%</span>}
+                    <span className="text-xs font-semibold text-foreground tabular-nums">{g.actual.toFixed(1)}%</span>
+                    {g.plan !== null && <span className="text-xs text-muted-foreground tabular-nums">/ {g.plan.toFixed(1)}%</span>}
                   </div>
                   <button type="button" onClick={() => { expand(g.id); setAddingTo(addingTo === g.id ? null : g.id); setError(null); }}
                     className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-3.5 text-[13px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">

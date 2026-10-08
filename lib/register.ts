@@ -751,6 +751,8 @@ export function getRegisterTree(projectId: string, register: RegisterKind, week?
     const actual = percentOf(docs, loaded);
     const plan = planPercentOf(docs, loaded, loaded.asOfWeek);
     const deviation = plan === null ? null : actual - plan;
+    const kids = childrenOf.get(category.id) ?? [];
+    const ownDocs = loaded.docsByCategory.get(category.id) ?? [];
 
     return {
       id: category.id,
@@ -770,24 +772,14 @@ export function getRegisterTree(projectId: string, register: RegisterKind, week?
       deviation,
       trend: trendOf(deviation),
       ...countsFor(docs, loaded),
-      children: (childrenOf.get(category.id) ?? []).map((c) => build(c, depth + 1)),
+      own: kids.length > 0 && ownDocs.length > 0
+        ? { documents: ownDocs.length, actual: percentOf(ownDocs, loaded), plan: planPercentOf(ownDocs, loaded, loaded.asOfWeek) }
+        : null,
+      children: kids.map((c) => build(c, depth + 1)),
     };
   };
 
   return (childrenOf.get(null) ?? []).map((c) => build(c, 0));
-}
-
-/** The tree flattened to the categories that actually hold documents. */
-export function getRegisterLeaves(projectId: string, register: RegisterKind, week?: number): RegisterNode[] {
-  const out: RegisterNode[] = [];
-  const walk = (nodes: RegisterNode[]) => {
-    for (const n of nodes) {
-      if (n.children.length === 0) out.push(n);
-      else walk(n.children);
-    }
-  };
-  walk(getRegisterTree(projectId, register, week));
-  return out.filter((n) => n.documents > 0);
 }
 
 /**

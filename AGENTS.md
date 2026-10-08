@@ -1114,6 +1114,11 @@ client" counts are Data's chips of the same names. A shown return code is the
 LATEST stage's, only while unanswered; `next` is what Send offers
 (`sendNextOf`), never the stage whose date passed. Proof:
 `scripts/verify-register-agree.ts`, every project, week and register.
+Data's groups come from `dataGroups`, never a walk of the leaves: a
+sub-discipline added to a group that already held documents left them on the
+group, and a leaves-only list hid them from Data while the Summary counted
+them. Such a group gets its own row, before its sub-groups, with figures from
+its own documents (`RegisterNode.own`).
 
 **The register curve wipes in with a CSS keyframe** (`.animate-curve-wipe`),
 not framer-motion: its `initial` clip shipped hidden in the server HTML and held
