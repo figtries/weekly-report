@@ -10,6 +10,7 @@ import type { LinkType } from '@/lib/links';
 import { warmLinkDragCard } from './links-panel-loader';
 import { KIND_KEYS, KIND_LABEL, paintCss, paintOf, segmentsOf, type BarView, type ColourBy } from '@/lib/bar-view';
 import type { BarFact } from '@/lib/bar-facts';
+import { textWidth } from '@/lib/gantt-print';
 
 /**
  * The timeline.
@@ -39,6 +40,8 @@ const TARGET_PX = 1200;
 const MIN_PX_PER_DAY = 1.5;
 /** Never wider than this, or a two-week plan becomes a ruler nobody can scan. */
 const MAX_PX_PER_DAY = 90;
+/** Room one month label ("Sep 26") needs, its rule and padding included. */
+const MONTH_LABEL_W = 46;
 
 function utc(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);
@@ -215,15 +218,63 @@ export default function GanttChart({
   // true and should look it. What read as broken was the drawing surface
   // STOPPING at 288px, so the month lines and the today line covered a third
   // of the pane and bare white covered the rest.
-  const width = days > 0 ? Math.max(days * scale, paneWidth, 240) : Math.max(paneWidth, 240);
+  const base = days > 0 ? Math.max(days * scale, paneWidth, 240) : Math.max(paneWidth, 240);
+
+  /** What the Bars menu says to write beside a bar. */
+  const besideText = (r: SheetRow): string => {
+    if (view.beside === 'none') return '';
+    if (view.beside === 'dates') {
+      if (!r.startDate || !r.finishDate) return '';
+      return r.isMilestone
+        ? fmtDate(r.startDate)
+        : `${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays ?? daysBetween(r.startDate, r.finishDate) + 1} d`;
+    }
+    const pct = facts[r.id]?.donePct;
+    return view.beside === 'name-pct' && !r.isSummary && pct != null ? `${r.name} · ${Math.round(pct)}%` : r.name;
+  };
+  /** Days the forecast finishes past the plan, drawn as the red hatch. */
+  const lateOf = (r: SheetRow): number => {
+    const ff = facts[r.id]?.forecastFinish;
+    return view.marks.forecast && !r.isSummary && ff && r.finishDate && ff > r.finishDate ? daysBetween(r.finishDate, ff) : 0;
+  };
+  /** Days a row linked through to the finish can slip, drawn as the dashed tail. */
+  const slipOf = (r: SheetRow, late: number): number =>
+    view.marks.slip && late === 0 && r.totalFloat != null && r.totalFloat > 0 && !r.isSummary ? r.totalFloat : 0;
+
+  // What is written after a bar runs past its last day, and on the last bars
+  // past the plan's: names hung over a white strip with no month band above it
+  // (8 Oct 2026). The calendar runs on far enough to hold the longest, measured
+  // with the PDF's own Inter widths (generous, so it never comes up short).
+  let reach = 0;
+  if (spanStart) {
+    for (const r of rows) {
+      if (!r.startDate || !r.finishDate) continue;
+      const diamond = r.isMilestone && !r.isSummary;
+      const w = diamond ? 0 : Math.max((daysBetween(r.startDate, r.finishDate) + 1) * scale, 3);
+      let px = daysBetween(spanStart, r.startDate) * scale + w + (w === 0 ? 12 : 0);
+      const late = lateOf(r);
+      const slip = slipOf(r, late);
+      const text = besideText(r);
+      if (late > 0) px += Math.max(late * scale, 3) + 4 + textWidth(`+${late} d`, true, 10);
+      if (slip > 0) px += Math.max(slip * scale - 2, 4) + 8 + textWidth(`+${slip} days`, false, 10);
+      if (text) px += 14 + textWidth(text, true, 11);
+      if (view.marks.contract && r.contractFinish && !r.isSummary) {
+        px = Math.max(px, (daysBetween(spanStart, r.contractFinish) + 1) * scale);
+      }
+      reach = Math.max(reach, px);
+    }
+  }
+  const drawn = Math.max(base, Math.ceil(reach) + 8);
 
   const months = useMemo(() => {
     if (!spanStart || !end) return [];
     const out: { key: string; x: number; label: string }[] = [];
     const first = new Date(utc(spanStart));
     const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
-    const stop = utc(end);
-    for (let i = 0; i < 400 && cursor.getTime() <= stop; i++) {
+    // Every month the surface shows, not only the plan's: past its last day the
+    // calendar still has to say where it is.
+    const stop = Math.max(utc(end), utc(spanStart) + (drawn / scale) * MS_PER_DAY);
+    for (let i = 0; i < 400 && cursor.getTime() < stop; i++) {
       const x = ((cursor.getTime() - utc(spanStart)) / MS_PER_DAY) * scale;
       out.push({
         key: cursor.toISOString().slice(0, 7),
@@ -234,14 +285,20 @@ export default function GanttChart({
           month: 'short',
           year: '2-digit',
           timeZone: 'UTC',
-        }).format(cursor),
+        })
+          .format(cursor)
+          .replace('Sept', 'Sep'),
       });
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
     // Two labels closer than their own width collide, and the first is pinned to
     // the edge so it collides most often.
-    return out.filter((m, i) => i === 0 || m.x - out[i - 1].x >= 46);
-  }, [spanStart, end, scale]);
+    return out.filter((m, i) => i === 0 || m.x - out[i - 1].x >= MONTH_LABEL_W);
+  }, [spanStart, end, scale, drawn]);
+  // The last month starts a few days before the plan ends, so its label used to
+  // run into the surface's edge, wrap, and drop "27" of "Apr 27" into the first
+  // row over a bar's name (8 Oct 2026). The calendar runs on far enough to hold it.
+  const width = Math.max(drawn, (months.at(-1)?.x ?? 0) + MONTH_LABEL_W);
 
   useEffect(() => {
     if (!spanStart) return;
@@ -346,25 +403,10 @@ export default function GanttChart({
    * locked) and a conflict (a red "!" and a pale band over the days the plan
    * breaks its link). The first three are marks the Bars panel turns on/off.
    */
-  /** What the Bars menu says to write beside a bar. */
-  const besideText = (r: SheetRow): string => {
-    if (view.beside === 'none') return '';
-    if (view.beside === 'dates') {
-      if (!r.startDate || !r.finishDate) return '';
-      return r.isMilestone
-        ? fmtDate(r.startDate)
-        : `${fmtDate(r.startDate)} → ${fmtDate(r.finishDate)} · ${r.durationDays ?? daysBetween(r.startDate, r.finishDate) + 1} d`;
-    }
-    const pct = facts[r.id]?.donePct;
-    return view.beside === 'name-pct' && !r.isSummary && pct != null ? `${r.name} · ${Math.round(pct)}%` : r.name;
-  };
-
   const extras = (r: SheetRow, x: number, w: number, y: number) => {
     const c = network?.rows.get(r.id)?.conflicts[0];
-    const ff = facts[r.id]?.forecastFinish;
-    const late =
-      view.marks.forecast && !r.isSummary && ff && r.finishDate && ff > r.finishDate ? daysBetween(r.finishDate, ff) : 0;
-    const slip = view.marks.slip && late === 0 && r.totalFloat != null && r.totalFloat > 0 && !r.isSummary ? r.totalFloat : 0;
+    const late = lateOf(r);
+    const slip = slipOf(r, late);
     const text = besideText(r);
     return (
       <>
@@ -457,7 +499,7 @@ export default function GanttChart({
         {months.map((m) => (
           <span
             key={m.key}
-            className="absolute top-0 border-l pl-1 text-[10px] font-medium text-muted-foreground"
+            className="absolute top-0 whitespace-nowrap border-l pl-1 text-[10px] font-medium text-muted-foreground"
             style={{ left: m.x, lineHeight: `${headH}px` }}
           >
             {m.label}
@@ -547,7 +589,8 @@ export default function GanttChart({
             className="pointer-events-none absolute top-0 z-10 w-0 border-l-[1.5px] border-dashed border-sky-500"
             style={{ left: todayX, height: bodyH }}
           >
-            <span className="absolute left-1 top-0.5 text-[10px] font-semibold text-sky-600">Today</span>
+            {/* On the card's colour, so a bar's name under it is covered, never jumbled. */}
+            <span className="absolute left-1 top-0.5 rounded-[3px] bg-card px-0.5 text-[10px] font-semibold text-sky-600">Today</span>
           </span>
         )}
 
