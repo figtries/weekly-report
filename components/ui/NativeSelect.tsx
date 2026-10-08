@@ -32,7 +32,8 @@ function optionsOf(children: React.ReactNode): Option[] {
  * menu with a blue bar that matched nothing on screen (8 Oct 2026: "pakai
  * template biasa"). The week picker's list was the one people liked: a rounded
  * panel exactly under the field and as wide as it, rows with room, the chosen
- * one green with a tick. So this draws that list for every `<select>`.
+ * one marked with a tick (green stays the week picker's: it means the
+ * CURRENT week, and nothing else here has one). So this draws that list for every `<select>`.
  *
  * Callers still write a `<select>`'s props and `<option>` children, and still
  * get a real ChangeEvent: a hidden native `<select>` carries `name`, `value`
@@ -310,16 +311,16 @@ export default function NativeSelect({
                     className={cn(
                       'flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors duration-150 disabled:opacity-40 sm:min-h-9',
                       isSelected
-                        ? 'bg-ok-soft font-semibold text-ok'
+                        ? 'bg-muted font-semibold text-foreground'
                         : i === active
-                          ? 'bg-muted font-medium text-foreground'
+                          ? 'bg-muted/60 font-medium text-foreground'
                           : 'font-medium text-foreground'
                     )}
                   >
                     <span className="min-w-0">{o.label}</span>
                     {isSelected && (
                       <svg
-                        className="size-4 shrink-0 text-ok"
+                        className="size-4 shrink-0 text-foreground"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
