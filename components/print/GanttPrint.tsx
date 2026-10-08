@@ -635,6 +635,9 @@ export default function GanttPrint({
             </div>
 
             <div className="gantt-key" style={{ gridTemplateColumns: `repeat(${keyCols}, auto)` }}>
+              <svg className="gantt-key-frame" aria-hidden>
+                <rect width="100%" height="100%" fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
+              </svg>
               {key.map((k) => (
                 <span key={k.label}>
                   <svg width="26" height="12" viewBox="0 -1 26 12" aria-hidden>

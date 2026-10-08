@@ -1439,16 +1439,25 @@ a:active {
 .gantt-row.is-top {
   background: #c6dcff;
 }
-/* columns from legendColumns in lib/gantt-print.ts, which budgets this gap */
+/* columns from legendColumns in lib/gantt-print.ts, which budgets this gap and
+   the side padding */
 .gantt-key {
+  position: relative;
   display: grid;
   justify-content: space-between;
   gap: 6px 20px;
-  padding-top: 7px;
-  border-top: 0.5px solid var(--gantt-line);
+  padding: 7px 10px;
   font-size: 10.5px;
   line-height: 12px;
   color: #334155;
+}
+/* closed like the table's frame, and as thin: a CSS border rounds up to 1px */
+.gantt-key-frame {
+  position: absolute;
+  inset: 0.3px;
+  width: calc(100% - 0.6px);
+  height: calc(100% - 0.6px);
+  overflow: visible;
 }
 .gantt-key > span {
   display: inline-flex;
@@ -1461,8 +1470,6 @@ a:active {
   align-items: center;
   justify-content: space-between;
   margin-top: 7px;
-  padding-top: 6px;
-  border-top: 0.5px solid var(--gantt-line);
   font-size: 10.5px;
   color: var(--rpt-muted);
 }
