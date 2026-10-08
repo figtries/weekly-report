@@ -37,6 +37,16 @@ function printTargetFor(pdfUrl: string, origin: string): string | null {
   }
   const daily = parsed.pathname.match(/^\/api\/pdf\/daily\/(\d{4}-\d{2}-\d{2})$/);
   if (daily) return new URL(`/print/daily/${daily[1]}`, origin).toString();
+  const gantt = parsed.pathname.match(/^\/api\/pdf\/projects\/([\w-]{1,80})$/);
+  if (gantt) {
+    const scope = parsed.searchParams.get('scope') ?? 'all';
+    const levels = parsed.searchParams.get('levels') ?? '0';
+    if ((scope !== 'all' && !/^[\w-]{1,80}$/.test(scope)) || !/^\d{1,2}$/.test(levels)) return null;
+    const target = new URL(`/print/projects/${gantt[1]}`, origin);
+    target.searchParams.set('scope', scope);
+    target.searchParams.set('levels', levels);
+    return target.toString();
+  }
   return null;
 }
 

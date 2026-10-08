@@ -8,6 +8,8 @@ import OpenProjectButton from '@/components/projects/OpenProjectButton';
 import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
 import LockContract from '@/components/projects/LockContract';
 import ProjectDetails from '@/components/projects/ProjectDetails';
+import GanttPdfButton from '@/components/projects/GanttPdfButton';
+import { packagesOf } from '@/lib/gantt-print';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
 import { refreshDbSnapshot } from '@/lib/sqlite';
@@ -149,6 +151,22 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
               All projects
             </Link>
             <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3">
+              <GanttPdfButton
+                projectId={id}
+                fileBase={project.alias || project.name}
+                packages={packagesOf(sheet.rows)}
+                rows={sheet.rows.map((r) => ({
+                  id: r.id,
+                  parentId: r.parentId,
+                  depth: r.depth,
+                  name: r.name,
+                  code: r.code,
+                  isSummary: r.isSummary,
+                  isReportingUnit: r.isReportingUnit,
+                  unitLabel: r.unitLabel,
+                  childCount: r.childCount,
+                }))}
+              />
               <ProjectDetails project={project} />
               <LockContract
                 projectId={id}

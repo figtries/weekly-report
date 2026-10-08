@@ -730,6 +730,37 @@ with Windows' own PDF renderer. The person's own Excel window is never touched; 
 `Win32_Process` that no `/automation` instance is left behind. Measure a picture's shape from
 pixels (a drawn circle's width over height), never by eye.
 
+# The plan leaves as a Gantt PDF
+
+Added 8 Oct 2026 from a mockup he approved at real A4 size. A PDF button beside Details on
+the project page opens `GanttPdfDialog`: the whole plan or one work package (`packagesOf`,
+the weekly export's fallback to top branches), and All levels / Top level / 2 / 3, with
+"N rows · N pages" counted by the same layout the PDF is cut with. The file comes from
+`/api/pdf/projects/[id]` rendering `/print/projects/[id]` (`components/print/GanttPrint.tsx`),
+A4 landscape, and draws what the planner draws from the same facts and Bars choices.
+
+**Nothing is cut off.** A long task name wraps and its row grows; duration and dates always
+fit. Row heights are decided on the server by `lib/gantt-print.ts` from Inter's widths,
+rounded up, because the sheets are cut there and the bars and arrows sit on the same grid as
+the table. Change the column widths, the font or the sheet padding together with `SHEET`.
+
+**Every sheet explains itself**: the key at the foot names every mark the file uses, a sheet
+that starts inside a heading says "Continued from", and an arrow whose other end is on
+another sheet or not in the file is a short arrow with that row's number. The foot reads
+"Lucille by Figtries" with the Lucille mark and the page number, and NO print date: he asked
+for quiet branding like Oracle's "© Oracle Corporation", but never "©", because the plan is
+the client's and not ours.
+
+**Two Chromium traps, each found by measuring the file.** An SVG `<pattern>` (the forecast
+hatch) is written into the PDF as a raster image the width of the page, and `opacity` on a
+shape makes a transparency group per bar: nine pages came to 1.4 MB. Hatches are drawn as
+lines (`Hatch`), shapes use `fill-opacity`, and the footer uses `lucille-mark-print.png`
+(38×64, 3 KB) instead of the 110 KB mark: 432 KB now. And **a named page dropped the whole
+CSS block**: `page: gantt` with `@page gantt { size: A4 landscape }` in `globals.css` vanished
+from Turbopack's output with no error, taking every `.gantt-*` rule with it. The print page
+carries its own `@page { size: A4 landscape }` instead; it prints nothing else. Check a CSS
+change reached the browser (`document.styleSheets`), not only the file.
+
 # The weekly report leaves as ONE Excel workbook
 
 Decided 3 Oct 2026; spec `docs/superpowers/specs/2026-10-03-weekly-excel-export-design.md`,

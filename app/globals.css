@@ -1334,6 +1334,146 @@ a:active {
   }
 }
 
+/* ---------- A4 landscape sheets: the Gantt PDF ---------- */
+/* The same sheet turned sideways (8 Oct 2026). The landscape @page is NOT here:
+   a named page (`page: gantt` + `@page gantt`) silently dropped this whole
+   block from Turbopack's CSS output, so app/print/projects/[id]/page.tsx, which
+   prints nothing but these sheets, carries its own @page. lib/gantt-print.ts
+   cuts the rows to fit 273mm x 191mm, the box left inside this padding, so
+   change the two together. */
+.print-sheet-a4.print-sheet-landscape {
+  width: 297mm;
+  min-height: 210mm;
+  padding: 10mm 12mm 9mm;
+}
+@media print {
+  .print-sheet-a4.print-sheet-landscape {
+    padding: 10mm 12mm 9mm;
+  }
+}
+.gantt-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--rpt-ink);
+}
+.gantt-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.gantt-sub {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--rpt-muted);
+}
+.gantt-parties {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: right;
+  color: var(--rpt-muted);
+}
+.gantt-parties b {
+  font-weight: 600;
+  color: var(--rpt-ink);
+}
+.gantt-cont {
+  height: 20px;
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 20px;
+  color: var(--rpt-muted);
+}
+.gantt-grid {
+  position: relative;
+  margin-top: 2px;
+}
+.gantt-chart {
+  position: absolute;
+  top: 0;
+  overflow: visible;
+}
+.gantt-colhead,
+.gantt-row {
+  display: grid;
+  box-sizing: border-box;
+  font-size: 11px;
+}
+.gantt-colhead {
+  align-items: end;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--rpt-ink);
+  font-weight: 500;
+  color: var(--rpt-muted);
+}
+.gantt-row {
+  align-items: center;
+  line-height: 13px;
+  border-bottom: 0.5px solid #ececec;
+}
+.gantt-colhead > span,
+.gantt-row > span {
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.gantt-row > .gantt-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.gantt-code {
+  color: var(--rpt-muted);
+}
+.gantt-row.is-heading {
+  font-weight: 600;
+}
+.gantt-row.is-top {
+  background: #f4f4f5;
+}
+.gantt-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--rpt-rule);
+  font-size: 10.5px;
+  line-height: 12px;
+  color: #334155;
+}
+.gantt-key > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gantt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 0.5px solid var(--rpt-rule);
+  font-size: 10.5px;
+  color: var(--rpt-muted);
+}
+.gantt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gantt-brand img {
+  width: auto;
+  height: 14px;
+}
+.gantt-brand b {
+  font-weight: 600;
+  color: var(--rpt-ink);
+}
+
 /* ---------- Report design system ---------- */
 /* Every printed report is built from these pieces and nothing else. A report
    component picks classes; it does not invent borders, greys or font sizes —
