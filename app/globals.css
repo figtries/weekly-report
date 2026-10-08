@@ -1418,6 +1418,10 @@ a:active {
   line-height: 13px;
   border-bottom: 0.5px solid var(--gantt-line);
 }
+/* with a chart beside it, its SVG draws the rules thinner than a border can be */
+.gantt-table.is-charted .gantt-row {
+  border-bottom: 0;
+}
 .gantt-colhead > span,
 .gantt-row > span {
   padding: 0 6px;

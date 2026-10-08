@@ -346,7 +346,7 @@ export default function GanttPrint({
             )}
 
             <div className="gantt-grid" style={{ height: svgH + SHEET.badge }}>
-              <div className="gantt-table" style={{ width: tableW }}>
+              <div className={`gantt-table${axis ? ' is-charted' : ''}`} style={{ width: tableW }}>
                 <div className="gantt-colhead" style={{ gridTemplateColumns: gridCols, height: SHEET.axis }}>
                   <span>#</span>
                   <span>Task name</span>
@@ -386,9 +386,9 @@ export default function GanttPrint({
 
                   {/* the calendar */}
                   {axis.grid.map((g, k) => (
-                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth="1" />
+                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth={g.strong ? 0.6 : 0.3} />
                   ))}
-                  <line x1="0" y1="20" x2={W} y2="20" stroke="var(--gantt-line)" />
+                  <line x1="0" y1="20" x2={W} y2="20" stroke="var(--gantt-line)" strokeWidth="0.3" />
                   {axis.top.map((t, k) => (
                     <text key={k} x={t.x + 4} y="14" fontSize="11" fontWeight="600" fill={INK}>
                       {t.label}
@@ -399,10 +399,10 @@ export default function GanttPrint({
                       {t.label}
                     </text>
                   ))}
-                  {/* the table's row rules, carried across */}
+                  {/* the row rules, table included: a CSS border under 1px is rounded up to 1px in the PDF, a stroke is not */}
                   {page.map((i) => {
-                    const y = yOf.get(i)! + heights[i] / 2 - 0.25;
-                    return <line key={`r-${i}`} x1="0" x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.5" />;
+                    const y = yOf.get(i)! + heights[i] / 2 - 0.15;
+                    return <line key={`r-${i}`} x1={-tableW} x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.3" />;
                   })}
                   <line x1="0" y1={SHEET.axis - 0.5} x2={W} y2={SHEET.axis - 0.5} stroke={INK} />
 
