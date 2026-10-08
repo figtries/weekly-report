@@ -191,7 +191,7 @@ export default function PlannerSkeleton() {
         <div className="min-h-0 min-w-0 shrink-0 overflow-hidden max-md:!w-full md:w-[min(620px,max(62%,490px))]">
           <div className="min-w-[19rem] sm:min-w-[30.625rem]">
             <div
-              className={`grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground ${GRID}`}
+              className={`grid items-center gap-x-1.5 border-b bg-card px-3 sm:px-6 md:pr-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground ${GRID}`}
               style={{ height: HEAD_H }}
             >
               {/* The headings are the real words. They are identical on every
@@ -219,7 +219,7 @@ export default function PlannerSkeleton() {
               {ROWS.map((r, i) => (
                 <div
                   key={i}
-                  className={`grid items-center gap-x-1.5 border-b px-3 ${GRID}`}
+                  className={`grid items-center gap-x-1.5 border-b px-3 sm:px-6 md:pr-3 ${GRID}`}
                   style={{ height: ROW_H }}
                 >
                   <span aria-hidden className="h-4 w-[3px] rounded-full bg-muted-foreground/25" />

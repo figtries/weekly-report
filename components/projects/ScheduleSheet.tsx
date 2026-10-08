@@ -1846,7 +1846,7 @@ export default function ScheduleSheet({
                  indent — at both breakpoints, without measuring anything. */
               <div
                 aria-hidden
-                className={`pointer-events-none absolute inset-x-0 z-30 grid items-center gap-x-1.5 px-3 ${GRID_SM} ${GRID_LG}`}
+                className={`pointer-events-none absolute inset-x-0 z-30 grid items-center gap-x-1.5 px-3 sm:px-6 md:pr-3 ${GRID_SM} ${GRID_LG}`}
                 style={{ top: HEAD_H + drag.gap * ROW_H - 1 }}
               >
                 <div
@@ -1856,7 +1856,7 @@ export default function ScheduleSheet({
               </div>
             )}
             <div
-              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
+              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 sm:px-6 md:pr-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
             >
               {/* `invisible`, not `hidden`. A display:none grid child leaves the
@@ -2004,7 +2004,7 @@ export default function ScheduleSheet({
               {...pressMotion}
               onClick={() => setFitTimeline((f) => !f)}
               aria-pressed={fitTimeline}
-              className={`absolute right-2 top-1.5 z-30 flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium shadow-sm ${
+              className={`absolute right-3 top-1.5 z-30 flex h-8 sm:right-6 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium shadow-sm ${
                 fitTimeline ? 'bg-foreground text-background' : 'bg-card text-muted-foreground'
               }`}
             >
@@ -2231,7 +2231,7 @@ const Row = memo(function Row({
     <div
       onMouseDown={onSelect}
       onPointerDown={(e) => on.press(r, e)}
-      className={`group grid items-center gap-x-1.5 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
+      className={`group grid items-center gap-x-1.5 border-b px-3 sm:px-6 md:pr-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
         selected ? 'bg-muted' : 'hover:bg-muted/50'
       } ${r.isSummary ? 'font-semibold' : ''} ${
         pending ? 'animate-fade-in-up text-muted-foreground' : ''
