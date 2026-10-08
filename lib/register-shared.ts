@@ -108,6 +108,14 @@ export type ObstacleKind = 'late' | 'comments' | 'waiting' | 'soon' | 'untouched
 
 /** Over this many days with the other side, a document is chased. */
 export const REPLY_DAYS = 14;
+
+/**
+ * A document at 100% is finished, and Needs action never lists it: three AFC
+ * drawings waiting on the client's reply sat under Needs action beside groups
+ * reading 100.0% (8 Oct 2026). To the hundredth, because stage weights with
+ * decimals can add up to 99.999…
+ */
+export const isFull = (percent: number) => Math.round(percent * 100) >= 10000;
 /** How far ahead "due soon" looks from the end of the week being viewed. */
 export const LOOKAHEAD_DAYS = 14;
 

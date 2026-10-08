@@ -31,7 +31,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import {
-  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, daysBetween, isApproved,
+  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, daysBetween, isApproved, isFull,
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
@@ -790,6 +790,7 @@ export function getObstacles(projectId: string, register: RegisterKind, week?: n
   const out: Obstacle[] = [];
 
   for (const doc of loaded.documents) {
+    if (isFull(percentOf([doc], loaded))) continue;
     const { open } = openStateOf(loaded.byDoc.get(doc.id) ?? [], loaded);
     if (!open) continue;
     out.push({

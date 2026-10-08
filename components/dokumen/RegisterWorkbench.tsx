@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { addCategory, addDocument, deleteCategory, renameCategory } from '@/lib/doc-actions';
 import { knownDiscipline, nextNumber, defaultRule, type NumberingRule } from '@/lib/register-numbering';
 import {
-  REGISTER_INFO, REPLY_DAYS, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
+  REGISTER_INFO, REPLY_DAYS, isFull, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
 import { CODE_TONE, codeLabel, docRev, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { ExistingNode } from '@/lib/builder-model';
@@ -55,10 +55,10 @@ const clamp = (n: number) => Math.min(100, Math.max(0, n));
 const fmt = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
 
-const isDone = (c: DocumentCard) => c.percent >= 100 && !c.out;
+const isDone = (c: DocumentCard) => isFull(c.percent) && !c.out;
 const needsPlan = (c: DocumentCard) => !isDone(c) && !c.out && c.nextStage !== null && !c.plannedAt;
-const needsAction = (c: DocumentCard) =>
-  c.overdue || Boolean(c.returnCode && c.sendNext) || (c.out !== null && (c.out.days ?? 0) > REPLY_DAYS);
+const needsAction = (c: DocumentCard) => !isFull(c.percent) &&
+  (c.overdue || Boolean(c.returnCode && c.sendNext) || (c.out !== null && (c.out.days ?? 0) > REPLY_DAYS));
 const lastLetter = (c: DocumentCard) => {
   for (const s of [...c.stages].reverse()) {
     if (s.returnTransmittal) return s.returnTransmittal;
@@ -111,14 +111,20 @@ export function RegisterWorkbench({
   }, [tree]);
 
   const all = useMemo(() => groups.flatMap((g) => cards[g.id] ?? []), [groups, cards]);
+  // Done is a GROUP at 100%: a group with one document still out read 86.7%
+  // under the Done tab, beside its finished siblings (8 Oct 2026).
+  // The group's own figure decides, rounded as it is printed beside the bar.
+  const doneIds = useMemo(() => new Set(groups.flatMap((g) =>
+    g.node.actual.toFixed(1) === '100.0' ? (cards[g.id] ?? []).filter(isDone).map((c) => c.id) : [],
+  )), [groups, cards]);
   const counts = useMemo(() => ({
     all: all.length,
     action: all.filter(needsAction).length,
     us: all.filter((c) => !isDone(c) && !c.out).length,
     them: all.filter((c) => c.out !== null).length,
-    done: all.filter(isDone).length,
+    done: doneIds.size,
     info: all.filter(needsPlan).length,
-  }), [all]);
+  }), [all, doneIds]);
   const emptyGroups = groups.filter((g) => (cards[g.id] ?? []).length === 0).length;
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -171,7 +177,7 @@ export function RegisterWorkbench({
       case 'action': return needsAction(c);
       case 'us': return !isDone(c) && !c.out;
       case 'them': return c.out !== null;
-      case 'done': return isDone(c);
+      case 'done': return doneIds.has(c.id);
       case 'info': return needsPlan(c);
       default: return true;
     }
@@ -398,7 +404,7 @@ export function RegisterWorkbench({
 
         <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh-18.75rem)] md:overflow-y-auto md:scrollbar-none">
           {/* Column names: thin, like the Excel register's own header row. */}
-          <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-muted/70 px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
+          <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-card))] px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
             <span />
             <span>No.</span><span>Title</span><span className="hidden xl:block">Rev</span><span>Issue</span><span>Code</span>
             <span>With</span><span className="text-right">Plan</span><span className="hidden xl:block">Last letter</span>
@@ -429,7 +435,7 @@ export function RegisterWorkbench({
                     if (!window.matchMedia('(min-width: 768px)').matches) return;
                     setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; });
                   }}
-                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:flex-none md:items-center">
+                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:w-60 md:flex-none md:items-center">
                     <ChevronDown className={cn('hidden h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 ease-ios md:block', !open && '-rotate-90')} />
                     <span className="min-w-0 truncate text-[16px] font-semibold tracking-[-0.01em] text-foreground md:text-[14px] md:tracking-normal">
                       {g.parentName && <span className="font-medium text-muted-foreground">{g.parentName} · </span>}{g.name}
@@ -512,9 +518,6 @@ export function RegisterWorkbench({
               </div>
             );
           })}
-          {flatVisible.length === 0 && filter !== 'all' && (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">Nothing here.</p>
-          )}
         </div>
         {error && <p role="alert" className="border-t border-border/70 bg-bad-soft px-4 py-2.5 text-sm text-bad">{error}</p>}
       </section>
