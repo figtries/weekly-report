@@ -54,7 +54,9 @@
     ".next-empty/types/**/*.ts",
     ".next-empty/dev/types/**/*.ts",
     ".next-verifydb/types/**/*.ts",
-    ".next-verifydb/dev/types/**/*.ts"
+    ".next-verifydb/dev/types/**/*.ts",
+    ".next-preview-kind/types/**/*.ts",
+    ".next-preview-kind/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

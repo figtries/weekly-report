@@ -82,14 +82,15 @@ export async function createProjectAction(input: {
   /** The project's field (lib/fields.ts); EPC when absent. */
   field?: string | null;
   clientName?: string;
-  /** Not asked for at creation — it belongs to the project page, once one exists. */
+  /** Asked beside the client since 8 Oct 2026; optional, like the client. */
   contractorName?: string;
   startDate: string;
   finishDate: string;
   /**
    * The SIGNED contract value. Asked here because a contract exists before a
    * single WBS row does — deriving it from prices later forced signed and
-   * allocated to be equal, which deleted the gap between them.
+   * allocated to be equal, which deleted the gap between them. Required since
+   * 8 Oct 2026, here as well as in the dialog.
    */
   contractValue?: number | null;
   currency?: string;
@@ -98,6 +99,7 @@ export async function createProjectAction(input: {
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Give the project a name');
+    if (!(Number(input.contractValue) > 0)) throw new Error('Give the contract value');
     if (!ISO_DATE.test(input.startDate)) throw new Error('Start date is not a date');
     if (!ISO_DATE.test(input.finishDate)) throw new Error('Finish date is not a date');
     if (utc(input.finishDate) < utc(input.startDate)) {

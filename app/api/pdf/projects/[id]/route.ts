@@ -26,6 +26,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const target = new URL(`/print/projects/${id}`, req.nextUrl.origin);
   target.searchParams.set('scope', scope);
   target.searchParams.set('levels', levels);
+  for (const k of ['client', 'contractor']) {
+    if (req.nextUrl.searchParams.get(k) === '1') target.searchParams.set(k, '1');
+  }
 
   let pdf: Uint8Array;
   try {
@@ -35,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const message = error instanceof Error ? error.message : String(error);
     return new Response(`PDF render failed: ${message}`, { status: 500 });
   }
-  const name = `${(project.alias || project.name).replace(/[^\w .()-]/g, '').trim() || 'Project'} - Schedule.pdf`;
+  const name = `${[project.alias, project.name].filter(Boolean).join(' - ').replace(/[^\w .()-]/g, '').replace(/\s+/g, ' ').trim() || 'Project'} - Schedule.pdf`;
 
   return new Response(pdf as BodyInit, {
     headers: {

@@ -42,6 +42,16 @@
       "autoPort": true
     },
     {
+      "name": "dev-preview-kind",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set NEXT_DIST_DIR=.next-preview-kind&& npm run dev"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "dev-preview4",
       "runtimeExecutable": "cmd",
       "runtimeArgs": [

@@ -16,19 +16,24 @@ export default function GanttPdfDialog({
   onOpenChange,
   projectId,
   fileBase,
+  parties,
   packages,
   rows,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
-  /** The project's initial or name, the start of the file name. */
+  /** The project's initial and name, the start of the file name. */
   fileBase: string;
+  /** Printed in the corner only when ticked: unasked, it read as clutter (8 Oct 2026). */
+  parties: { client: string | null; contractor: string | null };
   packages: { id: string; label: string }[];
   rows: PrintRowLite[];
 }) {
   const [scope, setScope] = useState('all');
   const [levels, setLevels] = useState(0);
+  const [shown, setShown] = useState({ client: false, contractor: false });
+  const partyChoices = (['client', 'contractor'] as const).filter((k) => parties[k]);
   const depth = useMemo(() => levelsIn(rows, scope), [rows, scope]);
   // A level the new choice does not have falls back to all of them.
   const shownLevels = levels < depth ? levels : 0;
@@ -114,6 +119,27 @@ export default function GanttPdfDialog({
           </div>
         )}
 
+        {partyChoices.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Show on the page</p>
+            <div className="space-y-0.5">
+              {partyChoices.map((k) => (
+                <label key={k} className={option(shown[k])}>
+                  <input
+                    type="checkbox"
+                    checked={shown[k]}
+                    onChange={(e) => setShown((s) => ({ ...s, [k]: e.target.checked }))}
+                    className="size-4 shrink-0 accent-[var(--primary)]"
+                  />
+                  <span className="min-w-0">
+                    {k === 'client' ? 'Client' : 'Contractor'} · {parties[k]}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="pt-1">
           <p className="mb-2 text-sm text-muted-foreground" aria-live="polite">
             {size.rows === 0
@@ -121,7 +147,7 @@ export default function GanttPdfDialog({
               : `${size.rows} ${size.rows === 1 ? 'row' : 'rows'} · ${size.pages} ${size.pages === 1 ? 'page' : 'pages'}`}
           </p>
           <SavePdfButton
-            url={`/api/pdf/projects/${projectId}?scope=${encodeURIComponent(scope)}&levels=${shownLevels}`}
+            url={`/api/pdf/projects/${projectId}?scope=${encodeURIComponent(scope)}&levels=${shownLevels}${shown.client ? '&client=1' : ''}${shown.contractor ? '&contractor=1' : ''}`}
             filename={fileName}
             ariaLabel={`Download the Gantt chart as a PDF, ${size.pages} pages`}
             label="Download PDF"

@@ -13,10 +13,11 @@ import { scopeRows } from '@/lib/gantt-print';
 // segments, for the reasons app/print/weekly/[week]/page.tsx gives.
 //
 // `scope` is 'all' or the id of the row whose branch is printed; `levels` is
-// how many levels below it are shown, 0 for all of them.
+// how many levels below it are shown, 0 for all of them. `client` and
+// `contractor` are '1' when ticked in the dialog; otherwise they stay off the page.
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ scope?: string; levels?: string }>;
+  searchParams: Promise<{ scope?: string; levels?: string; client?: string; contractor?: string }>;
 };
 
 // searchParams is a runtime read: behind Suspense, with a null fallback that
@@ -30,7 +31,7 @@ export default function ProjectPrintTarget(props: Props) {
 }
 
 async function ProjectPrintBody({ params, searchParams }: Props) {
-  const [{ id }, { scope = 'all', levels = '0' }] = await Promise.all([params, searchParams]);
+  const [{ id }, { scope = 'all', levels = '0', client, contractor }] = await Promise.all([params, searchParams]);
   // After the request reads: both of these look at the clock.
   await ensureFreshDb();
   let project = getProject(id);
@@ -61,7 +62,11 @@ async function ProjectPrintBody({ params, searchParams }: Props) {
       <style>{'@media print { @page { size: A4 landscape; margin: 0; } }'}</style>
       <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:block print:w-auto print:min-w-0 print:gap-0 print:p-0">
         <GanttPrint
-          project={project}
+          project={{
+            name: project.name,
+            clientName: client === '1' ? project.clientName : null,
+            contractorName: contractor === '1' ? project.contractorName : null,
+          }}
           rows={rows}
           allRows={sheet.rows}
           facts={facts}

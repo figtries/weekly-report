@@ -19,8 +19,27 @@ import { CURRENCIES } from '@/lib/currency';
 import { INITIAL_LENGTH, deriveInitial } from '@/lib/initial';
 import { FIELDS as ENERGY_FIELDS } from '@/lib/fields';
 
+/** Every control's size: one height, one type size, Input's own corner. */
+const CONTROL = 'h-11 text-base md:text-sm';
+/** What Input and NativeSelect draw for themselves, for the two that do not.
+ *  The border colour is left to `tone`, so a missing field can turn it red. */
+const BOX =
+  'w-full min-w-0 rounded-lg border bg-transparent px-2.5 outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** What Create asks for before it writes, in the order the form asks it. */
+const REQUIRED = [
+  { key: 'name', id: 'np-name', label: 'project name' },
+  { key: 'field', id: 'np-field', label: 'field' },
+  { key: 'value', id: 'np-value', label: 'contract value' },
+  { key: 'start', id: 'np-start', label: 'start date' },
+  { key: 'finish', id: 'np-finish', label: 'finish date' },
+] as const;
+
+/** "a", "a and b", "a, b and c". */
+const listOf = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
 /**
- * Six fields, one screen, one Save — not a wizard.
+ * One screen, one Save — not a wizard.
  *
  * The old flow asked for a name and dropped you into a five-step setup. What it
  * produced was a dead row: a project with no dates has no weeks, and a project
@@ -36,11 +55,13 @@ import { FIELDS as ENERGY_FIELDS } from '@/lib/fields';
  * signed before a single WBS row exists. Deriving it later from whatever prices
  * happen to have been typed forced signed and allocated to be equal, which
  * deleted the gap between them — the number that says how much of the contract
- * still has nothing priced against it. It stays optional, because someone
- * scheduling before the award should not be stopped at the door.
+ * still has nothing priced against it. Since 8 Oct 2026 it is REQUIRED, with
+ * the name, the field and both dates: Create marks whatever is missing red,
+ * names it, and takes the cursor there; nothing is red before that press.
  *
- * Everything else — contractor, contract numbers, site, document prefix —
- * belongs to the project's own page, where there is a project to hang it on.
+ * The client and the contractor are asked, not required. Everything else —
+ * contract numbers, site, document prefix — belongs to the project's own page,
+ * where there is a project to hang it on.
  *
  * It is an OVERLAY, portalled to the body, not a card that unfolds inside the
  * page header. Inline, the open form set the header row's height and left a
@@ -57,6 +78,7 @@ export default function NewProjectDialog() {
   const [alias, setAlias] = useState('');
   const [field, setField] = useState(ENERGY_FIELDS[0].id);
   const [client, setClient] = useState('');
+  const [contractor, setContractor] = useState('');
   const [start, setStart] = useState('');
   const [finish, setFinish] = useState('');
   const [value, setValue] = useState('');
@@ -74,12 +96,27 @@ export default function NewProjectDialog() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const ready = name.trim() !== '' && start !== '' && finish !== '';
+  // Red only after Create was pressed, and each box clears the moment it is filled.
+  const [tried, setTried] = useState(false);
+  const missing: Record<(typeof REQUIRED)[number]['key'], boolean> = {
+    name: name.trim() === '',
+    field: field === '',
+    value: !(Number(value.replace(/[^0-9.]/g, '')) > 0),
+    start: start === '',
+    finish: finish === '',
+  };
+  const gaps = tried ? REQUIRED.filter((r) => missing[r.key]) : [];
+  const bad = (key: keyof typeof missing) => tried && missing[key];
+  /** Border colour for the two controls that do not read `aria-invalid`. */
+  const tone = (key: keyof typeof missing) =>
+    bad(key) ? 'border-destructive ring-3 ring-destructive/20' : 'border-input';
 
   function reset() {
     setName('');
     setAlias('');
     setClient('');
+    setContractor('');
+    setTried(false);
     setStart('');
     setFinish('');
     setValue('');
@@ -100,15 +137,22 @@ export default function NewProjectDialog() {
   function create() {
     if (pending) return;
     setError(null);
+    setTried(true);
+    const first = REQUIRED.find((r) => missing[r.key]);
+    if (first) {
+      document.getElementById(first.id)?.focus();
+      return;
+    }
     startTransition(async () => {
       const res = await createProjectAction({
         name,
         alias,
         field,
         clientName: client,
+        contractorName: contractor,
         startDate: start,
         finishDate: finish,
-        contractValue: value.trim() === '' ? null : Number(value.replace(/[^0-9.]/g, '')),
+        contractValue: Number(value.replace(/[^0-9.]/g, '')),
         currency,
       });
       if (!res.ok) {
@@ -157,25 +201,26 @@ export default function NewProjectDialog() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: MOTION.enter, ease: MOTION.ease }}
-                  className="max-h-[88vh] w-full overflow-auto rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-md sm:rounded-2xl"
+                  className="max-h-[88vh] w-full overflow-auto rounded-t-2xl border bg-card px-5 py-5 shadow-lg sm:max-w-md sm:rounded-2xl sm:px-6"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <h2 className="text-sm font-semibold">New project</h2>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    The work breakdown, the prices and the schedule come next, on the
-                    project&apos;s own page.
-                  </p>
+                  <h2 className="text-[17px] font-semibold">New project</h2>
 
-                  <div className="mt-3 space-y-3">
-                    <div className="space-y-1">
+                  {/* ONE even grid: the name across the top, then every
+                      control in two equal columns, each the same 44px box with
+                      the same corner. Fields that each sized themselves read
+                      as four forms in one (8 Oct 2026). */}
+                  <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
+                    <div className="col-span-2 space-y-1.5">
                       <Label htmlFor="np-name">Project name</Label>
                       <Input
                         id="np-name"
                         autoFocus
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Relocation of 2 GTG units"
-                        className="h-11"
+                        placeholder="e.g. GTG relocation"
+                        aria-invalid={bad('name') || undefined}
+                        className={CONTROL}
                       />
                     </div>
 
@@ -185,12 +230,9 @@ export default function NewProjectDialog() {
                         abandoned, with nothing on screen saying so. As a
                         placeholder it follows the name until somebody types
                         over it, and after that it never interferes again.
-
-                        Uppercased as you type, and three characters wide rather
-                        than full width: the field's own size is what says three
-                        letters, before anyone reads the sentence under it. */}
-                    <div className="space-y-1">
-                      <Label htmlFor="np-initial">Project initial</Label>
+                        Uppercased as you type; maxLength holds it to three. */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="np-initial">Initial</Label>
                       <Input
                         id="np-initial"
                         value={alias}
@@ -201,65 +243,64 @@ export default function NewProjectDialog() {
                         autoCapitalize="characters"
                         autoComplete="off"
                         spellCheck={false}
-                        className="h-11 w-24 text-center text-base font-semibold uppercase tracking-[0.2em]"
+                        className={`${CONTROL} font-semibold uppercase tracking-[0.2em]`}
                       />
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Three letters, used wherever the full name will not fit. Leave it blank and
-                        we use the one shown here.
-                      </p>
                     </div>
-
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <Label htmlFor="np-field">Field</Label>
-                      <select
+                      <NativeSelect
                         id="np-field"
                         value={field}
                         onChange={(e) => setField(e.target.value)}
-                        className="h-11 w-full rounded-md border bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
+                        aria-invalid={bad('field') || undefined}
+                        className={CONTROL}
                       >
                         {ENERGY_FIELDS.map((fd) => (
-                          <option key={fd.id} value={fd.id}>
-                            {fd.label}: {fd.help}
+                          <option key={fd.id} value={fd.id} title={fd.help}>
+                            {fd.label}
                           </option>
                         ))}
-                      </select>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        The line of energy work. More fields come later.
-                      </p>
+                      </NativeSelect>
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <Label htmlFor="np-client">Client</Label>
                       <Input
                         id="np-client"
                         value={client}
                         onChange={(e) => setClient(e.target.value)}
-                        placeholder="Who the work is for"
-                        className="h-11"
+                        placeholder="Company name"
+                        className={CONTROL}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="np-contractor">Contractor</Label>
+                      <Input
+                        id="np-contractor"
+                        value={contractor}
+                        onChange={(e) => setContractor(e.target.value)}
+                        placeholder="Company name"
+                        className={CONTROL}
                       />
                     </div>
 
                     {/* The signed figure, asked here because the contract exists
-                        before the plan does. Optional: someone starting a
-                        schedule before the award should not be stopped at the
-                        door. */}
-                    <div className="grid grid-cols-[1fr_5.5rem] gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="np-value">Contract value</Label>
-                        <MoneyInput
-                          id="np-value"
-                          resetKey={valueSeed}
-                          onValueChange={setValue}
-                          placeholder="Not signed yet? Leave it"
-                          className="h-11 w-full rounded-md border bg-transparent px-3 py-1 text-base shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="np-cur">Currency</Label>
+                        before the plan does. ONE box across both columns, the
+                        currency its first segment: a figure and its unit are
+                        read together, and as two boxes the currency stood
+                        alone half the width of the form. */}
+                    <div className="col-span-2 space-y-1.5">
+                      <Label htmlFor="np-value">Contract value</Label>
+                      <div
+                        className={`flex h-11 overflow-hidden rounded-lg border transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 ${tone('value')}`}
+                      >
                         <NativeSelect
                           id="np-cur"
+                          aria-label="Currency"
                           value={currency}
                           onChange={(e) => setCurrency(e.target.value)}
+                          wrapperClassName="w-[5.25rem] shrink-0"
+                          className="h-full min-h-0 rounded-none border-0 border-r border-input bg-muted text-base font-medium focus-visible:ring-0 sm:min-h-0 md:text-sm"
                         >
                           {CURRENCIES.map((c) => (
                             <option key={c.code} value={c.code}>
@@ -267,46 +308,47 @@ export default function NewProjectDialog() {
                             </option>
                           ))}
                         </NativeSelect>
+                        <MoneyInput
+                          id="np-value"
+                          resetKey={valueSeed}
+                          onValueChange={setValue}
+                          placeholder="Signed value"
+                          className="h-full min-w-0 flex-1 bg-transparent px-3 text-base tabular-nums outline-none placeholder:text-muted-foreground md:text-sm"
+                        />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="np-start">Starts</Label>
-                        <DateField
-                          id="np-start"
-                          value={start}
-                          onChange={setStart}
-                          className="h-11 w-full min-w-0 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="np-finish">Finishes</Label>
-                        <DateField
-                          id="np-finish"
-                          value={finish}
-                          onChange={setFinish}
-                          className="h-11 w-full min-w-0 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                        />
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="np-start">Starts</Label>
+                      <DateField
+                        id="np-start"
+                        value={start}
+                        onChange={setStart}
+                        className={`${CONTROL} ${BOX} ${tone('start')}`}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="np-finish">Finishes</Label>
+                      <DateField
+                        id="np-finish"
+                        value={finish}
+                        onChange={setFinish}
+                        className={`${CONTROL} ${BOX} ${tone('finish')}`}
+                      />
                     </div>
                   </div>
 
-                  {error && (
-                    <p className="animate-fade-in-up mt-2 text-xs text-destructive">{error}</p>
+                  {(gaps.length > 0 || error) && (
+                    <p role="alert" className="animate-fade-in-up mt-4 text-sm text-destructive">
+                      {gaps.length > 0
+                        ? `Fill in the ${listOf(gaps.map((g) => g.label))} to create the project.`
+                        : error}
+                    </p>
                   )}
 
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-6 grid grid-cols-2 gap-3">
                     <Button
-                      className="h-11 flex-1 gap-1.5"
-                      onClick={create}
-                      disabled={pending || !ready}
-                    >
-                      {pending && <Spinner />}
-                      {opening ? 'Opening the project…' : pending ? 'Creating…' : 'Create project'}
-                    </Button>
-                    <Button
-                      variant="ghost"
+                      variant="outline"
                       className="h-11"
                       onClick={() => {
                         reset();
@@ -315,6 +357,14 @@ export default function NewProjectDialog() {
                       disabled={pending}
                     >
                       Cancel
+                    </Button>
+                    <Button
+                      className="h-11 gap-1.5"
+                      onClick={create}
+                      disabled={pending}
+                    >
+                      {pending && <Spinner />}
+                      {opening ? 'Opening the project…' : pending ? 'Creating…' : 'Create project'}
                     </Button>
                   </div>
                   {/* Said in words as well as in the button, because what the

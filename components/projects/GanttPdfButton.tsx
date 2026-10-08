@@ -22,11 +22,13 @@ function preloadDialog(): Promise<unknown> {
 export default function GanttPdfButton({
   projectId,
   fileBase,
+  parties,
   packages,
   rows,
 }: {
   projectId: string;
   fileBase: string;
+  parties: { client: string | null; contractor: string | null };
   packages: { id: string; label: string }[];
   rows: PrintRowLite[];
 }) {
@@ -75,6 +77,7 @@ export default function GanttPdfButton({
             onOpenChange={setOpen}
             projectId={projectId}
             fileBase={fileBase}
+            parties={parties}
             packages={packages}
             rows={rows}
           />

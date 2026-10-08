@@ -153,7 +153,8 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
             <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3">
               <GanttPdfButton
                 projectId={id}
-                fileBase={project.alias || project.name}
+                fileBase={[project.alias, project.name].filter(Boolean).join(' - ')}
+                parties={{ client: project.clientName, contractor: project.contractorName }}
                 packages={packagesOf(sheet.rows)}
                 rows={sheet.rows.map((r) => ({
                   id: r.id,
