@@ -10,7 +10,11 @@ import { db, schema } from './sqlite';
 import { formatMoney } from './currency';
 import {
   checkBudgetEdit,
+  deriveWeights,
+  describeIssue,
+  issueHref,
   summariseWeights,
+  weightIssues,
   type WeightNode,
   type WeightSummary,
 } from './weights';
@@ -59,6 +63,47 @@ export function getWeightSummary(projectId: string): WeightSummary | null {
   // One source, read here and nowhere else, so the list card and the project
   // page can never show two different numbers for the same project again.
   return summariseWeights(nodes, project.currency, project.contractValue);
+}
+
+export interface WeightFix {
+  key: string;
+  title: string;
+  detail: string;
+  action: string;
+  href: string;
+}
+
+/**
+ * Every money issue on a project, in words and with the one place it is fixed.
+ * What the dashboard, the report screens, Data Overall and the project page all
+ * read, so they name the same rows in the same order. See `weightIssues`.
+ */
+export function loadWeightFixes(projectId: string, week: number): WeightFix[] {
+  const project = db
+    .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .all()[0];
+  if (!project) return [];
+  const rows = db
+    .select({
+      id: schema.wbsNodes.id,
+      code: schema.wbsNodes.wbsCode,
+      name: schema.wbsNodes.deskripsi,
+      milestone: schema.wbsNodes.isMilestone,
+    })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.projectId, projectId))
+    .all();
+  const label = new Map(rows.map((r) => [r.id, `${r.code ?? ''} ${r.name ?? ''}`.trim()]));
+  const milestones = new Set(rows.filter((r) => r.milestone).map((r) => r.id));
+  const result = deriveWeights(loadWeightNodes(projectId), project.contractValue ?? undefined);
+  const say = (amount: number) => formatMoney(amount, project.currency);
+  return weightIssues(result, milestones).map((issue) => ({
+    key: 'id' in issue ? `${issue.kind}:${issue.id}` : issue.kind,
+    ...describeIssue(issue, 'id' in issue ? (label.get(issue.id) ?? 'This row') : '', say),
+    href: issueHref(issue, projectId, week),
+  }));
 }
 
 /**

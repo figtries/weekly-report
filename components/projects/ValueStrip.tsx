@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import type { WeightSummary } from '@/lib/weights';
 import { formatMoney } from '@/lib/currency';
 import CurrencyPicker from './CurrencyPicker';
@@ -32,11 +34,21 @@ import CurrencyPicker from './CurrencyPicker';
 export default function ValueStrip({
   summary,
   projectId,
+  week = null,
 }: {
   summary: WeightSummary;
   projectId: string;
+  /** The open project's current week, for the press to Weights. Null when not open. */
+  week?: number | null;
 }) {
   const signed = summary.contractValue > 0;
+  // THE CONTRACT AND THE WORK PACKAGES, SIDE BY SIDE (8 Oct 2026). This line
+  // showed the contract alone while Weights measured everything against the
+  // packages, so the two screens quoted different figures for one project with
+  // nothing saying so. Same comparison as Weights, same press to fix it.
+  const budget = summary.projectBudget;
+  const diff = signed && budget > 0 ? budget - summary.contractValue : 0;
+  const say = (v: number) => formatMoney(v, summary.currency);
 
   return (
     // Second in the page's cascade, after the header and before the sheet. The
@@ -50,6 +62,37 @@ export default function ValueStrip({
         </strong>
         <CurrencyPicker projectId={projectId} currency={summary.currency} />
       </span>
+      {signed && budget > 0 && (
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+          <span className="text-muted-foreground">
+            Work packages <strong className="tabular-nums text-foreground">{say(budget)}</strong>
+            {' · '}
+            {Math.abs(diff) <= 0.5 ? (
+              <span className="font-semibold text-ok">Matches the contract</span>
+            ) : diff > 0 ? (
+              <span className="font-semibold text-destructive">{say(diff)} past the contract</span>
+            ) : (
+              <span className="font-semibold text-warn">{say(-diff)} of the contract in no work package</span>
+            )}
+          </span>
+          {diff > 0.5 && (
+            <a
+              href="#edit=contractValue"
+              className="inline-flex min-h-11 items-center rounded-lg bg-background px-3.5 text-sm font-semibold text-primary ring-1 ring-primary/30 sm:min-h-9"
+            >
+              Raise the contract value
+            </a>
+          )}
+          {diff < -0.5 && week != null && (
+            <Link
+              href={`/weekly/${week}/weights`}
+              className="inline-flex min-h-11 items-center rounded-lg bg-background px-3.5 text-sm font-semibold text-primary ring-1 ring-primary/30 sm:min-h-9"
+            >
+              Open Weights
+            </Link>
+          )}
+        </span>
+      )}
     </div>
   );
 }

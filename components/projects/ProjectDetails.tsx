@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, m } from 'framer-motion';
@@ -120,7 +120,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ field: ProjectField; message: string } | null>(null);
   const [saved, setSaved] = useState<ProjectField | null>(null);
 
   // The overlay is PORTALLED to the body, and that is a bug fix rather than a
@@ -131,6 +131,35 @@ export default function ProjectDetails({ project }: { project: Project }) {
   // above the top of the screen with its first two fields unreachable.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // `#edit=contractValue`: "Raise the contract value" on Weights, the project
+  // strip and the dashboard lands HERE, dialog open and that field focused,
+  // so nobody hunts for which button holds it (8 Oct 2026). On arrival and on
+  // a hash change, because the strip links to it from this same page.
+  const focusField = useRef<string | null>(null);
+  useEffect(() => {
+    const go = () => {
+      const m = /edit=([^&]+)/.exec(window.location.hash);
+      if (!m) return;
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      focusField.current = decodeURIComponent(m[1]);
+      setOpen(true);
+    };
+    const arrival = window.setTimeout(go, 0);
+    window.addEventListener('hashchange', go);
+    return () => {
+      window.clearTimeout(arrival);
+      window.removeEventListener('hashchange', go);
+    };
+  }, []);
+  useEffect(() => {
+    if (!open || !mounted || !focusField.current) return;
+    const el = document.getElementById(`pd-${focusField.current}`) as HTMLInputElement | null;
+    focusField.current = null;
+    el?.scrollIntoView({ block: 'center' });
+    el?.focus();
+    el?.select();
+  }, [open, mounted]);
 
   const valueOf = (k: ProjectField): string => {
     // The four signature halves are not columns: two JSON columns hold them,
@@ -151,7 +180,9 @@ export default function ProjectDetails({ project }: { project: Project }) {
     startTransition(async () => {
       const res = await updateProjectFieldAction(project.id, field, next);
       if (!res.ok) {
-        setError(res.error);
+        // Under the field it belongs to: at the foot of a long dialog the
+        // contract refusal went unseen.
+        setError({ field, message: res.error });
         return;
       }
       setSaved(field);
@@ -195,8 +226,8 @@ export default function ProjectDetails({ project }: { project: Project }) {
                 >
                   <h2 className="text-sm font-semibold">Project details</h2>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Saved as you leave each field. The contract value is the signed figure. What
-                    the prices in the sheet add up to is shown against it on the project page.
+                    Saved as you leave each field. The contract value is the signed figure, and the
+                    work packages on Weights can add up to it but never past it.
                   </p>
 
                   <div className="mt-3 space-y-3">
@@ -298,6 +329,11 @@ export default function ProjectDetails({ project }: { project: Project }) {
                         ) : (
                           f.hint && <p className="text-[11px] text-muted-foreground">{f.hint}</p>
                         )}
+                        {error?.field === f.key && (
+                          <p role="alert" className="text-xs font-semibold text-destructive">
+                            {error.message}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -307,7 +343,6 @@ export default function ProjectDetails({ project }: { project: Project }) {
                     relabels and never converts.
                   </p>
 
-                  {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
                   <Button className="mt-4 h-11 w-full" onClick={() => setOpen(false)}>
                     Done

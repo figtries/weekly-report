@@ -174,6 +174,8 @@ export interface WeightsScreen {
    * be the last to find out.
    */
   nodes: WeightNode[];
+  /** Milestone ids: they weigh nothing on purpose and are never listed as missing a budget. */
+  milestones: string[];
   /**
    * False where nobody has marked an SPK yet. The WBS roots stand in as the
    * cards instead — a plan with no units still has weights, and hiding the
@@ -211,6 +213,8 @@ export interface RowFacts {
   qtyTotal?: number | null;
   qtyUnit?: string | null;
   steps?: number;
+  /** A milestone weighs nothing by definition, so it is never "without a budget". */
+  milestone?: boolean;
 }
 
 export function buildWeightsScreen(
@@ -358,7 +362,12 @@ export function buildWeightsScreen(
       derivedValue,
       bobotOverall: leafTotal,
       budgetedLeaves: members.filter((n) => n.isLeaf && (result.valueOf.get(n.id) ?? 0) > 0).length,
-      leafCount: members.filter((n) => n.isLeaf && result.bobotOf.has(n.id)).length,
+      // Milestones are out of the count, as they are out of the gate: a card
+      // of six milestones read "6 activities without a budget" while the
+      // dashboard said every activity had one (8 Oct 2026).
+      leafCount: members.filter(
+        (n) => n.isLeaf && result.bobotOf.has(n.id) && !meta.get(n.id)?.milestone
+      ).length,
       isUnit: anchor.isReportingUnit,
       isLeaf: anchor.isLeaf,
       rows: toRows(members, depthOf(anchor) + 1, leafTotal),
@@ -378,6 +387,7 @@ export function buildWeightsScreen(
     looseRows: toRows(loose, 0, looseTotal),
     hasUnits,
     nodes,
+    milestones: nodes.filter((n) => meta.get(n.id)?.milestone).map((n) => n.id),
     locked,
   };
 }
@@ -402,6 +412,7 @@ export function loadWeightsScreen(projectId: string): WeightsScreen | null {
       code: schema.wbsNodes.wbsCode,
       name: schema.wbsNodes.deskripsi,
       method: schema.wbsNodes.progressMethod,
+      milestone: schema.wbsNodes.isMilestone,
       qtyTotal: schema.wbsNodes.vol,
       qtyUnit: schema.wbsNodes.satuan,
     })
@@ -444,6 +455,7 @@ export function loadWeightsScreen(projectId: string): WeightsScreen | null {
           qtyTotal: r.qtyTotal,
           qtyUnit: r.qtyUnit,
           steps: stepCount.get(r.id) ?? 0,
+          milestone: r.milestone,
         },
       ] as const;
     })

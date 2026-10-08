@@ -167,9 +167,13 @@ budget of its own, or the project** (`poolOf`); a work package with a budget
 is its own contract and draws on the project, which is how SPK-007 inside 1.4
 stays out of 1.4's sum. **The project budget IS its work packages added up**
 (`WeightResult.projectBudget`) and every weight is measured against it, so
-raising a package raises the project; the contract value typed on the project
-is only COMPARED with it, and the Weights strip says "over the contract value
-by X" with a link to Project details instead of refusing anything. **A row nobody budgeted weighs 0** — no even share of a
+raising a package raises the project, UP TO THE CONTRACT VALUE (8 Oct 2026,
+replacing "only compared"): "if the work packages go past the contract, the
+contract has to be raised". `checkBudgetEdit` refuses an edit that takes the
+project past it, and `updateProjectFieldAction` refuses lowering the contract
+below the packages; both only where it gets WORSE. The refusal carries a
+"Raise the contract value" press to `/projects/<id>#edit=contractValue`, which
+opens Project details on that field, selected. **A row nobody budgeted weighs 0** — no even share of a
 remainder, anywhere, including a plan with no budgets at all. It was read as a
 figure somebody had typed ("= IDR 11 253" under five empty boxes), and the
 consequence is the user's by decision: the total reads what the budgets reach,
@@ -179,7 +183,19 @@ anywhere until it closes (see "No figure until the weights close" below).
 **The cap is refused, in both directions, inside a heading**, by
 `checkBudgetEdit`: a budget may not take more than its heading has left, and a
 heading may not be lowered below what already draws on it. The project level
-never refuses (see above).
+is capped by the contract value (see above).
+
+**Every money issue is NAMED and one press from where it is fixed** (8 Oct
+2026). "1.34% has not reached an activity yet" beside an empty card sent the
+user opening card after card for the heading it meant (SPK-001, short by IDR
+789,900,000). `weightIssues` in `lib/weights.ts` is the one list: past the
+contract, headings over, headings short, activities with no budget (never
+milestones), contract not in any package. `loadWeightFixes` words it with an
+href; the dashboard and report gate ("What to fix"), Data Overall's guide, the
+Weights strip and the project's value strip all read it, never their own.
+Weights opens at `#row=<id>` (card open, row lit, scrolled clear of the sticky
+bar); its colours use the gate's `WEIGHT_TOLERANCE`, not 0.5, so 99.60% is
+never green while the reports hold their figures.
 It runs on the client while typing and again in the action before writing, and
 it refuses only what makes a pool WORSE, so Gundih's inherited 140% headings
 stay editable. Paste and indent are bulk and are not blocked; the card reports

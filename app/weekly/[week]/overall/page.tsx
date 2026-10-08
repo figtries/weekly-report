@@ -20,6 +20,7 @@ import { formatMoney } from '@/lib/currency';
 import { blockingIds, validateWeek } from '@/lib/analysis';
 import { r2 } from '@/lib/figures';
 import { weightGate } from '@/lib/weight-gate';
+import { loadWeightFixes } from '@/lib/weights-read';
 import { buildForecastView } from '@/lib/forecast-view';
 
 export const unstable_instant = {
@@ -144,6 +145,9 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // reports are actually built on, so this card, the dashboard, the sidebar
   // and Check can never disagree about whether figures exist this week.
   const gate = weightGate(db.wbsItems);
+  // The first thing to fix, by name, so the guide's press lands on it rather
+  // than on Weights' front page (8 Oct 2026). Same list as the dashboard.
+  const fix = !gate.ok && open ? loadWeightFixes(open.id, week)[0] : undefined;
   // The forecast is a figure like the four below, so it waits for the same
   // gate. What it needs looked at rides with it (lib/forecast-view.ts).
   const forecast = gate.ok ? buildForecastView(db, week) : null;
@@ -181,9 +185,11 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
                 Math.abs(gate.total - 100) > 0.01
                   ? `The weights add up to ${gate.total.toFixed(2)}%, not 100%`
                   : `${gate.unbudgeted.length} ${gate.unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`,
-              body: `Progress figures wait until every activity has a budget and the budgets reach 100%.${overrun} Filling in below still works.`,
-              cta: 'Complete in Weights',
-              href: `/weekly/${week}/weights`,
+              body: fix
+                ? `${fix.title}. ${fix.detail} Progress figures wait until the weights reach 100%; filling in below still works.`
+                : `Progress figures wait until every activity has a budget and the budgets reach 100%.${overrun} Filling in below still works.`,
+              cta: fix ? fix.action : 'Complete in Weights',
+              href: fix ? fix.href : `/weekly/${week}/weights`,
               tone: 'warn' as const,
             }
           : money.basis !== 'boq' && money.wouldChange > 0

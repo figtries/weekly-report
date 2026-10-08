@@ -15,6 +15,7 @@ import {
   computeContractValue,
   deriveWeights,
   summariseWeights,
+  weightIssues,
   type WeightNode,
 } from '../lib/weights.ts';
 
@@ -158,11 +159,37 @@ check(
   (tryBudget(capped, 'H', 150) ?? '').startsWith('The rows inside H already take 200.'),
   String(tryBudget(capped, 'H', 150))
 );
+// THE CONTRACT CAPS THE PROJECT (8 Oct 2026). The project budget is H 500 +
+// K1 100 = 600 against a contract of 1000, so K1 may grow by 400 and no more.
 check(
-  'the project is not capped: a row with no heading above grows the project budget',
-  tryBudget(capped, 'K1', 600) === null,
-  String(tryBudget(capped, 'K1', 600))
+  'a row drawing on the project may grow it up to the contract value',
+  tryBudget(capped, 'K1', 500) === null,
+  String(tryBudget(capped, 'K1', 500))
 );
+check(
+  'and not one unit past it: the contract value has to be raised first',
+  (tryBudget(capped, 'K1', 501) ?? '').endsWith('past the contract value of 1000. Raise the contract value first.'),
+  String(tryBudget(capped, 'K1', 501))
+);
+{
+  // Already past (inherited): an edit that eases it goes through.
+  const past = capped.map((n) => (n.id === 'K1' ? { ...n, price: 700 } : n));
+  check('a project already past the contract can still be lowered', tryBudget(past, 'K1', 600) === null, String(tryBudget(past, 'K1', 600)));
+}
+
+/* ------------------------------------------------------------ the issues */
+
+// Every issue named, in the order to fix it: H holds 500 and its rows 200, H2
+// has nothing, and 400 of the contract is in no heading.
+{
+  const issues = weightIssues(deriveWeights(capped, 1000));
+  const shape = issues.map((i) => `${i.kind}${'id' in i ? `:${i.id}` : ''}${'amount' in i ? `=${i.amount}` : ''}`).join(' ');
+  check('weightIssues names the short heading, the empty row and the unshared contract', shape === 'short:H=300 unbudgeted:H2 contract-short=400', shape);
+  const over = weightIssues(deriveWeights(capped.map((n) => (n.id === 'K1' ? { ...n, price: 700 } : n)), 1000));
+  check('past the contract comes first', over[0]?.kind === 'contract-over' && 'amount' in over[0] && over[0].amount === 200, JSON.stringify(over[0]));
+  const ms = weightIssues(deriveWeights(capped, 1000), new Set(['H2']));
+  check('a milestone with no budget is not an issue', !ms.some((i) => i.kind === 'unbudgeted'), ms.map((i) => i.kind).join(' '));
+}
 check('clearing a budget is always allowed', tryBudget(capped, 'H', null) === null, String(tryBudget(capped, 'H', null)));
 
 // Inherited overrun: H already hands out 700 of its 500. An edit that makes it

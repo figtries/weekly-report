@@ -15,12 +15,14 @@ import {
   overrunOf,
   poolAmount,
   poolOf,
+  weightIssues,
   type Allocation,
   type OverGiving,
   type Overrun,
   type WeightNode,
 } from '@/lib/weights';
 import type { WeightsRow, WeightsScreen, WeightsUnit } from '@/lib/weights-screen';
+import { WEIGHT_TOLERANCE } from '@/lib/weight-gate';
 import { formatMoney, groupAmount } from '@/lib/currency';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Spinner from '@/components/ui/Spinner';
@@ -316,20 +318,58 @@ export default function WeightsWorkbench({
     setFocusRow(rowId);
   }
 
+  // `#row=<id>`: the dashboard's "Go to it" lands here with that row's card
+  // open and the row lit, so nobody hunts for the heading the gate named
+  // (8 Oct 2026). Same hash shape the planner reads: on arrival, and whenever
+  // a link on this page sets one.
+  useEffect(() => {
+    const go = () => {
+      const m = /row=([^&]+)/.exec(window.location.hash);
+      if (!m) return;
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      goToRow(decodeURIComponent(m[1]));
+    };
+    const arrival = window.setTimeout(go, 0);
+    window.addEventListener('hashchange', go);
+    return () => {
+      window.clearTimeout(arrival);
+      window.removeEventListener('hashchange', go);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Headings holding budget their rows have not been given, biggest first. */
+  const shortHeadings = useMemo<OverGiving[]>(
+    () =>
+      weightIssues(live).flatMap((i) =>
+        i.kind === 'short' ? [{ id: i.id, budget: i.budget, claimed: i.claimed, over: i.amount }] : []
+      ),
+    [live]
+  );
+
   /** How many activities a budget reaches now, counting what is only typed. */
   const pricedCount = useMemo(
     () => [...live.bobotOf.keys()].filter((id) => (live.valueOf.get(id) ?? 0) > 0).length,
     [live]
   );
-  const leafCount = live.bobotOf.size;
+  /**
+   * MILESTONES ARE NOT ACTIVITIES WITHOUT A BUDGET (8 Oct 2026). Weighing
+   * nothing is what a milestone is, and the gate has always skipped them;
+   * this screen listed all six of Merbau's as "no budget" while the
+   * dashboard said every activity had one.
+   */
+  const milestones = useMemo(() => new Set(screen.milestones), [screen.milestones]);
+  const leafCount = [...live.bobotOf.keys()].filter((id) => !milestones.has(id)).length;
 
   /** Activities no budget reaches, in plan order, for the strip to name. */
   const unbudgeted = useMemo(
     () =>
       screen.nodes
-        .filter((n) => live.bobotOf.has(n.id) && (live.valueOf.get(n.id) ?? 0) <= 0)
+        .filter(
+          (n) => live.bobotOf.has(n.id) && !milestones.has(n.id) && (live.valueOf.get(n.id) ?? 0) <= 0
+        )
         .map((n) => n.id),
-    [screen.nodes, live]
+    [screen.nodes, live, milestones]
   );
 
   const unit = openUnit ? (screen.units.find((u) => u.id === openUnit) ?? null) : null;
@@ -361,6 +401,12 @@ export default function WeightsWorkbench({
     onCancel: cancelEdit,
     onSave: (rowId: string) => void saveEdit(rowId),
     onTypeMoney: typeMoney,
+    // A figure refused because it takes the project past the contract is
+    // fixed on the project, so the refusal carries the press that gets there.
+    contractHref:
+      live.signedContract > 0 && live.projectBudget - live.signedContract > 0.5
+        ? `/projects/${projectId}#edit=contractValue`
+        : null,
   };
 
   return (
@@ -375,6 +421,7 @@ export default function WeightsWorkbench({
         screen={screen}
         live={live}
         overrun={overrun}
+        short={shortHeadings}
         labelOf={labelOf}
         onGoToRow={goToRow}
         priced={pricedCount}
@@ -390,6 +437,7 @@ export default function WeightsWorkbench({
           hidden={hidden}
           alloc={unit.isLeaf ? null : (liveAlloc.get(unit.id) ?? null)}
           list={listProps}
+          focused={focusRow === unit.id}
           onBack={() => setOpenUnit(null)}
         />
       ) : (
@@ -431,11 +479,11 @@ export default function WeightsWorkbench({
  * the contract.
  *
  * **The project budget IS its work packages added up** (24 Sep 2026). Raising
- * a package raises the project; nothing at this level refuses. The contract
- * value typed on the project is what that total is compared with, and when the
- * packages run past it the strip says by how much and sends you to Project
- * details to change it, because a budget that really grew has to be changed
- * where the project keeps it, by somebody deciding to.
+ * a package raises the project, up to the contract value typed on the project:
+ * since 8 Oct 2026 that is a CAP, refused at the box with a press to raise it.
+ * A project already past it (from before the cap) says by how much and sends
+ * you straight to the contract field, because a budget that really grew is
+ * changed where the project keeps it, by somebody deciding to.
  *
  * **Weights total is the one figure that must reach 100**: a leaf's weight is
  * its budget over the project budget, so anything short of 100 is budget still
@@ -447,6 +495,7 @@ function PricingHero({
   screen,
   live,
   overrun,
+  short,
   labelOf,
   onGoToRow,
   priced,
@@ -457,6 +506,8 @@ function PricingHero({
   screen: WeightsScreen;
   live: ReturnType<typeof deriveWeights>;
   overrun: Overrun;
+  /** Headings whose rows hold less than they do, named so the gap is one press away. */
+  short: OverGiving[];
   labelOf: Map<string, string>;
   onGoToRow: (rowId: string) => void;
   priced: number;
@@ -473,8 +524,10 @@ function PricingHero({
   // A locked project's stored weights are what its report uses, so its total
   // is the stored one; the derived one is told separately as drift.
   const governing = locked ? screen.summary.storedTotal : live.total;
-  const over = governing > 100.5;
-  const under = budget > 0 && governing < 99.5;
+  // The gate's own tolerance: at 0.5 a total of 99.60% read green here while
+  // every report held its figures back for it (8 Oct 2026).
+  const over = governing > 100 + WEIGHT_TOLERANCE;
+  const under = budget > 0 && governing < 100 - WEIGHT_TOLERANCE;
   const priceDrift = locked && Math.abs(live.total - 100) > 0.5;
 
   const diff = contract > 0 ? budget - contract : 0;
@@ -520,9 +573,8 @@ function PricingHero({
           />
         </div>
 
-        {/* THE CONTRACT, compared, never capping. Past it is the one case with
-            somewhere to send you: a budget that really grew is changed on the
-            project, by somebody deciding to. */}
+        {/* THE CONTRACT caps the packages (8 Oct 2026). Past it can only be
+            inherited; the press lands on the contract field itself. */}
         {contract > 0 &&
           (pastContract ? (
             <div className="animate-fade-in-up flex flex-col gap-2 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25 sm:flex-row sm:items-center sm:justify-between">
@@ -540,10 +592,10 @@ function PricingHero({
               </div>
               <PressLink
                 {...pressMotion}
-                href={`/projects/${projectId}`}
+                href={`/projects/${projectId}#edit=contractValue`}
                 className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background px-4 py-2 text-sm font-medium ring-1 ring-foreground/12"
               >
-                Update the contract value
+                Raise the contract value
               </PressLink>
             </div>
           ) : (
@@ -609,6 +661,24 @@ function PricingHero({
           </div>
         )}
 
+        {/* WHERE THE MISSING PERCENT SITS (8 Oct 2026). "1.60% still in
+            headings" with no heading named sent the person through every
+            card; each one here is a press away, with what it holds and what
+            its rows hold. */}
+        {short.length > 0 && (
+          <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-warn">
+                {short.length} {short.length === 1 ? 'heading holds' : 'headings hold'} budget its rows have
+                not been given
+              </strong>
+              , so the weights stop short of 100%. Give the rows the rest, or lower the heading to what its
+              rows hold.
+            </p>
+            <OverList headings={short} labelOf={labelOf} currency={currency} onGo={onGoToRow} short />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-sm text-muted-foreground">
             <strong className="tabular-nums text-foreground">
@@ -666,11 +736,14 @@ function OverList({
   labelOf,
   currency,
   onGo,
+  short = false,
 }: {
   headings: OverGiving[];
   labelOf: Map<string, string>;
   currency: string;
   onGo: (rowId: string) => void;
+  /** Headings whose rows hold LESS: `over` is then the shortfall. */
+  short?: boolean;
 }) {
   // EIGHT, then the rest behind one press. Not a sample — the count is on
   // the button and every one of them is one tap away — but twenty-six rows
@@ -695,11 +768,16 @@ function OverList({
                 {label ?? 'This heading'}
               </span>
               <span className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
-                holds {formatMoney(h.budget, currency)} · rows take{' '}
+                Holds {formatMoney(h.budget, currency)} · Rows {short ? 'hold' : 'take'}{' '}
                 {formatMoney(h.claimed, currency)}
               </span>
-              <span className="shrink-0 text-[13px] font-semibold tabular-nums text-destructive">
-                over by {formatMoney(h.over, currency)}
+              <span
+                className={cn(
+                  'shrink-0 text-[13px] font-semibold tabular-nums',
+                  short ? 'text-warn' : 'text-destructive'
+                )}
+              >
+                {short ? 'Short by' : 'Over by'} {formatMoney(h.over, currency)}
               </span>
             </m.button>
           </li>
@@ -710,7 +788,10 @@ function OverList({
           <m.button
             {...pressMotion}
             onClick={() => setAll((v) => !v)}
-            className="inline-flex min-h-11 items-center rounded-lg px-3 text-[13px] font-semibold text-destructive underline underline-offset-2"
+            className={cn(
+              'inline-flex min-h-11 items-center rounded-lg px-3 text-[13px] font-semibold underline underline-offset-2',
+              short ? 'text-warn' : 'text-destructive'
+            )}
           >
             {all
               ? `Show only the ${OVER_SHOWN} biggest`
@@ -793,6 +874,21 @@ function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
           ? 'Rows that no work package above holds.'
           : 'No work package is marked, so every row is budgeted here.'}
       </p>
+    </div>
+  );
+}
+
+/** The press under a refusal that only a bigger contract can lift. */
+function RaiseContract({ href }: { href: string }) {
+  return (
+    <div className="mt-2 flex sm:justify-end">
+      <PressLink
+        {...pressMotion}
+        href={href}
+        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-background px-4 text-sm font-semibold text-primary ring-1 ring-primary/30"
+      >
+        Raise the contract value
+      </PressLink>
     </div>
   );
 }
@@ -1068,6 +1164,7 @@ function UnitRows({
   hidden,
   alloc,
   list,
+  focused,
   onBack,
 }: {
   unit: WeightsUnit;
@@ -1076,11 +1173,20 @@ function UnitRows({
   hidden: Set<string>;
   alloc: Allocation | null;
   list: ListProps;
+  /** The card itself is what a link named: bring it under the eye. */
+  focused: boolean;
   onBack: () => void;
 }) {
   const { live, currency } = list;
+  // Landing from "Go to it" on a CARD (SPK-001 short by X) opened it below a
+  // tall strip, out of sight; the card's own row-scroll never fires for it.
+  const top = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (focused) top.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [focused]);
   return (
-    <div className="flex flex-col gap-2">
+    // Clear of the sticky week bar above it (about 170px on a phone).
+    <div ref={top} className="flex scroll-mt-44 flex-col gap-2">
       <div className="flex items-center gap-2">
         <m.button
           {...pressMotion}
@@ -1240,9 +1346,12 @@ function BudgetHeader({
             </label>
 
             {error ? (
-              <p role="alert" className="text-[13px] font-semibold text-destructive">
-                {error}
-              </p>
+              <>
+                <p role="alert" className="text-[13px] font-semibold text-destructive">
+                  {error}
+                </p>
+                {list.contractHref && <RaiseContract href={list.contractHref} />}
+              </>
             ) : (
               <ul className="flex flex-col gap-1.5 text-[13px]">
                 <li className="flex justify-between gap-3">
@@ -1328,6 +1437,8 @@ interface ListProps {
   onCancel: (rowId: string) => void;
   onSave: (rowId: string) => void;
   onTypeMoney: (rowId: string, raw: string) => void;
+  /** Where the contract value is raised, while what is typed takes the project past it. */
+  contractHref: string | null;
 }
 
 /**
@@ -1384,6 +1495,7 @@ function RowList({
   onCancel,
   onSave,
   onTypeMoney,
+  contractHref,
   lockRoot = false,
 }: ListProps & {
   rows: WeightsRow[];
@@ -1659,6 +1771,7 @@ function RowList({
                   {error}
                 </p>
               )}
+              {error && contractHref && <RaiseContract href={contractHref} />}
             </div>
           );
         })}

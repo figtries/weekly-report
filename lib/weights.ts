@@ -24,10 +24,11 @@
  * **Every budget is carved out of a POOL**: the nearest heading above it with a
  * budget of its own, or the project. What draws on a heading may not exceed it —
  * see `checkBudgetEdit`, which the write path and the screen both call. The
- * PROJECT is the one pool that does not cap: its budget IS its work packages
- * added up, so raising one raises the project (24 Sep 2026). The contract value
- * typed on the project is what that total is compared with, and the screen
- * says so when they differ; it never refuses a keystroke over it.
+ * project budget IS its work packages added up, so raising one raises the
+ * project (24 Sep 2026), and since 8 Oct 2026 the CONTRACT VALUE caps it: a
+ * package may not take the project past the signed figure until the contract
+ * value is raised, and the contract value may not be lowered below the
+ * packages (`updateProjectFieldAction`).
  *
  * **A total row restates the whole contract.** Gundih's `1.5 Finish` carries
  * 5,920,000 — the entire project — as its price. Counted as a line it doubles
@@ -68,7 +69,7 @@ export interface WeightResult {
    * measured against it, so it moves when a work package's budget does.
    */
   projectBudget: number;
-  /** The contract value typed on the project, 0 when none. Compared with, never a cap. */
+  /** The contract value typed on the project, 0 when none. Caps the project budget. */
   signedContract: number;
   /**
    * Money per node. A row with a budget of its own is that budget, a heading
@@ -347,15 +348,14 @@ export function checkBudgetEdit(
   say: (amount: number) => string
 ): string | null {
   const contract = signedContract != null && signedContract > 0 ? signedContract : undefined;
-  // THE PROJECT IS NOT CAPPED: its budget is its work packages added up, so a
-  // package may grow and the project with it. Only headings refuse.
   const clean = next != null && next > 0 ? next : null;
   // Setting or clearing the budget clears a stored fraction either way, exactly
   // as `updateRowTextAction` writes it.
   const afterNodes = nodes.map((n) =>
     n.id === nodeId ? { ...n, price: clean, workstepFactor: null } : n
   );
-  const beforeAlloc = allocationOf(deriveWeights(nodes, contract));
+  const before = deriveWeights(nodes, contract);
+  const beforeAlloc = allocationOf(before);
   const after = deriveWeights(afterNodes, contract);
   const afterAlloc = allocationOf(after);
 
@@ -371,7 +371,113 @@ export function checkBudgetEdit(
     const available = Math.max(0, a.budget - (a.claimed - (after.valueOf.get(nodeId) ?? 0)));
     return `This row can take at most ${say(available)} of ${where}.`;
   }
+  // THE CONTRACT CAPS THE PROJECT (8 Oct 2026, replacing 24 Sep's "the project
+  // level never refuses"). Work packages past the signed figure is a contract
+  // that grew, and that is raised on the project, by somebody deciding to,
+  // before a package may take it. Refused only where it gets WORSE, like every
+  // pool above, so a project already past it stays editable downwards.
+  if (contract != null) {
+    const pastAfter = after.projectBudget - contract;
+    if (pastAfter > HALF_UNIT && pastAfter > before.projectBudget - contract + HALF_UNIT) {
+      return `That puts the project budget at ${say(after.projectBudget)}, ${say(pastAfter)} past the contract value of ${say(contract)}. Raise the contract value first.`;
+    }
+  }
   return null;
+}
+
+/**
+ * Everything wrong with a project's money, each one NAMED, in the order to fix
+ * it (8 Oct 2026).
+ *
+ * The gate used to say "1.34% of the project budget has not reached an activity
+ * yet" and stop: true, and no help, because the person then opened card after
+ * card looking for the heading it meant (SPK-001, short by IDR 789,900,000).
+ * Every screen that holds figures back lists these instead, each one press from
+ * the row it is about. Nothing here decides a figure: the fix is the person's,
+ * the app says where and by how much.
+ *
+ * `skip` is the milestones: weighing nothing is what a milestone is.
+ */
+export type WeightIssue =
+  | { kind: 'contract-over' | 'contract-short'; amount: number; budget: number; contract: number }
+  | { kind: 'over' | 'short'; id: string; amount: number; budget: number; claimed: number }
+  | { kind: 'unbudgeted'; id: string };
+
+export function weightIssues(result: WeightResult, skip: Set<string> = new Set()): WeightIssue[] {
+  const past = result.signedContract > 0 ? result.projectBudget - result.signedContract : 0;
+  const over: WeightIssue[] = [];
+  const short: WeightIssue[] = [];
+  for (const [id, a] of allocationOf(result)) {
+    // A leaf holding a budget is in the map too, with nothing drawing on it.
+    if (id === CONTRACT_POOL || result.bobotOf.has(id)) continue;
+    if (a.left < -HALF_UNIT) over.push({ kind: 'over', id, amount: -a.left, budget: a.budget, claimed: a.claimed });
+    else if (a.left > HALF_UNIT) short.push({ kind: 'short', id, amount: a.left, budget: a.budget, claimed: a.claimed });
+  }
+  const byAmount = (x: WeightIssue, y: WeightIssue) =>
+    ('amount' in y ? y.amount : 0) - ('amount' in x ? x.amount : 0);
+  const empty: WeightIssue[] = [];
+  for (const [id] of result.bobotOf) {
+    if (!skip.has(id) && (result.valueOf.get(id) ?? 0) <= 0) empty.push({ kind: 'unbudgeted', id });
+  }
+  return [
+    ...(past > HALF_UNIT
+      ? [{ kind: 'contract-over' as const, amount: past, budget: result.projectBudget, contract: result.signedContract }]
+      : []),
+    ...over.sort(byAmount),
+    ...short.sort(byAmount),
+    ...empty,
+    ...(past < -HALF_UNIT
+      ? [{ kind: 'contract-short' as const, amount: -past, budget: result.projectBudget, contract: result.signedContract }]
+      : []),
+  ];
+}
+
+/** An issue in words: what is wrong, the figures it is made of, and the press. */
+export function describeIssue(
+  issue: WeightIssue,
+  label: string,
+  say: (amount: number) => string
+): { title: string; detail: string; action: string } {
+  switch (issue.kind) {
+    case 'contract-over':
+      return {
+        title: `The project budget is ${say(issue.amount)} past the contract value`,
+        detail: `The work packages add up to ${say(issue.budget)}; the contract value is ${say(issue.contract)}. Raise the contract value, or lower a work package.`,
+        action: 'Raise the contract value',
+      };
+    case 'contract-short':
+      return {
+        title: `${say(issue.amount)} of the contract is in no work package`,
+        detail: `The work packages add up to ${say(issue.budget)}; the contract value is ${say(issue.contract)}.`,
+        action: 'Open Weights',
+      };
+    case 'over':
+      return {
+        title: `${label} hands out ${say(issue.amount)} more than it holds`,
+        detail: `It holds ${say(issue.budget)}; its rows take ${say(issue.claimed)}. Lower its rows, or raise it to ${say(issue.claimed)}.`,
+        action: 'Go to it',
+      };
+    case 'short':
+      return {
+        title: `${label} is short by ${say(issue.amount)}`,
+        detail: `It holds ${say(issue.budget)}; its rows hold ${say(issue.claimed)}. Give its rows ${say(issue.amount)} more, or lower it to ${say(issue.claimed)}.`,
+        action: 'Go to it',
+      };
+    case 'unbudgeted':
+      return {
+        title: `${label} has no budget`,
+        detail: 'It weighs nothing in the report until it has one.',
+        action: 'Go to it',
+      };
+  }
+}
+
+/** Where an issue is fixed: the row on Weights, or the contract value on the project. */
+export function issueHref(issue: WeightIssue, projectId: string, week: number): string {
+  if ('id' in issue) return `/weekly/${week}/weights#row=${issue.id}`;
+  return issue.kind === 'contract-over'
+    ? `/projects/${projectId}#edit=contractValue`
+    : `/weekly/${week}/weights`;
 }
 
 /** Money compares to half a unit: nothing on screen shows less than a whole one. */
@@ -430,6 +536,8 @@ export interface WeightSummary {
    * construction.
    */
   contractValue: number;
+  /** The work packages added up: what every weight is measured against. */
+  projectBudget: number;
   /** What the prices entered so far actually add up to. */
   allocated: number;
   /** Signed minus allocated. Positive means work still has no price on it. */
@@ -479,6 +587,7 @@ export function summariseWeights(
 
   return {
     contractValue: contract,
+    projectBudget: result.projectBudget,
     allocated,
     gap: contract - allocated,
     unitTotal,

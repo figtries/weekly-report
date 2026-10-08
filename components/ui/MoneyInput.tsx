@@ -69,6 +69,15 @@ export default function MoneyInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
+  // A FIGURE OPENED TO BE CHANGED IS REPLACED, NOT APPENDED TO (8 Oct 2026).
+  // The caret landed after "95,100,000", so typing 885000000 made it
+  // 95,100,000,885,000,000 and the cap refused it as too big: "I add budget
+  // and it won't take it". Selected whole, the first keystroke replaces it.
+  useEffect(() => {
+    if (autoFocus) ref.current?.select();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (pending.current === null) return;
     const el = ref.current;

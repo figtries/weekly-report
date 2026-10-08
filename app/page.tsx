@@ -24,6 +24,7 @@ import {
 import { formatMoneyShort } from '@/lib/currency';
 import { flattenTree, promoteNestedSpkContracts, summariseUnits, summaryTitle } from '@/lib/rollup';
 import { weightGate } from '@/lib/weight-gate';
+import { loadWeightFixes } from '@/lib/weights-read';
 import WeightGateNotice from '@/components/dashboard/WeightGateNotice';
 import PriorityActionsCard from '@/components/dashboard/PriorityActionsCard';
 import { buildPriorityActions, LOOK_AHEAD_WEEKS } from '@/lib/priority-actions';
@@ -255,6 +256,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           week={week}
           budget={db.project.projectBudget ?? null}
           currency={data.currency}
+          fixes={projectId ? loadWeightFixes(projectId, week) : []}
         />
       </div>
     );

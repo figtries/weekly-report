@@ -7,7 +7,9 @@ import { eq, sql } from 'drizzle-orm';
 
 import { beforeWrite, db, flushDbSnapshot, schema } from './sqlite';
 import { syncDerivedWeights } from './weights-auto';
-import { isKnownCurrency } from './currency';
+import { formatMoney, isKnownCurrency } from './currency';
+import { deriveWeights } from './weights';
+import { loadWeightNodes } from './weights-read';
 import { deriveInitial, INITIAL_LENGTH } from './initial';
 import { FIELDS, fieldOf } from './fields';
 import { SIGNATURE_PARTS, mergeSignature, type SignatureField } from './signature';
@@ -376,6 +378,23 @@ export async function updateProjectFieldAction(
     if (field === 'contractValue') {
       const n = raw === '' ? null : Number(raw.replace(/[^0-9.]/g, ''));
       if (n !== null && (!Number.isFinite(n) || n < 0)) throw new Error('That is not a contract value');
+      // THE CONTRACT CAPS THE WORK PACKAGES (8 Oct 2026), so it may not be
+      // lowered below what they already add up to. Raising is always allowed,
+      // and lowering a contract that was already short only refuses going lower.
+      if (n != null && n > 0) {
+        const budget = deriveWeights(loadWeightNodes(projectId)).projectBudget;
+        const row = db
+          .select({ was: schema.projects.contractValue, currency: schema.projects.currency })
+          .from(schema.projects)
+          .where(eq(schema.projects.id, projectId))
+          .get();
+        if (n < budget - 0.5 && (row?.was == null || n < row.was)) {
+          const say = (v: number) => formatMoney(v, row?.currency ?? 'IDR');
+          throw new Error(
+            `The work packages already add up to ${say(budget)}. Keep the contract value at ${say(budget)} or more, or lower a work package on Weights first.`
+          );
+        }
+      }
       next = n;
     }
 
