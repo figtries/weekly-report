@@ -6,7 +6,6 @@ import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
 import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
-import LockContract from '@/components/projects/LockContract';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import GanttPdfButton from '@/components/projects/GanttPdfButton';
 import { packagesOf } from '@/lib/gantt-print';
@@ -169,11 +168,6 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
                 }))}
               />
               <ProjectDetails project={project} />
-              <LockContract
-                projectId={id}
-                lockedAt={sheet.contract?.lockedAt ?? null}
-                activities={sheet.rows.filter((r) => r.isLeaf && r.startDate).length}
-              />
               <OpenProjectButton id={id} isOpen={isOpen} openWeek={openWeek} />
             </div>
             <div className="order-3 w-full min-w-0 sm:order-2 sm:mr-auto sm:w-auto">

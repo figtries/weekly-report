@@ -153,7 +153,7 @@ export default function BarsPanel({
     {
       key: 'contract',
       label: 'Contract',
-      help: contract ? 'Thin grey line under a bar is its contract dates.' : 'Shows after Lock as contract.',
+      help: contract ? 'Thin grey line under a bar is its contract dates.' : 'No contract dates on this plan.',
       mark: (
         <span className="flex w-8 flex-col gap-0.5">
           <span className="h-2.5 w-7 rounded-[3px] bg-[var(--plan-5)]" />
