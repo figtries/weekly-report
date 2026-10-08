@@ -353,7 +353,7 @@ export default function GanttPrint({
             <div className="gantt-grid" style={{ height: svgH }}>
               <div className={`gantt-table${axis ? ' is-charted' : ''}`} style={{ width: tableW }}>
                 <div className="gantt-colhead" style={{ gridTemplateColumns: gridCols, height: SHEET.axis }}>
-                  <span>#</span>
+                  <span>No.</span>
                   <span>Task name</span>
                   <span className="text-right">Duration</span>
                   <span>Start</span>
@@ -391,9 +391,11 @@ export default function GanttPrint({
 
                   {/* the calendar */}
                   {axis.grid.map((g, k) => (
-                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth={g.strong ? 0.6 : 0.3} />
+                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth="0.3" />
                   ))}
                   <line x1="0" y1="20" x2={W} y2="20" stroke="var(--gantt-line)" strokeWidth="0.3" />
+                  {/* the table/calendar divider, full height like a year line, so the first year's cell is closed */}
+                  <line x1="0" y1="0" x2="0" y2={svgH} stroke="var(--gantt-line)" strokeWidth="0.3" />
                   {axis.top.map((t, k) => (
                     <text key={k} x={t.x + 4} y="14" fontSize="11" fontWeight="600" fill={INK}>
                       {t.label}
@@ -409,12 +411,12 @@ export default function GanttPrint({
                     const y = yOf.get(i)! + heights[i] / 2 - 0.15;
                     return <line key={`r-${i}`} x1={-tableW} x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.3" />;
                   })}
-                  <line x1="0" y1={SHEET.axis - 0.5} x2={W} y2={SHEET.axis - 0.5} stroke={INK} />
+                  <line x1={-tableW} y1={SHEET.axis - 0.15} x2={W} y2={SHEET.axis - 0.15} stroke={INK} strokeWidth="0.3" />
                   {/* the frame: table, calendar and the key under them as one closed table. Drawn
                       here, in one SVG, because two SVGs are each snapped to whole pixels and their
                       sub-pixel lines never meet */}
-                  <rect x={-tableW + 0.3} y="0.3" width={tableW + W - 0.6} height={svgH + keyH - 0.6} fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
-                  {keyH > 0 && <line x1={-tableW} x2={W} y1={svgH - 0.3} y2={svgH - 0.3} stroke="var(--gantt-line)" strokeWidth="0.6" />}
+                  <rect x={-tableW + 0.15} y="0.15" width={tableW + W - 0.3} height={svgH + keyH - 0.3} fill="none" stroke="var(--gantt-line)" strokeWidth="0.3" />
+                  {keyH > 0 && <line x1={-tableW} x2={W} y1={svgH - 0.15} y2={svgH - 0.15} stroke="var(--gantt-line)" strokeWidth="0.3" />}
 
                   {/* targets first, so a bar running through one is not hidden by it */}
                   {page.map((i) => {

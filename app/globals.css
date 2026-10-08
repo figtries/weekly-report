@@ -1392,8 +1392,14 @@ a:active {
   line-height: 20px;
   color: var(--rpt-muted);
 }
+/* the frame stands clear of the title rule; under "Continued from" that line
+   already parts them. Paid from the `continued` band every sheet budgets. */
 .gantt-grid {
   position: relative;
+  margin-top: 8px;
+}
+.gantt-cont + .gantt-grid {
+  margin-top: 0;
 }
 .gantt-chart {
   position: absolute;
@@ -1417,8 +1423,9 @@ a:active {
   line-height: 13px;
   border-bottom: 0.5px solid var(--gantt-line);
 }
-/* with a chart beside it, its SVG draws the rules thinner than a border can be */
-.gantt-table.is-charted .gantt-row {
+/* with a chart beside it, its SVG draws these rules, thinner than a border can be */
+.gantt-table.is-charted .gantt-row,
+.gantt-table.is-charted .gantt-colhead {
   border-bottom: 0;
 }
 .gantt-colhead > span,
