@@ -134,7 +134,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
   return (
     <RouteTransition id="project-home">
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <header className="animate-enter shrink-0 border-b px-3 py-2 sm:px-6 sm:py-3">
+        <header className="animate-enter shrink-0 border-b px-3 py-2 sm:py-3">
           {/* One wrapping row, reordered rather than duplicated.
               On a phone the way back and the two buttons share the first line
               and the title takes the second; above 640px the way back has its

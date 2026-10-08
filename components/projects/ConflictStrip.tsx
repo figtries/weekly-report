@@ -27,7 +27,7 @@ export default function ConflictStrip({
   // press away.
   const shown = all ? ids : ids.slice(0, 3);
   return (
-    <div className="animate-fade-in-up flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-bad-soft px-3 py-2 text-xs text-bad sm:px-6">
+    <div className="animate-fade-in-up flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-bad-soft px-3 py-2 text-xs text-bad">
       <CircleAlert className="size-3.5 shrink-0" aria-hidden />
       <span className="font-medium">
         {ids.length === 1 ? '1 activity starts before what it waits for:' : `${ids.length} activities start before what they wait for:`}

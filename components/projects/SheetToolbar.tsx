@@ -83,7 +83,7 @@ export default function SheetToolbar({
   const has = selected !== null;
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-3 py-2 max-sm:justify-between max-sm:gap-y-2 sm:px-6">
+    <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-3 py-2 max-sm:justify-between max-sm:gap-y-2">
       <Action onClick={onAdd} icon={<Plus className="size-4" />} label="Add row" primary />
       <Action
         onClick={onAddChild}

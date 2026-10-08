@@ -81,7 +81,7 @@ export default function ShiftPreviewBar({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-      className="shrink-0 border-b bg-muted/60 px-3 py-2 sm:px-6"
+      className="shrink-0 border-b bg-muted/60 px-3 py-2"
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex items-center gap-1.5 text-xs">
