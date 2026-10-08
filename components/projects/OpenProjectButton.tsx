@@ -70,14 +70,14 @@ export default function OpenProjectButton({
   // state — and the thing a person wants after opening a project is the screen
   // the project is worked on, which is Data Overall.
   if (isOpen) {
-    // Details' twin: same border, height, type and icon size, so the pair reads
-    // as one group rather than two styles side by side (8 Oct 2026).
+    // Details' twin in shape (height, type, icon size) and a colour of its own:
+    // the header's buttons are Lucille blue, violet and this green (8 Oct 2026).
     return (
       <Link
         href={openWeek ? `/weekly/${openWeek}/overall` : DATA_OVERALL}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-muted sm:h-9"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-ok px-3 text-[13px] font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-ok/90 hover:shadow-md sm:h-9"
       >
-        <Check className="size-4 text-ok" />
+        <Check className="size-4" />
         {/* Short on a phone, where this button shares its line with the way
             back and every pixel it takes is a row of the plan you cannot
             see. The sentence is still there on any screen with room. */}

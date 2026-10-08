@@ -59,7 +59,6 @@ const TODAY = '#0ea5e9';
 
 export default function GanttPrint({
   project,
-  subtitle,
   rows,
   allRows,
   facts,
@@ -69,8 +68,6 @@ export default function GanttPrint({
   contract,
 }: {
   project: { name: string; clientName: string | null; contractorName: string | null };
-  /** "Schedule · Whole plan · All levels · Progress as of Week 31". */
-  subtitle: string;
   rows: PrintRow[];
   allRows: SheetRow[];
   facts: Record<string, BarFact>;
@@ -321,8 +318,9 @@ export default function GanttPrint({
           <section key={n} className="print-sheet-a4 print-sheet-landscape gantt-sheet">
             <header className="gantt-head">
               <div className="min-w-0">
+                {/* The name alone: the "Schedule · Whole plan · …" line under it
+                    went on 8 Oct 2026, asked for. */}
                 <h1 className="gantt-title">{project.name}</h1>
-                <p className="gantt-sub">{subtitle}</p>
               </div>
               {(project.clientName || project.contractorName) && (
                 <p className="gantt-parties">

@@ -198,9 +198,10 @@ export default function ProjectDetails({ project }: { project: Project }) {
         onClick={() => setOpen(true)}
         whileTap={{ scale: 0.97 }}
         transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-muted sm:h-9"
+        // Lucille violet, as Setup is in Document Control (8 Oct 2026).
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-check px-3 text-[13px] font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-check/90 hover:shadow-md sm:h-9"
       >
-        <Pencil className="size-4 text-muted-foreground" />
+        <Pencil className="size-4" />
         Details
       </m.button>
 

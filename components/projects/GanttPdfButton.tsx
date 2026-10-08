@@ -60,9 +60,10 @@ export default function GanttPdfButton({
         }}
         aria-label="Download the plan as a PDF"
         disabled={rows.length === 0}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-muted active:scale-[0.97] disabled:opacity-50 sm:h-9"
+        // Lucille blue, as Export Excel is: the export of this screen (8 Oct 2026).
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:bg-primary-hover hover:shadow-md active:scale-[0.97] disabled:opacity-50 sm:h-9"
       >
-        <FileDown className="size-4 text-muted-foreground" />
+        <FileDown className="size-4" />
         PDF
       </button>
       {/* Its own boundary: a lazy component suspends once, and without one the

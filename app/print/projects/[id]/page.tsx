@@ -6,7 +6,7 @@ import { getSheet } from '@/lib/sheet';
 import { getBarView } from '@/lib/bar-view-read';
 import { getBarFacts } from '@/lib/bar-facts';
 import { analyseNetwork } from '@/lib/chains';
-import { packagesOf, scopeRows } from '@/lib/gantt-print';
+import { scopeRows } from '@/lib/gantt-print';
 
 // The page headless Chromium renders into the Gantt PDF (see lib/pdf.ts and
 // app/api/pdf/projects/[id]/route.ts). Under /print, outside the app's own
@@ -48,19 +48,7 @@ async function ProjectPrintBody({ params, searchParams }: Props) {
   const sheet = getSheet(id);
   const depth = Math.max(0, Math.min(20, Math.trunc(Number(levels)) || 0));
   const rows = scopeRows(sheet.rows, scope, depth);
-  const { week, facts } = getBarFacts(id);
-  const where =
-    scope === 'all'
-      ? 'Whole plan'
-      : (packagesOf(sheet.rows).find((p) => p.id === scope)?.label ?? sheet.rows.find((r) => r.id === scope)?.name ?? 'Part of the plan');
-  const subtitle = [
-    'Schedule',
-    where,
-    depth === 0 ? 'All levels' : depth === 1 ? 'Top level only' : `${depth} levels`,
-    week != null ? `Progress as of Week ${week}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const { facts } = getBarFacts(id);
   // The day line, in the site's own time zone: the server runs on UTC, which
   // is the day before for the first seven hours of every Indonesian morning.
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
@@ -74,7 +62,6 @@ async function ProjectPrintBody({ params, searchParams }: Props) {
       <div className="flex w-max min-w-full flex-col items-center gap-6 px-4 py-6 print:block print:w-auto print:min-w-0 print:gap-0 print:p-0">
         <GanttPrint
           project={project}
-          subtitle={subtitle}
           rows={rows}
           allRows={sheet.rows}
           facts={facts}
