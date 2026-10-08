@@ -155,7 +155,7 @@ export function legendColumns(labels: string[]): number {
       for (let i = j; i < w.length; i += c) widest = Math.max(widest, w[i]);
       total += widest;
     }
-    if (total <= SHEET.width - 20) return c;
+    if (total <= SHEET.width - SHEET.cellPad * 2) return c;
   }
   return 1;
 }

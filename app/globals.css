@@ -1453,7 +1453,9 @@ a:active {
   display: grid;
   justify-content: space-between;
   gap: 6px 20px;
-  padding: 7px 10px;
+  /* the sides are the table's cell padding (SHEET.cellPad), so the key starts
+     and ends where the table's text does */
+  padding: 7px 6px;
   font-size: 10.5px;
   line-height: 12px;
   color: #334155;
