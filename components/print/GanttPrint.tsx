@@ -156,7 +156,9 @@ export default function GanttPrint({
 
   // ---------------------------------------------------------------- the key
   // Decided by the whole file, so every sheet carries the same key; the sheets
-  // are cut after it, because its height comes out of the rows' budget.
+  // are cut after it, because its height comes out of the rows' budget. Every
+  // mark starts at its box's left edge, so whichever lands first in a row is
+  // flush with the swatch above it.
   const tasks = rows.filter((r) => !r.isSummary && !r.isMilestone && r.startDate);
   const key: { mark: ReactNode; label: string }[] = [];
   const swatch = (css: string) => <rect width="20" height="10" rx="1.5" fill={css} />;
@@ -188,8 +190,8 @@ export default function GanttPrint({
       label: 'Solid done, pale to do',
     });
   if (rows.some((r) => r.isMilestone && !r.isSummary && r.startDate))
-    key.push({ mark: <rect x="8" y="1" width="8" height="8" fill={INK} transform="rotate(45 12 5)" />, label: 'Milestone' });
-  if (rows.some(onSite)) key.push({ mark: <Flag x={9} y={-2} colour={paintCss('plan-3')} />, label: 'Must be on site' });
+    key.push({ mark: <rect x="2" y="1" width="8" height="8" fill={INK} transform="rotate(45 6 5)" />, label: 'Milestone' });
+  if (rows.some(onSite)) key.push({ mark: <Flag x={1} y={-2} colour={paintCss('plan-3')} />, label: 'Must be on site' });
   if (placed.length) key.push({ mark: <ArrowMark colour={MUTED} />, label: 'Waits for (+days = wait)' });
   if (used.path) key.push({ mark: <ArrowMark colour={INK} />, label: 'Chain that sets the finish' });
   if (used.bad) key.push({ mark: <ArrowMark colour={RED} dashed />, label: 'Dates break this link' });
@@ -213,20 +215,20 @@ export default function GanttPrint({
     });
   if (view.marks.contract && contract && rows.some((r) => r.contractStart && !r.isSummary))
     key.push({ mark: <rect y="4" width="22" height="3" rx="1.5" fill={MUTED} fillOpacity="0.45" />, label: 'Contract dates' });
-  if (rows.some((r) => r.targetDate)) key.push({ mark: <path d="M7 1h10l-5 8z" fill={INK} fillOpacity="0.55" />, label: 'Target date' });
+  if (rows.some((r) => r.targetDate)) key.push({ mark: <path d="M0 1h10l-5 8z" fill={INK} fillOpacity="0.55" />, label: 'Target date' });
   if (rows.some((r) => network.rows.get(r.id)?.conflicts.length))
     key.push({
       mark: (
         <>
-          <circle cx="12" cy="5" r="5" fill={RED} />
-          <text x="12" y="8" textAnchor="middle" fontSize="8" fontWeight="700" fill="#fff">
+          <circle cx="5" cy="5" r="5" fill={RED} />
+          <text x="5" y="8" textAnchor="middle" fontSize="8" fontWeight="700" fill="#fff">
             !
           </text>
         </>
       ),
       label: 'Starts before what it waits for',
     });
-  if (todayX !== null) key.push({ mark: <path d="M12 0V11" stroke={TODAY} strokeWidth="1.5" strokeDasharray="3 2" />, label: `Data date ${fmtDay(today)}` });
+  if (todayX !== null) key.push({ mark: <path d="M1 0V11" stroke={TODAY} strokeWidth="1.5" strokeDasharray="3 2" />, label: 'Data date' });
   // Only what a reader cannot read off the chart itself (8 Oct 2026, "infonya
   // yg penting aja"): a heading's black bar and a link stub's row number
   // explain themselves, and the stub's "1.2 →" mark read as a glitch.
