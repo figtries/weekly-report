@@ -1439,6 +1439,7 @@ a:active {
 .gantt-key {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
   gap: 6px 16px;
   padding-top: 7px;
   border-top: 0.5px solid var(--gantt-line);
