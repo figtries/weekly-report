@@ -1342,6 +1342,8 @@ a:active {
    cuts the rows to fit 273mm x 191mm, the box left inside this padding, so
    change the two together. */
 .print-sheet-a4.print-sheet-landscape {
+  /* every rule on the sheet that is not the black one, and the row numbers */
+  --gantt-line: #2f2f3b;
   width: 297mm;
   min-height: 210mm;
   padding: 10mm 12mm 9mm;
@@ -1406,8 +1408,7 @@ a:active {
   font-size: 11px;
 }
 .gantt-colhead {
-  align-items: end;
-  padding-bottom: 4px;
+  align-items: center;
   border-bottom: 1px solid var(--rpt-ink);
   font-weight: 500;
   color: var(--rpt-muted);
@@ -1415,7 +1416,7 @@ a:active {
 .gantt-row {
   align-items: center;
   line-height: 13px;
-  border-bottom: 0.5px solid #ececec;
+  border-bottom: 0.5px solid var(--gantt-line);
 }
 .gantt-colhead > span,
 .gantt-row > span {
@@ -1427,20 +1428,20 @@ a:active {
   overflow-wrap: anywhere;
 }
 .gantt-code {
-  color: var(--rpt-muted);
+  color: var(--gantt-line);
 }
 .gantt-row.is-heading {
   font-weight: 600;
 }
 .gantt-row.is-top {
-  background: #f4f4f5;
+  background: #c6dcff;
 }
 .gantt-key {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
   padding-top: 7px;
-  border-top: 0.5px solid var(--rpt-rule);
+  border-top: 0.5px solid var(--gantt-line);
   font-size: 10.5px;
   line-height: 12px;
   color: #334155;
@@ -1456,7 +1457,7 @@ a:active {
   justify-content: space-between;
   margin-top: 7px;
   padding-top: 6px;
-  border-top: 0.5px solid var(--rpt-rule);
+  border-top: 0.5px solid var(--gantt-line);
   font-size: 10.5px;
   color: var(--rpt-muted);
 }

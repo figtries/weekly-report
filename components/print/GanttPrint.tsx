@@ -386,9 +386,9 @@ export default function GanttPrint({
 
                   {/* the calendar */}
                   {axis.grid.map((g, k) => (
-                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke={g.strong ? '#9ca3af' : '#e5e7eb'} strokeWidth="1" />
+                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth="1" />
                   ))}
-                  <line x1="0" y1="20" x2={W} y2="20" stroke="#e5e7eb" />
+                  <line x1="0" y1="20" x2={W} y2="20" stroke="var(--gantt-line)" />
                   {axis.top.map((t, k) => (
                     <text key={k} x={t.x + 4} y="14" fontSize="11" fontWeight="600" fill={INK}>
                       {t.label}
@@ -402,7 +402,7 @@ export default function GanttPrint({
                   {/* the table's row rules, carried across */}
                   {page.map((i) => {
                     const y = yOf.get(i)! + heights[i] / 2 - 0.25;
-                    return <line key={`r-${i}`} x1="0" x2={W} y1={y} y2={y} stroke="#ececec" strokeWidth="0.5" />;
+                    return <line key={`r-${i}`} x1="0" x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.5" />;
                   })}
                   <line x1="0" y1={SHEET.axis - 0.5} x2={W} y2={SHEET.axis - 0.5} stroke={INK} />
 
