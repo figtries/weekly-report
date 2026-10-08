@@ -1471,6 +1471,9 @@ a:active {
   align-items: center;
   justify-content: space-between;
   margin-top: 7px;
+  /* the table's cell padding, so the mark and the page number line up with
+     the No. column and the key, left and right */
+  padding: 0 6px;
   font-size: 10.5px;
   color: var(--rpt-muted);
 }
