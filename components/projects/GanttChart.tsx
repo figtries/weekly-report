@@ -98,7 +98,6 @@ export default function GanttChart({
   colourBy,
   labels,
   range,
-  fit = false,
   network = null,
   parentOf,
   onClear,
@@ -119,15 +118,6 @@ export default function GanttChart({
   colourBy: ColourBy;
   /** Each row's label, its own or its heading's (lib/bar-view.ts `labelsByRow`). */
   labels: Map<string, string | null>;
-  /**
-   * Draw the whole span inside the pane instead of at a readable day width.
-   *
-   * `pxPerDay` aims at 1200px of calendar so a week is still a week you can
-   * point at, which on a phone means a three-month plan is three screens wide
-   * with no sign that there is anything past the right edge. Answering "show
-   * me all of it" by scrolling is not answering it.
-   */
-  fit?: boolean;
   /**
    * The window of rows the sheet has mounted. The surface stays FULL height —
    * every bar is placed at `index × rowH`, so the height is what keeps the two
@@ -219,7 +209,7 @@ export default function GanttChart({
 
   const days = spanStart && end ? daysBetween(spanStart, end) + 1 : 0;
   const scale =
-    days > 0 ? (fit ? Math.max(MIN_PX_PER_DAY, paneWidth / days) : pxPerDay(days, paneWidth)) : 8;
+    days > 0 ? pxPerDay(days, paneWidth) : 8;
   // At least as wide as the pane. A plan whose rows all sit on one day inside
   // a two-week project genuinely fills almost none of its calendar — that is
   // true and should look it. What read as broken was the drawing surface

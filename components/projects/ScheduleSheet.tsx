@@ -16,7 +16,6 @@ import { m } from 'framer-motion';
 import {
   ChevronDown,
   ChevronRight,
-  Maximize2,
   MoreHorizontal,
   Plus,
   X,
@@ -322,7 +321,6 @@ export default function ScheduleSheet({
   // The heading Links was pressed on; the hint shows only while that row is
   // still the selected one, so picking an activity clears it without an effect.
   const [linkHint, setLinkHint] = useState<string | null>(null);
-  const [fitTimeline, setFitTimeline] = useState(false);
   const [shift, setShift] = useState<{ rowId: string; rowName: string; preview: Shift } | null>(null);
   const [query, setQuery] = useState('');
   // The window of rows actually mounted. All 285 at once was 7,980 DOM nodes
@@ -1996,22 +1994,6 @@ export default function ScheduleSheet({
         />
 
         <div className={`relative min-h-0 min-w-0 flex-1 ${pane === 'sheet' ? 'max-md:hidden' : ''}`}>
-          {/* Outside the scroller on purpose: a control that scrolls away with
-              the calendar is a control you have to go and find. */}
-          {ganttStart && ganttFinish && (
-            <m.button
-              type="button"
-              {...pressMotion}
-              onClick={() => setFitTimeline((f) => !f)}
-              aria-pressed={fitTimeline}
-              className={`absolute right-3 top-1.5 z-30 flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium shadow-sm ${
-                fitTimeline ? 'bg-foreground text-background' : 'bg-card text-muted-foreground'
-              }`}
-            >
-              <Maximize2 className="size-3" />
-              Fit
-            </m.button>
-          )}
           <div
             ref={rightRef}
             onScroll={mirror('r')}
@@ -2038,7 +2020,6 @@ export default function ScheduleSheet({
             colourBy={colourBy}
             labels={labelMap}
             range={range}
-            fit={fitTimeline}
           />
           </div>
         </div>
