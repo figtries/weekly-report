@@ -321,7 +321,9 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
         kind: 'late',
         stage: late.stage,
         returnCode: unanswered?.returnCode ?? null,
-        next: late.stage,
+        // What goes out, not the stage whose date passed: rejected at IFA with
+        // AFC's date gone, it is RE-IFA that has to be sent (8 Oct 2026).
+        next: sendNextOf(rows, loaded),
         since: late.planSubmitDate,
         days: daysBetween(late.planSubmitDate!, asOfDate),
       },
@@ -353,7 +355,7 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
         kind: 'soon',
         stage: soon.stage,
         returnCode: null,
-        next: soon.stage,
+        next: sendNextOf(rows, loaded),
         since: soon.planSubmitDate,
         days: daysBetween(asOfDate, soon.planSubmitDate!),
       },
@@ -372,11 +374,22 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
   return { open: null, withOtherSide: false, awaiting: null };
 }
 
+/**
+ * What one document needs, as of the week viewed: THE rule behind the
+ * Summary's Needs action and every chip, row and sheet on Data. A document at
+ * 100% needs nothing (`isFull`), whoever holds it.
+ */
+function actionOf(doc: DocumentRow, rows: StageRow[], loaded: Loaded): OpenState | null {
+  if (isFull(percentOf([doc], loaded))) return null;
+  return openStateOf(rows, loaded).open;
+}
+
 function countsFor(docs: DocumentRow[], loaded: Loaded) {
   let untouched = 0;
   let returnedOpen = 0;
   let overdue = 0;
   let awaiting = 0;
+  let withUs = 0;
   let longestWait: number | null = null;
 
   for (const d of docs) {
@@ -384,15 +397,18 @@ function countsFor(docs: DocumentRow[], loaded: Loaded) {
     if (!rows.some((s) => reachedBy(s, loaded))) untouched += 1;
 
     const state = openStateOf(rows, loaded);
-    if (state.open?.kind === 'comments') returnedOpen += 1;
-    if (state.open?.kind === 'late') overdue += 1;
+    const open = actionOf(d, rows, loaded);
+    if (open?.kind === 'comments') returnedOpen += 1;
+    if (open?.kind === 'late') overdue += 1;
     if (state.withOtherSide) {
       awaiting += 1;
       if (state.awaiting !== null) longestWait = Math.max(longestWait ?? 0, state.awaiting);
+    } else if (!isFull(percentOf([d], loaded))) {
+      withUs += 1;
     }
   }
 
-  return { untouched, returnedOpen, overdue, awaiting, longestWait };
+  return { untouched, returnedOpen, overdue, awaiting, longestWait, withUs };
 }
 
 /* ----------------------------------------------------------------- public */
@@ -790,8 +806,7 @@ export function getObstacles(projectId: string, register: RegisterKind, week?: n
   const out: Obstacle[] = [];
 
   for (const doc of loaded.documents) {
-    if (isFull(percentOf([doc], loaded))) continue;
-    const { open } = openStateOf(loaded.byDoc.get(doc.id) ?? [], loaded);
+    const open = actionOf(doc, loaded.byDoc.get(doc.id) ?? [], loaded);
     if (!open) continue;
     out.push({
       documentId: doc.id,
@@ -890,9 +905,13 @@ export function getRegisterCards(
         const rows = loaded.byDoc.get(d.id) ?? [];
         const moved = rows.filter((s) => reachedBy(s, loaded));
         const last = moved[moved.length - 1] ?? null;
-        const returned = rows.filter((s) => s.returnCode && returnedBy(s, loaded));
-        const lastReturn = returned[returned.length - 1] ?? null;
-        const next = rows.find((s) => !reachedBy(s, loaded)) ?? null;
+        const ball = ballOf(rows, loaded);
+        // Read off the LATEST stage, as the Summary's `comments` is: an RWC at
+        // IFA is answered once RE-IFA has gone out, and stopped showing then.
+        const open = ball.latest && !ball.out && ball.latest.returnCode && !isApproved(ball.latest.returnCode)
+          ? ball.latest.returnCode : null;
+        // After the furthest stage reached, never a stage skipped before it.
+        const next = rows[ball.furthest + 1] ?? null;
 
         return {
           id: d.id,
@@ -905,17 +924,16 @@ export function getRegisterCards(
           remarks: d.remarks,
           percent: percentOf([d], loaded),
           stage: last?.stage ?? null,
-          returnCode: lastReturn && !isApproved(lastReturn.returnCode) ? lastReturn.returnCode : null,
+          returnCode: open,
           waiting: last?.submittedAt && !last.returnedAt
             ? daysBetween(last.submittedAt, loaded.asOfDate)
             : null,
           nextStage: next?.stage ?? null,
           plannedAt: next?.planSubmitDate ?? null,
-          overdue: Boolean(next?.planSubmitDate && next.planSubmitDate < loaded.asOfDate),
+          action: actionOf(d, rows, loaded),
           laps: rows.filter((s) => s.stage.startsWith('RE_') && reachedBy(s, loaded)).length,
           sendNext: sendNextOf(rows, loaded),
           out: (() => {
-            const ball = ballOf(rows, loaded);
             if (!ball.out || !ball.latest) return null;
             const since = ball.latest.submittedAt;
             return { stage: ball.latest.stage, since, days: since ? daysBetween(since, loaded.asOfDate) : null };

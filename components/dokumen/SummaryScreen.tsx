@@ -214,12 +214,13 @@ export function SummaryScreen({
         <div className="grid border-t border-border/70 lg:grid-cols-2">
           <ActionColumn
             heading="With us"
-            sub={`${ours.length} to send`}
+            // Both counts are Data's chips of the same names; the rows are the ones that need action.
+            sub={`${summary.withUs} to send`}
             rows={ours}
             settings={settings}
             dataHref={dataHref}
             className="lg:border-r lg:border-border/70"
-            empty="Nothing of ours is waiting."
+            empty="Nothing of ours needs action."
           />
           <ActionColumn
             heading={`With ${other}`}

@@ -47,6 +47,9 @@ export interface RegisterNode {
   returnedOpen: number;
   /** Past a planned send date with the ball on our side (`late`). */
   overdue: number;
+  awaiting: number;
+  longestWait: number | null;
+  withUs: number;
   children: RegisterNode[];
 }
 
@@ -72,8 +75,10 @@ export interface RegisterSummary {
   untouched: number;
   returnedOpen: number;
   overdue: number;
-  /** Documents whose latest send has had no reply yet. */
+  /** Documents whose latest send has had no reply yet: the Data screen's "With client". */
   awaiting: number;
+  /** Below 100% with the ball on our side: the Data screen's "With us". */
+  withUs: number;
   /** The longest of those waits in days, or null when nothing is out. */
   longestWait: number | null;
   /** Submissions the register marks without a date — placed on the curve by estimate. */
@@ -116,6 +121,16 @@ export const REPLY_DAYS = 14;
  * decimals can add up to 99.999…
  */
 export const isFull = (percent: number) => Math.round(percent * 100) >= 10000;
+
+/*
+ * The Data screen's chips and the Summary's Needs action read these and nothing
+ * else (8 Oct 2026): the Data tab had its own rule and counted a document the
+ * Summary did not, and the reverse. `DocumentCard.action` is decided once, on
+ * the server, by the same function that builds the Summary's list.
+ */
+export const isDone = (c: DocumentCard) => isFull(c.percent) && !c.out;
+export const needsAction = (c: DocumentCard) => c.action !== null && c.action.kind !== 'untouched';
+export const withUs = (c: DocumentCard) => !c.out && !isFull(c.percent);
 /** How far ahead "due soon" looks from the end of the week being viewed. */
 export const LOOKAHEAD_DAYS = 14;
 
@@ -140,6 +155,9 @@ export interface Obstacle {
   /** Days from `since` to the as-of date; for `soon`, days until it is due. */
   days: number | null;
 }
+
+/** What one document is waiting on: an Obstacle without the document around it. */
+export type DocAction = Pick<Obstacle, 'kind' | 'stage' | 'returnCode' | 'next' | 'since' | 'days'>;
 
 export interface LogEvent {
   at: string;
@@ -265,13 +283,18 @@ export interface DocumentCard {
   percent: number;
   /** The furthest stage it has actually reached. */
   stage: DocStage | null;
-  /** The last return code, only while it is still open. */
+  /**
+   * The comment its latest stage came back with, while it is unanswered: once
+   * the next stage has gone out it is answered, as on the Summary.
+   */
   returnCode: string | null;
   /** Days it has been sitting with the reviewer. */
   waiting: number | null;
+  /** The first stage after the furthest one reached, and its planned date. */
   nextStage: DocStage | null;
   plannedAt: string | null;
-  overdue: boolean;
+  /** Why it needs action, exactly as the Summary lists it; null when it needs none. */
+  action: DocAction | null;
   laps: number;
   /**
    * The stage this document goes out at next while the ball is on our side;

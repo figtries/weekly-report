@@ -145,7 +145,8 @@ export function DocumentSheet({
   const reached = (stage: DocStage) => Boolean(stageRow(stage)?.submitted || stageRow(stage)?.submittedAt);
   const days = doc.out?.days ?? null;
   const replyDue = doc.out?.since ? addDays(doc.out.since, REPLY_DAYS) : null;
-  const overdueReply = days !== null && days > REPLY_DAYS;
+  // The Summary's `waiting`: past the review, and never for a document at 100%.
+  const overdueReply = doc.action?.kind === 'waiting';
 
   let sentence: string;
   if (done) sentence = 'Done. Every stage is through.';

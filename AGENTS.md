@@ -1101,6 +1101,20 @@ that names both).
 write a wrong figure holds Save back (weights that are not 100, a blank code or
 short name); a missing plan date or an empty heading is reminded, never refused.
 
+**Summary and Data read ONE rule** (8 Oct 2026). Data's Needs action had its
+own predicate and drifted from the Summary's both ways: a drawing at 100%
+waiting on the client's AFC reply was listed, "due soon" was not, and a
+document sitting with the client counted as late. `actionOf` in
+`lib/register.ts` now decides, per document, what it needs; `getObstacles`
+(the Summary's list) and `DocumentCard.action` (Data's chips, the red Plan
+date, the red "overdue", the sheet's "Chase them") are both built from it, and
+the chips are `needsAction` / `withUs` / `isDone` in `register-shared.ts`. A
+document at 100% needs nothing (`isFull`). The Summary's "With us" / "With
+client" counts are Data's chips of the same names. A shown return code is the
+LATEST stage's, only while unanswered; `next` is what Send offers
+(`sendNextOf`), never the stage whose date passed. Proof:
+`scripts/verify-register-agree.ts`, every project, week and register.
+
 **The register curve wipes in with a CSS keyframe** (`.animate-curve-wipe`),
 not framer-motion: its `initial` clip shipped hidden in the server HTML and held
 the route's view transition at frame zero, so headless Chrome never painted the

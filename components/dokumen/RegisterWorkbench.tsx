@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { addCategory, addDocument, deleteCategory, renameCategory } from '@/lib/doc-actions';
 import { knownDiscipline, nextNumber, defaultRule, type NumberingRule } from '@/lib/register-numbering';
 import {
-  REGISTER_INFO, REPLY_DAYS, isFull, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
+  REGISTER_INFO, isDone, needsAction, withUs, type DocumentCard, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
 import { CODE_TONE, codeLabel, docRev, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { ExistingNode } from '@/lib/builder-model';
@@ -55,10 +55,7 @@ const clamp = (n: number) => Math.min(100, Math.max(0, n));
 const fmt = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
 
-const isDone = (c: DocumentCard) => isFull(c.percent) && !c.out;
 const needsPlan = (c: DocumentCard) => !isDone(c) && !c.out && c.nextStage !== null && !c.plannedAt;
-const needsAction = (c: DocumentCard) => !isFull(c.percent) &&
-  (c.overdue || Boolean(c.returnCode && c.sendNext) || (c.out !== null && (c.out.days ?? 0) > REPLY_DAYS));
 const lastLetter = (c: DocumentCard) => {
   for (const s of [...c.stages].reverse()) {
     if (s.returnTransmittal) return s.returnTransmittal;
@@ -120,7 +117,7 @@ export function RegisterWorkbench({
   const counts = useMemo(() => ({
     all: all.length,
     action: all.filter(needsAction).length,
-    us: all.filter((c) => !isDone(c) && !c.out).length,
+    us: all.filter(withUs).length,
     them: all.filter((c) => c.out !== null).length,
     done: doneIds.size,
     info: all.filter(needsPlan).length,
@@ -175,7 +172,7 @@ export function RegisterWorkbench({
     if (q && !(c.title.toLowerCase().includes(q) || (c.docNo ?? '').toLowerCase().includes(q))) return false;
     switch (filter) {
       case 'action': return needsAction(c);
-      case 'us': return !isDone(c) && !c.out;
+      case 'us': return withUs(c);
       case 'them': return c.out !== null;
       case 'done': return doneIds.has(c.id);
       case 'info': return needsPlan(c);
@@ -586,7 +583,9 @@ function Row({
 }) {
   const done = isDone(c);
   const days = c.out?.days ?? null;
-  const late = days !== null && days > REPLY_DAYS;
+  // Red exactly where the Summary lists it: `waiting` (never a document at 100%).
+  const late = c.action?.kind === 'waiting';
+  const lateAt = c.action?.kind === 'late' ? c.action.since : null;
   const stage = c.stage ? stageOf(settings, c.stage).label : '—';
   const letterNo = lastLetter(c);
   const rev = docRev(settings, c.stages, c.revision);
@@ -598,11 +597,14 @@ function Row({
   const code = c.returnCode
     ? <span className={cn('rounded-md px-1.5 text-[11px] font-bold leading-5', CODE_TONE[c.returnCode] ?? 'bg-muted text-foreground')}>{codeLabel(settings, c.returnCode)}</span>
     : <span className="text-muted-foreground">—</span>;
-  const plan = needsPlan(c)
-    ? <span className="inline-block rounded-full border border-bad/40 bg-bad-soft px-2 text-[11.5px] font-semibold leading-[22px] text-bad">Plan date needed</span>
-    : c.plannedAt
-      ? <span className={cn(c.overdue && 'font-semibold text-bad')}>{fmt(c.plannedAt)}</span>
-      : <span className="text-muted-foreground">—</span>;
+  // A late document shows the date the Summary counts its lateness from.
+  const plan = lateAt
+    ? <span className="font-semibold text-bad">{fmt(lateAt)}</span>
+    : needsPlan(c)
+      ? <span className="inline-block rounded-full border border-bad/40 bg-bad-soft px-2 text-[11.5px] font-semibold leading-[22px] text-bad">Plan date needed</span>
+      : c.plannedAt
+        ? <span>{fmt(c.plannedAt)}</span>
+        : <span className="text-muted-foreground">—</span>;
 
   return (
     <div
