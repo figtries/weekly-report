@@ -10,6 +10,7 @@ import {
   codeWidth,
   daysBetween,
   fmtDay,
+  legendColumns,
   legendHeight,
   paginate,
   rowHeight,
@@ -186,7 +187,6 @@ export default function GanttPrint({
       ),
       label: 'Solid done, pale to do',
     });
-  if (rows.some((r) => r.isSummary && r.startDate)) key.push({ mark: <rect y="3" width="24" height="5" fill={INK} />, label: 'Heading' });
   if (rows.some((r) => r.isMilestone && !r.isSummary && r.startDate))
     key.push({ mark: <rect x="8" y="1" width="8" height="8" fill={INK} transform="rotate(45 12 5)" />, label: 'Milestone' });
   if (rows.some(onSite)) key.push({ mark: <Flag x={9} y={-2} colour={paintCss('plan-3')} />, label: 'Must be on site' });
@@ -227,10 +227,11 @@ export default function GanttPrint({
       label: 'Starts before what it waits for',
     });
   if (todayX !== null) key.push({ mark: <path d="M12 0V11" stroke={TODAY} strokeWidth="1.5" strokeDasharray="3 2" />, label: 'Data date' });
-  // Stubs are known only once rows are on sheets: their line is budgeted for
-  // and dropped again if no sheet needs it.
-  const stubKey = { mark: <StubMark />, label: 'Link to a row on another page, or not in this file' };
-  const legendH = legendHeight([...key.map((k) => k.label), ...(placed.length ? [stubKey.label] : [])]);
+  // Only what a reader cannot read off the chart itself (8 Oct 2026, "infonya
+  // yg penting aja"): a heading's black bar and a link stub's row number
+  // explain themselves, and the stub's "1.2 →" mark read as a glitch.
+  const keyCols = legendColumns(key.map((k) => k.label));
+  const legendH = legendHeight(key.map((k) => k.label));
 
   // ------------------------------------------------------------- the sheets
   const pages = paginate(heights, rows.map((r) => r.isSummary), legendH);
@@ -292,7 +293,6 @@ export default function GanttPrint({
       });
     }
   }
-  if (stubsBy.some((s) => s.length)) key.push(stubKey);
 
   /** The heading a sheet starts inside, when that heading sits on an earlier sheet. */
   const continuedFrom = (r: SheetRow, page: number) => {
@@ -632,7 +632,7 @@ export default function GanttPrint({
               )}
             </div>
 
-            <div className="gantt-key">
+            <div className="gantt-key" style={{ gridTemplateColumns: `repeat(${keyCols}, auto)` }}>
               {key.map((k) => (
                 <span key={k.label}>
                   <svg width="26" height="12" viewBox="0 -1 26 12" aria-hidden>
@@ -694,18 +694,6 @@ function ArrowMark({ colour, dashed = false }: { colour: string; dashed?: boolea
     <>
       <path d="M1 5H19" stroke={colour} strokeWidth="1.3" strokeDasharray={dashed ? '3 2' : undefined} />
       <path d="M18 1l7 4-7 4z" fill={colour} />
-    </>
-  );
-}
-
-function StubMark() {
-  return (
-    <>
-      <text x="0" y="8" fontSize="8" fontWeight="600" fill={MUTED}>
-        1.2
-      </text>
-      <path d="M12 5H20" stroke={MUTED} strokeWidth="1.3" />
-      <path d="M19 1.5l6 3.5-6 3.5z" fill={MUTED} />
     </>
   );
 }

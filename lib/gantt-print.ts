@@ -142,18 +142,28 @@ export function packagesOf(rows: PrintRowLite[]): { id: string; label: string }[
   }));
 }
 
-/** Legend items fill lines across the sheet; this is how many lines they take. */
-export function legendHeight(labels: string[]): number {
-  let lines = labels.length ? 1 : 0;
-  let used = 0;
-  for (const l of labels) {
-    const w = 30 + textWidth(l, false, 10.5) + 16;
-    if (used > 0 && used + w > SHEET.width) {
-      lines += 1;
-      used = w;
-    } else used += w;
+/**
+ * The key is a grid justified edge to edge, so its columns line up from row to
+ * row: as many columns as fit across the sheet, at most six, rows balanced.
+ * The 20 is `.gantt-key`'s column gap, the 31 a mark plus the mark's gap.
+ */
+export function legendColumns(labels: string[]): number {
+  const w = labels.map((l) => 31 + textWidth(l, false, 10.5));
+  for (let cols = Math.min(6, labels.length); cols > 1; cols--) {
+    const c = Math.ceil(labels.length / Math.ceil(labels.length / cols));
+    let total = (c - 1) * 20;
+    for (let j = 0; j < c; j++) {
+      let widest = 0;
+      for (let i = j; i < w.length; i += c) widest = Math.max(widest, w[i]);
+      total += widest;
+    }
+    if (total <= SHEET.width) return c;
   }
-  return lines ? lines * 18 + 10 : 0;
+  return 1;
+}
+
+export function legendHeight(labels: string[]): number {
+  return labels.length ? Math.ceil(labels.length / legendColumns(labels)) * 18 + 10 : 0;
 }
 
 /**

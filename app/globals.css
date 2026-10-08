@@ -1440,11 +1440,11 @@ a:active {
 .gantt-row.is-top {
   background: #c6dcff;
 }
+/* columns from legendColumns in lib/gantt-print.ts, which budgets this gap */
 .gantt-key {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   justify-content: space-between;
-  gap: 6px 16px;
+  gap: 6px 20px;
   padding-top: 7px;
   border-top: 0.5px solid var(--gantt-line);
   font-size: 10.5px;
@@ -1455,6 +1455,7 @@ a:active {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
 }
 .gantt-foot {
   display: flex;
