@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { RegisterSetup } from './RegisterSetup';
 import { verdict } from './verdict';
 import { OPEN_SETUP } from './RegisterTabs';
+import NativeSelect from '@/components/ui/NativeSelect';
 
 const loadTransmittal = () => import('./TransmittalDialog');
 const preloadTransmittal = () => { void loadTransmittal(); };
@@ -706,10 +707,10 @@ function AddLine({
           className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm"
         />
         {preview && <span className="hidden shrink-0 text-xs text-muted-foreground tabular-nums lg:block"><b className="text-foreground">{preview}</b> will be given</span>}
-        <select value={kind} onChange={(e) => setKind(e.target.value as 'Doc' | 'Dwg')} aria-label="Kind" className="h-9 rounded-lg border border-border bg-card px-2 text-[13px]">
+        <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as 'Doc' | 'Dwg')} aria-label="Kind" wrapperClassName="w-auto shrink-0" className="h-9 min-h-9 border-border bg-card pl-2.5 text-[13px] md:text-[13px]">
           <option value="Doc">Doc</option>
           <option value="Dwg">Dwg</option>
-        </select>
+        </NativeSelect>
         <button type="button" disabled={pending} onClick={() => put(text)} className="h-9 rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground disabled:opacity-60">
           {pending ? 'Adding…' : 'Add'}
         </button>

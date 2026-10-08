@@ -8,6 +8,7 @@ import { LINK_TYPES, MAX_WAIT, WAY_LABEL, type LinkType, type StoredLink } from 
 import type { Sheet, SheetRow } from '@/lib/sheet';
 import { saveRowLinksAction } from '@/lib/sheet-actions';
 import { cn } from '@/lib/utils';
+import NativeSelect from '@/components/ui/NativeSelect';
 
 /**
  * One activity's links: what it waits for, what waits for it, and one sentence
@@ -137,18 +138,19 @@ export default function LinksPanel({
           </button>
         </div>
         <div className="mt-2 flex gap-2">
-          <select
+          <NativeSelect
             aria-label="How it waits"
             value={l.type}
             onChange={(e) => set(items.map((x, k) => (k === i ? { ...x, type: e.target.value as LinkType } : x)))}
-            className="h-11 min-w-0 flex-1 rounded-lg border bg-card px-2 text-[13px]"
+            wrapperClassName="min-w-0 flex-1"
+            className="h-11 bg-card pl-3 text-[13px] md:text-[13px]"
           >
             {LINK_TYPES.map((t) => (
               <option key={t} value={t}>
                 {WAY_LABEL[t]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <label className="flex h-11 items-center gap-1.5 rounded-lg border px-2 text-[13px] text-muted-foreground">
             Wait
             <input

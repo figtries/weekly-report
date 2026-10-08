@@ -10,6 +10,7 @@ import { REPLY_DAYS, type DocumentCard, type DocumentStageDetail } from '@/lib/r
 import { CODE_TONE, MAIN_STAGES, codeLabel, docRev, revAt, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
+import NativeSelect from '@/components/ui/NativeSelect';
 
 /**
  * One document, everything about it, over the list that was not disturbed to
@@ -223,14 +224,15 @@ export function DocumentSheet({
               className={cn(quiet, '-ml-2 mt-0.5 resize-none py-0.5 text-[21px] font-semibold leading-7 tracking-tight text-foreground [field-sizing:content]')}
             />
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <select
+              <NativeSelect
                 value={doc.categoryId}
                 aria-label="Discipline"
                 onChange={(e) => saveDoc({ categoryId: e.target.value })}
-                className="h-8 max-w-[14rem] truncate rounded-full border border-border bg-card px-3 text-[12.5px] text-foreground/85 outline-none focus-visible:border-ring"
+                wrapperClassName="w-auto max-w-[14rem]"
+                className="min-h-0 rounded-full border-border bg-card pl-3 text-[12.5px] text-foreground/85 md:text-[12.5px]"
               >
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+              </NativeSelect>
               <div role="radiogroup" aria-label="Kind" className="flex rounded-full bg-muted p-0.5">
                 {(['Doc', 'Dwg'] as const).map((k) => {
                   const on = (doc.kind ?? 'Doc').toLowerCase().startsWith(k.toLowerCase().slice(0, 2));

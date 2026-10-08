@@ -8,7 +8,8 @@ import DateField from '@/components/ui/DateField';
 import type { AocRow } from '@/lib/types';
 import { CAPACITY } from '@/lib/xlsx/daily-cells';
 import { cn } from '@/lib/utils';
-import { INPUT_CLS, Labeled, TextField } from '../fields';
+import NativeSelect from '@/components/ui/NativeSelect';
+import { Labeled, TextField } from '../fields';
 import { CapacityNote, RowButton, SectionRow, type SectionProps } from '../SectionRow';
 import { newId } from '../useDailyReport';
 
@@ -88,15 +89,15 @@ export default function AocSection({ report, commit, state, open, onToggle, onOp
               {edit && (
                 <div className="mt-3 grid grid-cols-1 gap-2.5 border-t border-border pt-3 sm:grid-cols-2">
                   <Labeled label="Type">
-                    <select
+                    <NativeSelect
                       aria-label="Type"
                       value={r.type}
                       onChange={(e) => setRow(r.id, { type: e.target.value as AocRow['type'] })}
-                      className={INPUT_CLS}
+                      className="bg-card pl-3 sm:h-9"
                     >
                       <option value="AOC">AOC (Area of Concern)</option>
                       <option value="AFH">AFH (Ask for Help)</option>
-                    </select>
+                    </NativeSelect>
                   </Labeled>
                   <Labeled label="Date">
                     <DateField value={r.date} onChange={(v) => setRow(r.id, { date: v })} placeholder="Date" className={`${DATE_CLS} w-full`} />

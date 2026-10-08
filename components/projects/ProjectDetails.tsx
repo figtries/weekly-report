@@ -15,6 +15,7 @@ import { FIELDS as ENERGY_FIELDS, fieldOf } from '@/lib/fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import MoneyInput from '@/components/ui/MoneyInput';
+import NativeSelect from '@/components/ui/NativeSelect';
 import { Label } from '@/components/ui/label';
 
 /**
@@ -260,19 +261,19 @@ export default function ProjectDetails({ project }: { project: Project }) {
                             it is typed: ten raw digits are unreadable, and the
                             same figure is printed under it a moment later. */}
                         {f.type === 'field' ? (
-                          <select
+                          <NativeSelect
                             id={`pd-${f.key}`}
                             defaultValue={valueOf(f.key)}
                             disabled={pending}
                             onChange={(e) => commit(f.key, e.target.value)}
-                            className="h-11 w-full rounded-md border bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 md:text-sm"
+                            className="h-11 rounded-md pl-3 shadow-xs"
                           >
                             {ENERGY_FIELDS.map((fd) => (
                               <option key={fd.id} value={fd.id}>
                                 {fd.label}: {fd.help}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         ) : f.type === 'number' ? (
                           <MoneyInput
                             id={`pd-${f.key}`}

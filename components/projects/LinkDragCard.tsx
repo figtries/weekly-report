@@ -6,6 +6,7 @@ import { wouldLoop } from '@/lib/chains';
 import { LINK_TYPES, MAX_WAIT, WAY_LABEL, type LinkType } from '@/lib/links';
 import type { Sheet, SheetRow } from '@/lib/sheet';
 import { saveRowLinksAction } from '@/lib/sheet-actions';
+import NativeSelect from '@/components/ui/NativeSelect';
 
 /**
  * What a drag between two bar ends will save. Nothing is stored before Save;
@@ -54,18 +55,19 @@ export default function LinkDragCard({
         <strong className="font-semibold">{to.name}</strong> waits for <strong className="font-semibold">{from.name}</strong>
       </p>
       <div className="mt-3 flex gap-2">
-        <select
+        <NativeSelect
           aria-label="How it waits"
           value={type}
           onChange={(e) => setType(e.target.value as LinkType)}
-          className="h-11 min-w-0 flex-1 rounded-lg border bg-card px-2"
+          wrapperClassName="min-w-0 flex-1"
+          className="h-11 bg-card pl-3 text-[13px] md:text-[13px]"
         >
           {LINK_TYPES.map((t) => (
             <option key={t} value={t}>
               {WAY_LABEL[t]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <label className="flex h-11 items-center gap-1.5 rounded-lg border px-2 text-muted-foreground">
           Wait
           <input
