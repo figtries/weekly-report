@@ -31,8 +31,8 @@ export interface PrintRowLite {
 
 /** A4 landscape at 96 dpi, less the sheet's print padding (12mm sides, 10/9mm top/bottom). */
 export const SHEET = {
-  /** 273mm. */
-  width: 1030,
+  /** 273mm, exactly: the frame's right edge has to meet the title rule's. */
+  width: 1031.8,
   /** 191mm of page, less a margin for the renderer's rounding. */
   height: 700,
   header: 58,

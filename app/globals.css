@@ -1394,7 +1394,6 @@ a:active {
 }
 .gantt-grid {
   position: relative;
-  margin-top: 2px;
 }
 .gantt-chart {
   position: absolute;

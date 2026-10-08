@@ -405,6 +405,8 @@ export default function GanttPrint({
                     return <line key={`r-${i}`} x1={-tableW} x2={W} y1={y} y2={y} stroke="var(--gantt-line)" strokeWidth="0.3" />;
                   })}
                   <line x1="0" y1={SHEET.axis - 0.5} x2={W} y2={SHEET.axis - 0.5} stroke={INK} />
+                  {/* the frame: table and calendar closed on every side, the right edge included */}
+                  <rect x={-tableW + 0.3} y="0.3" width={tableW + W - 0.6} height={svgH - 0.6} fill="none" stroke="var(--gantt-line)" strokeWidth="0.6" />
 
                   {/* targets first, so a bar running through one is not hidden by it */}
                   {page.map((i) => {
