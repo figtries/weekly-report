@@ -1648,7 +1648,7 @@ export default function ScheduleSheet({
     // app/projects/[id]/page.tsx fades the page in over 200ms, skeleton and
     // plan alike. The cascade stays on the two bands above, which are small
     // enough that the frame under them is a couple of grey bars.
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col max-md:flex-none">
       <SheetToolbar
         rowCount={rows.length}
         selected={selected}
@@ -1819,7 +1819,7 @@ export default function ScheduleSheet({
           e.stopPropagation();
           e.preventDefault();
         }}
-        className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden"
+        className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden max-md:h-[65dvh] max-md:flex-none"
       >
         <div
           ref={leftRef}
