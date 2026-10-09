@@ -292,7 +292,7 @@ export default function WeekSelect({
         aria-label={label ? `${label}: Week ${displayedWeek}` : undefined}
         className={
           variant === 'pill'
-            ? 'flex min-h-9 w-38 items-center justify-between gap-2 rounded-full bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1'
+            ? 'flex min-h-9 w-38 items-center justify-between gap-2 rounded-lg bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1'
             : `flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40${compact ? ' max-sm:w-32 max-sm:px-3' : ''}`
         }
       >

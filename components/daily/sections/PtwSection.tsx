@@ -98,7 +98,7 @@ export default function PtwSection({ report, commit, state, open, onToggle, onOp
                 <p className="min-w-0 truncate text-sm font-semibold text-foreground">{r.pwtNo || 'New permit'}</p>
                 <span
                   className={cn(
-                    'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                    'shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold',
                     isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
                   )}
                 >

@@ -646,7 +646,7 @@ function PanelBody({
                 {projectHref && (
                   <Link
                     href={`${projectHref}#row=${encodeURIComponent(node.id)}&open=kind`}
-                    className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                    className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
                   >
                     <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     {answered ? 'Change in plan' : 'Set in plan'}
@@ -672,7 +672,7 @@ function PanelBody({
                         setPartOverride(null);
                         setPickingPart(true);
                       }}
-                      className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
+                      className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-primary/6 px-3.5 text-[13px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground"
                     >
                       <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       Change

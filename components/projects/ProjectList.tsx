@@ -323,7 +323,7 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
                 {pending && <Spinner />}
                 {pending ? 'Saving…' : 'Save'}
               </Button>
-              <Button variant="ghost" className="h-11" onClick={() => setMode('menu')} disabled={pending}>
+              <Button variant="ghost" className="btn-cancel h-11" onClick={() => setMode('menu')} disabled={pending}>
                 Cancel
               </Button>
             </div>
@@ -349,7 +349,7 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
                 {pending && <Spinner />}
                 {pending ? 'Deleting…' : 'Delete permanently'}
               </Button>
-              <Button variant="ghost" className="h-11" onClick={() => setMode('menu')} disabled={pending}>
+              <Button variant="ghost" className="btn-cancel h-11" onClick={() => setMode('menu')} disabled={pending}>
                 Cancel
               </Button>
             </div>

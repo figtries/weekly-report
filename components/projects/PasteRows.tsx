@@ -427,7 +427,7 @@ export default function PasteRows({
                       type="button"
                       onClick={close}
                       disabled={pending}
-                      className="h-11 rounded-lg border px-4 text-sm font-medium"
+                      className="btn-cancel h-11 rounded-lg px-4 text-sm"
                     >
                       Cancel
                     </button>

@@ -6,6 +6,7 @@ import type { MapNode } from '@/lib/overall-map';
 import type { Shape } from '@/lib/work-kind';
 import { pressMotion } from '@/components/motion/Press';
 import { cn } from '@/lib/utils';
+import DateField from '@/components/ui/DateField';
 import type { Draft } from './ActivityPanel';
 
 /**
@@ -145,10 +146,9 @@ function GateEntry({
       </m.button>
       <label className="mt-3 block text-[13px] text-muted-foreground">
         When
-        <input
-          type="date"
+        <DateField
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={setDate}
           className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
         />
       </label>

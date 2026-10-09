@@ -36,6 +36,7 @@ import {
   predictOutdent,
 } from '@/lib/sheet-predict';
 import MoneyInput from '@/components/ui/MoneyInput';
+import DateField from '@/components/ui/DateField';
 import {
   deleteRowAction,
   indentRowAction,
@@ -263,25 +264,17 @@ export default function RowMenu({
           <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
             <label className="text-[11px] font-medium text-muted-foreground">
               Start
-              <input
-                type="date"
-                defaultValue={row.startDate ?? ''}
-                onBlur={(e) =>
-                  e.target.value !== (row.startDate ?? '') &&
-                  run(() => updateRowDatesAction(row.id, 'start', e.target.value), true)
-                }
+              <DateField
+                value={row.startDate ?? ''}
+                onChange={(v) => v !== (row.startDate ?? '') && run(() => updateRowDatesAction(row.id, 'start', v), true)}
                 className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
               />
             </label>
             <label className="text-[11px] font-medium text-muted-foreground">
               Finish
-              <input
-                type="date"
-                defaultValue={row.finishDate ?? ''}
-                onBlur={(e) =>
-                  e.target.value !== (row.finishDate ?? '') &&
-                  run(() => updateRowDatesAction(row.id, 'finish', e.target.value), true)
-                }
+              <DateField
+                value={row.finishDate ?? ''}
+                onChange={(v) => v !== (row.finishDate ?? '') && run(() => updateRowDatesAction(row.id, 'finish', v), true)}
                 className="mt-1 h-11 w-full rounded-lg border px-2 text-sm text-foreground outline-none focus:border-foreground"
               />
             </label>

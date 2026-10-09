@@ -458,7 +458,7 @@ export default function WeekLog({
             setLoadFailed(false);
             setAttempt((n) => n + 1);
           }}
-          className="min-h-11 shrink-0 rounded-full border border-bad/25 bg-card px-4 text-[13px] font-semibold text-bad transition-colors duration-200 ease-ios hover:bg-bad/10"
+          className="min-h-11 shrink-0 rounded-lg border border-bad/25 bg-card px-4 text-[13px] font-semibold text-bad transition-colors duration-200 ease-ios hover:bg-bad/10"
         >
           Try again
         </button>
@@ -524,7 +524,7 @@ export default function WeekLog({
       <div className="mt-3 rounded-xl border border-warn/25 bg-warn-soft p-3">
         <p className="text-center text-[13px] font-medium text-warn">{confirm.message}</p>
         <div className="mt-3 flex gap-2">
-          <SecondaryButton onClick={() => setConfirm(null)}>Cancel</SecondaryButton>
+          <CancelButton onClick={() => setConfirm(null)} />
           <PrimaryButton onClick={confirm.run} disabled={saving}>
             {confirm.yes}
           </PrimaryButton>
@@ -532,7 +532,7 @@ export default function WeekLog({
       </div>
     ) : (
       <div className="mt-4 flex gap-2">
-        <SecondaryButton onClick={resetEditors}>Cancel</SecondaryButton>
+        <CancelButton onClick={resetEditors} />
         <PrimaryButton onClick={save} disabled={saving || Boolean(plan?.error) || nWrites === 0 || !changed}>
           {saving ? 'Saving…' : primary}
         </PrimaryButton>
@@ -563,7 +563,7 @@ export default function WeekLog({
             onClick={toggleFill}
             aria-expanded={Boolean(fill)}
             className={cn(
-              'flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
+              'flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
               fill
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-primary/6 text-primary hover:bg-primary hover:text-primary-foreground'
@@ -607,7 +607,7 @@ export default function WeekLog({
                   <button
                     type="button"
                     onClick={() => setSpread((v) => (v === 'each' ? 'total' : 'each'))}
-                    className="inline-flex min-h-9 items-center rounded-full bg-primary/6 px-3 text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
+                    className="inline-flex min-h-9 items-center rounded-lg bg-primary/6 px-3 text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
                   >
                     {spread === 'each' ? 'each week' : 'in total'}
                   </button>
@@ -744,7 +744,7 @@ export default function WeekLog({
                   >
                     <span
                       className={cn(
-                        'inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1 rounded-full px-3 text-[13px] font-medium tabular-nums transition-colors duration-200 ease-ios',
+                        'inline-flex h-8 min-w-[4.75rem] items-center justify-center gap-1 rounded-lg px-3 text-[13px] font-medium tabular-nums transition-colors duration-200 ease-ios',
                         active
                           ? 'bg-primary text-primary-foreground'
                           : writes && moves
@@ -894,13 +894,13 @@ export default function WeekLog({
       {toast && (
         <div
           role="status"
-          className="animate-fade-in-up sticky bottom-3 z-10 mt-3 flex items-center justify-between gap-3 rounded-full bg-foreground py-1.5 pl-4 pr-1.5 text-[13px] font-medium text-background shadow-lg"
+          className="animate-fade-in-up sticky bottom-3 z-10 mt-3 flex items-center justify-between gap-3 rounded-2xl bg-foreground py-1.5 pl-4 pr-1.5 text-[13px] font-medium text-background shadow-lg"
         >
           <span className="min-w-0 truncate">{toast.text}</span>
           <button
             type="button"
             onClick={undo}
-            className="min-h-10 shrink-0 rounded-full bg-background/15 px-4 font-semibold transition-colors duration-200 ease-ios hover:bg-background/25"
+            className="min-h-10 shrink-0 rounded-lg bg-background/15 px-4 font-semibold transition-colors duration-200 ease-ios hover:bg-background/25"
           >
             Undo
           </button>
@@ -933,6 +933,14 @@ function SecondaryButton({ children, onClick }: { children: React.ReactNode; onC
       className="min-h-11 flex-1 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 ease-ios hover:bg-muted/60"
     >
       {children}
+    </button>
+  );
+}
+
+function CancelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="btn-cancel min-h-11 flex-1 rounded-xl px-3 text-sm">
+      Cancel
     </button>
   );
 }

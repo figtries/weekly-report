@@ -81,7 +81,7 @@ function Pill({
   return (
     <span
       className={cn(
-        'rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold tracking-[0.045em] uppercase tabular-nums',
+        'rounded-md px-2.5 py-0.5 text-[11.5px] font-semibold tracking-[0.045em] uppercase tabular-nums',
         PILL_TONE[tone]
       )}
     >
@@ -274,15 +274,13 @@ export default function OverallMap({
     else setOpenIds((prev) => flip(prev, !openIds.has(id)));
   }
 
-  const weekDone = map.due > 0 && map.filled >= map.due;
-
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       {/* The week, the lens and the search are the map's OWN HEADER rather than
           two more cards stacked above it. Three separate cards pushed the first
           activity most of a phone screen down, and the brief asked for the work
           to be the thing you land on. */}
-      <div className="border-b border-border p-4">
+      <div className="flex flex-col gap-3 border-b border-border p-4">
         {/* Arrived via `?lens=manual` from the Check screen's admission line.
             Its own strip rather than folding into the "this week" row below:
             the two lenses answer different questions and can both be true of
@@ -293,7 +291,7 @@ export default function OverallMap({
         {(lens === 'manual' || lens === 'blocking') && (
           <div
             className={cn(
-              'mb-3 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-[13px] font-medium',
+              'flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-[13px] font-medium',
               lens === 'blocking'
                 ? 'border-bad/30 bg-bad-soft text-bad'
                 : 'border-chart-1/30 bg-chart-1/10 text-chart-1'
@@ -318,46 +316,6 @@ export default function OverallMap({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold text-foreground">
-              {!map.hasSchedule
-                ? 'No schedule yet, so nothing is due'
-                : map.due === 0
-                  ? 'Nothing is scheduled this week'
-                  : weekDone
-                    ? `This week · All ${map.due} filled in`
-                    : `This week · Filled in ${map.filled} of ${map.due}`}
-            </p>
-            {map.due > 0 && (
-              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-foreground/8">
-                <m.div
-                  className="h-full origin-left rounded-full bg-ok"
-                  initial={false}
-                  animate={{ scaleX: Math.min(1, map.filled / map.due) }}
-                  transition={MOTION.spring}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            )}
-          </div>
-          {map.due > 0 && (
-            <m.button
-              {...pressMotion}
-              onClick={() => setLens((v) => (v === 'due' ? null : 'due'))}
-              aria-pressed={lens === 'due'}
-              className={cn(
-                'min-h-11 shrink-0 rounded-xl border px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
-                lens === 'due'
-                  ? 'border-chart-1/40 bg-chart-1/10 text-chart-1'
-                  : 'border-input bg-card text-foreground hover:bg-muted/60'
-              )}
-            >
-              {lens === 'due' ? 'Showing this week' : 'Show only these'}
-            </m.button>
-          )}
-        </div>
-
         {/* THE REMINDERS, as buttons. This was one sentence pointing at the
             Check screen, which told you how many and sent you somewhere else
             to find out which. Pressing one now lists them right here, each
@@ -371,7 +329,7 @@ export default function OverallMap({
             has to answer. Links are set in each activity's panel. An odd one out spans the row, so the grid keeps both
             edges. */}
         {reminderKinds.length > 0 && (
-          <div className="mt-3">
+          <div>
             <div className={cn('grid gap-2', reminderKinds.length > 1 && 'grid-cols-2')}>
               {reminderKinds.map(({ kind, n }, i) => {
                 const Icon = REMINDER_ICON[kind];
@@ -414,7 +372,7 @@ export default function OverallMap({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find an activity"
           aria-label="Find an activity"
-          className="mt-3 h-11 w-full rounded-xl border border-input bg-card px-3.5 text-sm text-foreground transition-colors duration-200 ease-ios placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
+          className="h-11 w-full rounded-xl border border-input bg-card px-3.5 text-sm text-foreground transition-colors duration-200 ease-ios placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1"
         />
       </div>
 

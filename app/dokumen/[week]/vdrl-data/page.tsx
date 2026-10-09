@@ -8,6 +8,7 @@ import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getRegisterSettings, getNextLetterNumbers,
   getRegisterSources, getRegisterExisting,
 } from '@/lib/register';
+import { isAddedStage } from '@/lib/register-shared';
 import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'VDRL Data' };
@@ -77,7 +78,7 @@ async function VdrlDataPageBody({ params }: { params: Promise<{ week: string }> 
       currentObstacles={getObstacles(projectId, 'vdrl')}
       settings={getRegisterSettings(projectId, 'vdrl')}
       nextLetters={getNextLetterNumbers(projectId, 'vdrl')}
-      overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage)) }}
+      overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage) || isAddedStage(x.stage)) }}
     />
     </RouteTransition>
   );

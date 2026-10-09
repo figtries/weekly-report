@@ -11,9 +11,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import NativeSelect from '@/components/ui/NativeSelect';
+import DateField from '@/components/ui/DateField';
 import { recordTransmittal } from '@/lib/doc-actions';
 import { MOTION } from '@/lib/design';
-import { STAGE_LABEL, STAGE_ORDER, type DocumentCard, type Obstacle } from '@/lib/register-shared';
+import { STAGE_LABEL, STAGE_ORDER, stageLabel, type DocumentCard, type Obstacle } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import type { RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
@@ -245,7 +246,7 @@ export default function TransmittalDialog({
         <div className="grid grid-cols-[9.5rem_minmax(0,1fr)] gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Date</span>
-            <Input type="date" className="h-11" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateField value={date} onChange={setDate} className="h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-base text-foreground md:text-sm" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Letter</span>
@@ -285,7 +286,7 @@ export default function TransmittalDialog({
                   return (
                     <li
                       key={r.card.id}
-                      className="grid grid-cols-[1.75rem_minmax(0,1fr)_7.75rem] items-center gap-x-3 border-t border-border/60 py-2 first:border-t-0 sm:grid-cols-[1.75rem_6.5rem_minmax(0,1fr)_6rem]"
+                      className="grid grid-cols-[1.75rem_minmax(0,1fr)_5.25rem] items-center gap-x-3 border-t border-border/60 py-2 first:border-t-0 sm:grid-cols-[1.75rem_6.5rem_minmax(0,1fr)_6rem]"
                     >
                       <CheckBox checked={on} onChange={() => toggle(r.card.id)} aria-label={`Include ${r.card.title}`} />
                       <span className={cn(
@@ -298,12 +299,13 @@ export default function TransmittalDialog({
                         <span className="line-clamp-2 text-sm font-medium leading-snug sm:line-clamp-1">{r.card.title}</span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {r.reason && <span className="font-semibold text-foreground/70 sm:hidden">{r.reason.text} · </span>}
-                          {[r.group, r.card.docNo, direction === 'in' ? STAGE_LABEL[r.stage] : null].filter(Boolean).join(' · ')}
+                          {[r.group, r.card.docNo, direction === 'in' ? stageLabel(r.stage) : null].filter(Boolean).join(' · ')}
                         </span>
                       </button>
                       {direction === 'out' ? (
                         <NativeSelect
                           aria-label={`Stage for ${r.card.title}`}
+                          className="pr-8 text-[13px] md:text-[13px]"
                           value={stageOf[r.card.id] ?? r.stage}
                           onChange={(e) => setStageOf((s) => ({ ...s, [r.card.id]: e.target.value as DocStage }))}
                         >
@@ -314,9 +316,9 @@ export default function TransmittalDialog({
                           aria-label={`Code for ${r.card.title}`}
                           value={codeOf[r.card.id] ?? ''}
                           onChange={(e) => setCodeOf((s) => ({ ...s, [r.card.id]: e.target.value }))}
-                          className={missingCodes && ticked.has(r.card.id) && !codeOf[r.card.id] ? 'border-bad text-bad' : undefined}
+                          className={cn('pr-8 text-[13px] md:text-[13px]', missingCodes && ticked.has(r.card.id) && !codeOf[r.card.id] && 'border-bad text-bad')}
                         >
-                          <option value="">Choose a code</option>
+                          <option value="">Code</option>
                           {CODES.map((c) => <option key={c} value={c}>{codeName(c)}</option>)}
                         </NativeSelect>
                       )}
@@ -334,7 +336,7 @@ export default function TransmittalDialog({
           <span className="mr-auto text-sm tabular-nums text-muted-foreground">
             {plural(count, 'document')} in this letter
           </span>
-          <Button variant="outline" className="h-11" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" className="btn-cancel h-11" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button className="h-11" disabled={pending || count === 0} onClick={save}>
             {pending ? 'Saving…' : 'Save'}
           </Button>

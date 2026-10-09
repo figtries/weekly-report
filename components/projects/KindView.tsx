@@ -188,7 +188,7 @@ export default function KindView({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted"
+          className="btn-cancel min-h-11 rounded-lg px-4 text-[13px]"
         >
           Cancel
         </button>

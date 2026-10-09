@@ -6,6 +6,7 @@ import { verdict } from '@/components/dokumen/verdict';
 import type {
   EngineeringBridge, Obstacle, RegisterNode, RegisterSummary, WeekMovement,
 } from '@/lib/register-shared';
+import { isAddedStage } from '@/lib/register-shared';
 import { CODE_TONE, DEFAULT_SETTINGS, codeLabel, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
 
@@ -71,7 +72,7 @@ export function SummaryScreen({
 
   const ours = obstacles.filter((o) => o.kind === 'late' || o.kind === 'comments' || o.kind === 'soon');
   const theirs = obstacles.filter((o) => o.kind === 'waiting');
-  const stages = summary.stages.filter((s) => ['IFR', 'IFA', 'AFC'].includes(s.stage));
+  const stages = summary.stages.filter((s) => ['IFR', 'IFA', 'AFC'].includes(s.stage) || isAddedStage(s.stage));
   // The table is narrow on a phone and again as the half-width card below xl:
   // there it drops the count and the bars and says the count under the name.
   const cols = hasPlan
@@ -83,75 +84,75 @@ export function SummaryScreen({
   return (
     <div className="flex flex-col gap-4 pb-6">
       {/* ------------------------------------------------- where it stands */}
-      <section className={cn(card, 'grid grid-cols-3 overflow-hidden lg:grid-cols-[1.35fr_1fr_1fr_1fr_1.35fr]')}>
-        <div className="col-span-3 flex flex-col justify-center gap-1.5 border-b border-border/70 p-5 lg:col-span-1 lg:border-b-0 lg:border-r">
-          <span className="text-[13px] font-semibold text-foreground/80">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
-          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-            {/* The figure itself takes the verdict's colour: red behind plan,
-                green on or ahead of it, plain with no plan to read against. */}
-            <span className={cn('text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums', against ? (against.diff < 0 ? 'text-bad' : 'text-ok') : 'text-foreground')}>
-              {r1(summary.actual).toFixed(1)}<span className={cn('ml-0.5 text-xl font-medium', against ? 'opacity-80' : 'text-muted-foreground')}>%</span>
-            </span>
-            {against && (
-              <span className={cn('mb-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums', against.chip)}>
-                {against.diff > 0 ? `+${against.diff.toFixed(1)} pts ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} pts behind`}
-              </span>
-            )}
-          </div>
-          <span className="text-[13px] text-foreground/75 tabular-nums">
-            {hasPlan && <>Plan <b className="font-semibold text-foreground">{r1(summary.plan!).toFixed(1)}%</b> · </>}
-            <b className="font-semibold text-foreground">{summary.documents}</b> documents
+      {/* Variant A (9 Oct 2026): the figure on its verdict's tint, the three
+          stages side by side (unnumbered: he rejected the 1-2-3 squares), the week as a short ledger. */}
+      <section className={cn(card, 'grid grid-cols-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,1.3fr)_minmax(0,2.9fr)_minmax(0,1.3fr)]')}>
+        <div className='flex flex-col justify-center gap-2.5 border-b border-border/70 p-5 lg:border-b-0 lg:border-r'>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
+          {/* ONLY the figure takes the verdict's colour (9 Oct 2026: the card stays
+              white like every other, the chip neutral): red behind plan,
+              green on or ahead of it, plain with no plan to read against. */}
+          <span className={cn('text-[46px] font-bold leading-none tracking-[-0.03em] tabular-nums', against ? (against.diff < 0 ? 'text-bad' : 'text-ok') : 'text-foreground')}>
+            {r1(summary.actual).toFixed(1)}<span className={cn('ml-0.5 text-[22px] font-semibold', !against && 'text-muted-foreground')}>%</span>
           </span>
+          {against && (
+            <span className='w-fit rounded-md bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/80 tabular-nums'>
+              {against.diff > 0 ? `+${against.diff.toFixed(1)} pts ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} pts behind`} · Plan {r1(summary.plan!).toFixed(1)}%
+            </span>
+          )}
+          <span className="text-[13px] text-foreground/75 tabular-nums"><b className="font-semibold text-foreground">{summary.documents}</b> documents</span>
           {stale && (
-            <span className="w-fit rounded-full bg-warn-soft px-2.5 py-0.5 text-xs font-medium text-warn">
+            <span className="w-fit rounded-md bg-warn-soft px-2.5 py-0.5 text-xs font-medium text-warn">
               Nothing recorded since week {summary.evidenceWeek}
             </span>
           )}
         </div>
-        {stages.map((s, i) => {
-          const st = stageOf(settings, s.stage);
-          const pct = summary.documents ? (s.reached / summary.documents) * 100 : 0;
-          return (
-            <div key={s.stage} className={cn('flex min-w-0 flex-col justify-between gap-2 border-b border-r border-border/70 p-3.5 sm:p-5 lg:border-b-0', i === stages.length - 1 && 'max-lg:border-r-0')}>
-              <div className="min-w-0">
-                <div className="flex items-baseline justify-between gap-2">
-                  <b className="text-[13px] font-semibold text-foreground">{st.label}</b>
-                  <span className="text-[13px] font-medium text-foreground/70 tabular-nums">{pct.toFixed(1)}%</span>
+        <div className="grid grid-cols-3 gap-y-5 border-b border-border/70 py-5 lg:border-b-0">
+          {stages.map((s, i) => {
+            const st = stageOf(settings, s.stage);
+            const pct = summary.documents ? (s.reached / summary.documents) * 100 : 0;
+            const left = summary.documents - s.reached;
+            return (
+              <div key={s.stage} className={cn('flex min-w-0 flex-col gap-2.5 px-3.5 sm:px-5', i % 3 > 0 && 'border-l border-dashed border-border')}>
+                {/* The full name always shows, on its own line: an abbreviation cut to "…" explains nothing. */}
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <b className="text-[14px] font-semibold text-foreground">{st.label}</b>
+                  <span className="text-xs leading-snug text-foreground/65">{st.name}</span>
                 </div>
-                <span className="line-clamp-2 text-xs text-foreground/65">{st.name}</span>
+                <span className="text-2xl font-bold leading-none tracking-[-0.02em] text-foreground tabular-nums sm:text-[32px]">
+                  {s.reached}<span className="text-sm font-medium text-muted-foreground sm:text-[15px]"> / {summary.documents}</span>
+                </span>
+                <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full" style={{ width: `${clamp(pct)}%`, background: st.color }} /></span>
+                <span className={cn('text-xs font-medium tabular-nums', left <= 0 ? 'text-ok' : 'text-bad')}>
+                  ● {left <= 0 ? 'Complete' : <>{left} to go<span className="max-sm:hidden"> · {pct.toFixed(1)}%</span></>}
+                </span>
               </div>
-              <span className="text-2xl font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums sm:text-[30px]">
-                {s.reached}<span className="text-sm font-medium text-muted-foreground sm:text-base"> / {summary.documents}</span>
-              </span>
-              <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full" style={{ width: `${clamp(pct)}%`, background: st.color }} /></span>
-            </div>
-          );
-        })}
-        <div className="col-span-3 flex flex-col justify-center gap-2 p-5 lg:col-span-1">
-          <span className="text-[13px] text-foreground/75">
-            <b className="font-semibold text-foreground">This week</b>
-            {movement && <> · {fmt(movement.startDate)} – {fmt(movement.endDate)}</>}
+            );
+          })}
+        </div>
+        <div className="flex flex-col justify-center bg-[#f8faff] p-5 lg:border-l lg:border-border/70">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            This week{movement && <> · {fmt(movement.startDate)} – {fmt(movement.endDate)}</>}
           </span>
-          <div className="flex items-baseline gap-5 tabular-nums">
+          <div className="mt-2 tabular-nums">
             {[
-              [movement?.submitted ?? 0, edl ? 'sent' : 'received'],
-              [movement?.returned ?? 0, edl ? 'back' : 'replied'],
-              [movement?.approved ?? 0, 'approved'],
+              [movement?.submitted ?? 0, edl ? 'Sent' : 'Received'],
+              [movement?.returned ?? 0, edl ? 'Back' : 'Replied'],
+              [movement?.approved ?? 0, 'Approved'],
             ].map(([n, w]) => (
-              <span key={w as string}>
-                <span className="text-[30px] font-semibold leading-none tracking-[-0.02em] text-foreground">{n}</span>
-                <span className="ml-1 text-[13px] text-foreground/70">{w}</span>
-              </span>
+              <div key={w as string} className="flex items-baseline justify-between border-b border-border/70 py-1.5 text-[13px] text-foreground/80">
+                <span>{w}</span><b className="text-lg font-semibold text-foreground">{n}</b>
+              </div>
             ))}
           </div>
-          <span className="text-[13px] text-foreground/70 tabular-nums">
-            {r1(summary.thisWeek) >= 0 ? '+' : ''}{r1(summary.thisWeek).toFixed(1)} pts of progress this week
+          <span className="mt-2 text-[12.5px] text-muted-foreground tabular-nums">
+            Progress <b className="font-semibold text-foreground">{r1(summary.thisWeek) >= 0 ? '+' : ''}{r1(summary.thisWeek).toFixed(1)} pts</b>
           </span>
         </div>
       </section>
 
       {/* --------------------------------------- how it got there, by whom */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
         <section className={cn(card, 'flex flex-col p-5')}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className={title}>Week by week</h2>
@@ -178,7 +179,7 @@ export function SummaryScreen({
               return (
                 <div key={g.id} className={cn('grid min-h-11 items-center gap-x-3 border-b border-border/50 px-5 py-1.5 text-[13.5px] last:border-b-0', cols)}>
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold text-foreground">{g.name}</span>
+                    <span className="block break-words font-semibold leading-tight text-foreground">{g.name}</span>
                     <span className={cn('block text-xs text-foreground/60 tabular-nums', narrow)}>{g.documents} documents</span>
                   </span>
                   <span className={cn('text-right text-foreground/70 tabular-nums', wide)}>{g.documents}</span>
@@ -206,12 +207,12 @@ export function SummaryScreen({
       <section className={cn(card, 'overflow-hidden')}>
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
           <h2 className={title}>Needs action</h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">{ours.length + theirs.length}</span>
+          <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">{ours.length + theirs.length}</span>
           <Link href={dataHref} className="ml-auto inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
             Open in Data <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
-        <div className="grid border-t border-border/70 lg:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] border-t border-border/70 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
           <ActionColumn
             heading="With us"
             // Both counts are Data's chips of the same names; the rows are the ones that need action.
@@ -258,9 +259,11 @@ function ActionColumn({
   const label = (s: Obstacle['stage']) => (s ? stageOf(settings, s).label : '');
   return (
     <div className={className}>
-      <div className="flex items-baseline gap-2 border-b border-border/70 bg-muted/40 px-5 py-2.5">
+      {/* A long party name wraps, and the count drops whole under it rather
+          than splitting into a column of its own beside the name. */}
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border/70 bg-muted/40 px-5 py-2.5">
         <span className="text-[13.5px] font-bold text-foreground">{heading}</span>
-        <span className="text-[13px] text-foreground/70 tabular-nums">{sub}</span>
+        <span className="whitespace-nowrap text-[13px] text-foreground/70 tabular-nums">{sub}</span>
       </div>
       {rows.length === 0 && <p className="px-5 py-6 text-[13.5px] text-foreground/70">{empty}</p>}
       {rows.slice(0, 8).map((o) => {
@@ -274,8 +277,8 @@ function ActionColumn({
         return (
           <div key={o.documentId} className="flex min-h-[3.75rem] items-center gap-3 border-b border-border/50 px-5 py-2.5 last:border-b-0">
             <div className="min-w-0 flex-1">
-              <p className="mb-[5px] truncate text-xs text-foreground/65 tabular-nums">{o.docNo ?? 'No number'} · {o.categoryName}</p>
-              <p className="truncate text-[14px] font-semibold leading-5 text-foreground">{o.title}</p>
+              <p className="mb-[5px] break-words text-xs text-foreground/65 tabular-nums">{o.docNo ?? 'No number'} · {o.categoryName}</p>
+              <p className="break-words text-[14px] font-semibold leading-5 text-foreground">{o.title}</p>
             </div>
             <span className={cn('hidden shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold sm:inline', reason.tone)}>{reason.text}</span>
             {/* No prefetch: every row is a different address, and prefetching each
@@ -283,7 +286,7 @@ function ActionColumn({
             <Link
               href={`${dataHref}?doc=${o.documentId}`}
               prefetch={false}
-              className="flex h-9 shrink-0 items-center rounded-lg border border-border px-3.5 text-[13px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary-soft"
+              className="flex h-9 w-[4.5rem] shrink-0 items-center justify-center rounded-lg border border-border text-[13px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary-soft"
             >
               {o.kind === 'waiting' ? 'Chase' : 'Send'}
             </Link>

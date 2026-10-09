@@ -88,10 +88,10 @@ function why(view: ForecastLeafView): string {
 }
 
 const pill =
-  'flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-colors duration-200 ease-ios';
+  'flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-4 text-[13px] font-medium transition-colors duration-200 ease-ios';
 const pillPrimary = cn(pill, 'bg-primary/6 text-primary hover:bg-primary hover:text-primary-foreground active:bg-primary/85 active:text-primary-foreground');
 const pillQuiet = cn(pill, 'text-muted-foreground hover:bg-muted');
-const chip = 'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums';
+const chip = 'shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold tabular-nums';
 
 export default function ForecastBlock({
   leafId,
@@ -246,7 +246,7 @@ export default function ForecastBlock({
                       Back to plan
                     </button>
                   )}
-                  <button type="button" onClick={() => setEditing(null)} className={cn(pillQuiet, !typedHere && 'ml-auto')}>
+                  <button type="button" onClick={() => setEditing(null)} className={cn(pill, 'btn-cancel', !typedHere && 'ml-auto')}>
                     Cancel
                   </button>
                   <m.button {...pressMotion} type="button" disabled={!date || pending} onClick={saveDate} className={cn(pillPrimary, 'disabled:opacity-40')}>

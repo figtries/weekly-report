@@ -8,6 +8,7 @@ import {
   getNumbering, getObstacles, getRegisterCards, getRegisterParties, getRegisterShape, getRegisterSummary, getRegisterTree, getRegisterSettings, getNextLetterNumbers,
   getRegisterSources, getRegisterExisting,
 } from '@/lib/register';
+import { isAddedStage } from '@/lib/register-shared';
 import { getActiveProjectId } from '@/lib/projects';
 
 export const metadata = { title: 'EDL Data' };
@@ -77,7 +78,7 @@ async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }
       currentObstacles={getObstacles(projectId, 'edl')}
       settings={getRegisterSettings(projectId, 'edl')}
       nextLetters={getNextLetterNumbers(projectId, 'edl')}
-      overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage)) }}
+      overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage) || isAddedStage(x.stage)) }}
     />
     </RouteTransition>
   );

@@ -123,7 +123,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
               <m.button {...pressMotion}
                 onClick={closeModal}
                 disabled={creating}
-                className="rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-muted/60 disabled:opacity-50 sm:py-2"
+                className="btn-cancel rounded-lg px-4 py-2.5 text-sm sm:py-2"
               >
                 Cancel
               </m.button>

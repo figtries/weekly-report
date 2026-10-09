@@ -5,8 +5,9 @@ import { revalidatePath } from 'next/cache';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { beforeWrite, db, schema } from './sqlite';
-import { transmittalId, writeStage, writeTransmittal, type TransmittalInput } from './transmittal-write';
-import { STAGE_ORDER } from './register-shared';
+import { transmittalId, writeDocumentStatus, writeStage, writeTransmittal, type TransmittalInput } from './transmittal-write';
+import { STAGE_ORDER, baseOfAdded, isAddedStage, isStageKey, stageRank } from './register-shared';
+import type { StatusWhere } from './register-status';
 import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
 import type { DocStage, RegisterKind } from './schema';
@@ -60,8 +61,8 @@ function assertRegister(value: string): RegisterKind {
 }
 
 function assertStage(value: string): DocStage {
-  if (!STAGE_ORDER.includes(value as DocStage)) throw new Error(`Unknown stage "${value}"`);
-  return value as DocStage;
+  if (!isStageKey(value)) throw new Error(`Unknown stage "${value}"`);
+  return value;
 }
 
 /** Documents that really belong to this project and this register. */
@@ -179,6 +180,29 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
 
     refreshRegister();
     return { ok: true, changed: 1 };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* ------------------------------------------------- status, set directly */
+
+/**
+ * Stage + who has it (lib/register-status.ts, written by
+ * `writeDocumentStatus`). Anything it would replace comes back as `confirm`
+ * until the person has seen the list and said yes.
+ */
+export async function setDocumentStatus(input: {
+  projectId: string; register: RegisterKind; documentId: string;
+  stage: string; where: StatusWhere; code: string | null; date: string; letter: string;
+  confirmed: boolean;
+}): Promise<ActionResult | { ok: false; error: string; confirm: string[] }> {
+  await beforeWrite();
+  try {
+    const r = writeDocumentStatus({ ...input, register: assertRegister(input.register), stage: assertStage(input.stage) });
+    if ('confirm' in r) return { ok: false, error: 'Already recorded', confirm: r.confirm };
+    refreshRegister();
+    return { ok: true, changed: r.written };
   } catch (err) {
     return fail(err);
   }
@@ -534,10 +558,41 @@ export async function saveRegisterSettings(input: {
           id: randomUUID(), projectId: input.projectId, register, stage, weight: 0, order,
         }))).run();
       }
+      // A stage added on Setup and removed again (9 Oct 2026). The three are
+      // never removed; an added one only while no document has gone out at it,
+      // so no send or reply history is ever thrown away with it.
+      const kept = new Set(input.stages.map((s) => s.stage));
+      const gone = rows.filter((r) => isAddedStage(r.stage) && !kept.has(r.stage)).map((r) => r.stage);
+      if (gone.length) {
+        const keys = gone.flatMap((s) => [s, `RE_${s}` as DocStage]);
+        const docIds = tx.select({ id: schema.documents.id }).from(schema.documents)
+          .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)))
+          .all().map((d) => d.id);
+        const used = docIds.length === 0 ? [] : tx.select().from(schema.docStages)
+          .where(and(inArray(schema.docStages.documentId, docIds), inArray(schema.docStages.stage, keys)))
+          .all();
+        const sent = used.filter((u) => u.submitted || u.submittedAt || u.returnedAt || u.returnCode);
+        if (sent.length) {
+          const label = rows.find((r) => r.stage === baseOfAdded(sent[0].stage))?.label || sent[0].stage;
+          throw new Error(`${label} has already been sent on ${sent.length === 1 ? 'a document' : `${sent.length} documents`}, so it stays`);
+        }
+        if (used.length) tx.delete(schema.docStages).where(inArray(schema.docStages.id, used.map((u) => u.id))).run();
+        tx.delete(schema.docStageWeights).where(and(
+          eq(schema.docStageWeights.projectId, input.projectId),
+          eq(schema.docStageWeights.register, register),
+          inArray(schema.docStageWeights.stage, keys),
+        )).run();
+      }
+
       for (const s of input.stages) {
         const stage = assertStage(s.stage);
         if (s.weight < 0) throw new Error('A weight cannot be negative');
         if (!s.label.trim()) throw new Error(`Give ${stage} a short name`);
+        if (isAddedStage(stage) && !rows.some((r) => r.stage === stage)) {
+          tx.insert(schema.docStageWeights).values({
+            id: randomUUID(), projectId: input.projectId, register, stage, weight: 0, order: stageRank(stage),
+          }).run();
+        }
         tx.update(schema.docStageWeights)
           .set({
             weight: s.weight,
@@ -743,7 +798,7 @@ export async function setDisciplineLink(input: LinkInput): Promise<ActionResult>
     db.transaction((tx) => {
       for (const leaf of leaves) {
         const stage = leaf.deskripsi.trim().toUpperCase().replace('-', '_') as DocStage;
-        if (!STAGE_ORDER.includes(stage)) continue;
+        if (!(STAGE_ORDER as DocStage[]).includes(stage)) continue;
 
         tx.update(schema.wbsNodes)
           .set(input.on

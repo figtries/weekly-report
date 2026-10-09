@@ -699,7 +699,7 @@ function PricingHero({
               An unlocked project's weights follow its budgets on every edit;
               an imported one arrives locked, and that is still said here. */}
           {locked && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
               <span className="h-1.5 w-1.5 rounded-full bg-ok" />
               Value based, locked
             </span>
@@ -921,7 +921,7 @@ function Pill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap',
         tone === 'ok' && 'bg-ok-soft text-ok',
         tone === 'info' && 'bg-chart-1/10 text-chart-1',
         tone === 'warn' && 'bg-warn-soft text-warn',
@@ -1743,7 +1743,7 @@ function RowList({
                           {...pressMotion}
                           type="button"
                           onClick={() => onCancel(row.id)}
-                          className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-background text-sm font-medium text-muted-foreground ring-1 ring-foreground/15 transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
+                          className="btn-cancel inline-flex min-h-11 items-center justify-center rounded-[10px] text-sm"
                         >
                           Cancel
                         </m.button>

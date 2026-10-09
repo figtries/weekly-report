@@ -84,14 +84,14 @@ export default function LinkDragCard({
       {loop && <p className="mt-2 text-bad">Would loop back: {loop.map((id) => names.get(id) ?? id).join(' → ')}</p>}
       {error && <p className="mt-2 text-bad">{error}</p>}
       <div className="mt-3 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="min-h-11 rounded-full px-4 text-muted-foreground hover:bg-muted">
+        <button type="button" onClick={onCancel} className="btn-cancel min-h-11 rounded-lg px-4">
           Cancel
         </button>
         <button
           type="button"
           disabled={pending || Boolean(loop)}
           onClick={save}
-          className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-primary px-5 font-semibold text-primary-foreground disabled:opacity-50"
         >
           {pending ? 'Saving…' : 'Save'}
         </button>

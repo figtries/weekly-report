@@ -186,6 +186,15 @@ export default function NativeSelect({
     if (list && target) list.scrollTop = target.offsetTop - (list.clientHeight - target.offsetHeight) / 2;
   }, [open]);
 
+  // The list is as wide as its longest row, so it can be wider than the
+  // trigger: pulled back left when that would run off the screen.
+  React.useLayoutEffect(() => {
+    const p = panelRef.current;
+    if (!open || !anchor || !p) return;
+    const over = anchor.left + p.offsetWidth - (window.innerWidth - 8);
+    p.style.left = Math.max(8, anchor.left - Math.max(0, over)) + 'px';
+  }, [open, anchor]);
+
   React.useEffect(() => {
     if (!open || active < 0) return;
     listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' });
@@ -248,8 +257,8 @@ export default function NativeSelect({
           'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
           'disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30',
           compact
-            ? 'h-8 min-h-11 pl-2 pr-7 text-[11px] font-medium sm:min-h-0'
-            : 'h-8 min-h-11 py-1 pl-2.5 pr-8 text-base sm:min-h-0 md:text-sm',
+            ? 'h-8 min-h-11 pl-2 pr-8 text-[11px] font-medium sm:min-h-0'
+            : 'h-8 min-h-11 py-1 pl-2.5 pr-10 text-base sm:min-h-0 md:text-sm',
           className
         )}
       >
@@ -259,7 +268,7 @@ export default function NativeSelect({
         aria-hidden
         className={cn(
           'pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground transition-transform duration-200 ease-ios',
-          compact ? 'right-2 size-3' : 'right-2.5 size-4',
+          compact ? 'right-3 size-3' : 'right-3.5 size-4',
           open && !closing && 'rotate-180'
         )}
         fill="none"
@@ -283,7 +292,9 @@ export default function NativeSelect({
               left: anchor.left,
               top: anchor.top,
               bottom: anchor.bottom,
-              width: anchor.width,
+              minWidth: anchor.width,
+              width: 'max-content',
+              maxWidth: 'calc(100vw - 16px)',
               zIndex: 70,
               pointerEvents: 'auto',
               transformOrigin: anchor.flip ? 'bottom left' : 'top left',
@@ -309,7 +320,7 @@ export default function NativeSelect({
                     onClick={() => pick(o.value)}
                     onMouseEnter={() => setActive(i)}
                     className={cn(
-                      'flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors duration-150 disabled:opacity-40 sm:min-h-9',
+                      'flex min-h-11 w-full items-center justify-between gap-4 whitespace-nowrap rounded-lg py-2 pl-3 pr-2.5 text-left text-sm transition-colors duration-150 disabled:opacity-40 sm:min-h-9',
                       isSelected
                         ? 'bg-muted font-semibold text-foreground'
                         : i === active
@@ -317,19 +328,17 @@ export default function NativeSelect({
                           : 'font-medium text-foreground'
                     )}
                   >
-                    <span className="min-w-0">{o.label}</span>
-                    {isSelected && (
-                      <svg
-                        className="size-4 shrink-0 text-foreground"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2.5}
-                        aria-hidden
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
+                    <span className="min-w-0 truncate">{o.label}</span>
+                    <svg
+                      className={cn('size-4 shrink-0 text-foreground', !isSelected && 'invisible')}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                      aria-hidden
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
                   </button>
                 );
               })}

@@ -341,7 +341,7 @@ export function ProgressSpread({
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', s.cls)} />
               {s.label}
               {s.in > 0 && (
-                <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-ok">
+                <span className="rounded-md bg-ok-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-ok">
                   +{s.in} this week
                 </span>
               )}
@@ -508,7 +508,7 @@ export function WeekStory({
                 </span>
               </div>
               {m.milestones.length > 0 && (
-                <span className="mt-1.5 inline-flex rounded-full bg-meta-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-meta">
+                <span className="mt-1.5 inline-flex rounded-md bg-meta-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-meta">
                   {m.milestones.join(' · ')}
                 </span>
               )}

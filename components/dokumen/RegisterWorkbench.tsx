@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, startTransition, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
-import { Check, ChevronDown, Plus, Search, Send, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, ChevronDown, FilePlus2, FolderPlus, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { addCategory, addDocument, deleteCategory, renameCategory } from '@/lib/doc-actions';
 import { knownDiscipline, nextNumber, defaultRule, type NumberingRule } from '@/lib/register-numbering';
 import {
@@ -20,10 +20,10 @@ import { RegisterSetup } from './RegisterSetup';
 import { verdict } from './verdict';
 import { OPEN_SETUP } from './RegisterTabs';
 import NativeSelect from '@/components/ui/NativeSelect';
+import { Button } from '@/components/ui/button';
 
-const loadTransmittal = () => import('./TransmittalDialog');
-const preloadTransmittal = () => { void loadTransmittal(); };
-const TransmittalDialog = dynamic(loadTransmittal);
+// The Record transmittal pop-up went on 9 Oct 2026: a status is set on the
+// document itself (DocumentSheet's StatusForm). TransmittalDialog.tsx stays, unlinked.
 const DocumentSheet = dynamic(() => import('./DocumentSheet').then((x) => x.DocumentSheet));
 
 /**
@@ -40,15 +40,16 @@ const DocumentSheet = dynamic(() => import('./DocumentSheet').then((x) => x.Docu
  *
  * Crucial fields that are empty are said in red, in a sentence that starts
  * with a capital (the user's rule, 4 Oct 2026): a document with no plan date
- * for its next stage, a discipline with no documents. They are counted in the
- * toolbar, and the count is a filter.
+ * for its next stage, a discipline with no documents. A missing plan date is
+ * said on its own row only (9 Oct 2026: a toolbar count and a filter on top of
+ * the row's red Set date was the same reminder three times).
  *
  * Rows are plain elements, never Radix (AGENTS.md: a register can hold
  * hundreds); the one menu on screen is driven by the active group's id.
  */
 
 type NumberingProps = { rule: NumberingRule | null; taken: string[]; suggestedPrefix: string };
-type Filter = 'all' | 'action' | 'us' | 'them' | 'done' | 'info';
+type Filter = 'all' | 'action' | 'us' | 'them' | 'done';
 
 type Group = DataGroup;
 
@@ -68,11 +69,11 @@ const lastLetter = (c: DocumentCard) => {
 /** Desktop columns: tick, No., Title, Rev, Issue, Code, With, Plan, Last letter. */
 /** A phone's cards (the F-Phone mockup): rounder, lifted off the page. */
 const phoneCard = 'overflow-hidden rounded-[22px] bg-card shadow-[0_0_0_1px_rgba(16,24,40,.04),0_4px_16px_-6px_rgba(16,24,40,.10)]';
-const COLS = 'md:grid-cols-[2.25rem_10.5rem_minmax(0,1fr)_3.5rem_4rem_8.5rem_6.5rem] xl:grid-cols-[2.25rem_11rem_minmax(0,1fr)_2.75rem_3.5rem_4rem_9rem_6.5rem_8.5rem]';
+const COLS = 'md:grid-cols-[2.25rem_10.5rem_minmax(0,1fr)_3.5rem_4rem_8.5rem_6.5rem] xl:grid-cols-[2.25rem_11rem_minmax(0,1fr)_2.75rem_3.5rem_4rem_9.5rem_6.5rem_8rem]';
 
 export function RegisterWorkbench({
   projectId, register, tree, cards, totalDocuments, clientName, contractorName,
-  numbering, sources, currentCards, currentObstacles, settings, nextLetters, overview,
+  numbering, sources, settings, nextLetters, overview,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -113,29 +114,19 @@ export function RegisterWorkbench({
     us: all.filter(withUs).length,
     them: all.filter((c) => c.out !== null).length,
     done: doneIds.size,
-    info: all.filter(needsPlan).length,
   }), [all, doneIds]);
   const emptyGroups = groups.filter((g) => (cards[g.id] ?? []).length === 0).length;
 
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menuAt, setMenuAt] = useState<HTMLElement | null>(null);
   const [building, setBuilding] = useState(false);
-  const [letter, setLetter] = useState<{ open: boolean; preset: { direction: 'out' | 'in'; ids: string[] } | null }>({ open: false, preset: null });
-  const [letterMounted, setLetterMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch the letter dialog's code once the page is quiet, so the first press only opens it.
-  useEffect(() => {
-    let live = true;
-    const t = window.setTimeout(() => { void loadTransmittal().then(() => { if (live) setLetterMounted(true); }); }, 900);
-    return () => { live = false; window.clearTimeout(t); };
-  }, []);
 
   // The header's Setup mark (RegisterTabs).
   useEffect(() => {
@@ -176,37 +167,9 @@ export function RegisterWorkbench({
       case 'us': return withUs(c);
       case 'them': return c.out !== null;
       case 'done': return doneIds.has(c.id);
-      case 'info': return needsPlan(c);
       default: return true;
     }
   };
-
-  const tickedCards = all.filter((c) => ticked.has(c.id));
-  const sendStages = new Set(tickedCards.map((c) => c.sendNext));
-  const canSend = tickedCards.length > 0 && tickedCards.every((c) => c.sendNext && !c.out);
-  const canReply = tickedCards.length > 0 && tickedCards.every((c) => c.out);
-  const sendLabel = canSend && sendStages.size === 1 ? stageOf(settings, [...sendStages][0]!).label : null;
-
-  // Only for what is ticked: one document is sent or answered from its own
-  // sheet, so a standing "Record transmittal" button said nothing the sheet
-  // does not (removed 4 Oct 2026).
-  const primary = canSend
-    ? { text: `Send ${tickedCards.length}${sendLabel ? ` as ${sendLabel}` : ''}`, run: () => openLetter({ direction: 'out', ids: [...ticked] }) }
-    : canReply
-      ? { text: `Record reply · ${tickedCards.length}`, run: () => openLetter({ direction: 'in', ids: [...ticked] }) }
-      : null;
-
-  function openLetter(preset: { direction: 'out' | 'in'; ids: string[] } | null) {
-    setLetterMounted(true);
-    setLetter({ open: true, preset });
-  }
-
-  const toggle = (id: string) => setTicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleGroup = (g: Group, on: boolean) => setTicked((s) => {
-    const n = new Set(s);
-    for (const c of cards[g.id] ?? []) { if (on) n.add(c.id); else n.delete(c.id); }
-    return n;
-  });
 
   const existing = useMemo(() => {
     const map = (n: RegisterNode): ExistingNode => ({ name: n.name, documents: n.documents, children: n.children.map(map) });
@@ -238,47 +201,26 @@ export function RegisterWorkbench({
     );
   }
 
-  const chips: { key: Filter; label: string; n: number; tone?: 'warn' | 'bad' }[] = [
-    { key: 'all', label: 'All', n: counts.all },
-    { key: 'action', label: 'Needs action', n: counts.action, tone: 'warn' },
-    { key: 'us', label: 'With us', n: counts.us },
-    { key: 'them', label: edl ? 'With client' : 'With vendor', n: counts.them },
-    { key: 'done', label: 'Done', n: counts.done },
+  const chips: { key: Filter; label: string; short: string; n: number; tone?: 'warn' | 'bad' }[] = [
+    { key: 'all', label: 'All', short: 'All', n: counts.all },
+    { key: 'action', label: 'Needs action', short: 'Action', n: counts.action, tone: 'warn' },
+    { key: 'us', label: 'With us', short: 'Us', n: counts.us },
+    { key: 'them', label: edl ? 'With client' : 'With vendor', short: edl ? 'Client' : 'Vendor', n: counts.them },
+    { key: 'done', label: 'Done', short: 'Done', n: counts.done },
   ];
-  if (counts.info > 0) chips.push({ key: 'info', label: 'Plan date needed', n: counts.info, tone: 'bad' });
 
   return (
     <div className="flex flex-col gap-3 pb-24 sm:gap-4 md:pb-0">
       {/* ------------------------------------------------------------ toolbar */}
       {/* Each block rises in on Setup's own keyframe and steps, so coming back
           from Setup moves the way going into it does (4 Oct 2026). */}
-      <div className={cn('animate-enter flex flex-wrap items-center gap-x-4 gap-y-3', counts.info === 0 && emptyGroups === 0 && 'max-md:hidden')}>
+      <div className={cn('animate-enter flex flex-wrap items-center gap-x-4 gap-y-3', emptyGroups === 0 && 'max-md:hidden')}>
         <h2 className="hidden min-w-0 flex-1 text-[15px] font-semibold tracking-tight text-foreground md:block">{info.long}</h2>
         <div className="grid w-full grid-cols-2 gap-2 empty:hidden md:flex md:w-auto md:flex-wrap md:items-center">
-          {(counts.info > 0 || emptyGroups > 0) && (
-            <button
-              type="button"
-              onClick={() => counts.info > 0 && setFilter('info')}
-              className="col-span-2 h-9 rounded-full bg-bad-soft px-3.5 text-[12.5px] font-semibold text-bad"
-            >
-              {counts.info > 0
-                ? `Plan date needed on ${counts.info} document${counts.info === 1 ? '' : 's'}`
-                : `${emptyGroups} group${emptyGroups === 1 ? ' has' : 's have'} no documents yet`}
-            </button>
-          )}
-          {tickedCards.length > 0 && (
-            <span className="hidden items-center gap-2 text-[13px] text-muted-foreground md:flex">
-              <b className="text-foreground">{tickedCards.length}</b> selected
-              <Button variant="outline" className="h-10" onClick={() => setTicked(new Set())}>Clear</Button>
+          {emptyGroups > 0 && (
+            <span className="col-span-2 flex h-9 items-center rounded-lg bg-bad-soft px-3.5 text-[12.5px] font-semibold text-bad">
+              {emptyGroups} group{emptyGroups === 1 ? ' has' : 's have'} no documents yet
             </span>
-          )}
-          {primary && (
-            <Button className="hidden h-10 md:inline-flex" onClick={primary.run} onPointerDown={preloadTransmittal}>
-              <Send className="mr-1.5 h-4 w-4" />{primary.text}
-            </Button>
-          )}
-          {tickedCards.length > 0 && !primary && (
-            <span className="hidden text-[13px] text-muted-foreground md:inline">Tick documents at the same step to send or answer them together.</span>
           )}
         </div>
       </div>
@@ -297,7 +239,7 @@ export function RegisterWorkbench({
             <span className="pb-1 text-[13px] text-muted-foreground">plan <b className="font-semibold text-foreground tabular-nums">{overview.plan.toFixed(1)}%</b></span>
           )}
           {against && (
-            <span className={cn('mb-1.5 ml-auto h-6 shrink-0 rounded-full px-[9px] text-xs font-semibold leading-6 tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
+            <span className={cn('mb-1.5 ml-auto h-6 shrink-0 rounded-md px-[9px] text-xs font-semibold leading-6 tabular-nums', against.diff >= 0 ? 'bg-ok-soft text-ok' : against.chip)}>
               {against.diff > 0 ? `+${against.diff.toFixed(1)} ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} behind`}
             </span>
           )}
@@ -322,31 +264,41 @@ export function RegisterWorkbench({
 
       {/* Phones (the F-Phone mockup): the filters stand on the page, the picked one dark. */}
       <div className="animate-enter stagger-2 flex flex-col gap-2.5 md:hidden">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scrollbar-none">
-          {chips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              aria-pressed={filter === c.key}
-              onClick={() => setFilter(c.key)}
-              className={cn(
-                'h-9 shrink-0 rounded-full px-3.5 text-[13px] transition-colors duration-200 ease-ios',
-                filter === c.key
-                  ? cn('font-semibold', c.tone === 'bad' ? 'bg-bad text-white' : 'bg-[#0f172a] text-white')
-                  : cn('font-medium', c.tone === 'bad' ? 'bg-bad-soft text-bad' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]'),
-              )}
-            >
-              {c.label}{' '}
-              <span className={cn('tabular-nums', filter === c.key ? 'opacity-75' : c.tone === 'warn' ? 'font-semibold text-warn' : c.tone === 'bad' ? '' : 'text-muted-foreground')}>{c.n}</span>
-            </button>
-          ))}
+        {/* The filters are a bar like the tabs above (WeekSteps' look), every
+            filter in view and the bar sharing the cards' edges: as a scrolling
+            row of chips the last one ran off the screen (9 Oct 2026). */}
+        <div className="flex items-stretch gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-5 gap-0.5 rounded-2xl bg-card p-1 shadow-sm ring-1 ring-foreground/5">
+            {chips.map((c) => {
+              const on = filter === c.key;
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${c.label} ${c.n}`}
+                  onClick={() => setFilter(c.key)}
+                  className={cn(
+                    // One word each (variant A, 9 Oct 2026): "Needs action" and
+                    // "With client" wrapped and made the row uneven. The full
+                    // name stays the desktop's and the screen reader's.
+                    'flex min-h-12 min-w-0 flex-col items-center justify-start rounded-lg px-0.5 pb-1.5 pt-2 text-center transition-colors duration-200 ease-ios',
+                    on ? 'bg-chart-1/10 text-chart-1 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)]' : 'text-foreground/80',
+                  )}
+                >
+                  <span className={cn('text-[15px] font-bold leading-tight tabular-nums', !on && (c.tone === 'warn' ? 'text-warn' : c.tone === 'bad' ? 'text-bad' : 'text-foreground'))}>{c.n}</span>
+                  <span title={c.label} className={cn('mt-0.5 whitespace-nowrap text-[11px] leading-tight', on ? 'font-semibold' : 'font-medium')}>{c.short}</span>
+                </button>
+              );
+            })}
+          </div>
           {/* Search is one press away rather than a standing box: the mockup has none. */}
           <button
             type="button"
             aria-label="Search documents"
             aria-expanded={searchOpen}
             onClick={() => setSearchOpen((v) => !v || query !== '')}
-            className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-full', searchOpen ? 'bg-[#0f172a] text-white' : 'bg-card text-foreground shadow-[0_0_0_1px_rgba(16,24,40,.10)]')}
+            className={cn('flex w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm ring-1 ring-foreground/5', searchOpen ? 'bg-chart-1/10 text-chart-1' : 'bg-card text-foreground')}
           >
             <Search className="h-4 w-4" />
           </button>
@@ -360,7 +312,7 @@ export function RegisterWorkbench({
               onChange={(e) => search(e.target.value)}
               placeholder="Search number or title"
               aria-label="Search number or title"
-              className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              className="h-11 w-full rounded-xl bg-card pl-10 pr-4 text-base shadow-[0_0_0_1px_rgba(16,24,40,.10)] outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             />
           </div>
         )}
@@ -377,7 +329,7 @@ export function RegisterWorkbench({
                 aria-pressed={filter === c.key}
                 onClick={() => setFilter(c.key)}
                 className={cn(
-                  'h-9 shrink-0 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
+                  'h-9 shrink-0 rounded-lg px-3.5 text-[13px] font-medium transition-colors duration-200 ease-ios',
                   filter === c.key
                     ? (c.tone === 'bad' ? 'bg-bad text-white' : 'bg-primary-soft text-primary')
                     : (c.tone === 'bad' ? 'bg-bad-soft text-bad' : 'text-foreground/80 hover:bg-muted'),
@@ -404,8 +356,8 @@ export function RegisterWorkbench({
           {/* Column names: thin, like the Excel register's own header row. */}
           <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-card))] px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
             <span />
-            <span>No.</span><span>Title</span><span className="hidden xl:block">Rev</span><span>Issue</span><span>Code</span>
-            <span>With</span><span className="text-right">Plan</span><span className="hidden xl:block">Last letter</span>
+            <span>No.</span><span>Title</span><span className="hidden xl:block">Rev</span><span>Issue</span><span className="text-center">Code</span>
+            <span>With</span><span>Plan</span><span className="hidden xl:block">Last letter</span>
           </div>
 
           {groups.map((g) => {
@@ -414,31 +366,23 @@ export function RegisterWorkbench({
             if (filter !== 'all' && shown.length === 0) return null;
             if (q && shown.length === 0) return null;
             const open = !collapsed.has(g.id);
-            const allTicked = docs.length > 0 && docs.every((c) => ticked.has(c.id));
             return (
               // Never clipped on a wide screen: an overflow there would become the
               // sticky header's scroller and push it down over the first row.
               <div key={g.id} className={cn(phoneCard, 'overflow-visible md:rounded-none md:bg-transparent md:shadow-none')}>
                 <div className="relative flex flex-wrap items-center gap-x-2 gap-y-2.5 px-4 pb-3 pt-3.5 md:sticky md:top-9 md:z-10 md:min-h-12 md:flex-nowrap md:border-b md:border-border/70 md:bg-[#f8faff] md:py-0">
-                  <input
-                    type="checkbox"
-                    aria-label={`Select every document in ${g.name}`}
-                    checked={allTicked}
-                    disabled={docs.length === 0}
-                    onChange={(e) => toggleGroup(g, e.target.checked)}
-                    className="hidden h-4 w-4 accent-primary md:block"
-                  />
+                  <span aria-hidden className="hidden w-4 md:block" />
                   <button type="button" aria-expanded={open} onClick={() => {
                     // Folding is a wide screen's: a phone shows no chevron, so a tap there would hide rows unexplained.
                     if (!window.matchMedia('(min-width: 768px)').matches) return;
                     setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; });
                   }}
-                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:w-60 md:flex-none md:items-center">
+                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left md:ml-2 md:w-[22rem] md:flex-none md:items-center">
                     <ChevronDown className={cn('hidden h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 ease-ios md:block', !open && '-rotate-90')} />
-                    <span className="min-w-0 truncate text-[16px] font-semibold tracking-[-0.01em] text-foreground md:text-[14px] md:tracking-normal">
+                    <span className="min-w-0 text-[16px] font-semibold leading-snug tracking-[-0.01em] text-foreground [overflow-wrap:anywhere] md:text-[14px] md:tracking-normal">
                       {g.parentName && <span className="font-medium text-muted-foreground">{g.parentName} · </span>}{g.name}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{docs.length} docs</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums md:ml-auto md:pl-2">{docs.length} docs</span>
                   </button>
                   <span className="shrink-0 text-[20px] font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums md:hidden">
                     {g.actual.toFixed(1)}<span className="text-xs text-muted-foreground">%</span>
@@ -451,8 +395,8 @@ export function RegisterWorkbench({
                     </span>
                     {g.plan !== null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">plan {g.plan.toFixed(1)}</span>}
                   </div>
-                  <div className="ml-1 hidden items-center gap-2 md:flex">
-                    <span className="flex w-16 flex-col gap-[2px]">
+                  <div className="ml-4 hidden items-center gap-2.5 md:flex">
+                    <span className="flex w-24 flex-col gap-[2px]">
                       <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full bg-chart-1" style={{ width: `${clamp(g.actual)}%` }} /></span>
                       {g.plan !== null && <span className="h-[3px] rounded-full bg-muted"><span className="block h-[3px] rounded-full bg-chart-2" style={{ width: `${clamp(g.plan)}%` }} /></span>}
                     </span>
@@ -460,19 +404,19 @@ export function RegisterWorkbench({
                     {g.plan !== null && <span className="text-xs text-muted-foreground tabular-nums">/ {g.plan.toFixed(1)}%</span>}
                   </div>
                   <button type="button" onClick={() => { expand(g.id); setAddingTo(addingTo === g.id ? null : g.id); setError(null); }}
-                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-3.5 text-[13px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-3.5 text-[13px] font-semibold text-primary md:ml-auto md:h-8 md:px-3 md:text-[12.5px]">
                     <Plus className="hidden h-3.5 w-3.5 md:block" /><span className="md:hidden">+ </span>Add<span className="md:hidden"> document</span>
                   </button>
-                  {/* On a phone the menu hangs from the header, the card's width; from md, from this button. */}
-                  <div className="md:relative">
-                    <button type="button" aria-label={`More for ${g.name}`} aria-expanded={menuFor === g.id} onClick={() => setMenuFor(menuFor === g.id ? null : g.id)}
+                  <div>
+                    <button type="button" aria-label={`More for ${g.name}`} aria-expanded={menuFor === g.id} onClick={(e) => { setMenuAt(e.currentTarget); setMenuFor(menuFor === g.id ? null : g.id); }}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f3f4f6] text-[#374151] hover:bg-muted md:bg-transparent md:text-muted-foreground">
                       <span className="text-base leading-none">⋯</span>
                     </button>
                     {menuFor === g.id && (
                       <GroupMenu
+                        anchor={menuAt}
                         name={g.name}
-                        empty={docs.length === 0}
+                        count={docs.length}
                         onAdd={() => { setMenuFor(null); expand(g.id); setAddingTo(g.id); }}
                         onClose={() => setMenuFor(null)}
                         onRename={(name) => renameCategory({ projectId, register, categoryId: g.id, name })}
@@ -507,9 +451,7 @@ export function RegisterWorkbench({
                     card={c}
                     settings={settings}
                     other={other}
-                    ticked={ticked.has(c.id)}
                     opened={openId === c.id}
-                    onTick={() => toggle(c.id)}
                     onOpen={() => startTransition(() => setOpenId(c.id))}
                   />
                 ))}
@@ -525,17 +467,6 @@ export function RegisterWorkbench({
         {error && <p role="alert" className="border-t border-border/70 bg-bad-soft px-4 py-2.5 text-sm text-bad">{error}</p>}
       </section>
 
-      {/* Phones: what is ticked, and the one thing to do with it, under the thumb. */}
-      {tickedCards.length > 0 && (
-        <div className="animate-fade-in-up fixed inset-x-3 bottom-4 z-30 flex items-center gap-3 rounded-full bg-[#0f172a] py-2 pl-5 pr-2 shadow-[0_12px_32px_-8px_rgba(15,23,42,.45)] md:hidden">
-          <span className="text-sm text-white"><b className="tabular-nums">{tickedCards.length}</b> selected</span>
-          <button type="button" onClick={() => setTicked(new Set())} className="h-9 px-2 text-[13px] text-slate-300">Clear</button>
-          {primary
-            ? <button type="button" onClick={primary.run} className="ml-auto h-11 rounded-full bg-[#2563eb] px-5 text-sm font-semibold text-white">{primary.text}</button>
-            : <span className="ml-auto pr-3 text-right text-xs text-slate-300">Not at the same step</span>}
-        </div>
-      )}
-
       {openDoc && openGroup && (
         <DocumentSheet
           key={openDoc.id}
@@ -544,31 +475,13 @@ export function RegisterWorkbench({
           doc={openDoc}
           groups={groups.map((g) => ({ id: g.id, name: g.parentName ? `${g.parentName} · ${g.name}` : g.name }))}
           settings={settings}
+          rule={numbering.rule ?? defaultRule(numbering.suggestedPrefix)}
           nextLetter={nextLetters.out}
           position={{ index: Math.max(0, inGroup.findIndex((c) => c.id === openDoc.id)), total: inGroup.length, group: openGroup.name }}
           onPrev={openIndex > 0 ? () => setOpenId(flatVisible[openIndex - 1].id) : null}
           onNext={openIndex >= 0 && openIndex < flatVisible.length - 1 ? () => setOpenId(flatVisible[openIndex + 1].id) : null}
-          onSend={(doc) => openLetter({ direction: 'out', ids: [doc.id] })}
-          onReply={(doc) => openLetter({ direction: 'in', ids: [doc.id] })}
           onClose={() => setOpenId(null)}
         />
-      )}
-
-      {letterMounted && (
-        <Suspense fallback={null}>
-          <TransmittalDialog
-            open={letter.open}
-            onOpenChange={(o) => { setLetter((l) => ({ ...l, open: o })); if (!o) setTicked(new Set()); }}
-            projectId={projectId}
-            register={register}
-            cards={currentCards}
-            obstacles={currentObstacles}
-            groupNames={Object.fromEntries(groups.map((g) => [g.id, g.name]))}
-            preset={letter.preset}
-            nextLetters={nextLetters}
-            settings={settings}
-          />
-        </Suspense>
       )}
     </div>
   );
@@ -577,14 +490,12 @@ export function RegisterWorkbench({
 /* --------------------------------------------------------------- one row */
 
 function Row({
-  card: c, settings, other, ticked, opened, onTick, onOpen,
+  card: c, settings, other, opened, onOpen,
 }: {
   card: DocumentCard;
   settings: RegisterSettings;
   other: string;
-  ticked: boolean;
   opened: boolean;
-  onTick: () => void;
   onOpen: () => void;
 }) {
   const done = isDone(c);
@@ -598,7 +509,7 @@ function Row({
   const with_ = done
     ? <span className="inline-flex items-center gap-1 font-medium text-ok"><Check className="h-3.5 w-3.5" />Done</span>
     : c.out
-      ? <span className={cn(late && 'font-semibold text-bad')}>{other === 'client' ? 'Client' : 'Vendor'}{days !== null ? ` · ${days} d` : ''}{late && <span className="block text-[11px] font-medium leading-3">overdue</span>}</span>
+      ? <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', late && 'font-semibold text-bad')}>{other === 'client' ? 'Client' : 'Vendor'}{days !== null ? ` · ${days} d` : ''}{late && <span className="rounded-md bg-bad-soft px-1.5 text-[11px] font-semibold leading-5">Overdue</span>}</span>
       : <span><b className="font-semibold text-foreground">Us</b>{c.sendNext && <span className="text-muted-foreground"> · send {stageOf(settings, c.sendNext).label}</span>}</span>;
   const code = c.returnCode
     ? <span className={cn('rounded-md px-1.5 text-[11px] font-bold leading-5', CODE_TONE[c.returnCode] ?? 'bg-muted text-foreground')}>{codeLabel(settings, c.returnCode)}</span>
@@ -607,31 +518,31 @@ function Row({
   const plan = lateAt
     ? <span className="font-semibold text-bad">{fmt(lateAt)}</span>
     : needsPlan(c)
-      ? <span className="inline-block rounded-full border border-bad/40 bg-bad-soft px-2 text-[11.5px] font-semibold leading-[22px] text-bad">Plan date needed</span>
+      // A press, not a warning: the row's click opens the sheet where the date is set.
+      ? <span className="inline-flex h-[26px] items-center gap-1 whitespace-nowrap rounded-[7px] border border-dashed border-bad/70 bg-card px-2.5 text-xs font-semibold text-bad group-hover:bg-bad-soft"><Plus className="h-3 w-3" strokeWidth={2.6} />Set date</span>
       : c.plannedAt
         ? <span>{fmt(c.plannedAt)}</span>
         : <span className="text-muted-foreground">—</span>;
 
   return (
     <div
+      onClick={onOpen}
       className={cn(
-        'group relative flex min-h-16 items-center gap-x-0 border-t border-border/60 pl-1 pr-4 transition-colors duration-150 ease-ios max-md:last:rounded-b-[22px] md:grid md:min-h-11 md:gap-x-3 md:border-t-0 md:border-b md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
+        'group relative flex min-h-16 cursor-pointer items-center gap-x-0 border-t border-border/60 px-4 transition-colors duration-150 ease-ios max-md:last:rounded-b-[22px] md:grid md:min-h-11 md:gap-x-3 md:border-t-0 md:border-b md:px-4 [content-visibility:auto] [contain-intrinsic-size:auto_44px]',
         COLS,
-        ticked ? 'bg-primary-soft/60' : opened ? 'bg-muted/60' : 'hover:bg-muted/40',
+        opened ? 'bg-muted/60' : 'hover:bg-muted/40',
       )}
     >
       {opened && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
-      <label className="flex h-11 w-11 shrink-0 items-center justify-center md:w-auto md:justify-start">
-        <input type="checkbox" checked={ticked} onChange={onTick} aria-label={`Select ${c.docNo ?? c.title}`} className="h-5 w-5 rounded-md accent-primary md:h-4 md:w-4" />
-      </label>
+      <span aria-hidden className="hidden md:block" />
 
       {/* Phone: two lines. Desktop: the cells below take over. */}
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left md:hidden">
+      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left md:hidden">
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-[12px] tracking-[0.02em] text-muted-foreground [font-feature-settings:'tnum'_1,'zero'_1]">
-            <span className="truncate">{c.docNo ?? 'No number'} · {stage}</span>{c.returnCode && code}
+            <span className="min-w-0 break-words">{c.docNo ?? 'No number'} · {stage}</span>{c.returnCode && code}
           </span>
-          <span className="mt-[3px] block truncate text-[14px] font-semibold text-foreground">{c.title}</span>
+          <span className="mt-[3px] block break-words text-[14px] font-semibold text-foreground">{c.title}</span>
           {needsPlan(c) && <span className="mt-0.5 block text-xs font-semibold text-bad">Plan date needed</span>}
         </span>
         <span className="shrink-0 text-right">
@@ -640,15 +551,15 @@ function Row({
         </span>
       </button>
 
-      <button type="button" onClick={onOpen} className={cn('hidden truncate text-left text-[12.5px] tabular-nums md:block [font-feature-settings:"tnum"_1,"zero"_1]', opened ? 'font-semibold text-primary' : 'text-foreground/80')}>
+      <button type="button" className={cn('hidden truncate text-left text-[12.5px] tabular-nums md:block [font-feature-settings:"tnum"_1,"zero"_1]', opened ? 'font-semibold text-primary' : 'text-foreground/80')}>
         {c.docNo ?? <span className="text-muted-foreground">No number</span>}
       </button>
-      <button type="button" onClick={onOpen} className="hidden truncate text-left text-[13.5px] font-medium text-foreground md:block">{c.title}</button>
+      <button type="button" className="hidden break-words py-1.5 text-left text-[13.5px] font-medium text-foreground md:block">{c.title}</button>
       <span className="hidden text-[13px] font-medium text-foreground/80 tabular-nums xl:block">{rev ?? '—'}</span>
       <span className="hidden whitespace-nowrap text-[13px] font-semibold text-foreground md:block">{stage}</span>
-      <span className="hidden text-[13px] md:block">{code}</span>
-      <span className="hidden text-[13px] text-foreground/80 md:block">{with_}</span>
-      <span className="hidden text-right text-[13px] text-foreground tabular-nums md:block">{plan}</span>
+      <span className="hidden items-center justify-center text-[13px] md:flex">{code}</span>
+      <span className="hidden items-center text-[13px] leading-5 text-foreground/80 md:flex">{with_}</span>
+      <span className="hidden text-[13px] text-foreground tabular-nums md:block">{plan}</span>
       <span className="hidden truncate text-[12.5px] text-muted-foreground tabular-nums xl:block">{letterNo ?? '—'}</span>
     </div>
   );
@@ -694,9 +605,10 @@ function AddLine({
   };
 
   return (
-    <div className="animate-fade-in-up border-b border-border/70 px-3 py-3 md:pl-[4.25rem] md:pr-4">
-      <div className={cn('flex items-center gap-2 rounded-xl border bg-card pl-3 pr-1.5 shadow-[0_0_0_3px_rgba(29,78,216,.10)]', nudge ? 'border-bad' : 'border-primary')}>
-        <Plus className="h-4 w-4 shrink-0 text-primary" />
+    <div className="animate-fade-in-up border-b border-border/70 px-3 py-3 md:px-4">
+      {/* Variant A (9 Oct 2026), as on Setup: the box holds only the title;
+          Kind, Cancel and Add sit under it. A button inside the box read as a
+          box in a box. */}
         <input
           ref={field}
           value={text}
@@ -713,32 +625,58 @@ function AddLine({
             e.preventDefault();
             put(pasted);
           }}
-          placeholder={`Type a title, or paste several lines from Excel, into ${group.name}`}
+          placeholder="Title, or paste from Excel"
           aria-label={`New document in ${group.name}`}
-          className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm"
+          className={cn('h-11 w-full rounded-xl border-[1.5px] bg-card px-3.5 text-base outline-none ring-3 placeholder:text-muted-foreground/80 md:text-sm', nudge ? 'border-bad ring-bad/15' : 'border-primary ring-ring/20')}
         />
-        {preview && <span className="hidden shrink-0 text-xs text-muted-foreground tabular-nums lg:block"><b className="text-foreground">{preview}</b> will be given</span>}
-        <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as 'Doc' | 'Dwg')} aria-label="Kind" wrapperClassName="w-auto shrink-0" className="h-9 min-h-9 border-border bg-card pl-2.5 text-[13px] md:text-[13px]">
+      {nudge && <p className="mt-1.5 text-xs font-semibold text-bad">Type a title first.</p>}
+      <div className="mt-2 flex items-center gap-2">
+        <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as 'Doc' | 'Dwg')} aria-label="Kind" wrapperClassName="w-[5.5rem] shrink-0" className="h-9 min-h-9 border-border bg-card pl-3 text-[13px] font-medium md:text-[13px]">
           <option value="Doc">Doc</option>
           <option value="Dwg">Dwg</option>
         </NativeSelect>
-        <button type="button" disabled={pending} onClick={() => put(text)} className="h-9 rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground disabled:opacity-60">
-          {pending ? 'Adding…' : 'Add'}
-        </button>
-        <button type="button" aria-label="Close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+        {preview && (
+          <span className="hidden min-w-0 items-center gap-2 lg:flex">
+            <span className="text-xs text-muted-foreground">Number</span>
+            <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[12.5px] font-semibold text-foreground tabular-nums">{preview}</span>
+          </span>
+        )}
+        <Button variant="ghost" className="btn-cancel ml-auto h-9" onClick={onClose}>Cancel</Button>
+        <Button className="h-9 min-w-20" disabled={pending} onClick={() => put(text)}>{pending ? 'Adding…' : 'Add'}</Button>
       </div>
-      {nudge && <p className="mt-1.5 text-xs font-semibold text-bad">Type a title first.</p>}
     </div>
   );
 }
 
 /* --------------------------------------------- the one menu, for one group */
 
+/** Under the ⋯ button and right-aligned to it, flipped above when the room is up there. */
+function placeMenu(anchor: HTMLElement | null) {
+  if (!anchor) return null;
+  const r = anchor.getBoundingClientRect();
+  const width = Math.min(264, window.innerWidth - 32);
+  const below = window.innerHeight - r.bottom - 8;
+  const flip = below < 260 && r.top > below;
+  // A button on the left half opens to the right of it, so the menu hangs off
+  // the ⋯ it came from instead of floating loose at the screen's edge.
+  const fromLeft = r.left + r.width / 2 < window.innerWidth / 2;
+  const want = fromLeft ? r.left : r.right - width;
+  return {
+    left: Math.max(16, Math.min(want, window.innerWidth - width - 16)),
+    fromLeft,
+    top: flip ? undefined : r.bottom + 4,
+    bottom: flip ? window.innerHeight - r.top + 4 : undefined,
+    width,
+    flip,
+  };
+}
+
 function GroupMenu({
-  name, empty, onAdd, onRename, onSub, onDelete, onClose,
+  anchor, name, count, onAdd, onRename, onSub, onDelete, onClose,
 }: {
+  anchor: HTMLElement | null;
   name: string;
-  empty: boolean;
+  count: number;
   onAdd: () => void;
   onRename: (name: string) => Promise<{ ok: boolean }>;
   onSub: (name: string) => Promise<{ ok: boolean }>;
@@ -748,22 +686,62 @@ function GroupMenu({
   const [mode, setMode] = useState<'menu' | 'rename' | 'sub'>('menu');
   const [value, setValue] = useState(name);
   const [pending, start] = useTransition();
-  const item = 'flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm text-foreground hover:bg-muted';
+  const empty = count === 0;
+  const item = 'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] font-medium text-foreground hover:bg-muted active:bg-muted md:text-sm';
+  const icon = 'h-[18px] w-[18px] shrink-0 text-muted-foreground';
   const submit = () => start(async () => {
     const v = value.trim();
     if (!v) return;
     const r = mode === 'rename' ? await onRename(v) : await onSub(v);
     if (r.ok) onClose();
   });
-  return (
-    <div className="animate-fade-in-up absolute inset-x-4 top-[calc(100%-0.5rem)] z-30 rounded-2xl border bg-card p-1.5 shadow-lg md:inset-x-auto md:right-0 md:top-10 md:w-64">
+  // In a portal, fixed to the button (8 Oct 2026): inside the list, each
+  // group's sticky header and the list's own scroller painted over it.
+  const panel = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState(() => placeMenu(anchor));
+  useEffect(() => {
+    if (!anchor) return;
+    const follow = () => setAt(placeMenu(anchor));
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!anchor.contains(t) && !panel.current?.contains(t)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // The menu stays put: while it is open the page under it does not scroll.
+    const hold = (e: Event) => { if (!panel.current?.contains(e.target as Node)) e.preventDefault(); };
+    window.addEventListener('wheel', hold, { passive: false, capture: true });
+    window.addEventListener('touchmove', hold, { passive: false, capture: true });
+    window.addEventListener('resize', follow);
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('wheel', hold, true);
+      window.removeEventListener('touchmove', hold, true);
+      window.removeEventListener('resize', follow);
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [anchor, onClose]);
+  if (!at) return null;
+  return createPortal(
+    <div
+      ref={panel}
+      style={{ position: 'fixed', left: at.left, top: at.top, bottom: at.bottom, width: at.width, zIndex: 70, transformOrigin: `${at.flip ? 'bottom' : 'top'} ${at.fromLeft ? 'left' : 'right'}` }}
+      className="animate-dropdown-in rounded-2xl border bg-card p-1.5 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.18)] ring-1 ring-foreground/5"
+    >
       {mode === 'menu' ? (
         <>
-          <button type="button" className={item} onClick={onAdd}>Add documents</button>
-          <button type="button" className={item} onClick={() => { setMode('rename'); setValue(name); }}>Rename</button>
-          <button type="button" className={item} onClick={() => { setMode('sub'); setValue(''); }}>Add a sub-discipline</button>
-          <button type="button" disabled={!empty || pending} className={cn(item, 'text-bad disabled:text-muted-foreground')} onClick={() => start(async () => { const r = await onDelete(); if (r.ok) onClose(); })}>
-            {empty ? 'Remove' : 'Remove: empty it first'}
+          <p className="truncate px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground">{name}</p>
+          <button type="button" className={item} onClick={onAdd}><FilePlus2 className={icon} />Add documents</button>
+          <button type="button" className={item} onClick={() => { setMode('sub'); setValue(''); }}><FolderPlus className={icon} />Add a sub-discipline</button>
+          <button type="button" className={item} onClick={() => { setMode('rename'); setValue(name); }}><Pencil className={icon} />Rename</button>
+          <div className="mx-3 my-1 h-px bg-border" />
+          <button type="button" disabled={!empty || pending} className={cn(item, 'items-start py-2.5 disabled:hover:bg-transparent', empty ? 'text-bad' : 'text-muted-foreground')} onClick={() => start(async () => { const r = await onDelete(); if (r.ok) onClose(); })}>
+            <Trash2 className={cn(icon, 'mt-px', empty ? 'text-bad' : 'text-muted-foreground/60')} />
+            <span className="min-w-0">
+              <span className="block">Remove discipline</span>
+              {!empty && <span className="mt-0.5 block text-xs font-normal leading-snug text-muted-foreground">Holds {count} document{count === 1 ? '' : 's'}. Move or delete them first.</span>}
+            </span>
           </button>
         </>
       ) : (
@@ -777,11 +755,12 @@ function GroupMenu({
             className="h-10 w-full rounded-xl border border-border px-3 text-base outline-none focus-visible:border-ring md:text-sm"
           />
           <div className="mt-2 flex justify-end gap-1.5">
-            <button type="button" onClick={onClose} className="h-9 rounded-full px-3 text-sm text-muted-foreground">Cancel</button>
-            <button type="button" disabled={pending} onClick={submit} className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">{mode === 'rename' ? 'Save' : 'Add'}</button>
+            <button type="button" onClick={onClose} className="btn-cancel h-9 rounded-lg px-3.5 text-sm">Cancel</button>
+            <button type="button" disabled={pending} onClick={submit} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">{mode === 'rename' ? 'Save' : 'Add'}</button>
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

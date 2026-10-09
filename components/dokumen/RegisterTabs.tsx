@@ -2,7 +2,9 @@
 
 import WeekRow from '@/components/weekly/WeekRow';
 import WeekSteps from '@/components/weekly/WeekSteps';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { Settings2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -28,14 +30,14 @@ export const OPEN_SETUP = 'register:setup';
  * moves between them.
  */
 // `short` is what a phone shows. The four full labels come to 484px of text,
-// which no phone has: at 390px the row was cut to "...VDRL Summary  V". The
-// register name alone identifies the pair, and 'list' says the same thing to a
-// reader as 'Data' does while costing four characters less.
+// which no phone has: at 390px the row was cut to "...VDRL Summary  V". So a
+// phone shows the SAME words as the desktop, stacked on two lines (9 Oct 2026:
+// 'EDL' / 'EDL list' read as a different menu from the desktop's).
 const TABS = [
-  { key: 'summary', label: 'EDL Summary', short: 'EDL' },
-  { key: 'data', label: 'EDL Data', short: 'EDL list' },
-  { key: 'vdrl', label: 'VDRL Summary', short: 'VDRL' },
-  { key: 'vdrl-data', label: 'VDRL Data', short: 'VDRL list' },
+  { key: 'summary', label: 'EDL Summary', short: 'EDL\nSummary' },
+  { key: 'data', label: 'EDL Data', short: 'EDL\nData' },
+  { key: 'vdrl', label: 'VDRL Summary', short: 'VDRL\nSummary' },
+  { key: 'vdrl-data', label: 'VDRL Data', short: 'VDRL\nData' },
 ] as const;
 
 export function RegisterTabs({
@@ -54,7 +56,7 @@ export function RegisterTabs({
   const register = active === 'data' ? 'edl' : active === 'vdrl-data' ? 'vdrl' : null;
 
   return (
-    <div className="relative px-4 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
+    <div className="relative z-30 px-4 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
       {/* THE SAME HEADER AS THE WEEKLY PAGES (25 Sep 2026): the shared
           `WeekRow` over the shared `WeekSteps` bar, in a column that hugs the
           bar so the week picker and Current share its edges. This section had
@@ -74,8 +76,9 @@ export function RegisterTabs({
               Excel: in the row on a phone, the page's top corner from md. */}
           {register && <RegisterMarks register={register} className="flex md:hidden" />}
         </WeekRow>
+        <PhoneRegisterBar active={active} selectedWeek={selectedWeek} />
         <WeekSteps
-          className="sm:w-full"
+          className="max-sm:hidden sm:w-full"
           ariaLabel="Document Control"
           activeKey={active}
           steps={TABS.map((t) => ({
@@ -93,6 +96,88 @@ export function RegisterTabs({
           thing between the tabs and the figures. REGISTER_INFO still says it
           where a register is first built. */}
     </div>
+  );
+}
+
+/**
+ * A phone's bar (9 Oct 2026, from the mockup he approved): two tabs, EDL and
+ * VDRL, each opening its two screens in a menu exactly as wide as the tab and
+ * flush under it. Words only. Hand-rolled, not Radix: one tiny menu does not
+ * earn a portal and a lazy chunk.
+ */
+const REGISTERS = [
+  { name: 'EDL', screens: [{ key: 'summary', label: 'Summary' }, { key: 'data', label: 'Data' }] },
+  { name: 'VDRL', screens: [{ key: 'vdrl', label: 'Summary' }, { key: 'vdrl-data', label: 'Data' }] },
+] as const;
+
+function PhoneRegisterBar({ active, selectedWeek }: { active: string; selectedWeek: number }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  return (
+    <nav
+      ref={ref}
+      aria-label="Document Control"
+      className="relative z-20 grid w-full grid-cols-2 gap-1 rounded-2xl bg-card p-1 shadow-sm ring-1 ring-foreground/5 sm:hidden print:hidden"
+    >
+      {REGISTERS.map((r) => {
+        const here = r.screens.find((s) => s.key === active);
+        const isOpen = open === r.name;
+        return (
+          <div key={r.name} className="relative">
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              aria-haspopup="menu"
+              onClick={() => setOpen(isOpen ? null : r.name)}
+              className={cn(
+                'flex min-h-11 w-full items-center justify-center rounded-lg text-sm transition-colors duration-300 ease-ios',
+                here ? 'bg-chart-1/10 font-semibold text-chart-1' : 'font-medium text-foreground/80'
+              )}
+            >
+              {r.name}
+              {here && <span className="font-medium">&nbsp;·&nbsp;{here.label}</span>}
+            </button>
+            {isOpen && (
+              <div
+                role="menu"
+                className="absolute inset-x-0 top-[calc(100%+0.5rem)] animate-fade-in-up rounded-xl bg-card p-1 shadow-lg ring-1 ring-foreground/10"
+              >
+                {r.screens.map((s) => (
+                  <Link
+                    key={s.key}
+                    role="menuitem"
+                    href={`/dokumen/${selectedWeek}/${s.key}`}
+                    aria-current={s.key === active ? 'page' : undefined}
+                    onClick={() => setOpen(null)}
+                    className={cn(
+                      'flex min-h-11 items-center justify-center rounded-lg text-sm',
+                      s.key === active ? 'bg-chart-1/10 font-semibold text-chart-1' : 'font-medium text-foreground/80 active:bg-muted'
+                    )}
+                  >
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 

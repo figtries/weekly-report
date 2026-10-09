@@ -278,7 +278,8 @@ export function renumber(tree: BuilderNode[], rule: NumberingRule, taken: string
       const section = here.find((name) => knownDiscipline(name, rule)) ?? here[0];
       const docs = n.docs.map((d) => {
         if (!d.auto) return d;
-        if (!keep(d)) return d.docNo ? { ...d, docNo: '' } : d;
+        // No prefix, no format (the VDRL): an auto document gets no number.
+        if (!keep(d) || !rule.prefix.trim()) return d.docNo ? { ...d, docNo: '' } : d;
         const docNo = nextNumber(rule, section, here.length > 1 ? n.name : d.title, d.kind, used);
         used.push(docNo);
         return docNo === d.docNo ? d : { ...d, docNo };

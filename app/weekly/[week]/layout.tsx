@@ -145,7 +145,7 @@ function WeekTabsFallback() {
     <div className="px-3 pt-2 pb-1 sm:px-6 sm:pt-4 sm:pb-2 lg:px-8 print:hidden">
       <div className="flex items-center gap-2">
         <Skeleton className="h-11 w-32 rounded-lg" />
-        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-24 rounded-lg" />
       </div>
       {/* The bar runs the full width, so the held space does too — a narrower
           placeholder would make the row jump wider as it lands. */}

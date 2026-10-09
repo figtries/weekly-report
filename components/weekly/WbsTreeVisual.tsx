@@ -547,7 +547,7 @@ function OverviewHero({
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-400">Overall project progress</p>
-          <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${st.chip}`}>{st.label}</span>
+          <span className={`rounded-md px-3 py-1 text-[13px] font-semibold ${st.chip}`}>{st.label}</span>
         </div>
         {dist.total > 0 && (
           <p className="shrink-0 text-[12px] font-medium tabular-nums text-gray-400">{dist.total} activities</p>

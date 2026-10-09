@@ -3,14 +3,19 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { m } from 'framer-motion';
-import { Check, ChevronDown, ChevronUp, Pencil, Send, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Clock, Pencil, Send, Trash2, X } from 'lucide-react';
 
-import { deleteDocument, saveDocument, saveStage } from '@/lib/doc-actions';
-import { REPLY_DAYS, type DocumentCard, type DocumentStageDetail } from '@/lib/register-shared';
-import { CODE_TONE, MAIN_STAGES, codeLabel, docRev, revAt, stageOf, type RegisterSettings } from '@/lib/register-settings';
+import { deleteDocument, saveDocument, saveStage, setDocumentStatus } from '@/lib/doc-actions';
+import type { StatusWhere } from '@/lib/register-status';
+import { REPLY_DAYS, baseOfAdded, type DocumentCard, type DocumentStageDetail } from '@/lib/register-shared';
+import { CODE_TONE, codeLabel, docRev, mainStagesOf, revAt, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 import NativeSelect from '@/components/ui/NativeSelect';
+import DateField from '@/components/ui/DateField';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { SlideTab } from '@/components/motion/SlideTab';
+import { numberTooLong, type NumberingRule } from '@/lib/register-numbering';
 
 /**
  * One document, everything about it, over the list that was not disturbed to
@@ -55,7 +60,7 @@ function handOver(closed: { current: boolean }, onClose: { current: () => void }
 }
 
 export function DocumentSheet({
-  projectId, register, doc, groups, settings, nextLetter, position, onPrev, onNext, onSend, onReply, onClose,
+  projectId, register, doc, groups, settings, rule, nextLetter, position, onPrev, onNext, onClose,
 }: {
   projectId: string;
   register: RegisterKind;
@@ -63,14 +68,14 @@ export function DocumentSheet({
   /** Every leaf group, for moving the document. */
   groups: { id: string; name: string }[];
   settings: RegisterSettings;
+  /** The register's numbering, for the length of each part of a typed number. */
+  rule: NumberingRule;
   /** The letter number a send would go out on. */
   nextLetter: string;
   /** "2 of 6 in Instrument & Control". */
   position: { index: number; total: number; group: string };
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
-  onSend: (doc: DocumentCard, stage: DocStage) => void;
-  onReply: (doc: DocumentCard) => void;
   onClose: () => void;
 }) {
   const edl = register === 'edl';
@@ -105,13 +110,18 @@ export function DocumentSheet({
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState(0);
   const [editing, setEditing] = useState<DocStage | null>(null);
-  const [menu, setMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [noTooLong, setNoTooLong] = useState<string | null>(null);
+  const [settingStatus, setSettingStatus] = useState(false);
+  const [kindPick, setKindPick] = useState<{ id: string; kind: string } | null>(null);
+  /** What a status change would replace, waiting for a yes. */
+  const [replacing, setReplacing] = useState<{ target: StatusInput; lines: string[] } | null>(null);
 
   const run = (task: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
     setError(null);
     start(async () => {
       const r = await task();
-      if (!r.ok) { setError(r.error); return; }
+      if (!r.ok) { setError(r.error); setKindPick(null); return; }
       setSavedAt(Date.now());
     });
   };
@@ -134,13 +144,27 @@ export function DocumentSheet({
     }));
   };
 
+  const saveStatus = (t: StatusInput, confirmed: boolean) => {
+    setError(null);
+    start(async () => {
+      const r = await setDocumentStatus({ projectId, register, documentId: doc.id, ...t, confirmed });
+      if (!r.ok) {
+        if ('confirm' in r) setReplacing({ target: t, lines: r.confirm });
+        else setError(r.error);
+        return;
+      }
+      setReplacing(null);
+      setSettingStatus(false);
+      setSavedAt(Date.now());
+    });
+  };
+
   /* --------------------------------------------------------- the state */
 
   const done = doc.percent >= 100 && !doc.out;
   // Rev follows the register's rule (Setup): the stage it went out at, plus
   // one per resubmission. Never typed here, so it cannot disagree with the issue.
   const rev = docRev(settings, doc.stages, doc.revision);
-  const nextRev = doc.sendNext ? revAt(settings, doc.sendNext) : null;
   const label = (stage: DocStage | null) => (stage ? stageOf(settings, stage).label : '');
   const reached = (stage: DocStage) => Boolean(stageRow(stage)?.submitted || stageRow(stage)?.submittedAt);
   const days = doc.out?.days ?? null;
@@ -149,9 +173,9 @@ export function DocumentSheet({
   const overdueReply = doc.action?.kind === 'waiting';
 
   let sentence: string;
-  if (done) sentence = 'Done. Every stage is through.';
+  if (done) sentence = 'Every stage is through.';
   else if (doc.out) sentence = `With the ${other} since ${fmt(doc.out.since)}: ${label(doc.out.stage)} sent${days !== null ? ` ${days} day${days === 1 ? '' : 's'} ago` : ''}.`;
-  else if (doc.returnCode && doc.sendNext) sentence = `Came back ${codeLabel(settings, doc.returnCode)} — send ${label(doc.sendNext)} next.`;
+  else if (doc.returnCode && doc.sendNext) sentence = `Came back ${codeLabel(settings, doc.returnCode)}. Send ${label(doc.sendNext)} next.`;
   else if (doc.sendNext) sentence = `Ready to send ${label(doc.sendNext)}${doc.plannedAt ? `, planned ${fmt(doc.plannedAt)}` : ''}.`;
   else sentence = 'Nothing to send yet.';
 
@@ -188,34 +212,61 @@ export function DocumentSheet({
                 key={`no-${doc.id}-${doc.docNo}`}
                 placeholder="No number yet"
                 aria-label="Document number"
-                onBlur={(e) => { if (e.target.value.trim() !== (doc.docNo ?? '')) saveDoc({ docNo: e.target.value }); }}
-                className={cn(quiet, '-ml-2 h-8 flex-1 text-[13px] font-medium text-muted-foreground tabular-nums [font-feature-settings:"tnum"_1,"zero"_1]')}
+                onChange={() => { if (noTooLong) setNoTooLong(null); }}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v === (doc.docNo ?? '')) return;
+                  // A part longer than Setup allows is refused, said in red, and left in the box to fix.
+                  const why = numberTooLong(v, rule);
+                  if (why) { setNoTooLong(why); return; }
+                  saveDoc({ docNo: v });
+                }}
+                aria-invalid={noTooLong ? true : undefined}
+                className={cn(quiet, '-ml-2 h-8 flex-1 text-[13px] font-medium text-muted-foreground tabular-nums [font-feature-settings:"tnum"_1,"zero"_1]', noTooLong && 'border-bad bg-bad-soft/40 text-bad')}
               />
-              <div className="relative">
-                <button type="button" aria-label="More for this document" aria-expanded={menu} onClick={() => setMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
-                  <span className="text-lg leading-none">⋯</span>
-                </button>
-                {menu && (
-                  <div className="animate-fade-in-up absolute right-0 top-10 z-10 w-56 rounded-2xl border bg-card p-1.5 shadow-lg">
-                    <button
-                      type="button"
-                      disabled={history.length > 0}
-                      onClick={() => run(async () => {
-                        const r = await deleteDocument({ projectId, register, documentId: doc.id });
-                        if (r.ok) close();
-                        return r;
-                      })}
-                      className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm text-bad hover:bg-bad-soft disabled:text-muted-foreground disabled:hover:bg-transparent"
-                    >
-                      {history.length > 0 ? 'Delete: only before it is sent' : 'Delete this document'}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button type="button" aria-label="Delete this document" onClick={() => setConfirmDelete(true)} className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-bad-soft hover:text-bad">
+                <Trash2 className="h-[18px] w-[18px]" />
+              </button>
+              <ConfirmDialog
+                open={confirmDelete}
+                title="Delete this document?"
+                message={history.length > 0
+                  ? `${doc.title} has been sent. Its stages and send history go with it.`
+                  : `${doc.title} will be removed from the register.`}
+                confirmLabel="Delete"
+                busyLabel="Deleting…"
+                busy={pending}
+                onCancel={() => setConfirmDelete(false)}
+                onConfirm={() => run(async () => {
+                  const r = await deleteDocument({ projectId, register, documentId: doc.id });
+                  setConfirmDelete(false);
+                  if (r.ok) close();
+                  return r;
+                })}
+              />
+              <ConfirmDialog
+                open={replacing !== null}
+                title="This is already recorded"
+                message={<>
+                  <span className="block">Setting this status replaces:</span>
+                  <ul className="mt-1.5 list-disc pl-5">{replacing?.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+                </>}
+                confirmLabel="Replace"
+                busyLabel="Saving…"
+                busy={pending}
+                onCancel={() => setReplacing(null)}
+                onConfirm={() => { if (replacing) saveStatus(replacing.target, true); }}
+              />
               <button type="button" aria-label="Close" onClick={close} className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
                 <X className="h-[18px] w-[18px]" />
               </button>
             </div>
+            {noTooLong && (
+              <p className="mt-1 flex items-start gap-2 text-[13px] font-medium text-bad">
+                <span aria-hidden className="mt-[7px] size-1.5 shrink-0 rounded-full bg-bad" />
+                <span>{noTooLong} Not saved.</span>
+              </p>
+            )}
             <textarea
               defaultValue={doc.title}
               key={`t-${doc.id}-${doc.title}`}
@@ -224,135 +275,144 @@ export function DocumentSheet({
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== doc.title) saveDoc({ title: v }); }}
               className={cn(quiet, '-ml-2 mt-0.5 resize-none py-0.5 text-[21px] font-semibold leading-7 tracking-tight text-foreground [field-sizing:content]')}
             />
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {/* A fixed grid, never a wrapping row: the discipline takes what is
+                left and truncates, so a long name never moves Doc/Dwg or Rev. */}
+            <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
               <NativeSelect
                 value={doc.categoryId}
                 aria-label="Discipline"
                 onChange={(e) => saveDoc({ categoryId: e.target.value })}
-                wrapperClassName="w-auto max-w-[14rem]"
-                className="min-h-0 rounded-full border-border bg-card pl-3 text-[12.5px] text-foreground/85 md:text-[12.5px]"
+                wrapperClassName="w-full min-w-0"
+                className="h-8 min-h-0 w-full truncate rounded-lg border-border bg-card pl-3 text-[12.5px] text-foreground/85 md:text-[12.5px]"
               >
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </NativeSelect>
-              <div role="radiogroup" aria-label="Kind" className="flex rounded-full bg-muted p-0.5">
+              <div role="radiogroup" aria-label="Kind" className="flex h-8 items-center rounded-lg border border-border bg-muted p-0.5">
                 {(['Doc', 'Dwg'] as const).map((k) => {
-                  const on = (doc.kind ?? 'Doc').toLowerCase().startsWith(k.toLowerCase().slice(0, 2));
+                  // The press shows at once; the stored kind only lands after
+                  // the round trip, and a toggle that waits for it got pressed twice.
+                  const shown = kindPick?.id === doc.id ? kindPick.kind : (doc.kind ?? 'Doc');
+                  const on = shown.toLowerCase().startsWith(k.toLowerCase().slice(0, 2));
                   return (
-                    <button key={k} type="button" role="radio" aria-checked={on} onClick={() => !on && saveDoc({ kind: k })}
-                      className={cn('h-7 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ease-ios', on ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
+                    <button key={k} type="button" role="radio" aria-checked={on} onClick={() => { if (on) return; setKindPick({ id: doc.id, kind: k }); saveDoc({ kind: k }); }}
+                      className={cn('h-full w-12 rounded-md text-xs font-semibold transition-colors duration-200 ease-ios', on ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                       {k}
                     </button>
                   );
                 })}
               </div>
-              <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground" title="Rev follows the stage and its resubmissions, as set on Setup">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Rev follows the stage and its resubmissions, as set on Setup">
                 Rev
-                <span className="flex h-8 min-w-11 items-center justify-center rounded-lg bg-muted px-2 text-[13px] font-semibold text-foreground tabular-nums">{rev ?? '—'}</span>
+                <span className="flex h-8 w-11 items-center justify-center truncate rounded-lg bg-muted px-1 text-[13px] font-semibold text-foreground tabular-nums">{rev ?? '—'}</span>
               </span>
             </div>
           </div>
 
           {/* ----------------------------------------------------- the body */}
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4 scrollbar-none sm:px-6">
-            <div className="rounded-2xl border border-border/70 bg-muted/40 p-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-foreground/80 tabular-nums">
-                {doc.stage && <span>{label(doc.stage)}</span>}
-                {rev && <><span className="font-normal text-muted-foreground">·</span><span>Rev {rev}</span></>}
-                {doc.returnCode && (
-                  <span className={cn('rounded-md px-1.5 py-px text-[11px]', CODE_TONE[doc.returnCode] ?? 'bg-muted')}>{codeLabel(settings, doc.returnCode)}</span>
-                )}
-                <span className={cn('ml-auto font-medium', overdueReply ? 'text-bad' : 'text-muted-foreground')}>
-                  {done ? 'Done' : doc.out ? `With ${other}${days !== null ? ` · ${days} d` : ''}` : 'With us'}
-                </span>
-              </div>
-              <p className="mt-2.5 text-[15px] font-medium leading-snug text-foreground">{sentence}</p>
-              {overdueReply && <p className="mt-1.5 text-[13px] font-medium text-bad">The {other} is past the {REPLY_DAYS}-day review. Chase them.</p>}
-              {!done && (doc.sendNext || doc.out) && (
-                <button
-                  type="button"
-                  onClick={() => (doc.out ? onReply(doc) : onSend(doc, doc.sendNext!))}
-                  className="mt-3.5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-primary-hover"
-                >
-                  {doc.out ? <>Record the {other}&apos;s reply</> : <><Send className="h-4 w-4" />Send {label(doc.sendNext)}{nextRev ? `, Rev ${nextRev}` : ''}</>}
-                </button>
-              )}
-              {!done && doc.sendNext && !doc.out && nextLetter && (
-                <p className="mt-2 text-center text-xs text-muted-foreground tabular-nums">Goes out on {nextLetter}</p>
-              )}
-            </div>
-
-            {/* The three stages, in the register's own words and colours. */}
-            <div>
-              <div className="flex items-center">
-                {MAIN_STAGES.map((st, i) => {
-                  const s = stageOf(settings, st);
-                  const isReached = reached(st);
-                  const isNext = !isReached && (doc.sendNext === st || doc.out?.stage === st || doc.nextStage === st);
-                  return (
-                    <div key={st} className={cn('flex items-center', i < MAIN_STAGES.length - 1 && 'flex-1')}>
-                      <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
-                        style={{ background: isReached ? s.color : 'var(--card)', borderColor: isReached || isNext ? s.color : 'var(--border)' }}
-                      >
-                        {isReached && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
-                      </span>
-                      {i < MAIN_STAGES.length - 1 && <span className="mx-1 h-0.5 flex-1 rounded-full" style={{ background: isReached ? s.color : 'var(--border)' }} />}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-2 grid grid-cols-3 text-xs leading-4 tabular-nums">
-                {MAIN_STAGES.map((st, i) => {
-                  const r = stageRow(st);
-                  const isReached = reached(st);
-                  const plan = r?.planSubmitDate ?? null;
-                  const needsPlan = !done && !isReached && !plan;
-                  return (
-                    <div key={st} className={cn(i === 1 && 'text-center', i === 2 && 'text-right')}>
-                      <div className="font-semibold text-foreground">{label(st)}</div>
-                      <div className={cn(needsPlan ? 'font-semibold text-bad' : 'text-muted-foreground')}>
-                        {isReached ? (r?.returnedAt ? `Back ${fmt(r.returnedAt)}` : `Sent ${fmt(r?.submittedAt ?? null)}`) : plan ? `Plan ${fmt(plan)}` : 'Plan needed'}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* What a document controller fills in: plan dates, PIC, and the reply due. */}
-            <div className="grid grid-cols-2 gap-2">
-              {MAIN_STAGES.filter((st) => !reached(st)).map((st) => {
-                const plan = stageRow(st)?.planSubmitDate ?? '';
-                const needs = !done && !plan;
-                return (
-                  <label key={st} className={cn('flex min-h-[3.25rem] flex-col justify-center rounded-xl border px-3 py-1.5', needs ? 'border-bad/40 bg-bad-soft/60' : 'border-border/70 bg-card')}>
-                    <span className={cn('text-xs', needs ? 'font-medium text-bad' : 'text-muted-foreground')}>{needs ? `Plan ${label(st)} date needed` : `Plan ${label(st)}`}</span>
-                    <input
-                      type="date"
-                      defaultValue={plan}
-                      key={`p-${doc.id}-${st}-${plan}`}
-                      onBlur={(e) => { if (e.target.value !== plan) saveStageRow(st, { planSubmitDate: e.target.value }); }}
-                      className="mt-0.5 bg-transparent text-[13.5px] font-semibold text-foreground outline-none"
-                    />
-                  </label>
-                );
-              })}
-              <label className="flex min-h-[3.25rem] flex-col justify-center rounded-xl border border-border/70 bg-card px-3 py-1.5">
-                <span className="text-xs text-muted-foreground">PIC</span>
-                <input
-                  defaultValue={doc.pic ?? ''}
-                  key={`pic-${doc.id}-${doc.pic}`}
-                  placeholder="Assign someone"
-                  onBlur={(e) => { if (e.target.value.trim() !== (doc.pic ?? '')) saveDoc({ pic: e.target.value }); }}
-                  className="mt-0.5 bg-transparent text-[13.5px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-              {replyDue && (
-                <div className={cn('flex min-h-[3.25rem] flex-col justify-center rounded-xl border px-3 py-1.5', overdueReply ? 'border-bad/40 bg-bad-soft/60' : 'border-border/70 bg-card')}>
-                  <span className={cn('text-xs', overdueReply ? 'font-medium text-bad' : 'text-muted-foreground')}>Reply due</span>
-                  <span className="mt-0.5 text-[13.5px] font-semibold tabular-nums text-foreground">{fmtY(replyDue)}</span>
+            {/* One card (variant A of the 8 Oct 2026 mockups, his pick): where the
+                document is, its three stages in the register's own words and
+                colours, and who has it. A stage not sent yet IS its plan date:
+                pressing it opens the picker, so there is no second box for it. */}
+            <div className="shrink-0 overflow-hidden rounded-2xl border border-border/70 bg-card">
+              <div className="p-4">
+                <div className="flex items-center gap-2 tabular-nums">
+                  <span
+                    className={cn(
+                      'inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold',
+                      done ? 'bg-ok-soft text-ok' : overdueReply ? 'bg-bad-soft text-bad' : doc.out ? 'bg-primary-soft text-primary' : 'bg-muted text-foreground/80',
+                    )}
+                  >
+                    {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : doc.out ? <Clock className="h-3.5 w-3.5" /> : null}
+                    {done ? 'Done' : doc.out ? `With ${other}${days !== null ? ` · ${days} d` : ''}` : 'With us'}
+                  </span>
+                  {(doc.stage || rev) && (
+                    <span className="ml-auto text-xs font-semibold text-muted-foreground">
+                      {[doc.stage && label(doc.stage), rev && `Rev ${rev}`].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                 </div>
-              )}
+                <p className="mt-2.5 text-[15px] font-semibold leading-snug text-foreground">{sentence}</p>
+                {overdueReply && <p className="mt-1.5 text-[13px] font-medium text-bad">The {other} is past the {REPLY_DAYS}-day review. Chase them.</p>}
+
+                <div className="mt-3.5 grid grid-cols-3 gap-x-1.5 gap-y-3 tabular-nums">
+                  {mainStagesOf(settings).map((st) => {
+                    const s = stageOf(settings, st);
+                    const r = stageRow(st);
+                    const isReached = reached(st);
+                    // Out with the other side: the bar fills as the review window runs.
+                    const inReview = doc.out?.stage === st && !r?.returnedAt;
+                    const fill = !isReached ? 0 : inReview ? Math.min(1, Math.max(0.1, (days ?? 0) / REPLY_DAYS)) : 1;
+                    const plan = r?.planSubmitDate ?? '';
+                    const needsPlan = !done && !isReached && !plan;
+                    const head = (
+                      <>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-border/70">
+                          <div className="h-full rounded-full" style={{ width: `${fill * 100}%`, background: inReview && overdueReply ? 'var(--bad)' : s.color }} />
+                        </div>
+                        <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-foreground">
+                          {s.label}
+                          {r?.returnedAt && r.returnCode && (
+                            <span className={cn('rounded px-1 text-[10.5px] leading-4', CODE_TONE[r.returnCode] ?? 'bg-muted')}>{codeLabel(settings, r.returnCode)}</span>
+                          )}
+                        </div>
+                      </>
+                    );
+                    if (isReached) {
+                      return (
+                        <div key={st}>
+                          {head}
+                          <div className="text-[11.5px] leading-4 text-muted-foreground">{r?.returnedAt ? `Back ${fmt(r.returnedAt)}` : `Sent ${fmt(r?.submittedAt ?? null)}`}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <DateField
+                        key={st}
+                        value={plan}
+                        aria-label={`Plan ${s.label} date`}
+                        onChange={(v) => { if (v !== plan) saveStageRow(st, { planSubmitDate: v }); }}
+                        className="block min-h-11 w-full cursor-pointer text-left"
+                      >
+                        {head}
+                        <div className={cn('text-[11.5px] leading-4', needsPlan ? 'font-semibold text-bad' : 'text-muted-foreground')}>{plan ? `Plan ${fmt(plan)}` : 'Plan needed'}</div>
+                      </DateField>
+                    );
+                  })}
+                </div>
+
+                {/* The status is SET, not reached through letters (9 Oct 2026):
+                    which stage, and who has it. See lib/register-status.ts. */}
+                {settingStatus ? (
+                  <StatusForm
+                    doc={doc}
+                    settings={settings}
+                    other={other}
+                    nextLetter={nextLetter}
+                    busy={pending}
+                    onCancel={() => setSettingStatus(false)}
+                    onSave={(t) => saveStatus(t, false)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSettingStatus(true)}
+                    className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-primary-hover"
+                  >
+                    <Send className="h-4 w-4" />Change status
+                  </button>
+                )}
+              </div>
+
+              <div className="flex border-t border-border/70 bg-muted/40">
+                <PicRow key={`pic-${doc.id}-${doc.pic}`} value={doc.pic ?? ''} onSave={(pic) => saveDoc({ pic })} />
+                {replyDue && (
+                  <div className="flex min-h-14 shrink-0 flex-col justify-center border-l border-border/70 px-4 py-2">
+                    <span className={cn('text-xs', overdueReply ? 'font-medium text-bad' : 'text-muted-foreground')}>Reply due</span>
+                    <span className={cn('text-[13.5px] font-semibold tabular-nums', overdueReply ? 'text-bad' : 'text-foreground')}>{fmtY(replyDue)}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* History: newest first, every entry correctable in place. */}
@@ -360,7 +420,7 @@ export function DocumentSheet({
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-[13.5px] font-semibold text-foreground">History</h3>
                 {!done && doc.sendNext && (
-                  <button type="button" onClick={() => setEditing(doc.sendNext)} className="h-8 rounded-full bg-primary-soft px-3 text-xs font-semibold text-primary">
+                  <button type="button" onClick={() => setEditing(doc.sendNext)} className="h-8 rounded-lg bg-primary-soft px-3 text-xs font-semibold text-primary">
                     + Add an entry
                   </button>
                 )}
@@ -411,7 +471,7 @@ export function DocumentSheet({
                 key={`rm-${doc.id}-${doc.remarks}`}
                 placeholder="Add a note: the comments, who is on it"
                 onBlur={(e) => { if (e.target.value.trim() !== (doc.remarks ?? '')) saveDoc({ remarks: e.target.value }); }}
-                className={cn(field, 'mt-1 h-auto min-h-12 resize-none py-2.5 [field-sizing:content]')}
+                className={cn(field, 'mt-1 h-auto min-h-12 resize-none py-3 text-left leading-6 md:leading-6 [field-sizing:content]')}
               />
             </label>
             {error && <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
@@ -438,11 +498,160 @@ export function DocumentSheet({
   return createPortal(body, document.body);
 }
 
+/**
+ * Who has the document (variant 1 of the 8 Oct 2026 mockups, his pick): a quiet
+ * row until pressed, then a real field, selected, with a tick. Enter or the
+ * tick saves, so does leaving the field; Esc puts the name back.
+ */
+function PicRow({ value, onSave }: { value: string; onSave: (pic: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [shown, setShown] = useState(value);
+  const cancelled = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => { cancelled.current = false; setEditing(true); }}
+        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left transition-colors duration-200 ease-ios hover:bg-muted/60"
+      >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-xs text-muted-foreground">PIC</span>
+          <span className={cn('truncate text-[13.5px]', shown ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{shown || 'Assign someone'}</span>
+        </span>
+        <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5 bg-card px-4 py-2.5">
+      <span className="text-xs text-muted-foreground">PIC</span>
+      <div className="flex gap-2">
+        <input
+          ref={input}
+          autoFocus
+          defaultValue={shown}
+          placeholder="Assign someone"
+          aria-label="PIC"
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur(); }
+          }}
+          onBlur={(e) => {
+            const next = e.target.value.trim();
+            if (!cancelled.current && next !== shown) { setShown(next); onSave(next); }
+            setEditing(false);
+          }}
+          className={cn(field, 'font-semibold')}
+        />
+        {/* Pressing it blurs the field first, and the blur is what saves. */}
+        <button type="button" aria-label="Save PIC" onClick={() => input.current?.blur()} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <Check className="h-4 w-4" strokeWidth={3} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EditButton({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" aria-label="Edit this entry" onClick={onClick} className="-mr-1.5 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
       <Pencil className="h-3.5 w-3.5" />
     </button>
+  );
+}
+
+type StatusInput = { stage: DocStage; where: StatusWhere; code: string | null; date: string; letter: string };
+
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** A resubmission belongs to its main stage: RE-IFA is still IFA. */
+const mainOf = (s: DocStage | null | undefined): DocStage =>
+  !s ? 'IFR' : baseOfAdded(s) ?? (s.includes('IFR') ? 'IFR' : s.includes('IFA') ? 'IFA' : 'AFC');
+
+/**
+ * The status, answered as he put it: which stage, and who has it. "With us"
+ * takes the code it came back with, or none while it is still being prepared.
+ */
+function StatusForm({
+  doc, settings, other, nextLetter, busy, onSave, onCancel,
+}: {
+  doc: DocumentCard;
+  settings: RegisterSettings;
+  other: string;
+  nextLetter: string;
+  busy: boolean;
+  onSave: (t: StatusInput) => void;
+  onCancel: () => void;
+}) {
+  const [stage, setStage] = useState<DocStage>(mainOf(doc.out?.stage ?? doc.stage));
+  const [where, setWhere] = useState<StatusWhere>(doc.out ? 'them' : 'us');
+  const [code, setCode] = useState<string | null>(doc.out ? null : doc.returnCode);
+  const [date, setDate] = useState(todayIso);
+  const [letter, setLetter] = useState('');
+  const name = stageOf(settings, stage).label;
+  const dated = where === 'them' || code !== null;
+  const said = where === 'them'
+    ? `${name} is with the ${other}.`
+    : code ? `${name} came back ${codeLabel(settings, code)}.` : `${name} is being prepared, not sent yet.`;
+  const cap = 'text-[11px] font-medium uppercase tracking-wider text-muted-foreground';
+  const box = 'h-10 w-full min-w-0 rounded-lg border border-border bg-card px-2.5 text-sm text-foreground outline-none focus-visible:border-ring md:text-sm';
+  // Every question is the SAME control, the header's Doc / Dwg toggle: a grey
+  // track, equal segments, the picked one blue. Three different shapes (a
+  // white track, a blue track, loose chips) read as three screens (9 Oct 2026).
+  const toggle = (label: string, id: string, items: { key: string; label: string }[], value: string, pick: (k: string) => void) => (
+    <div className="flex flex-col gap-1.5">
+      <span className={cap}>{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex h-10 items-center rounded-lg border border-border bg-muted p-0.5">
+        {items.map((it) => {
+          const on = it.key === value;
+          return (
+            <button key={it.key || 'none'} type="button" role="radio" aria-checked={on} onClick={() => pick(it.key)}
+              className={cn('relative isolate h-full min-w-0 flex-1 truncate rounded-md px-1.5 text-[13px] font-semibold transition-colors duration-200 ease-ios', on ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {on && <SlideTab id={id} className="rounded-md bg-primary shadow-sm ring-0 dark:ring-0" />}
+              {it.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  return (
+    <div className="animate-fade-in-up mt-4 flex flex-col gap-3.5 border-t border-border/70 pt-4">
+      {toggle('Stage', 'status-stage', mainStagesOf(settings).map((s) => ({ key: s, label: stageOf(settings, s).label })), stage, (k) => setStage(k as DocStage))}
+      {toggle('Who has it', 'status-where', [{ key: 'us', label: 'With us' }, { key: 'them', label: `With ${other}` }], where, (k) => {
+        setWhere(k as StatusWhere);
+        if (k === 'them') setCode(null);
+      })}
+      {where === 'us' && toggle('Came back with', 'status-code', [{ key: '', label: 'None' }, ...settings.codes], code ?? '', (k) => setCode(k || null))}
+      {dated && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className={cap}>{where === 'them' ? 'Sent' : 'Back'}</span>
+            <DateField value={date} onChange={setDate} placeholder="Date" className={cn(box, 'gap-1.5')} />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className={cn(cap, 'truncate')}>Letter (optional)</span>
+            <input value={letter} onChange={(e) => setLetter(e.target.value)} placeholder={where === 'them' && nextLetter ? nextLetter : 'No.'} className={cn(box, 'px-2 tracking-tight')} />
+          </label>
+        </div>
+      )}
+      <p className="text-[13.5px] font-medium text-foreground">{said}</p>
+      {/* Two equal halves, Cancel first, as every confirm in the app. */}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={onCancel} className="btn-cancel h-10 rounded-lg text-sm">Cancel</button>
+        <button type="button" disabled={busy || (dated && !date)}
+          onClick={() => onSave({ stage, where, code: where === 'us' ? code : null, date: date || todayIso(), letter })}
+          className="h-10 rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-200 ease-ios hover:bg-primary-hover disabled:opacity-50">
+          Save
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -464,32 +673,36 @@ function StageForm({
   const [inNo, setInNo] = useState(row?.returnTransmittal ?? '');
   const [code, setCode] = useState(row?.returnCode ?? '');
   const needsCode = Boolean(back) && !code;
-  const box = 'h-10 w-full min-w-0 rounded-xl border border-border bg-card px-3 text-base outline-none focus-visible:border-ring md:text-sm';
+  const box = 'h-10 w-full min-w-0 rounded-lg border border-border bg-card px-2.5 text-base text-foreground outline-none focus-visible:border-ring md:text-sm';
+  // One-line captions over full-width fields, so the two columns always line up
+  // ("Back from client" wrapped on a phone and pushed its field below its pair's).
+  const cell = 'flex min-w-0 flex-col gap-1';
+  const cap = 'truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground';
   return (
     <div className="animate-fade-in-up mb-3 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
       <p className="text-[13px] font-semibold text-foreground">{label}</p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <label className="text-xs text-muted-foreground">Sent<input type="date" value={sent} onChange={(e) => setSent(e.target.value)} className={cn(box, 'mt-1')} /></label>
-        <label className="text-xs text-muted-foreground">Letter out<input value={out} onChange={(e) => setOut(e.target.value)} className={cn(box, 'mt-1')} /></label>
-        <label className="text-xs text-muted-foreground">Back from {other}<input type="date" value={back} onChange={(e) => setBack(e.target.value)} className={cn(box, 'mt-1')} /></label>
-        <label className="text-xs text-muted-foreground">Letter in<input value={inNo} onChange={(e) => setInNo(e.target.value)} className={cn(box, 'mt-1')} /></label>
+      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2.5">
+        <label className={cell}><span className={cap}>Sent</span><DateField value={sent} onChange={setSent} placeholder="Date" className={cn(box, 'gap-1.5 text-sm md:text-sm')} /></label>
+        <label className={cell}><span className={cap}>Letter out</span><input value={out} onChange={(e) => setOut(e.target.value)} placeholder="No." className={cn(box, 'px-2 text-sm tracking-tight md:text-sm')} /></label>
+        <label className={cell}><span className={cap} title={`Back from ${other}`}>Back</span><DateField value={back} onChange={setBack} placeholder="Date" clearable className={cn(box, 'gap-1.5 text-sm md:text-sm')} /></label>
+        <label className={cell}><span className={cap}>Letter in</span><input value={inNo} onChange={(e) => setInNo(e.target.value)} placeholder="No." className={cn(box, 'px-2 text-sm tracking-tight md:text-sm')} /></label>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className={cn('mr-1 text-xs', needsCode ? 'font-medium text-bad' : 'text-muted-foreground')}>{needsCode ? 'Choose a code' : 'Code'}</span>
         {settings.codes.map((c) => (
           <button key={c.key} type="button" aria-pressed={code === c.key} onClick={() => setCode(code === c.key ? '' : c.key)}
-            className={cn('h-8 rounded-full border px-3 text-xs font-semibold', code === c.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground/80')}>
+            className={cn('h-8 rounded-lg border px-3 text-xs font-semibold', code === c.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground/80')}>
             {c.label}
           </button>
         ))}
       </div>
       <div className="mt-3 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="h-9 rounded-full px-3 text-sm text-muted-foreground">Cancel</button>
+        <button type="button" onClick={onCancel} className="btn-cancel h-9 rounded-lg px-3.5 text-sm">Cancel</button>
         <button
           type="button"
           disabled={needsCode}
           onClick={() => onSave({ submittedAt: sent || null, submitTransmittal: out || null, returnedAt: back || null, returnTransmittal: inNo || null, returnCode: code || null, stage })}
-          className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
           Save
         </button>

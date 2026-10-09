@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Reveal } from '@/components/motion/Reveal';
 import { setDisciplineLink } from '@/lib/doc-actions';
-import { STAGE_FULL, STAGE_LABEL, type DisciplineLink } from '@/lib/register-shared';
+import { stageFull, stageLabel, type DisciplineLink } from '@/lib/register-shared';
 import { cn } from '@/lib/utils';
 
 /**
@@ -168,9 +168,9 @@ function DisciplineRow({ projectId, discipline }: { projectId: string; disciplin
               return (
                 <tr key={s.nodeId} className="border-t">
                   <td className="py-2 pr-3">
-                    <span className="font-medium">{STAGE_FULL[s.stage]}</span>
+                    <span className="font-medium">{stageFull(s.stage)}</span>
                     <span className="ml-1.5 font-mono text-muted-foreground">
-                      {STAGE_LABEL[s.stage]}
+                      {stageLabel(s.stage)}
                     </span>
                   </td>
                   <td className="py-2 text-right tabular-nums text-muted-foreground">

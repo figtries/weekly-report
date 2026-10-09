@@ -348,8 +348,8 @@ export default function NewProjectDialog() {
 
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <Button
-                      variant="outline"
-                      className="h-11"
+                      variant="ghost"
+                      className="btn-cancel h-11"
                       onClick={() => {
                         reset();
                         setOpen(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 /* ---------------------------------------------------------------------------
@@ -56,6 +56,16 @@ function leadingBlanks(y: number, m: number) {
   return (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7;
 }
 
+/** The nearest ancestor that actually scrolls: this app scrolls <main> and its
+ *  sheets, never the document. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
 function todayIso() {
   const now = new Date();
   return iso(now.getFullYear(), now.getMonth(), now.getDate());
@@ -69,6 +79,11 @@ export default function DateField({
   className = '',
   placeholder = 'Select date',
   clearable = false,
+  defaultOpen = false,
+  onClose,
+  children,
+  'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
 }: {
   id?: string;
   /** YYYY-MM-DD, or '' for empty. */
@@ -79,6 +94,14 @@ export default function DateField({
   className?: string;
   placeholder?: string;
   clearable?: boolean;
+  /** Opens on mount: a sheet cell that is already being edited. */
+  defaultOpen?: boolean;
+  /** Called whenever the panel closes, picked or not. */
+  onClose?: () => void;
+  /** Replaces the label and mark inside the trigger; `className` then styles it alone. */
+  children?: ReactNode;
+  'aria-label'?: string;
+  'aria-invalid'?: boolean;
 }) {
   const picked = parse(value);
 
@@ -89,12 +112,16 @@ export default function DateField({
    *  New Daily dialog would otherwise close the dialog too, throwing away the
    *  date the user just came to pick. */
   const swallowClick = useRef(false);
+  const spacer = useRef<HTMLDivElement | null>(null);
 
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   /** The month on show, and the day the keyboard is on. */
   const [view, setView] = useState({ y: picked?.y ?? 2000, m: picked?.m ?? 0 });
   const [active, setActive] = useState('');
+  /** Days, or one level up: tap the title for months, tap again for years,
+   *  so a far date is two taps away instead of a dozen arrows. */
+  const [mode, setMode] = useState<'days' | 'months' | 'years'>('days');
   const [place, setPlace] = useState<{ left: number; top: number; width: number; above: boolean } | null>(null);
 
   /** Today per the user's own clock, not UTC — "today" is a local idea. Read
@@ -108,6 +135,9 @@ export default function DateField({
       setOpen(false);
       setClosing(false);
       setPlace(null);
+      spacer.current?.remove();
+      spacer.current = null;
+      onClose?.();
     }, 140);
   }
 
@@ -115,6 +145,7 @@ export default function DateField({
     const start = parse(value) ?? parse(todayIso())!;
     setView({ y: start.y, m: start.m });
     setActive(iso(start.y, start.m, start.d));
+    setMode('days');
     setClosing(false);
     setOpen(true);
   }
@@ -126,8 +157,27 @@ export default function DateField({
   const measure = (fresh: boolean) => {
     const el = triggerRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
+    let r = el.getBoundingClientRect();
     const h = panelRef.current?.offsetHeight ?? 0;
+    // No room underneath: scroll the field up rather than flip the panel over
+    // whatever sits above it, so the calendar always hangs off its own field.
+    const short = r.bottom + GAP_PX + h - (window.innerHeight - EDGE_PX);
+    // A field near the end of its sheet has nothing left to scroll, so a spacer
+    // lends the room while the panel is open (the keyboard trick iOS plays).
+    const sp = fresh && short > 0 ? scrollParent(el) : null;
+    // ...but never so far that the field itself slides out of its sheet.
+    if (sp && r.top - short >= sp.getBoundingClientRect().top) {
+      const room = sp.scrollHeight - sp.clientHeight - sp.scrollTop;
+      if (room < short) {
+        const pad = document.createElement('div');
+        pad.style.cssText = `flex:none;height:${short - room}px`;
+        pad.setAttribute('aria-hidden', 'true');
+        sp.appendChild(pad);
+        spacer.current = pad;
+      }
+      sp.scrollTop += short;
+      r = el.getBoundingClientRect();
+    }
     const width = Math.min(MAX_W_PX, Math.max(MIN_W_PX, r.width), window.innerWidth - EDGE_PX * 2);
     const left = Math.max(EDGE_PX, Math.min(r.left, window.innerWidth - EDGE_PX - width));
     setPlace((prev) => {
@@ -148,6 +198,12 @@ export default function DateField({
 
   // Height is only known once the panel has rendered, so the first pass places
   // it with h = 0 and this corrects it before paint.
+  useEffect(() => {
+    if (defaultOpen) openPanel();
+    return () => spacer.current?.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useLayoutEffect(() => {
     if (open) measure(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,9 +259,9 @@ export default function DateField({
   // The keyboard drives a cursor over the grid, so the panel is as usable
   // without a mouse as the native field it replaces.
   useEffect(() => {
-    if (!open || !place || !active) return;
+    if (!open || !place || !active || mode !== 'days') return;
     panelRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${active}"]`)?.focus();
-  }, [open, place, active]);
+  }, [open, place, active, mode]);
 
   function moveActive(days: number, months = 0) {
     const cur = parse(active);
@@ -228,7 +284,10 @@ export default function DateField({
       Home: () => setActive(iso(view.y, view.m, 1)),
       End: () => setActive(iso(view.y, view.m, daysIn(view.y, view.m))),
     };
-    const run = keys[e.key];
+    // Kept inside the panel: the planner listens on the window, where Enter
+    // adds a row and the arrows move the selection.
+    e.stopPropagation();
+    const run = mode === 'days' ? keys[e.key] : undefined;
     if (!run) return;
     e.preventDefault();
     run();
@@ -246,6 +305,20 @@ export default function DateField({
       return { y: next.getUTCFullYear(), m: next.getUTCMonth() };
     });
   }
+
+  /** The arrows step one month, one year, or one page of years. */
+  const step = (dir: number) => shiftMonth(dir * (mode === 'days' ? 1 : mode === 'months' ? 12 : 144));
+  const decade = Math.floor(view.y / 12) * 12;
+  const thisYear = today ? Number(today.slice(0, 4)) : null;
+  const thisMonth = today ? Number(today.slice(5, 7)) - 1 : null;
+  const tile = (on: boolean, now: boolean) =>
+    `rounded-xl text-sm tabular-nums transition-[color,background-color,transform] duration-150 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.95] ${
+      on
+        ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
+        : now
+          ? 'font-semibold text-primary ring-1 ring-inset ring-primary/30 hover:bg-primary/10'
+          : 'text-foreground/80 hover:bg-muted'
+    }`;
 
   const label = picked ? `${String(picked.d).padStart(2, '0')} ${SHORT_MONTHS[picked.m]} ${picked.y}` : placeholder;
 
@@ -268,15 +341,18 @@ export default function DateField({
         onClick={() => (open ? closePanel() : openPanel())}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`flex items-center gap-2 text-left ${className}`}
+        aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
+        className={children ? className : `flex items-center gap-2 text-left ${className}`}
       >
-        <span className={`min-w-0 flex-1 truncate tabular-nums ${picked ? '' : 'text-gray-400'}`}>{label}</span>
+        {children ?? (<>
+        <span className={`min-w-0 flex-1 truncate tabular-nums ${picked ? '' : 'text-muted-foreground'}`}>{label}</span>
         <svg
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden
           className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${
-            open ? 'text-blue-600' : 'text-gray-400'
+            open ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
           <rect x="2.75" y="4.75" width="14.5" height="12.5" rx="3.25" stroke="currentColor" strokeWidth="1.5" />
@@ -284,6 +360,7 @@ export default function DateField({
           <path d="M6.75 2.75v3.5M13.25 2.75v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           <circle cx="10" cy="12.75" r="1.4" fill="currentColor" />
         </svg>
+        </>)}
       </button>
 
       {open &&
@@ -293,7 +370,7 @@ export default function DateField({
             role="dialog"
             aria-label="Choose a date"
             onKeyDown={onPanelKey}
-            className={`scrollbar-none fixed z-[70] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5 ${
+            className={`scrollbar-none pointer-events-auto fixed z-[70] overflow-y-auto rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-xl ring-1 ring-black/5 ${
               closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
             }`}
             // Parked off-screen — NOT visibility:hidden — until it has been
@@ -313,22 +390,36 @@ export default function DateField({
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => shiftMonth(-1)}
-                aria-label="Previous month"
-                className="rounded-lg p-1.5 text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-900 active:scale-[0.94]"
+                onClick={() => step(-1)}
+                aria-label="Previous"
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground active:scale-[0.94]"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <span className="text-sm font-semibold text-gray-900">
-                {MONTHS[view.m]} {view.y}
-              </span>
+              {mode === 'years' ? (
+                <span className="px-2 text-sm font-semibold tabular-nums text-foreground">
+                  {decade} – {decade + 11}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === 'days' ? 'months' : 'years')}
+                  aria-label={mode === 'days' ? 'Choose month and year' : 'Choose year'}
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold tabular-nums text-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.97]"
+                >
+                  {mode === 'days' ? `${MONTHS[view.m]} ${view.y}` : view.y}
+                  <svg className="h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => shiftMonth(1)}
-                aria-label="Next month"
-                className="rounded-lg p-1.5 text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-900 active:scale-[0.94]"
+                onClick={() => step(1)}
+                aria-label="Next"
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground active:scale-[0.94]"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -336,9 +427,38 @@ export default function DateField({
               </button>
             </div>
 
+            {/* The day grid stays laid out under the month and year grids, so
+                the panel keeps one height whichever level is on show. */}
+            <div className="relative">
+            {mode !== 'days' && (
+              <div className="animate-fade-in-up absolute inset-0 z-10 grid grid-cols-3 gap-1.5 bg-popover pt-2">
+                {mode === 'months'
+                  ? SHORT_MONTHS.map((name, mi) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => { setView({ y: view.y, m: mi }); setMode('days'); }}
+                        className={tile(picked?.y === view.y && picked.m === mi, thisYear === view.y && thisMonth === mi)}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  : Array.from({ length: 12 }, (_, i) => decade + i).map((y) => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={() => { setView({ y, m: view.m }); setMode('months'); }}
+                        className={tile(picked?.y === y, thisYear === y)}
+                      >
+                        {y}
+                      </button>
+                    ))}
+              </div>
+            )}
+            <div aria-hidden={mode !== 'days' || undefined} className={mode !== 'days' ? 'invisible' : undefined}>
             <div className="mt-2 grid grid-cols-7 gap-0.5">
               {WEEKDAYS.map((w) => (
-                <span key={w} className="py-1 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <span key={w} className="py-1 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   {w}
                 </span>
               ))}
@@ -360,12 +480,12 @@ export default function DateField({
                     aria-pressed={isPicked}
                     aria-current={isToday ? 'date' : undefined}
                     aria-label={`${d} ${MONTHS[view.m]} ${view.y}`}
-                    className={`h-9 rounded-lg text-sm tabular-nums transition-[color,background-color,box-shadow,transform] duration-150 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 active:scale-[0.92] ${
+                    className={`h-9 rounded-lg text-sm tabular-nums transition-[color,background-color,box-shadow,transform] duration-150 ease-ios focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.92] ${
                       isPicked
                         ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
                         : isToday
-                          ? 'font-semibold text-blue-600 ring-1 ring-inset ring-blue-200 hover:bg-blue-50'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'font-semibold text-primary ring-1 ring-inset ring-primary/30 hover:bg-primary/10'
+                          : 'text-foreground/80 hover:bg-muted'
                     }`}
                   >
                     {d}
@@ -373,15 +493,17 @@ export default function DateField({
                 );
               })}
             </div>
+            </div>
+            </div>
 
-            <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+            <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   const t = parse(todayIso())!;
                   pick(t.y, t.m, t.d);
                 }}
-                className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors duration-150 hover:bg-blue-50"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-primary transition-colors duration-150 hover:bg-primary/10"
               >
                 Today
               </button>
@@ -393,7 +515,7 @@ export default function DateField({
                     closePanel();
                     triggerRef.current?.focus();
                   }}
-                  className="rounded-lg px-2 py-1 text-xs font-medium text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-700"
+                  className="rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
                 >
                   Clear
                 </button>

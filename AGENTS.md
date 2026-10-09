@@ -1097,6 +1097,15 @@ sides are never asked here**: contractor and client are the project's, and a
 register only reads them (`writeCategories` writes them only from an import
 that names both).
 
+**A register can add stages after AFC** (9 Oct 2026, "+ Add a stage" on
+Setup): keys `S1`, `S2`… with one resubmission each, `RE_S1`, behaving like
+IFR/IFA (sent, back with APP/AWC/RWC, RWC goes out again). The three are
+locked; an added one is removed only while nothing was sent at it
+(`saveRegisterSettings` refuses otherwise). Order, validity and labels go
+through `stageRank` / `stageChain` / `isStageKey` / `stageLabel` in
+`lib/register-shared.ts`, never `STAGE_ORDER` alone, and the sheet and the
+overview read `mainStagesOf(settings)` / `isAddedStage`.
+
 **A reminder is red, a sentence, and sits where the gap is.** Only what would
 write a wrong figure holds Save back (weights that are not 100, a blank code or
 short name); a missing plan date or an empty heading is reminded, never refused.

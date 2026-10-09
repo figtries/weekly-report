@@ -74,6 +74,7 @@ import { setBarViewAction } from '@/lib/bar-view-actions';
 import { groupAmount, stripAmount } from '@/lib/currency';
 import PasteRows, { ClipboardPaste } from './PasteRows';
 import RowMenu from './RowMenu';
+import DateField from '@/components/ui/DateField';
 import SheetToolbar from './SheetToolbar';
 import { pressMotion } from '@/components/motion/Press';
 
@@ -2447,6 +2448,20 @@ function EditableCell({
           display
         )}
       </button>
+    );
+  }
+
+  // A date opens Lucille's own calendar straight away; closing it without a
+  // pick leaves the cell as it was.
+  if (type === 'date') {
+    return (
+      <DateField
+        value={value}
+        defaultOpen
+        onChange={(v) => v !== value && onCommit(v)}
+        onClose={onDone}
+        className={`w-full rounded border-2 border-foreground bg-background px-1 py-1 leading-[22px] ${className}`}
+      />
     );
   }
 

@@ -31,7 +31,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import {
-  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, daysBetween, isApproved, isFull,
+  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, compareStages, daysBetween, isAddedStage, isApproved, isFull, stageChain,
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
@@ -95,7 +95,7 @@ function loadRegister(projectId: string, register: RegisterKind, week?: number):
       eq(schema.docStageWeights.register, register),
     )).all()
     .filter((w) => w.weight > 0)
-    .sort((a, b) => a.order - b.order)
+    .sort((a, b) => compareStages(a.stage, b.stage))
     .map((w) => ({ stage: w.stage, weight: w.weight }));
 
   const weeks = db.select().from(schema.weeks)
@@ -109,7 +109,7 @@ function loadRegister(projectId: string, register: RegisterKind, week?: number):
     byDoc.set(s.documentId, list);
   }
   for (const list of byDoc.values()) {
-    list.sort((a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
+    list.sort((a, b) => compareStages(a.stage, b.stage));
   }
 
   const docsByCategory = new Map<string, DocumentRow[]>();
@@ -281,10 +281,11 @@ function sendNextOf(rows: StageRow[], loaded: Loaded): DocStage | null {
   const { latest, out } = ballOf(rows, loaded);
   if (out) return null;
   const weighted = loaded.weights.map((w) => w.stage);
-  const order = (stage: DocStage) => STAGE_ORDER.indexOf(stage);
   if (!latest) return rows[0]?.stage ?? weighted[0] ?? null;
+  const chain = stageChain(weighted);
+  const order = (stage: DocStage) => chain.indexOf(stage);
   const nextWeighted = weighted.find((stage) => order(stage) > order(latest.stage)) ?? null;
-  const nextInOrder = STAGE_ORDER[order(latest.stage) + 1] ?? null;
+  const nextInOrder = chain[order(latest.stage) + 1] ?? null;
   const code = (latest.returnCode ?? '').trim().toUpperCase();
   if (isApproved(code)) return nextWeighted;
   if (code === 'RWC') return nextInOrder;
@@ -477,6 +478,15 @@ export function getNumbering(projectId: string, register: RegisterKind): {
   /** A guess at the project code, for a register that has none yet. */
   suggestedPrefix: string;
 } {
+  // A vendor document carries the number its vendor gave it, typed as it
+  // comes (9 Oct 2026): the VDRL has no number format, so no rule and no
+  // prefix, which is what keeps Setup and Add from proposing one.
+  if (register === 'vdrl') {
+    const taken = db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
+      .all().map((d) => d.docNo).filter((n): n is string => Boolean(n));
+    return { rule: null, taken, suggestedPrefix: '' };
+  }
   const row = db.select().from(schema.docNumbering)
     .where(and(
       eq(schema.docNumbering.projectId, projectId),
@@ -623,7 +633,9 @@ export function getRegisterSettings(projectId: string, register: RegisterKind): 
   const numbering = db.select().from(schema.docNumbering)
     .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register)))
     .all()[0];
-  const shown = rows.filter((r) => MAIN_STAGES.includes(r.stage) || r.weight > 0);
+  // The three always, every stage the register added, and any other that carries weight.
+  const shown = rows.filter((r) => MAIN_STAGES.includes(r.stage) || isAddedStage(r.stage) || r.weight > 0)
+    .sort((a, b) => compareStages(a.stage, b.stage));
   const stages = (shown.length ? shown : MAIN_STAGES.map((stage) => ({ stage, weight: undefined, label: null, fullName: null, color: null, revStart: null })))
     .map((r) => {
       const d = defaultStage(r.stage, r.weight ?? undefined);
@@ -1028,7 +1040,7 @@ export function getDisciplineLinks(projectId: string, week?: number): Discipline
       stages: leaves
         .map((leaf) => {
           const stage = leaf.deskripsi.trim().toUpperCase().replace('-', '_') as DocStage;
-          if (!STAGE_ORDER.includes(stage)) return null;
+          if (!(STAGE_ORDER as DocStage[]).includes(stage)) return null;
           const reached = docs.filter(
             (d) => loaded.byDoc.get(d.id)?.some((s) => s.stage === stage && reachedBy(s, loaded)),
           ).length;

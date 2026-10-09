@@ -11,7 +11,7 @@
  * Plain data, no server imports: the screens and the server share it.
  */
 import type { DocStage } from './schema';
-import { STAGE_FULL, STAGE_LABEL } from './register-shared';
+import { baseOfAdded, isAddedStage, stageFull, stageLabel } from './register-shared';
 
 export interface StageSetting {
   stage: DocStage;
@@ -80,15 +80,25 @@ export const CODE_EFFECT: Record<CodeKey, string> = {
 };
 
 export function defaultStage(stage: DocStage, weight?: number): StageSetting {
-  const name = STAGE_FULL[stage];
+  // An added stage has no words of its own until the register types them.
+  const added = isAddedStage(stage);
+  const name = added ? '' : stageFull(stage);
   return {
     stage,
     weight: weight ?? DEFAULT_WEIGHT[stage] ?? 0,
-    label: STAGE_LABEL[stage],
+    label: added ? '' : stageLabel(stage),
     name: name.charAt(0) + name.slice(1).toLowerCase(),
     color: DEFAULT_COLOR[stage] ?? '#94a3b8',
     revStart: DEFAULT_REV[stage] ?? '',
   };
+}
+
+/** The stage the + on Setup adds: the next free `S<n>`, after every stage there is, weighing nothing yet. */
+export function newStage(stages: StageSetting[]): StageSetting {
+  const used = stages.map((s) => /^S(\d+)$/.exec(s.stage)).filter(Boolean).map((m) => Number(m![1]));
+  const n = (used.length ? Math.max(...used) : 0) + 1;
+  const free = STAGE_PALETTE.find((c) => !stages.some((s) => s.color.toLowerCase() === c)) ?? STAGE_PALETTE[STAGE_PALETTE.length - 1];
+  return { ...defaultStage(`S${n}`, 0), color: free };
 }
 
 /* ------------------------------------------------------------- revisions */
@@ -114,7 +124,9 @@ export function bumpRev(start: string, lap: number): string {
 
 /** The Rev an issue at this stage carries under the register's rule; null where the rule says nothing. */
 export function revAt(settings: RegisterSettings, stage: DocStage): string | null {
-  const l = LAP[stage];
+  const base = baseOfAdded(stage);
+  const l = (LAP as Record<string, { base: DocStage; lap: number }>)[stage]
+    ?? (base ? { base, lap: stage === base ? 0 : 1 } : undefined);
   if (!l) return null;
   const start = settings.stages.find((s) => s.stage === l.base)?.revStart ?? '';
   return start.trim() ? bumpRev(start, l.lap) : null;
@@ -149,6 +161,12 @@ export function parseCodes(raw: string | null | undefined): CodeSetting[] {
       meaning: s?.meaning?.trim() || d.meaning,
     };
   });
+}
+
+/** The stages a document is shown going through: the three, then the ones the register added. */
+export function mainStagesOf(settings: RegisterSettings): DocStage[] {
+  const added = settings.stages.filter((s) => isAddedStage(s.stage)).map((s) => s.stage);
+  return [...MAIN_STAGES, ...added];
 }
 
 export function stageOf(settings: RegisterSettings, stage: DocStage): StageSetting {

@@ -7,7 +7,7 @@
  * better-sqlite3 into the browser bundle, which fails the build rather than
  * merely bloating it.
  */
-import type { DocStage, RegisterKind } from './schema';
+import type { BaseStage, DocStage, RegisterKind } from './schema';
 
 /* ----------------------------------------------------------------- types */
 
@@ -264,7 +264,7 @@ export function buildJourney(stages: DocumentStageDetail[]): DocumentLap[] {
   const byStage = new Map(stages.map((s) => [s.stage, s]));
   const laps: DocumentLap[] = [];
 
-  for (const stage of STAGE_ORDER) {
+  for (const stage of [...byStage.keys()].sort(compareStages)) {
     const row = byStage.get(stage);
     if (!row || (!row.submitted && !row.returnCode && !row.returnedAt)) continue;
 
@@ -449,10 +449,64 @@ export const REGISTER_INFO = {
   short: string; long: string; owes: string; detail: string;
 }>;
 
-export const STAGE_ORDER: DocStage[] =
+export const STAGE_ORDER: BaseStage[] =
   ['IFR', 'RE_IFR', 'IFA', 'RE_IFA', 'AFC', 'RE_AFC1', 'RE_AFC2', 'ASBUILT'];
 
-export const STAGE_LABEL: Record<DocStage, string> = {
+/*
+ * Stages a register added on Setup (9 Oct 2026) are `S1`, `S2`… with one
+ * resubmission each, `RE_S1`. They come after AFC and its resubmissions, in
+ * the order they were added, and before the imported AS-BUILT. Every reader
+ * orders and validates stages through these, never through STAGE_ORDER alone.
+ */
+const ADDED = /^(RE_)?S([1-9]\d{0,2})$/;
+
+export function isStageKey(value: string): value is DocStage {
+  return (STAGE_ORDER as string[]).includes(value) || ADDED.test(value);
+}
+
+/** S1, S2…: a stage the register added, not one of its resubmissions. */
+export function isAddedStage(stage: string): boolean {
+  const m = ADDED.exec(stage);
+  return Boolean(m && !m[1]);
+}
+
+/** Where a stage sits in the chain; lower goes out first. */
+export function stageRank(stage: DocStage): number {
+  if (stage === 'ASBUILT') return 1_000_000;
+  const i = (STAGE_ORDER as string[]).indexOf(stage);
+  if (i >= 0) return i;
+  const m = ADDED.exec(stage);
+  return m ? 100 + Number(m[2]) * 2 + (m[1] ? 1 : 0) : 2_000_000;
+}
+
+export const compareStages = (a: DocStage, b: DocStage) => stageRank(a) - stageRank(b);
+
+/** The whole chain, in order, with the register's added stages and their resubmissions in it. */
+export function stageChain(stages: Iterable<DocStage> = []): DocStage[] {
+  const set = new Set<DocStage>(STAGE_ORDER);
+  for (const s of stages) {
+    const m = ADDED.exec(s);
+    if (m) { set.add(`S${Number(m[2])}`); set.add(`RE_S${Number(m[2])}`); }
+  }
+  return [...set].sort(compareStages);
+}
+
+/** The added stage a key belongs to (RE_S1 → S1); null for the base chain. */
+export function baseOfAdded(stage: DocStage): DocStage | null {
+  const m = ADDED.exec(stage);
+  return m ? `S${Number(m[2])}` : null;
+}
+
+/** A stage's short name where no register settings are at hand. */
+export function stageLabel(stage: DocStage): string {
+  return (STAGE_LABEL as Record<string, string>)[stage] ?? stage.replace(/^RE_/, 'RE-');
+}
+
+export function stageFull(stage: DocStage): string {
+  return (STAGE_FULL as Record<string, string>)[stage] ?? stageLabel(stage);
+}
+
+export const STAGE_LABEL: Record<BaseStage, string> = {
   IFR: 'IFR', RE_IFR: 'RE-IFR', IFA: 'IFA', RE_IFA: 'RE-IFA',
   AFC: 'AFC', RE_AFC1: 'RE-AFC 1', RE_AFC2: 'RE-AFC 2', ASBUILT: 'AS-BUILT',
 };
@@ -466,7 +520,7 @@ export const STAGE_LABEL: Record<DocStage, string> = {
  * follows; in a dense list where the reader has already met it, STAGE_LABEL
  * alone is enough.
  */
-export const STAGE_FULL: Record<DocStage, string> = {
+export const STAGE_FULL: Record<BaseStage, string> = {
   IFR: 'Issued for Review',
   RE_IFR: 'Re-issued for Review',
   IFA: 'Issued for Approval',

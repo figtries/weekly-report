@@ -13,7 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { STAGE_ORDER } from './register-shared';
+import { isStageKey, stageRank } from './register-shared';
+import { planStatus, type StatusWhere } from './register-status';
 import type { DocStage, RegisterKind } from './schema';
 
 type StageRow = typeof schema.docStages.$inferInsert;
@@ -65,11 +66,65 @@ export function writeStage(
       id: randomUUID(),
       documentId,
       stage,
-      order: STAGE_ORDER.indexOf(stage),
+      order: stageRank(stage),
       submitted: false,
       ...patch,
     }).run();
   }
+}
+
+export interface StatusInput {
+  projectId: string;
+  register: RegisterKind;
+  documentId: string;
+  stage: DocStage;
+  where: StatusWhere;
+  code: string | null;
+  date: string;
+  letter: string;
+  /** Replace what is already recorded. Without it, anything replaced comes back as `confirm`. */
+  confirmed: boolean;
+}
+
+/**
+ * A status set directly (lib/register-status.ts), in one transaction. Read from
+ * the DATABASE, not from the card on screen: a card shown as of an old week
+ * does not carry what was recorded since, and that is exactly what a change
+ * would clear.
+ */
+export function writeDocumentStatus(input: StatusInput): { written: number } | { confirm: string[] } {
+  if (!ISO_DATE.test(input.date)) throw new Error('Pick a date first');
+  const code = input.where === 'us' ? (input.code?.trim().toUpperCase() || null) : null;
+  if (code && !CODES.has(code)) throw new Error(`Unknown code ${code}`);
+  const doc = db.select().from(schema.documents)
+    .where(and(
+      eq(schema.documents.id, input.documentId),
+      eq(schema.documents.projectId, input.projectId),
+      eq(schema.documents.register, input.register),
+    )).all()[0];
+  if (!doc) throw new Error('That document is not in this register');
+
+  const rows = db.select().from(schema.docStages).where(eq(schema.docStages.documentId, doc.id)).all();
+  const { writes, overwrites } = planStatus(rows, { stage: input.stage, where: input.where, code, date: input.date, letter: input.letter.trim() });
+  if (overwrites.length > 0 && !input.confirmed) return { confirm: overwrites };
+
+  db.transaction((tx) => {
+    for (const w of writes) {
+      const link = (no: string | null | undefined, dir: 'out' | 'in', day: string | null) =>
+        no === undefined ? undefined : no === null ? null : transmittalId(input.projectId, input.register, no, dir, day ?? input.date, tx);
+      const out = link(w.submitLetter, 'out', w.submittedAt);
+      const back = link(w.returnLetter, 'in', w.returnedAt);
+      writeStage(tx, doc.id, w.stage, {
+        submitted: w.submitted,
+        submittedAt: w.submittedAt,
+        returnedAt: w.returnedAt,
+        returnCode: w.returnCode,
+        ...(out !== undefined ? { submitTransmittalId: out } : {}),
+        ...(back !== undefined ? { returnTransmittalId: back } : {}),
+      });
+    }
+  });
+  return { written: writes.length };
 }
 
 export interface TransmittalInput {
@@ -107,7 +162,7 @@ export function writeTransmittal(input: TransmittalInput): number {
   const nameOf = new Map(docs.map((d) => [d.id, d.docNo || d.title]));
 
   for (const item of input.items) {
-    if (!STAGE_ORDER.includes(item.stage as DocStage)) throw new Error(`${item.stage} is not a stage`);
+    if (!isStageKey(item.stage)) throw new Error(`${item.stage} is not a stage`);
     if (input.direction === 'in' && !CODES.has((item.code ?? '').trim().toUpperCase())) {
       throw new Error(`Choose a return code for ${nameOf.get(item.documentId)}`);
     }

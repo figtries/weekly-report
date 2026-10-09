@@ -127,7 +127,7 @@ export default function LinksPanel({
         <div className="flex items-center gap-2 text-[13px]">
           <span className="min-w-0 flex-1 truncate">{names.get(l.id) ?? l.id}</span>
           {side === 'waits' && logic?.setsDateBy.includes(l.id) && (
-            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary">Sets the date</span>
+            <span className="shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary">Sets the date</span>
           )}
           <button
             type="button"
@@ -253,7 +253,7 @@ export default function LinksPanel({
 
       <div className={cn('mt-2 rounded-xl px-3 py-2.5 text-[13px] leading-relaxed', why.conflict ? 'bg-bad-soft text-bad' : 'bg-muted/60')}>
         {why.text}
-        {chip && <span className={cn('ml-2 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold', chip.tone)}>{chip.text}</span>}
+        {chip && <span className={cn('ml-2 inline-block rounded-md px-2 py-0.5 text-[10.5px] font-semibold', chip.tone)}>{chip.text}</span>}
         {contractGap !== 0 && (
           <p className="mt-1 text-[12px] text-muted-foreground">
             {Math.abs(contractGap)} {Math.abs(contractGap) === 1 ? 'day' : 'days'} {contractGap > 0 ? 'later' : 'earlier'} than contract
@@ -272,7 +272,7 @@ export default function LinksPanel({
             <button
               type="button"
               onClick={() => setWaits([...waits, { id, type: 'FS', wait: 0 }])}
-              className="min-h-9 rounded-full bg-primary/10 px-3 text-[12px] font-semibold text-primary"
+              className="min-h-9 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary"
             >
               Use
             </button>
@@ -285,14 +285,14 @@ export default function LinksPanel({
 
       {error && <p className="mt-3 rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onBack} className="min-h-11 rounded-full px-4 text-[13px] font-medium text-muted-foreground hover:bg-muted">
+        <button type="button" onClick={onBack} className="btn-cancel min-h-11 rounded-lg px-4 text-[13px]">
           Cancel
         </button>
         <button
           type="button"
           disabled={pending}
           onClick={save}
-          className="min-h-11 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-primary px-5 text-[13px] font-semibold text-primary-foreground disabled:opacity-60"
         >
           {pending ? 'Saving…' : 'Save'}
         </button>

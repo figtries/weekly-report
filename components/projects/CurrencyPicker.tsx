@@ -102,7 +102,7 @@ export default function CurrencyPicker({
               <button
                 type="button"
                 onClick={() => setAsking(null)}
-                className="h-11 rounded-lg border px-4 text-sm font-medium hover:bg-muted"
+                className="btn-cancel h-11 rounded-lg px-4 text-sm"
               >
                 Cancel
               </button>

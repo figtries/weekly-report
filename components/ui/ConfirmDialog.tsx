@@ -82,25 +82,27 @@ export default function ConfirmDialog({
             opposite directions and muscle memory from one was wrong in the
             other. The action keeps `flex-1` so it is unmistakably the primary
             even when its label is short. */}
-        <div className="mt-6 flex gap-2">
+        <div className="mt-6 grid grid-cols-2 gap-2">
+          {/* Two equal halves, Cancel first: a narrow grey Cancel beside a wide
+              pink Delete read as two unrelated buttons (9 Oct 2026). */}
+          <m.button {...pressMotion}
+            onClick={onCancel}
+            disabled={busy}
+            className="btn-cancel inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm"
+          >
+            Cancel
+          </m.button>
           <m.button {...pressMotion}
             onClick={onConfirm}
             disabled={busy}
-            className={`inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-medium shadow-sm transition-colors duration-200 ease-ios hover:shadow-md disabled:opacity-60 ${
+            className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors duration-200 ease-ios hover:shadow-md disabled:opacity-60 ${
               destructive
-                ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                ? 'bg-destructive text-white hover:bg-destructive/90'
                 : 'btn-primary'
             }`}
           >
             {busy && <Spinner />}
             {busy ? (busyLabel ?? confirmLabel) : confirmLabel}
-          </m.button>
-          <m.button {...pressMotion}
-            onClick={onCancel}
-            disabled={busy}
-            className="inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            Cancel
           </m.button>
         </div>
       </div>

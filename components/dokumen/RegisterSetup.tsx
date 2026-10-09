@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ClipboardPaste, Copy, FileSpreadsheet, Plus, X } from
 
 import { Button } from '@/components/ui/button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import DateField from '@/components/ui/DateField';
 import { Textarea } from '@/components/ui/textarea';
 import {
   MAX_DEPTH, addDocs, addHeadings, canHold, countDocuments, countNewHeadings, flatten, fromExisting, fromOutline,
@@ -16,9 +17,9 @@ import { addFromDraft, readRegisterFile, saveNumbering, saveRegisterSettings } f
 import { defaultRule, disciplineFor, knownDiscipline, nextNumber, typeFor, type NumberingRule } from '@/lib/register-numbering';
 import { parseRegisterPaste } from '@/lib/register-paste';
 import {
-  CODE_EFFECT, CODE_TONE, STAGE_PALETTE, revAt, type CodeSetting, type RegisterSettings, type StageSetting,
+  CODE_EFFECT, CODE_TONE, STAGE_PALETTE, newStage, type CodeSetting, type RegisterSettings, type StageSetting,
 } from '@/lib/register-settings';
-import { REGISTER_INFO, type RegisterSource } from '@/lib/register-shared';
+import { REGISTER_INFO, isAddedStage, type RegisterSource } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 
@@ -85,7 +86,10 @@ export function RegisterSetup({
     return { ...r, area: r.area ?? initialSettings.area ?? '' };
   });
   const [ruleDirty, setRuleDirty] = useState(false);
-  const [stages, setStages] = useState<StageSetting[]>(() => MAIN.map((s) => initialSettings.stages.find((x) => x.stage === s)!).filter(Boolean));
+  const [stages, setStages] = useState<StageSetting[]>(() => [
+    ...MAIN.map((s) => initialSettings.stages.find((x) => x.stage === s)!).filter(Boolean),
+    ...initialSettings.stages.filter((x) => isAddedStage(x.stage)),
+  ]);
   const [codes, setCodes] = useState<CodeSetting[]>(initialSettings.codes);
   const [settingsDirty, setSettingsDirty] = useState(false);
 
@@ -109,6 +113,9 @@ export function RegisterSetup({
     setStages((all) => all.map((s) => (s.stage === stage ? { ...s, ...patch } : s)));
     setSettingsDirty(true); setSaved(false);
   };
+  // The three are fixed; a stage added here can go again (the server refuses one already sent).
+  const addStage = () => { setStages((all) => [...all, newStage(all)]); setSettingsDirty(true); setSaved(false); };
+  const removeStage = (stage: DocStage) => { setStages((all) => all.filter((s) => s.stage !== stage)); setSettingsDirty(true); setSaved(false); };
   const editCode = (key: string, patch: Partial<CodeSetting>) => {
     setCodes((all) => all.map((c) => (c.key === key ? { ...c, ...patch } : c)));
     setSettingsDirty(true); setSaved(false);
@@ -121,7 +128,7 @@ export function RegisterSetup({
   const typeNames = [...new Set(groupsWithDocs)];
   const emptyGroups = rows.filter((r) => !r.node.locked && r.node.children.length === 0 && r.node.docs.every((d) => !d.title.trim()));
   const noPlan = rows.flatMap((r) => r.node.docs.filter((d) => d.title.trim() && !d.planIfr));
-  const blankCodes = mains.filter((m) => rule.disciplines[m] !== undefined && !rule.disciplines[m].trim());
+  const blankCodes = !edl ? [] : mains.filter((m) => rule.disciplines[m] !== undefined && !rule.disciplines[m].trim());
   const total = stages.reduce((n, s) => n + (Number.isFinite(s.weight) ? s.weight : 0), 0);
   const weightsOff = Math.abs(total - 100) > 0.001;
   const blankStage = stages.filter((s) => !s.label.trim());
@@ -257,28 +264,21 @@ export function RegisterSetup({
       />
 
       {/* -------------------------------------------------------- toolbar */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+      {/* Back sits on its own bar above the title (9 Oct 2026): beside it, it
+          pushed the title in and the parties wrapped into a ragged sentence. */}
+      {/* From sm the three share one row (back, title, actions) and the parties
+          start a row of their own, flush left with the back arrow: stacked, the wide screen kept a bar
+          of empty space above the title (variant B, 9 Oct 2026). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-2 sm:gap-y-1.5">
+        <div className="flex min-h-11 items-center gap-3 sm:contents">
           {onClose && (
-            <Button variant="ghost" size="icon" className="-ml-2 h-11 w-11 shrink-0" onClick={onClose} aria-label="Back to the register">
-              <ArrowLeft className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="-ml-3 h-11 w-11 shrink-0" onClick={onClose} aria-label="Back to the register">
+              <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <div className="min-w-0">
-            <h1 className="text-[17px] font-bold tracking-tight text-foreground">
-              {hasDocuments ? `Set up the ${info.short}` : `Build the ${info.short}`}
-            </h1>
-            <p className="text-[13px] text-foreground/70">
-              {contractorName || clientName
-                ? <>Contractor and client come from the project: <b className="font-semibold text-foreground">{contractorName || 'Contractor not set'}</b> → <b className="font-semibold text-foreground">{clientName || 'Client not set'}</b></>
-                : 'Contractor and client come from the project. Set them in Project details.'}
-              {origin && <> · copied from {origin}</>}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-3 sm:order-2 sm:shrink-0">
           {reminders > 0 ? (
-            <button type="button" onClick={toFirst} className="inline-flex min-h-9 items-center rounded-full bg-bad-soft px-3 text-[13px] font-semibold text-bad">
+            <button type="button" onClick={toFirst} className="inline-flex min-h-9 items-center rounded-lg bg-bad-soft px-3 text-[13px] font-semibold text-bad">
               Fill in {plural(reminders, 'thing')} to finish
             </button>
           ) : (
@@ -286,8 +286,35 @@ export function RegisterSetup({
           )}
           <span className="hidden text-[13px] text-foreground/60 sm:inline">{pending ? 'Saving…' : dirty ? 'Not saved yet' : saved ? 'Saved' : ''}</span>
           <div className="hidden items-center gap-2 sm:flex">
-            {onClose && <Button variant="outline" className="h-11" onClick={onClose}>Cancel</Button>}
+            {onClose && <Button variant="ghost" className="btn-cancel h-11" onClick={onClose}>Cancel</Button>}
             <Button className="h-11 min-w-24" disabled={pending || !dirty} onClick={save}>{pending ? 'Saving…' : 'Save'}</Button>
+          </div>
+          </div>
+        </div>
+        <div className="min-w-0 sm:contents">
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-foreground sm:order-1 sm:flex sm:min-h-11 sm:min-w-0 sm:flex-1 sm:items-center">
+            {hasDocuments ? `Set up the ${info.short}` : `Build the ${info.short}`}
+          </h1>
+          <div className="sm:order-3 sm:flex sm:basis-full sm:flex-wrap sm:items-center sm:gap-2">
+            {contractorName || clientName ? (
+              <dl className="mt-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13.5px] leading-5 sm:mt-0 sm:flex sm:flex-wrap sm:gap-2">
+                <div className="contents sm:flex sm:min-h-8 sm:items-center sm:gap-1.5 sm:rounded-lg sm:border sm:border-border sm:bg-card sm:px-3">
+                  <dt className="text-foreground/60">Contractor</dt>
+                  <dd className="break-words font-semibold text-foreground">{contractorName || 'Not set'}</dd>
+                </div>
+                <div className="contents sm:flex sm:min-h-8 sm:items-center sm:gap-1.5 sm:rounded-lg sm:border sm:border-border sm:bg-card sm:px-3">
+                  <dt className="text-foreground/60">Client</dt>
+                  <dd className="break-words font-semibold text-foreground">{clientName || 'Not set'}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="mt-1.5 text-[13.5px] text-foreground/70 sm:mt-0">Contractor and client are not set yet.</p>
+            )}
+            <p className="mt-1.5 text-[12.5px] text-foreground/60 sm:mt-0 sm:ml-1 sm:text-[13px]">
+              <span className="sm:hidden">Change them in Project details</span>
+              <a href={`/projects/${projectId}#edit=contractorName`} className="hidden font-medium text-primary hover:underline sm:inline">Change in Project details</a>
+              {origin && <> · Copied from {origin}</>}
+            </p>
           </div>
         </div>
       </div>
@@ -317,15 +344,15 @@ export function RegisterSetup({
       )}
 
       {/* ------------------------------------- documents · document number */}
-      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_27rem]">
-        <section className={cn(card, 'animate-enter stagger-1 flex min-w-0 flex-col overflow-hidden')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)] items-stretch gap-4', edl && 'xl:grid-cols-[minmax(0,1fr)_27rem]')}>
+        <section className={cn(card, 'animate-enter stagger-1 @container flex min-w-0 flex-col overflow-hidden')}>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 pb-3 pt-5">
             <h2 className={title}>Documents</h2>
             <span className="text-[13px] text-foreground/70 tabular-nums">
               {plural(allDocs, 'document')} in {plural(mains.length, word)}{newDocs > 0 && hasDocuments && ` · ${newDocs} new`}
             </span>
           </div>
-          <div className="hidden grid-cols-[11.5rem_minmax(0,1fr)_4.5rem_9.75rem_2.75rem] items-center gap-3 border-y border-border/70 bg-muted/50 px-5 py-2 text-xs font-medium text-foreground/70 md:grid">
+          <div className="hidden grid-cols-[11.5rem_minmax(0,1fr)_4.5rem_9.75rem_2.75rem] items-center gap-3 border-y border-border/70 bg-muted/50 px-5 py-2 text-xs font-medium text-foreground/70 @2xl:grid">
             <span>No.</span><span>Title</span><span>Kind</span><span>Plan {first?.label || 'IFR'}</span><span />
           </div>
 
@@ -341,31 +368,33 @@ export function RegisterSetup({
               const hold = canHold(node, depth);
               const empty = emptyGroups.some((r) => r.node.id === node.id);
               const open = adding?.id === node.id ? adding.mode : empty && hold.documents ? 'documents' : null;
-              const code = depth === 1 ? disciplineFor(node.name, rule) : null;
+              const code = edl && depth === 1 ? disciplineFor(node.name, rule) : null;
               return (
                 <div key={node.id}>
                   <div className="flex min-h-12 items-center gap-2 border-b border-border/60 bg-[#f8faff] py-1.5 pr-3" style={{ paddingLeft: `${20 + (depth - 1) * 20}px` }}>
+                    {/* Name and count wrap rather than truncate: "Instrument &…" hid which discipline a row was. */}
+                    <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     {node.locked ? (
-                      <span className={cn('truncate font-semibold text-foreground', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}>{node.name}</span>
+                      <span className={cn('min-w-0 break-words font-semibold text-foreground', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}>{node.name}</span>
                     ) : (
                       <input
                         value={node.name}
                         onChange={(e) => edit((t) => renameNode(t, node.id, e.target.value))}
                         aria-label={`${node.name} name`}
-                        className={cn('min-w-0 rounded-lg bg-transparent px-1 py-1 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
+                        className={cn('min-w-0 max-w-full rounded-lg bg-transparent px-1 py-1 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
                       />
                     )}
                     <span className="shrink-0 text-xs text-foreground/60 tabular-nums">
                       {plural(docsUnder(node), 'doc')}{code && ` · code ${code}`}{node.locked && node.existing > 0 && ' · saved'}
                     </span>
-                    <span className="ml-auto" />
+                    </div>
                     {hold.headings && depth < MAX_DEPTH && (
-                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'headings' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-2.5 text-[13px] font-semibold text-primary hover:bg-primary-soft">
+                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'headings' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[13px] font-semibold text-primary hover:bg-primary-soft">
                         <Plus className="h-3.5 w-3.5" /><span className="max-sm:sr-only">Sub-heading</span>
                       </button>
                     )}
                     {hold.documents && (
-                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'documents' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-primary-soft px-3 text-[13px] font-semibold text-primary">
+                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'documents' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-3 text-[13px] font-semibold text-primary">
                         <Plus className="h-3.5 w-3.5" />Add
                       </button>
                     )}
@@ -391,7 +420,7 @@ export function RegisterSetup({
                         key={`${node.id}-${open}`}
                         autoFocus={adding?.id === node.id}
                         label={open === 'documents' ? `Add documents to ${node.name}` : `Add a sub-heading to ${node.name}`}
-                        placeholder={open === 'documents' ? 'Type a title, or paste several lines from Excel' : 'Sub-heading name, e.g. Datasheet'}
+                        placeholder={open === 'documents' ? 'Title, or paste from Excel' : 'Sub-heading, e.g. Datasheet'}
                         empty="Type a title first."
                         hint={open === 'documents' ? hintFor(path, node) : undefined}
                         onAdd={(lines) => {
@@ -415,11 +444,11 @@ export function RegisterSetup({
               <Reminder inline>Plan {first?.label || 'IFR'} date needed on {plural(noPlan.length, 'new document')}.</Reminder>
               <label className="ml-auto inline-flex items-center gap-2 text-[13px] text-foreground/70">
                 One date for all of them
-                <input
-                  type="date"
+                <DateField
+                  value=""
+                  placeholder="Pick a date"
                   className={cn(field, 'h-9 w-[9.5rem]')}
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  onChange={(v) => {
                     if (!v) return;
                     const fill = (ns: BuilderNode[]): BuilderNode[] => ns.map((n) => ({
                       ...n,
@@ -436,7 +465,7 @@ export function RegisterSetup({
           <div className="flex flex-col gap-3 border-t border-border/70 px-5 py-4">
             <AddLine
               label={edl ? 'Add a discipline' : 'Add a vendor package'}
-              placeholder={edl ? (tree.length === 0 ? 'First discipline, e.g. Process' : 'Add a discipline') : (tree.length === 0 ? 'First package name' : 'Add a package')}
+              placeholder={edl ? (tree.length === 0 ? 'First discipline, e.g. Process' : 'Discipline name') : (tree.length === 0 ? 'First package name' : 'Package name')}
               empty="Type a name first."
               onAdd={addMain}
             />
@@ -444,7 +473,7 @@ export function RegisterSetup({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[13px] text-foreground/60">or one press:</span>
                 {missingCommon.map((c) => (
-                  <button key={c} type="button" onClick={() => addMain([c])} className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-[13px] font-medium text-foreground hover:border-primary/40 hover:bg-primary-soft">
+                  <button key={c} type="button" onClick={() => addMain([c])} className="inline-flex min-h-9 items-center rounded-lg border border-border px-3 text-[13px] font-medium text-foreground hover:border-primary/40 hover:bg-primary-soft">
                     {c}
                   </button>
                 ))}
@@ -453,25 +482,29 @@ export function RegisterSetup({
           </div>
         </section>
 
-        <NumberCard
-          rule={rule}
-          mains={mains}
-          types={typeNames}
-          onRule={editRule}
-          className="animate-enter stagger-2"
-        />
+        {/* The VDRL has no number format: a vendor document keeps its
+            vendor's number (9 Oct 2026). */}
+        {edl && (
+          <NumberCard
+            rule={rule}
+            mains={mains}
+            types={typeNames}
+            onRule={editRule}
+            className="animate-enter stagger-2"
+          />
+        )}
       </div>
 
       {/* ------------------------------------------- client codes · stages */}
-      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_27rem]">
-        <StagesCard stages={stages} total={total} weightsOff={weightsOff} onStage={editStage} className="animate-enter stagger-3" />
+      <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_27rem]">
+        <StagesCard stages={stages} total={total} weightsOff={weightsOff} onStage={editStage} onAdd={addStage} onRemove={removeStage} className="animate-enter stagger-3" />
         <CodesCard codes={codes} edl={edl} onCode={editCode} className="animate-enter stagger-4" />
       </div>
 
       {/* Phones: Save stays under the thumb. */}
       <div className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t bg-background px-4 py-3 sm:hidden">
         <span className="min-w-0 truncate text-sm text-foreground/70">{pending ? 'Saving…' : dirty ? 'Not saved yet' : saved ? 'Saved' : ''}</span>
-        {onClose && <Button variant="outline" className="ml-auto h-11" onClick={onClose}>Cancel</Button>}
+        {onClose && <Button variant="ghost" className="btn-cancel ml-auto h-11" onClick={onClose}>Cancel</Button>}
         <Button className={cn('h-11 min-w-24 shrink-0', !onClose && 'ml-auto')} disabled={pending || !dirty} onClick={save}>{pending ? 'Saving…' : 'Save'}</Button>
       </div>
 
@@ -559,19 +592,19 @@ function DocLine({ doc, indent, onChange }: { doc: BuilderDoc; indent: number; o
   const typed = doc.title.trim() !== '';
   return (
     <div
-      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1.5 border-b border-border/50 py-2.5 pr-3 md:grid-cols-[11.5rem_minmax(0,1fr)_4.5rem_9.75rem_2.75rem] md:gap-3 md:py-1.5 md:pr-5"
+      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1.5 border-b border-border/50 py-2.5 pr-3 @2xl:grid-cols-[11.5rem_minmax(0,1fr)_4.5rem_9.75rem_2.75rem] @2xl:gap-3 @2xl:py-1.5 @2xl:pr-5"
       style={{ paddingLeft: `${20 + (indent - 1) * 20}px` }}
     >
-      <span className="truncate font-mono text-[12.5px] tracking-tight text-foreground/75 md:order-none">{doc.docNo || '—'}</span>
+      <span className="truncate font-mono text-[12.5px] tracking-tight text-foreground/75 @2xl:order-none">{doc.docNo || '—'}</span>
       <button
         type="button"
         onClick={() => onChange({ kind: doc.kind === 'Doc' ? 'Dwg' : 'Doc' })}
         aria-label={`Kind: ${doc.kind === 'Dwg' ? 'drawing' : 'document'}. Press to change.`}
-        className={cn('inline-flex h-8 min-w-12 items-center justify-center rounded-lg border px-2 text-xs font-semibold md:order-3 md:w-full', doc.kind === 'Dwg' ? 'border-primary/30 bg-primary-soft text-primary' : 'border-border text-foreground/80')}
+        className={cn('inline-flex h-8 min-w-12 items-center justify-center rounded-lg border px-2 text-xs font-semibold @2xl:order-3 @2xl:w-full', doc.kind === 'Dwg' ? 'border-primary/30 bg-primary-soft text-primary' : 'border-border text-foreground/80')}
       >
         {doc.kind}
       </button>
-      <button type="button" onClick={() => onChange(null)} aria-label={`Remove ${doc.title || 'this document'}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground/45 hover:bg-bad-soft hover:text-bad md:order-5">
+      <button type="button" onClick={() => onChange(null)} aria-label={`Remove ${doc.title || 'this document'}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground/45 hover:bg-bad-soft hover:text-bad @2xl:order-5">
         <X className="h-4 w-4" />
       </button>
       <input
@@ -579,15 +612,16 @@ function DocLine({ doc, indent, onChange }: { doc: BuilderDoc; indent: number; o
         onChange={(e) => onChange({ title: e.target.value })}
         aria-label="Title"
         placeholder="Title"
-        className={cn(field, 'col-span-3 h-9 border-transparent bg-transparent px-2 font-medium hover:border-border focus-visible:bg-card md:order-2 md:col-span-1')}
+        className={cn(field, 'col-span-3 h-9 border-transparent bg-transparent px-2 font-medium hover:border-border focus-visible:bg-card @2xl:order-2 @2xl:col-span-1')}
       />
-      <input
-        type="date"
+      <DateField
         value={doc.planIfr ?? ''}
-        onChange={(e) => onChange({ planIfr: e.target.value })}
+        onChange={(v) => onChange({ planIfr: v })}
+        placeholder="Plan date"
+        clearable
         aria-label="Plan date"
         aria-invalid={typed && !doc.planIfr ? true : undefined}
-        className={cn(field, 'col-span-3 h-9 tabular-nums md:order-4 md:col-span-1', typed && !doc.planIfr && 'border-bad text-bad')}
+        className={cn(field, 'col-span-3 h-9 tabular-nums @2xl:order-4 @2xl:col-span-1', typed && !doc.planIfr && 'border-bad text-bad')}
       />
     </div>
   );
@@ -610,6 +644,9 @@ function AddLine({
   const box = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [nudge, setNudge] = useState<string | null>(null);
+  // Variant A (9 Oct 2026): a dashed "+ Add" row in the list that turns into a
+  // box when pressed. A box with a button inside it read as a box in a box.
+  const [open, setOpen] = useState(!!autoFocus || !!onDone);
 
   const put = (raw: string) => {
     const lines = raw.split(/\r?\n/).map((l) => l.replace(/\t+/g, ' ').trim()).filter(Boolean);
@@ -619,38 +656,51 @@ function AddLine({
     setNudge(null);
     box.current?.focus();
   };
+  const close = () => { setText(''); setNudge(null); if (onDone) onDone(); else setOpen(false); };
   const next = hint?.(text.trim());
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-primary/35 text-[14px] font-semibold text-primary transition-colors hover:border-primary/60 hover:bg-primary-soft"
+      >
+        <Plus className="h-4 w-4" aria-hidden />{label}
+      </button>
+    );
+  }
+
   return (
-    <div>
-      <div className={cn('flex h-11 items-center gap-2 rounded-xl border border-primary/30 bg-card pl-3 pr-1.5 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30', nudge && bad)}>
-        <Plus className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-        <input
-          ref={box}
-          autoFocus={autoFocus}
-          value={text}
-          onChange={(e) => { setText(e.target.value); if (nudge) setNudge(null); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' && onDone) { onDone(); return; }
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            put(text);
-          }}
-          onPaste={(e) => {
-            const pasted = e.clipboardData.getData('text');
-            if (!/\r?\n/.test(pasted.trim())) return;
-            e.preventDefault();
-            put(pasted);
-          }}
-          placeholder={placeholder}
-          aria-label={label}
-          aria-invalid={nudge ? true : undefined}
-          className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/80 md:text-sm"
-        />
-        {next && <span className="hidden shrink-0 font-mono text-xs text-foreground/70 sm:inline"><b className="font-semibold text-foreground">{next}</b> next</span>}
-        <Button size="sm" className="h-8 shrink-0 rounded-lg px-3" onClick={() => put(text)}>Add</Button>
-      </div>
+    <div className="animate-fade-in-up">
+      <input
+        ref={box}
+        autoFocus
+        value={text}
+        onChange={(e) => { setText(e.target.value); if (nudge) setNudge(null); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { close(); return; }
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          put(text);
+        }}
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData('text');
+          if (!/\r?\n/.test(pasted.trim())) return;
+          e.preventDefault();
+          put(pasted);
+        }}
+        placeholder={placeholder}
+        aria-label={label}
+        aria-invalid={nudge ? true : undefined}
+        className={cn('h-11 w-full rounded-xl border-[1.5px] border-primary bg-card px-3.5 text-base outline-none ring-3 ring-ring/20 placeholder:text-muted-foreground/80 md:text-sm', nudge && bad)}
+      />
       {nudge && <p className="mt-1.5 text-[13px] font-medium text-bad">{nudge}</p>}
+      <div className="mt-2 flex items-center gap-2">
+        {next && <span className="min-w-0 truncate font-mono text-xs text-foreground/70"><b className="font-semibold text-foreground">{next}</b> next</span>}
+        <Button variant="ghost" className="btn-cancel ml-auto h-9" onClick={close}>Cancel</Button>
+        <Button className="h-9 min-w-20" onClick={() => put(text)}>Add</Button>
+      </div>
     </div>
   );
 }
@@ -671,6 +721,16 @@ function NumberCard({
   const type = `G${typeFor(types[0] ?? 'Drawing', rule)}`;
   const example = [rule.prefix, rule.area, discipline, type, '001'.padStart(rule.digits, '0')].filter((x) => x && x.trim()).join('-');
   const seg = 'flex h-10 min-w-11 items-center justify-center rounded-xl border px-2 font-mono text-[13px] font-semibold sm:h-11 sm:min-w-14 sm:px-3 sm:text-[15px]';
+  // Each part of the number has a length. Typing past it used to do nothing
+  // at all, which read as a broken box; now the box turns red and says why,
+  // and clears on the next keystroke that fits.
+  const [over, setOver] = useState<{ key: string; text: string } | null>(null);
+  const take = (key: string, what: string, max: number, raw: string) => {
+    const v = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    setOver(v.length > max ? { key, text: `${what} takes at most ${max} characters.` } : null);
+    return v.slice(0, max);
+  };
+  const overRing = (key: string) => over?.key === key && 'border-bad bg-bad-soft/40 ring-2 ring-bad/30';
   return (
     <section className={cn(card, 'flex min-w-0 flex-col gap-4 p-5', className)}>
       <div className="flex items-baseline justify-between gap-3">
@@ -686,10 +746,12 @@ function NumberCard({
             node: (
               <input
                 value={rule.area ?? ''}
-                onChange={(e) => onRule({ area: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) })}
+                onChange={(e) => onRule({ area: take('area', 'The area code', 6, e.target.value) })}
+                onBlur={() => setOver(null)}
+                aria-invalid={over?.key === 'area' ? true : undefined}
                 placeholder="—"
                 aria-label="Area code, optional"
-                className={cn(seg, 'w-14 bg-card sm:w-20 text-center outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40', !rule.area && 'border-dashed')}
+                className={cn(seg, 'min-w-14 px-1.5 [field-sizing:content] bg-card sm:min-w-20 sm:px-3 text-center outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40', !rule.area && 'border-dashed', overRing('area'))}
               />
             ),
           },
@@ -706,6 +768,7 @@ function NumberCard({
           </div>
         ))}
       </div>
+      {over?.key === 'area' && <Reminder inline>{over.text}</Reminder>}
       <p className="-mt-1 text-[13px] text-foreground/70">
         <b className="font-semibold text-foreground">{rule.prefix || 'The first part'}</b> is the project&apos;s initial, changed in Project details. Area is optional; the rest is yours to edit.
       </p>
@@ -720,14 +783,16 @@ function NumberCard({
               const stored = rule.disciplines[m];
               const blank = stored !== undefined && !stored.trim();
               return (
-                <label key={m} className={cn('flex h-11 min-w-0 items-center gap-2 rounded-xl border bg-card pl-2 pr-3', blank ? 'border-bad bg-bad-soft/40' : 'border-border')}>
+                <label key={m} className={cn('flex h-11 min-w-0 items-center gap-2 rounded-xl border bg-card pl-2 pr-3', blank ? 'border-bad bg-bad-soft/40' : 'border-border', overRing(`d:${m}`))}>
                   <input
                     value={stored ?? disciplineFor(m, rule)}
-                    onChange={(e) => onRule({ disciplines: { ...rule.disciplines, [m]: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) } })}
+                    onChange={(e) => onRule({ disciplines: { ...rule.disciplines, [m]: take(`d:${m}`, `${m}'s code`, 4, e.target.value) } })}
+                    onBlur={() => setOver(null)}
+                    aria-invalid={over?.key === `d:${m}` ? true : undefined}
                     aria-label={`${m} code`}
                     className="h-8 w-12 shrink-0 rounded-lg bg-primary-soft text-center font-mono text-[13px] font-bold text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   />
-                  <span className="truncate text-[13px] text-foreground">{m}</span>
+                  <span className="min-w-0 break-words text-[13px] leading-tight text-foreground">{m}</span>
                 </label>
               );
             })}
@@ -736,6 +801,7 @@ function NumberCard({
         {mains.filter((m) => rule.disciplines[m] !== undefined && !rule.disciplines[m].trim()).map((m) => (
           <Reminder key={m}>{m} needs a code before its documents can be numbered.</Reminder>
         ))}
+        {over?.key.startsWith('d:') && <Reminder>{over.text}</Reminder>}
       </div>
 
       <div className="border-t border-border/70 pt-4">
@@ -747,10 +813,12 @@ function NumberCard({
         ) : (
           <div className="mt-2.5 flex flex-wrap gap-2">
             {types.map((t) => (
-              <label key={t} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary-soft/70 pl-1.5 pr-3">
+              <label key={t} className={cn('inline-flex h-10 items-center gap-1.5 rounded-xl border border-transparent bg-primary-soft/70 pl-1.5 pr-3', overRing(`t:${t}`))}>
                 <input
                   value={rule.types[t] ?? typeFor(t, rule)}
-                  onChange={(e) => onRule({ types: { ...rule.types, [t]: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) } })}
+                  onChange={(e) => onRule({ types: { ...rule.types, [t]: take(`t:${t}`, `${t}'s type code`, 3, e.target.value) } })}
+                  onBlur={() => setOver(null)}
+                  aria-invalid={over?.key === `t:${t}` ? true : undefined}
                   aria-label={`${t} type code`}
                   className="h-7 w-11 rounded-lg bg-card text-center font-mono text-xs font-bold text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 />
@@ -759,6 +827,7 @@ function NumberCard({
             ))}
           </div>
         )}
+        {over?.key.startsWith('t:') && <Reminder>{over.text}</Reminder>}
         <p className="mt-2.5 text-xs text-foreground/60">The type starts with D for a document and G for a drawing.</p>
       </div>
     </section>
@@ -804,17 +873,19 @@ function CodesCard({
 /* ---------------------------------------------------------- stages card */
 
 function StagesCard({
-  stages, total, weightsOff, onStage, className,
+  stages, total, weightsOff, onStage, onAdd, onRemove, className,
 }: {
   stages: StageSetting[];
   total: number;
   weightsOff: boolean;
   onStage: (stage: DocStage, patch: Partial<StageSetting>) => void;
+  onAdd: () => void;
+  onRemove: (stage: DocStage) => void;
   className?: string;
 }) {
   const [palette, setPalette] = useState<DocStage | null>(null);
-  const settings: RegisterSettings = { stages, codes: [], area: '' };
-  const again = (s: StageSetting) => [revAt(settings, s.stage === 'AFC' ? 'RE_AFC1' : (`RE_${s.stage}` as DocStage)), s.stage === 'AFC' ? revAt(settings, 'RE_AFC2') : null].filter(Boolean);
+  // One grid for the header, every row and the add row, edge to edge with the bar above.
+  const cols = 'grid grid-cols-[2.75rem_4.25rem_3.25rem_minmax(0,1fr)] sm:grid-cols-[2.75rem_5rem_minmax(0,1fr)_4rem_5.5rem] items-center gap-x-2';
   return (
     <section className={cn(card, 'flex min-w-0 flex-col p-5', className)}>
       <div className="flex items-baseline justify-between gap-3">
@@ -823,17 +894,19 @@ function StagesCard({
           ? <span className="text-[13px] font-semibold text-bad tabular-nums">Total {total}%</span>
           : <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-ok"><Check className="h-3.5 w-3.5" />Total 100%</span>}
       </div>
+      <p className="mt-1 text-[13px] text-foreground/70">What a document goes through, and what each stage is worth.</p>
       <div className="mt-3 flex h-2.5 gap-1 overflow-hidden rounded-full">
         {stages.map((s) => <span key={s.stage} className="rounded-full transition-[flex-grow] duration-300 ease-ios" style={{ flexGrow: Math.max(0, s.weight) || 0.0001, background: s.color }} />)}
       </div>
 
-      <div className="mt-3 grid grid-cols-[2.75rem_4.25rem_3.25rem_minmax(0,1fr)] sm:grid-cols-[2.75rem_5rem_minmax(0,1fr)_4rem_5.5rem] items-center gap-x-2 text-[11px] font-medium text-foreground/60">
+      <div className={cn(cols, 'mt-3 text-[11px] font-medium text-foreground/60')}>
         <span>Colour</span><span>Short</span><span className="max-sm:hidden">Name</span><span className="text-center">Rev</span><span className="text-right">Weight</span>
       </div>
-      <div className="mt-1 flex flex-col gap-2">
+      {/* A hairline between rows, the codes card's rhythm beside it. */}
+      <div className="mt-1 flex flex-col">
         {stages.map((s) => (
-          <div key={s.stage}>
-            <div className="grid grid-cols-[2.75rem_4.25rem_3.25rem_minmax(0,1fr)] sm:grid-cols-[2.75rem_5rem_minmax(0,1fr)_4rem_5.5rem] items-center gap-x-2">
+          <div key={s.stage} className="border-b border-border/60 py-2.5">
+            <div className={cols}>
               <button
                 type="button"
                 onClick={() => setPalette((p) => (p === s.stage ? null : s.stage))}
@@ -845,15 +918,25 @@ function StagesCard({
               <input
                 value={s.label}
                 onChange={(e) => onStage(s.stage, { label: e.target.value.toUpperCase().slice(0, 8) })}
-                aria-label={`${s.stage} short name`}
+                aria-label={`${s.name || 'Stage'} short name`}
+                placeholder={isAddedStage(s.stage) ? 'IFC' : undefined}
                 className={cn(field, 'px-1 text-center font-bold', !s.label.trim() && bad)}
               />
-              <input
-                value={s.name}
-                onChange={(e) => onStage(s.stage, { name: e.target.value })}
-                aria-label={`${s.label || s.stage} full name`}
-                className={cn(field, 'max-sm:order-last max-sm:col-span-3 max-sm:col-start-2 max-sm:mt-1.5')}
-              />
+              {/* An added stage's remove sits inside its name box: no extra track, so every row keeps the card's edge. */}
+              <div className="relative min-w-0 max-sm:order-last max-sm:col-span-3 max-sm:col-start-2 max-sm:mt-1.5">
+                <input
+                  value={s.name}
+                  onChange={(e) => onStage(s.stage, { name: e.target.value })}
+                  aria-label={`${s.label || 'Stage'} full name`}
+                  placeholder={isAddedStage(s.stage) ? 'Issued for construction' : undefined}
+                  className={cn(field, 'w-full', isAddedStage(s.stage) && 'pr-11')}
+                />
+                {isAddedStage(s.stage) && (
+                  <button type="button" onClick={() => onRemove(s.stage)} aria-label={`Remove ${s.label || 'this stage'}`} className="absolute right-0.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-foreground/45 hover:bg-bad-soft hover:text-bad">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               <input
                 value={s.revStart}
                 onChange={(e) => onStage(s.stage, { revStart: e.target.value.toUpperCase().slice(0, 3) })}
@@ -888,25 +971,20 @@ function StagesCard({
                 ))}
               </div>
             )}
-            {!s.label.trim() && <Reminder>Give the {s.name || s.stage} stage a short name.</Reminder>}
+            {!s.label.trim() && <Reminder>{s.name.trim() ? `Give the ${s.name.trim()} stage a short name.` : 'Give this stage a short name.'}</Reminder>}
           </div>
         ))}
       </div>
 
-      {weightsOff && <Reminder>The weights add up to {total}%. Make them 100%.</Reminder>}
+      {/* The next row, not a box (variant A, 9 Oct 2026): a dashed dot where the colour goes, the words where the short name goes. */}
+      <button type="button" onClick={onAdd} className={cn(cols, 'group mt-2.5 min-h-11 w-full rounded-xl text-left')}>
+        <span className="flex size-10 items-center justify-center rounded-full border-[1.5px] border-dashed border-primary/45 text-primary transition-colors duration-200 ease-ios group-hover:border-primary group-hover:bg-primary-soft">
+          <Plus className="h-4 w-4" />
+        </span>
+        <span className="col-span-3 text-[13px] font-semibold text-primary sm:col-span-4">Add a stage</span>
+      </button>
 
-      <div className="mt-auto border-t border-border/70 pt-3 text-[13px] text-foreground/70">
-        <p className="mt-1">
-          <b className="font-semibold text-foreground">Rev follows the stage.</b>{' '}
-          {stages.map((s, i) => (
-            <span key={s.stage}>
-              {i > 0 && '; '}
-              {s.label || s.stage} goes out as {s.revStart ? <b className="font-semibold text-foreground">Rev {s.revStart}</b> : 'the Rev typed on it'}
-              {s.revStart && again(s).length > 0 && `, sent again ${again(s).join(', ')}`}
-            </span>
-          ))}.
-        </p>
-      </div>
+      {weightsOff && <Reminder>The weights add up to {total}%. Make them 100%.</Reminder>}
     </section>
   );
 }

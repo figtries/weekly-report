@@ -560,7 +560,13 @@ export const documents = sqliteTable('documents', {
  * many times a drawing went round, which is what an extension-of-time argument
  * is actually built from.
  */
-export type DocStage = 'IFR' | 'RE_IFR' | 'IFA' | 'RE_IFA' | 'AFC' | 'RE_AFC1' | 'RE_AFC2' | 'ASBUILT';
+export type BaseStage = 'IFR' | 'RE_IFR' | 'IFA' | 'RE_IFA' | 'AFC' | 'RE_AFC1' | 'RE_AFC2' | 'ASBUILT';
+/**
+ * A stage a register added on Setup (9 Oct 2026): `S1`, `S2`… after AFC, each
+ * with one resubmission `RE_S1`. Its words, colour and weight are the register's.
+ */
+export type AddedStage = `S${number}` | `RE_S${number}`;
+export type DocStage = BaseStage | AddedStage;
 
 export const docStages = sqliteTable('doc_stages', {
   id: id(),

@@ -168,3 +168,31 @@ export function detectPrefix(numbers: string[]): string | null {
 export function defaultRule(prefix: string): NumberingRule {
   return { prefix, disciplines: {}, types: {}, digits: 3 };
 }
+
+/**
+ * The longest each part of a typed number may be, the same caps the Setup
+ * card puts on its codes: area 6, discipline 4, type 4 (its kind letter plus
+ * up to three), and the running number as many digits as the rule gives.
+ * Parts are read by position, so only a number with four parts (no area) or
+ * five is checked; any other shape is the user's own and left alone.
+ * Returns the sentence to show, or null when every part fits.
+ */
+export function numberTooLong(docNo: string, rule: NumberingRule): string | null {
+  // No prefix = no format (the VDRL): the number is the vendor's, any shape.
+  if (!rule.prefix.trim()) return null;
+  const parts = docNo.trim().split('-');
+  const names = parts.length === 5
+    ? ['The project part', 'The area', 'The discipline', 'The type', 'The running number']
+    : parts.length === 4 ? ['The project part', 'The discipline', 'The type', 'The running number'] : null;
+  if (!names) return null;
+  const caps: Record<string, number> = {
+    'The project part': Math.max(3, rule.prefix.trim().length),
+    'The area': 6, 'The discipline': 4, 'The type': 4,
+    'The running number': Math.max(3, rule.digits),
+  };
+  for (let i = 0; i < parts.length; i++) {
+    const max = caps[names[i]];
+    if (parts[i].length > max) return `${names[i]} (${parts[i]}) takes at most ${max} characters.`;
+  }
+  return null;
+}

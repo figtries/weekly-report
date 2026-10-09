@@ -96,7 +96,7 @@ export default function WeekSteps({
                   // touch target. Padding and type tighten below `sm` instead,
                   // because all four must fit a 360px screen: this list hides
                   // its scrollbar, and a label cut mid-word reads as broken.
-                  'relative isolate flex min-h-11 w-full items-center justify-center gap-1 whitespace-nowrap rounded-full px-1.5 text-sm sm:gap-1.5 sm:px-4 sm:text-[15px]',
+                  'relative isolate flex min-h-11 w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg px-1.5 text-sm sm:gap-1.5 sm:px-4 sm:text-[15px]',
                   // `transition-colors`, not `transition-all`: the press is
                   // framer-motion's, and two writers on one transform is a
                   // press that stutters halfway down.
@@ -109,12 +109,12 @@ export default function WeekSteps({
                 {active && (
                   <SlideTab
                     id="week-step"
-                    className="rounded-full bg-chart-1/10 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)] ring-0 dark:ring-0"
+                    className="rounded-lg bg-chart-1/10 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_0.08)] ring-0 dark:ring-0"
                   />
                 )}
                 {s.short ? (
                   <>
-                    <span className="sm:hidden">{s.short}</span>
+                    <span className="whitespace-pre-line py-1 text-center leading-[1.15] sm:hidden">{s.short}</span>
                     <span className="hidden sm:inline">{s.label}</span>
                   </>
                 ) : (
