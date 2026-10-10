@@ -104,21 +104,24 @@ export function rowHeight(row: { name: string; isSummary: boolean }, rel: number
   return nameLines(row.name, width, row.isSummary) * SHEET.lineH + SHEET.rowPad;
 }
 
-/** The rows a choice prints, each with its depth below the printed root. */
+/**
+ * The rows a choice prints, each with its depth below its printed root.
+ * `scope` is 'all' or comma-separated row ids; each id brings its branch, in
+ * plan order, and a branch inside one already picked is not printed twice.
+ */
 export function scopeRows<T extends PrintRowLite>(rows: T[], scope: string, levels: number): (T & { rel: number })[] {
-  let picked: T[] = rows;
-  let rootDepth = 0;
-  if (scope !== 'all') {
-    const start = rows.findIndex((r) => r.id === scope);
-    if (start < 0) return [];
-    rootDepth = rows[start].depth;
-    let end = start + 1;
-    while (end < rows.length && rows[end].depth > rootDepth) end++;
-    picked = rows.slice(start, end);
+  const ids = new Set(scope.split(','));
+  const all = ids.has('all');
+  const out: (T & { rel: number })[] = [];
+  let root = all ? 0 : -1;
+  for (const r of rows) {
+    if (!all && (root < 0 || r.depth <= root)) {
+      root = ids.has(r.id) ? r.depth : -1;
+      if (root < 0) continue;
+    }
+    out.push({ ...r, rel: r.depth - root });
   }
-  return picked
-    .map((r) => ({ ...r, rel: r.depth - rootDepth }))
-    .filter((r) => levels <= 0 || r.rel < levels);
+  return out.filter((r) => levels <= 0 || r.rel < levels);
 }
 
 /** The deepest level in a choice, so the pop-up offers only levels that exist. */

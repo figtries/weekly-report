@@ -16,7 +16,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const scope = req.nextUrl.searchParams.get('scope') ?? 'all';
   const levels = req.nextUrl.searchParams.get('levels') ?? '0';
   // Only our own page, rebuilt from validated pieces: caller text never reaches the browser.
-  if (scope !== 'all' && !ID.test(scope)) return new Response('Bad scope', { status: 400 });
+  const scopeIds = scope.split(',');
+  if (scope !== 'all' && (scopeIds.length > 200 || !scopeIds.every((s) => ID.test(s)))) return new Response('Bad scope', { status: 400 });
   if (!/^\d{1,2}$/.test(levels)) return new Response('Bad levels', { status: 400 });
   // A project another instance made seconds ago: pull the snapshot once before saying no.
   let project = getProject(id);

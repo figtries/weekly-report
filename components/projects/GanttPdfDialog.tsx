@@ -30,7 +30,16 @@ export default function GanttPdfDialog({
   packages: { id: string; label: string }[];
   rows: PrintRowLite[];
 }) {
-  const [scope, setScope] = useState('all');
+  // Ticked: 'all', or any number of packages (10 Oct 2026, radios became checkboxes).
+  const [ticked, setTicked] = useState<string[]>(['all']);
+  const whole = ticked.includes('all');
+  const scope = whole ? 'all' : packages.filter((p) => ticked.includes(p.id)).map((p) => p.id).join(',');
+  const toggle = (id: string, on: boolean) =>
+    setTicked(
+      id === 'all'
+        ? on ? ['all'] : []
+        : (whole ? packages.map((p) => p.id) : ticked).filter((t) => t !== id).concat(on ? [id] : []),
+    );
   const [levels, setLevels] = useState(0);
   const [shown, setShown] = useState({ client: false, contractor: false });
   const partyChoices = (['client', 'contractor'] as const).filter((k) => parties[k]);
@@ -38,7 +47,7 @@ export default function GanttPdfDialog({
   // A level the new choice does not have falls back to all of them.
   const shownLevels = levels < depth ? levels : 0;
   const size = useMemo(() => estimatePages(rows, scope, shownLevels), [rows, scope, shownLevels]);
-  const picked = packages.find((p) => p.id === scope);
+  const picked = whole ? undefined : packages.find((p) => p.id === scope);
   const fileName = `${fileBase} - Schedule${picked ? ` - ${picked.label}` : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   // Up to three levels besides All: four buttons that share both edges, 2 x 2 on a phone.
   const levelChoices = Array.from({ length: Math.max(0, Math.min(depth - 1, 3)) }, (_, i) => i + 1);
@@ -82,12 +91,11 @@ export default function GanttPdfDialog({
             <p className="mb-1 text-xs font-medium text-muted-foreground">What to include</p>
             <div className="max-h-64 space-y-0.5 overflow-y-auto">
               {[{ id: 'all', label: 'Whole plan' }, ...packages].map((p) => (
-                <label key={p.id} className={option(scope === p.id)}>
+                <label key={p.id} className={option(whole || ticked.includes(p.id))}>
                   <input
-                    type="radio"
-                    name="gantt-scope"
-                    checked={scope === p.id}
-                    onChange={() => setScope(p.id)}
+                    type="checkbox"
+                    checked={whole || ticked.includes(p.id)}
+                    onChange={(e) => toggle(p.id, e.target.checked)}
                     className="size-4 shrink-0 accent-[var(--primary)]"
                   />
                   <span className="min-w-0">{p.label}</span>
@@ -142,17 +150,19 @@ export default function GanttPdfDialog({
 
         <div className="pt-1">
           <p className="mb-2 text-sm text-muted-foreground" aria-live="polite">
-            {size.rows === 0
-              ? 'Nothing to print here yet.'
-              : `${size.rows} ${size.rows === 1 ? 'row' : 'rows'} · ${size.pages} ${size.pages === 1 ? 'page' : 'pages'}`}
+            {!scope
+              ? 'Tick at least one to download.'
+              : size.rows === 0
+                ? 'Nothing to print here yet.'
+                : `${size.rows} ${size.rows === 1 ? 'row' : 'rows'} · ${size.pages} ${size.pages === 1 ? 'page' : 'pages'}`}
           </p>
-          <SavePdfButton
+          {scope && <SavePdfButton
             url={`/api/pdf/projects/${projectId}?scope=${encodeURIComponent(scope)}&levels=${shownLevels}${shown.client ? '&client=1' : ''}${shown.contractor ? '&contractor=1' : ''}`}
             filename={fileName}
             ariaLabel={`Download the Gantt chart as a PDF, ${size.pages} pages`}
             label="Download PDF"
             labelAlways
-          />
+          />}
         </div>
       </DialogContent>
     </Dialog>

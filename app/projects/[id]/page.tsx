@@ -141,7 +141,7 @@ async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
               children, one instance of each — a second copy behind a
               `sm:hidden` would mean two ProjectDetails dialogs mounted, each
               with its own state, on every project page. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-3 sm:gap-y-1">
             <Link
               href="/projects"
               className="order-1 mr-auto inline-flex h-11 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full"
