@@ -21,6 +21,7 @@ export default function WeekSelect({
   onPick,
   variant = 'bar',
   label,
+  wide = false,
   compact = false,
 }: {
   weeks: number[];
@@ -53,6 +54,8 @@ export default function WeekSelect({
   onPick?: (week: number) => void;
   /** `pill` sits inside a sentence and takes that sentence's tinted capsule. */
   variant?: 'bar' | 'pill';
+  /** A pill that fills its column, so a form of pills shares one right edge. */
+  wide?: boolean;
   /** Read out for the trigger, for a picker whose sentence names it. */
   label?: string;
 }) {
@@ -281,7 +284,7 @@ export default function WeekSelect({
   return (
     // A span, so the picker can sit inside a sentence's <p> (the week log's "from /
     // to") without a div there, which is invalid HTML and a hydration error.
-    <span ref={rootRef} className={variant === 'pill' ? 'relative inline-flex' : 'relative block w-fit'}>
+    <span ref={rootRef} className={variant === 'pill' ? (wide ? 'relative flex w-full' : 'relative inline-flex') : 'relative block w-fit'}>
       <m.button
         {...pressMotion}
         type="button"
@@ -292,7 +295,7 @@ export default function WeekSelect({
         aria-label={label ? `${label}: Week ${displayedWeek}` : undefined}
         className={
           variant === 'pill'
-            ? 'flex min-h-9 w-38 items-center justify-between gap-2 rounded-lg bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1'
+            ? `flex min-h-9 ${wide ? 'w-full' : 'w-38'} items-center justify-between gap-2 rounded-lg bg-primary/6 px-3.5 py-1 text-[14px] font-medium tabular-nums text-primary transition-colors duration-200 ease-ios hover:bg-primary/12 focus:outline-none focus-visible:ring-2 focus-visible:ring-chart-1`
             : `flex min-h-11 w-38 items-center justify-between gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium tabular-nums text-foreground shadow-sm transition-colors duration-200 ease-ios hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40${compact ? ' max-sm:w-32 max-sm:px-3' : ''}`
         }
       >
@@ -305,7 +308,7 @@ export default function WeekSelect({
           <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
           <path d="M3 8h14M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        <span className="whitespace-nowrap">Week {displayedWeek}</span>
+        <span className={`whitespace-nowrap${wide ? ' flex-1 text-left' : ''}`}>Week {displayedWeek}</span>
         {isPending ? (
           <svg
             className="h-4 w-4 animate-spin text-chart-1"

@@ -677,7 +677,7 @@ function StageForm({
   // One-line captions over full-width fields, so the two columns always line up
   // ("Back from client" wrapped on a phone and pushed its field below its pair's).
   const cell = 'flex min-w-0 flex-col gap-1';
-  const cap = 'truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground';
+  const cap = 'truncate text-xs font-medium text-muted-foreground';
   return (
     <div className="animate-fade-in-up mb-3 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
       <p className="text-[13px] font-semibold text-foreground">{label}</p>

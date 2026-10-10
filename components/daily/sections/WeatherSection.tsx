@@ -62,21 +62,21 @@ export default function WeatherSection({
       </div>
 
       <p className="mb-2 mt-4 text-[12px] font-medium text-muted-foreground">Working hours</p>
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
         <input
           type="time"
           aria-label="Start time"
           value={w.waktuMulai}
           onChange={(e) => patch({ waktuMulai: e.target.value })}
-          className={cn(INPUT_CLS, 'w-32 tabular-nums')}
+          className={cn(INPUT_CLS, 'w-full min-w-0 tabular-nums sm:w-32')}
         />
-        <ArrowRight className="size-4 shrink-0 text-gray-400" aria-hidden />
+        <ArrowRight className="hidden size-4 shrink-0 text-gray-400 sm:block" aria-hidden />
         <input
           type="time"
           aria-label="End time"
           value={w.waktuSelesai}
           onChange={(e) => patch({ waktuSelesai: e.target.value })}
-          className={cn(INPUT_CLS, 'w-32 tabular-nums')}
+          className={cn(INPUT_CLS, 'w-full min-w-0 tabular-nums sm:w-32')}
         />
       </div>
     </SectionRow>

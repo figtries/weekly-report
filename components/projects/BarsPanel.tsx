@@ -288,15 +288,15 @@ export default function BarsPanel({
         </div>
 
         <p className="mt-5 text-[13px] font-medium">Colour bars by</p>
-        <div className="mt-2 grid grid-cols-2 gap-1 rounded-[10px] border p-0.5">
+        <div className="mt-2 grid grid-cols-2 gap-2">
           {modes.map((mo) => (
             <button
               key={mo.key}
               type="button"
               onClick={() => onChange({ ...view, colourBy: mo.key })}
               aria-pressed={by === mo.key}
-              className={`min-h-11 rounded-lg px-2 text-[13px] font-medium transition-colors duration-200 ease-ios ${
-                by === mo.key ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted'
+              className={`min-h-11 rounded-lg border px-2 text-[13px] font-medium transition-colors duration-200 ease-ios ${
+                by === mo.key ? 'border-chart-1 bg-chart-1/10 text-primary' : 'border-border bg-card text-foreground hover:border-gray-300'
               }`}
             >
               {mo.label}
@@ -373,7 +373,7 @@ export default function BarsPanel({
         )}
 
         <p className="mt-5 text-[13px] font-medium">Beside each bar</p>
-        <div className="mt-2 grid grid-cols-2 gap-1 rounded-[10px] border p-0.5">
+        <div className="mt-2 grid grid-cols-2 gap-2">
           {(
             [
               ['name', 'Name'],
@@ -387,8 +387,8 @@ export default function BarsPanel({
               type="button"
               onClick={() => onChange({ ...view, beside: key })}
               aria-pressed={view.beside === key}
-              className={`min-h-11 rounded-lg px-2 text-[13px] font-medium transition-colors duration-200 ease-ios ${
-                view.beside === key ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted'
+              className={`min-h-11 rounded-lg border px-2 text-[13px] font-medium transition-colors duration-200 ease-ios ${
+                view.beside === key ? 'border-chart-1 bg-chart-1/10 text-primary' : 'border-border bg-card text-foreground hover:border-gray-300'
               }`}
             >
               {label}

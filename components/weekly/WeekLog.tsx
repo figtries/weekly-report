@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Layers, Lock } from 'lucide-react';
+import { Flag, Layers, Lock, Plus } from 'lucide-react';
 
 import { restoreLeafWeeksAction, saveLeafWeeksAction } from '@/lib/actions';
 import type { MapNode } from '@/lib/overall-map';
@@ -599,59 +599,67 @@ export default function WeekLog({
               ))}
             </div>
 
-            <div className="mt-4 space-y-2.5 text-[15px] text-foreground">
-              <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-                <span>Add</span>
+            {/* One grid: words in the first column, boxes filling the second,
+                so every row shares both edges and neither mode shifts it. */}
+            <div className="mt-4 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 text-[15px] text-foreground">
+              <span>Add</span>
+              <div className="flex gap-2">
                 <AmountInput value={amount} onChange={setAmount} unit={unit} />
                 {fill === 'range' ? (
                   <button
                     type="button"
                     onClick={() => setSpread((v) => (v === 'each' ? 'total' : 'each'))}
-                    className="inline-flex min-h-9 items-center rounded-lg bg-primary/6 px-3 text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
+                    className="inline-flex min-h-9 w-28 shrink-0 items-center justify-center rounded-lg bg-primary/6 text-[14px] font-medium text-primary transition-colors duration-200 ease-ios hover:bg-primary hover:text-primary-foreground"
                   >
                     {spread === 'each' ? 'each week' : 'in total'}
                   </button>
                 ) : (
-                  <span>each week</span>
+                  <span className="inline-flex min-h-9 w-28 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.05] text-[14px] font-medium text-muted-foreground">
+                    each week
+                  </span>
                 )}
-              </p>
-              <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-                {/* Each word with its pill, so a phone breaks the sentence as
-                    "from [Week 35]" / "to [Week 40]", never leaving "to" alone. */}
-                <span className="inline-flex items-center gap-2">
-                  <span>from</span>
+              </div>
+
+              <span>from</span>
+              <WeekSelect
+                wide
+                variant="pill"
+                label="First week"
+                weeks={weekOptions}
+                selectedWeek={from}
+                projectCurrentWeek={today}
+                anchorEnd={anchorEnd}
+                prefetch={false}
+                onPick={(w) => {
+                  setFrom(w);
+                  if (to < w) setTo(w);
+                }}
+              />
+
+              {fill === 'range' ? (
+                <>
+                  <span>to</span>
                   <WeekSelect
+                    wide
                     variant="pill"
-                    label="First week"
-                    weeks={weekOptions}
-                    selectedWeek={from}
+                    label="Last week"
+                    weeks={weekOptions.filter((w) => w >= from)}
+                    selectedWeek={to}
                     projectCurrentWeek={today}
                     anchorEnd={anchorEnd}
                     prefetch={false}
-                    onPick={(w) => {
-                      setFrom(w);
-                      if (to < w) setTo(w);
-                    }}
+                    onPick={setTo}
                   />
-                </span>
-                {fill === 'range' ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span>to</span>
-                    <WeekSelect
-                      variant="pill"
-                      label="Last week"
-                      weeks={weekOptions.filter((w) => w >= from)}
-                      selectedWeek={to}
-                      projectCurrentWeek={today}
-                      anchorEnd={anchorEnd}
-                      prefetch={false}
-                      onPick={setTo}
-                    />
+                </>
+              ) : (
+                <>
+                  <span>until</span>
+                  <span className="flex min-h-9 items-center gap-2 rounded-lg bg-foreground/[0.05] px-3.5 text-[14px] font-medium text-muted-foreground">
+                    <Flag className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                    it reaches 100%
                   </span>
-                ) : (
-                  <span>until it is done</span>
-                )}
-              </p>
+                </>
+              )}
             </div>
 
             {plan?.fill && (
@@ -972,7 +980,10 @@ function StepPct({ children, onClick, label }: { children: React.ReactNode; onCl
  */
 function AmountInput({ value, onChange, unit }: { value: string; onChange: (v: string) => void; unit: string }) {
   return (
-    <span className="inline-flex items-baseline">
+    // Same box as the week pills below it (min-h-9, tinted), so the grid's
+    // second column is one straight edge.
+    <label className="flex min-h-9 min-w-0 flex-1 cursor-text items-center gap-2 rounded-lg bg-primary/6 px-3.5 ring-chart-1 transition-colors duration-200 ease-ios focus-within:ring-2 hover:bg-primary/12">
+      <Plus className="h-4 w-4 shrink-0 text-primary" strokeWidth={2} aria-hidden="true" />
       <input
         type="text"
         inputMode="decimal"
@@ -980,10 +991,9 @@ function AmountInput({ value, onChange, unit }: { value: string; onChange: (v: s
         value={value}
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => onChange(e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '').slice(0, 6))}
-        style={{ width: `${Math.max(value.length, 1) + 0.9}ch` }}
-        className="h-9 border-0 border-b-2 border-border bg-transparent px-1 text-center text-[17px] font-semibold tabular-nums text-primary outline-none transition-colors duration-200 ease-ios focus:border-chart-1"
+        className="min-w-0 flex-1 border-0 bg-transparent text-[16px] font-semibold tabular-nums text-primary outline-none"
       />
-      <span className="text-[15px] font-medium text-primary">{unit.trim()}</span>
-    </span>
+      <span className="shrink-0 text-[14px] font-medium text-primary">{unit.trim()}</span>
+    </label>
   );
 }

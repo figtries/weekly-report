@@ -272,9 +272,10 @@ export function RegisterSetup({
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-2 sm:gap-y-1.5">
         <div className="flex min-h-11 items-center gap-3 sm:contents">
           {onClose && (
-            <Button variant="ghost" size="icon" className="-ml-3 h-11 w-11 shrink-0" onClick={onClose} aria-label="Back to the register">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            <button type="button" onClick={onClose} className="inline-flex h-11 shrink-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:h-8 sm:w-full">
+              <ArrowLeft className="size-3.5" />
+              Back to {info.short} Data
+            </button>
           )}
           <div className="ml-auto flex items-center gap-3 sm:order-2 sm:shrink-0">
           {reminders > 0 ? (
