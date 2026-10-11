@@ -5,7 +5,7 @@ import WeekSteps from '@/components/weekly/WeekSteps';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import { ChevronDown, Settings2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -151,6 +151,11 @@ function PhoneRegisterBar({ active, selectedWeek }: { active: string; selectedWe
             >
               {r.name}
               {here && <span className="font-medium">&nbsp;·&nbsp;{here.label}</span>}
+              {/* The week picker's chevron: without it nobody read the tab as a menu. */}
+              <ChevronDown
+                aria-hidden
+                className={cn('ml-1.5 h-4 w-4 shrink-0 opacity-70 transition-transform duration-300 ease-ios', isOpen && 'rotate-180')}
+              />
             </button>
             {isOpen && (
               <div
