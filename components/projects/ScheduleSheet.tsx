@@ -1849,10 +1849,10 @@ export default function ScheduleSheet({
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] tabular-nums text-muted-foreground">{selected.code}</p>
                 <p className="mt-0.5 text-sm font-semibold leading-snug">{selected.name}</p>
-                <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                  {barSentence(selected, facts[selected.id], {
-                    setsFinish: network.rows.get(selected.id)?.setsProjectFinish ?? false,
-                  }) || 'No dates yet'}
+                <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                  {selected.startDate || selected.finishDate
+                    ? `${fmtDate(selected.startDate) || '?'} → ${fmtDate(selected.finishDate) || '?'}`
+                    : 'No dates yet'}
                 </p>
               </div>
               <button
