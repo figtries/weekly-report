@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { m } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import {
   ChevronDown,
   ChevronRight,
@@ -1734,7 +1734,11 @@ export default function ScheduleSheet({
           // The same height as the legend it replaces from md (GanttLegend's
           // `md:min-h-13`): a strip taller than the key shifted every row down
           // between a press's mousedown and its click, and the click missed.
-          className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px] md:min-h-13"
+          // Not on the phone's List tab: there it pushed every row down and still
+          // cut the name short. The floating card over the list says it whole.
+          className={`flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b bg-muted/60 px-3 py-1.5 text-[11px] md:min-h-13 ${
+            pane === 'sheet' ? 'max-md:hidden' : ''
+          }`}
         >
           <span
             aria-hidden
@@ -1819,8 +1823,49 @@ export default function ScheduleSheet({
           e.stopPropagation();
           e.preventDefault();
         }}
-        className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden max-md:h-[65dvh] max-md:flex-none"
+        className="relative flex min-h-0 w-full min-w-0 flex-1 overflow-hidden max-md:h-[65dvh] max-md:flex-none"
       >
+        {/* A PRESSED ROW, SAID WHOLE, on the phone's List tab (12 Oct 2026).
+            Three columns leave the name "Heat & …"; widening it would cost the
+            list its shape, so the full name floats over the list instead and
+            moves no row. Gone while the name is being edited. */}
+        <AnimatePresence>
+          {selected && pane === 'sheet' && !editing && (
+            <m.div
+              key="pressed"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.18 }}
+              // Fixed, not absolute: on a phone the page scrolls and the list's
+              // own foot is usually below the screen.
+              className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex items-start gap-2.5 rounded-xl border bg-card py-3 pl-3 pr-1.5 shadow-lg md:hidden"
+            >
+              <span
+                aria-hidden
+                className="w-1 shrink-0 self-stretch rounded-full"
+                style={{ background: paintOf(selected) }}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] tabular-nums text-muted-foreground">{selected.code}</p>
+                <p className="mt-0.5 text-sm font-semibold leading-snug">{selected.name}</p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                  {barSentence(selected, facts[selected.id], {
+                    setsFinish: network.rows.get(selected.id)?.setsProjectFinish ?? false,
+                  }) || 'No dates yet'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close"
+                className="-mt-1.5 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-4" />
+              </button>
+            </m.div>
+          )}
+        </AnimatePresence>
         <div
           ref={leftRef}
           onScroll={mirror('l')}
@@ -1986,6 +2031,8 @@ export default function ScheduleSheet({
                   Math.max(0, visible.length - Math.min(range.end, visible.length)) * ROW_H,
               }}
             />
+            {/* Room to scroll the last rows out from under the pressed-row card. */}
+            {selected && pane === 'sheet' && <div aria-hidden className="h-36 md:hidden" />}
           </div>
         </div>
 
@@ -2189,6 +2236,14 @@ const Row = memo(function Row({
   const onSelect = () => on.select(r.id);
   const onToggle = () => on.toggle(r.id);
   const onEdit = (f: Field) => on.edit(r.id, f);
+  // On a phone the first press on a name only picks the row, so the card over
+  // the list can say the name whole; the second press edits it. Read at
+  // pointerdown, before the press itself selects the row.
+  const wasSelected = useRef(false);
+  const onEditName = () => {
+    if (!wasSelected.current && window.matchMedia('(max-width: 767px)').matches) return;
+    onEdit('name');
+  };
   const onDone = on.done;
   const onCommit = (f: Field, v: string) => on.commit(r, f, v);
   const onMenu = () => !pending && on.menu(r);
@@ -2215,7 +2270,10 @@ const Row = memo(function Row({
   return (
     <div
       onMouseDown={onSelect}
-      onPointerDown={(e) => on.press(r, e)}
+      onPointerDown={(e) => {
+        wasSelected.current = selected;
+        on.press(r, e);
+      }}
       className={`group grid items-center gap-x-1.5 border-b px-3 transition-colors duration-150 ${GRID_SM} ${GRID_LG} ${
         selected ? 'bg-muted' : 'hover:bg-muted/50'
       } ${r.isSummary ? 'font-semibold' : ''} ${
@@ -2264,7 +2322,7 @@ const Row = memo(function Row({
         <EditableCell
           value={r.name}
           active={editing === 'name'}
-          onEdit={() => onEdit('name')}
+          onEdit={onEditName}
           onDone={onDone}
           onCommit={(v) => onCommit('name', v)}
           onTab={onIndent}
