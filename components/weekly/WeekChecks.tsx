@@ -168,28 +168,22 @@ export default function WeekChecks({
                 </p>
               </div>
             </div>
-            {/* Straight to the items that block the week. Fill in opens showing
-                only those, with the first one's panel already up, so closing
-                it leaves the rest in front of you. The set is worked out again
-                on that page from the same `validateWeek`, so the URL carries a
-                word and not a list of ids. A failure with no item behind it
-                (the weights not closing) has nothing to open, and then this is
-                plain navigation, as it always was. */}
-            <Link
-              href={
-                canIssue
-                  ? `/weekly/${week}/summary`
-                  : blocking
-                    ? `/weekly/${week}/overall?lens=blocking`
-                    : `/weekly/${week}/overall`
-              }
-              className={cn(
-                'inline-flex min-h-11 shrink-0 items-center rounded-xl px-4 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]',
-                canIssue ? 'bg-ok' : 'bg-bad'
-              )}
-            >
-              {canIssue ? 'Go to the report →' : 'Back to Fill in →'}
-            </Link>
+            {/* Only when the week is blocked: straight to the items that block
+                it. Fill in opens showing only those, with the first one's panel
+                already up. The set is worked out again on that page from the
+                same `validateWeek`, so the URL carries a word and not a list of
+                ids. A failure with no item behind it (the weights not closing)
+                has nothing to open, and then this is plain navigation. A ready
+                week has no button here: the page's Report button already goes
+                to the same place, and two doors to one room read as two rooms. */}
+            {!canIssue && (
+              <Link
+                href={blocking ? `/weekly/${week}/overall?lens=blocking` : `/weekly/${week}/overall`}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-bad px-4 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]"
+              >
+                Back to Fill in →
+              </Link>
+            )}
           </div>
         </div>
       </Reveal>
