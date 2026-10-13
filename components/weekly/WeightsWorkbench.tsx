@@ -401,12 +401,6 @@ export default function WeightsWorkbench({
     onCancel: cancelEdit,
     onSave: (rowId: string) => void saveEdit(rowId),
     onTypeMoney: typeMoney,
-    // A figure refused because it takes the project past the contract is
-    // fixed on the project, so the refusal carries the press that gets there.
-    contractHref:
-      live.signedContract > 0 && live.projectBudget - live.signedContract > 0.5
-        ? `/projects/${projectId}#edit=contractValue`
-        : null,
   };
 
   return (
@@ -878,21 +872,6 @@ function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
   );
 }
 
-/** The press under a refusal that only a bigger contract can lift. */
-function RaiseContract({ href }: { href: string }) {
-  return (
-    <div className="mt-2 flex">
-      <PressLink
-        {...pressMotion}
-        href={href}
-        className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-background px-4 text-sm font-semibold text-primary ring-1 ring-primary/30"
-      >
-        Raise the contract value
-      </PressLink>
-    </div>
-  );
-}
-
 /** Drop one key without mutating, so a stale entry cannot outlive its save. */
 function omit<T>(map: Record<string, T>, key: string): Record<string, T> {
   const next = { ...map };
@@ -1340,17 +1319,9 @@ function BudgetHeader({
             </label>
 
             {error ? (
-              <>
-                <p role="alert" className="text-[13px] font-semibold text-destructive">
-                  {error}
-                </p>
-                {/* A rule under it: the press leaves the dialog, Cancel and Save stay in it. */}
-                {list.contractHref && (
-                  <div className="border-b border-border pb-4">
-                    <RaiseContract href={list.contractHref} />
-                  </div>
-                )}
-              </>
+              <p role="alert" className="rounded-lg bg-destructive/8 px-3 py-2.5 text-[13px] font-medium text-destructive">
+                {error}
+              </p>
             ) : (
               <ul className="flex flex-col gap-1.5 text-[13px]">
                 <li className="flex justify-between gap-3">
@@ -1436,8 +1407,6 @@ interface ListProps {
   onCancel: (rowId: string) => void;
   onSave: (rowId: string) => void;
   onTypeMoney: (rowId: string, raw: string) => void;
-  /** Where the contract value is raised, while what is typed takes the project past it. */
-  contractHref: string | null;
 }
 
 /**
@@ -1494,7 +1463,6 @@ function RowList({
   onCancel,
   onSave,
   onTypeMoney,
-  contractHref,
   lockRoot = false,
 }: ListProps & {
   rows: WeightsRow[];
@@ -1765,12 +1733,11 @@ function RowList({
               {error && (
                 <p
                   role="alert"
-                  className="animate-fade-in-up mt-2 text-[12.5px] font-semibold text-destructive sm:text-right"
+                  className="animate-fade-in-up mt-2 rounded-lg bg-destructive/8 px-3 py-2 text-[13px] font-medium text-destructive"
                 >
                   {error}
                 </p>
               )}
-              {error && contractHref && <RaiseContract href={contractHref} />}
             </div>
           );
         })}

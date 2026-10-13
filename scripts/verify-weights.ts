@@ -168,7 +168,7 @@ check(
 );
 check(
   'and not one unit past it: the contract value has to be raised first',
-  (tryBudget(capped, 'K1', 501) ?? '').endsWith('past the contract value of 1000. Raise the contract value first.'),
+  (tryBudget(capped, 'K1', 501) ?? '').endsWith('Raise it by at least 1 first.'),
   String(tryBudget(capped, 'K1', 501))
 );
 {

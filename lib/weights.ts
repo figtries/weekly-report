@@ -379,7 +379,7 @@ export function checkBudgetEdit(
   if (contract != null) {
     const pastAfter = after.projectBudget - contract;
     if (pastAfter > HALF_UNIT && pastAfter > before.projectBudget - contract + HALF_UNIT) {
-      return `That puts the project budget at ${say(after.projectBudget)}, ${say(pastAfter)} past the contract value of ${say(contract)}. Raise the contract value first.`;
+      return `Over the contract value. Raise it by at least ${say(pastAfter)} first.`;
     }
   }
   return null;
