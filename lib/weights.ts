@@ -364,12 +364,12 @@ export function checkBudgetEdit(
     const was = beforeAlloc.get(key);
     if (was && a.left >= was.left - HALF_UNIT) continue;
     if (key === nodeId) {
-      return `The rows inside ${nameOf(nodeId)} already take ${say(a.claimed)}. Lower them first, or keep it at ${say(a.claimed)} or more.`;
+      return `Its rows already use ${say(a.claimed)}, so keep it at least that.`;
     }
     const where = nameOf(key);
-    if (clean == null) return `That would put ${where} over by ${say(-a.left)}.`;
+    if (clean == null) return `${where} would go over by ${say(-a.left)}. Lower its rows first.`;
     const available = Math.max(0, a.budget - (a.claimed - (after.valueOf.get(nodeId) ?? 0)));
-    return `This row can take at most ${say(available)} of ${where}.`;
+    return `Only ${say(available)} is left in ${where} for this row.`;
   }
   // THE CONTRACT CAPS THE PROJECT (8 Oct 2026, replacing 24 Sep's "the project
   // level never refuses"). Work packages past the signed figure is a contract
@@ -379,7 +379,7 @@ export function checkBudgetEdit(
   if (contract != null) {
     const pastAfter = after.projectBudget - contract;
     if (pastAfter > HALF_UNIT && pastAfter > before.projectBudget - contract + HALF_UNIT) {
-      return `Over the contract value. Raise it by at least ${say(pastAfter)} first.`;
+      return `This passes the contract value. Raise it by ${say(pastAfter)} first.`;
     }
   }
   return null;
@@ -441,32 +441,32 @@ export function describeIssue(
   switch (issue.kind) {
     case 'contract-over':
       return {
-        title: `The project budget is ${say(issue.amount)} past the contract value`,
-        detail: `The work packages add up to ${say(issue.budget)}; the contract value is ${say(issue.contract)}. Raise the contract value, or lower a work package.`,
+        title: `Budget is ${say(issue.amount)} over the contract value`,
+        detail: 'Raise the contract value or lower a work package.',
         action: 'Raise the contract value',
       };
     case 'contract-short':
       return {
-        title: `${say(issue.amount)} of the contract is in no work package`,
-        detail: `The work packages add up to ${say(issue.budget)}; the contract value is ${say(issue.contract)}.`,
+        title: `${say(issue.amount)} of the contract is not in a work package`,
+        detail: 'Give it to a work package.',
         action: 'Open Weights',
       };
     case 'over':
       return {
-        title: `${label} hands out ${say(issue.amount)} more than it holds`,
-        detail: `It holds ${say(issue.budget)}; its rows take ${say(issue.claimed)}. Lower its rows, or raise it to ${say(issue.claimed)}.`,
+        title: `${label} is over by ${say(issue.amount)}`,
+        detail: `Its rows use more than it holds. Lower them or raise it to ${say(issue.claimed)}.`,
         action: 'Go to it',
       };
     case 'short':
       return {
         title: `${label} is short by ${say(issue.amount)}`,
-        detail: `It holds ${say(issue.budget)}; its rows hold ${say(issue.claimed)}. Give its rows ${say(issue.amount)} more, or lower it to ${say(issue.claimed)}.`,
+        detail: `Its rows do not use it all yet. Give them the rest or lower it to ${say(issue.claimed)}.`,
         action: 'Go to it',
       };
     case 'unbudgeted':
       return {
         title: `${label} has no budget`,
-        detail: 'It weighs nothing in the report until it has one.',
+        detail: 'It counts for nothing until it has one.',
         action: 'Go to it',
       };
   }

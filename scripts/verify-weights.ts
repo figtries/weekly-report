@@ -151,12 +151,12 @@ const tryBudget = (rows: WeightNode[], id: string, next: number | null) =>
 check('a budget that fits its heading is allowed', tryBudget(capped, 'H2', 300) === null, String(tryBudget(capped, 'H2', 300)));
 check(
   'one unit more than the heading has room for is refused, with the figure',
-  tryBudget(capped, 'H2', 301) === 'This row can take at most 300 of H.',
+  tryBudget(capped, 'H2', 301) === 'Only 300 is left in H for this row.',
   String(tryBudget(capped, 'H2', 301))
 );
 check(
   'a heading cannot be lowered below what its rows take',
-  (tryBudget(capped, 'H', 150) ?? '').startsWith('The rows inside H already take 200.'),
+  (tryBudget(capped, 'H', 150) ?? '').startsWith('Its rows already use 200,'),
   String(tryBudget(capped, 'H', 150))
 );
 // THE CONTRACT CAPS THE PROJECT (8 Oct 2026). The project budget is H 500 +
@@ -168,7 +168,7 @@ check(
 );
 check(
   'and not one unit past it: the contract value has to be raised first',
-  (tryBudget(capped, 'K1', 501) ?? '').endsWith('Raise it by at least 1 first.'),
+  (tryBudget(capped, 'K1', 501) ?? '').endsWith('Raise it by 1 first.'),
   String(tryBudget(capped, 'K1', 501))
 );
 {

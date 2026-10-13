@@ -16,7 +16,6 @@ import LegacyGate from '@/components/projects/LegacyGate';
 import SetupGuideCard from '@/components/weekly/SetupGuideCard';
 import { getOpenProject } from '@/lib/legacy-bridge';
 import { loadWeightsScreen } from '@/lib/weights-screen';
-import { formatMoney } from '@/lib/currency';
 import { blockingIds, validateWeek } from '@/lib/analysis';
 import { r2 } from '@/lib/figures';
 import { weightGate } from '@/lib/weight-gate';
@@ -152,7 +151,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // gate. What it needs looked at rides with it (lib/forecast-view.ts).
   const forecast = gate.ok ? buildForecastView(db, week) : null;
   const overrun = money && money.overrun.branches > 0
-    ? ` ${money.overrun.branches} headings hand out more than they hold, ${formatMoney(money.overrun.amount, money.currency)} over between them.`
+    ? ` ${money.overrun.branches} headings are over what they hold.`
     : '';
 
   const guide =

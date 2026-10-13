@@ -609,33 +609,18 @@ function PricingHero({
 
         {over ? (
           <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-destructive/8 p-3 ring-1 ring-destructive/25">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-destructive">
-                The weights add up to {governing.toFixed(2)}%, and they have to be 100%
-              </p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {overrun.branches} headings hand out more than they hold,{' '}
-                <strong className="tabular-nums text-foreground">
-                  {formatMoney(overrun.amount, currency)}
-                </strong>{' '}
-                over between them. Every one of them is listed below — tap one to go straight to it.
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-destructive">
+              Weights are at {governing.toFixed(2)}% because the rows in these headings use more than the heading holds. Lower them to reach 100%.
+            </p>
             <OverList headings={overrun.headings} labelOf={labelOf} currency={currency} onGo={onGoToRow} />
           </div>
         ) : priceDrift ? (
           // Locked, so the report is safe and this is not an alarm — but the
           // prices and the weights are telling different stories.
           <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-warn">The budgets no longer add up to these weights</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                The weights are locked at{' '}
-                <strong className="tabular-nums text-foreground">{governing.toFixed(2)}%</strong> and the report
-                uses them. Deriving from the budgets would give{' '}
-                <strong className="tabular-nums text-foreground">{live.total.toFixed(2)}%</strong>.
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-warn">
+              Locked weights are {governing.toFixed(2)}% but the budgets give {live.total.toFixed(2)}%. Check the headings below.
+            </p>
             <OverList headings={overrun.headings} labelOf={labelOf} currency={currency} onGo={onGoToRow} />
           </div>
         ) : null}
@@ -644,12 +629,9 @@ function PricingHero({
             message, so they are named and one tap away. */}
         {unbudgeted.length > 0 && (
           <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
-            <p className="text-sm text-muted-foreground">
-              <strong className="text-warn">
-                {unbudgeted.length} {unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget
-              </strong>
-              , so {unbudgeted.length === 1 ? 'it weighs' : 'they weigh'} nothing in the report. Give each one a
-              budget, or its share of the heading.
+            <p className="text-sm font-semibold text-warn">
+              {unbudgeted.length} {unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget yet, so{' '}
+              {unbudgeted.length === 1 ? 'it counts' : 'they count'} for nothing. Give each one a budget.
             </p>
             <RowButtons ids={unbudgeted} labelOf={labelOf} onGo={onGoToRow} />
           </div>
@@ -661,13 +643,9 @@ function PricingHero({
             its rows hold. */}
         {short.length > 0 && (
           <div className="animate-fade-in-up flex flex-col gap-3 rounded-xl bg-warn-soft p-3 ring-1 ring-warn/25">
-            <p className="text-sm text-muted-foreground">
-              <strong className="text-warn">
-                {short.length} {short.length === 1 ? 'heading holds' : 'headings hold'} budget its rows have
-                not been given
-              </strong>
-              , so the weights stop short of 100%. Give the rows the rest, or lower the heading to what its
-              rows hold.
+            <p className="text-sm font-semibold text-warn">
+              {short.length === 1 ? 'This heading has' : 'These headings have'} budget its rows do not use yet. Give
+              the rows the rest or lower the heading.
             </p>
             <OverList headings={short} labelOf={labelOf} currency={currency} onGo={onGoToRow} short />
           </div>
@@ -683,7 +661,7 @@ function PricingHero({
               <>
                 {' · '}
                 <span className="font-semibold text-warn">
-                  {(100 - governing).toFixed(2)}% still in headings, not yet handed to activities
+                  {(100 - governing).toFixed(2)}% not given to activities yet
                 </span>
               </>
             )}
@@ -756,14 +734,10 @@ function OverList({
             <m.button
               {...pressMotion}
               onClick={() => onGo(h.id)}
-              className="flex w-full min-h-11 flex-col gap-0.5 rounded-lg bg-background/70 px-3 py-2 text-left ring-1 ring-foreground/10 transition-colors duration-300 ease-ios hover:bg-background sm:flex-row sm:items-center sm:gap-3"
+              className="flex w-full min-h-11 items-center gap-3 rounded-lg bg-background/70 px-3 py-2 text-left ring-1 ring-foreground/10 transition-colors duration-300 ease-ios hover:bg-background"
             >
               <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
                 {label ?? 'This heading'}
-              </span>
-              <span className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
-                Holds {formatMoney(h.budget, currency)} · Rows {short ? 'hold' : 'take'}{' '}
-                {formatMoney(h.claimed, currency)}
               </span>
               <span
                 className={cn(
@@ -1353,8 +1327,7 @@ function BudgetHeader({
                 </li>
                 {pastContract > 0.5 && (
                   <li className="rounded-lg bg-warn-soft px-2.5 py-2 font-medium text-warn">
-                    {formatMoney(pastContract, currency)} over the contract value ({formatMoney(contract, currency)}).
-                    If the budget really changed, update the contract value on the project after saving.
+                    {formatMoney(pastContract, currency)} over the contract value. Raise it on the project after saving.
                   </li>
                 )}
               </ul>
