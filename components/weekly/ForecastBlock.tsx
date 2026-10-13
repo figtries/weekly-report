@@ -240,16 +240,24 @@ export default function ForecastBlock({
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  {typedHere && (
-                    <button type="button" disabled={pending} onClick={backToPlan} className={cn(pillQuiet, 'mr-auto')}>
-                      Back to plan
-                    </button>
-                  )}
-                  <button type="button" onClick={() => setEditing(null)} className={cn(pill, 'btn-cancel', !typedHere && 'ml-auto')}>
+                {typedHere && (
+                  <button type="button" disabled={pending} onClick={backToPlan} className={pillQuiet}>
+                    Back to plan
+                  </button>
+                )}
+                {/* As wide as the three sources above, and SOLID, so the two
+                    that finish the edit never read as a fourth choice. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setEditing(null)} className={cn(pill, 'btn-cancel justify-center rounded-xl text-[14px]')}>
                     Cancel
                   </button>
-                  <m.button {...pressMotion} type="button" disabled={!date || pending} onClick={saveDate} className={cn(pillPrimary, 'disabled:opacity-40')}>
+                  <m.button
+                    {...pressMotion}
+                    type="button"
+                    disabled={!date || pending}
+                    onClick={saveDate}
+                    className={cn(pill, 'justify-center rounded-xl bg-primary text-[14px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary/85 disabled:opacity-40')}
+                  >
                     {pending ? 'Saving…' : 'Save'}
                   </m.button>
                 </div>

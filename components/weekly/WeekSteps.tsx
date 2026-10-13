@@ -86,7 +86,11 @@ export default function WeekSteps({
         {steps.map((s) => {
           const active = s.key === activeKey;
           return (
-            <li key={s.key} className="flex-1 sm:flex-none">
+            // `sm:flex-auto`, not `flex-none`: when the row above is the wider
+            // ("Set as current" is longer than "Current") the bar stretches to
+            // it, and the spare width must go to every tab equally, or it all
+            // piles up after the last pill.
+            <li key={s.key} className="flex-1 sm:flex-auto">
               <PressLink
                 href={s.href}
                 aria-current={active ? 'page' : undefined}
