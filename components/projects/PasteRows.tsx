@@ -176,13 +176,6 @@ export default function PasteRows({
                 >
                   <div className="shrink-0 border-b p-4">
                     <h2 className="text-sm font-semibold">Bring the plan in from Excel</h2>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      Choose the workbook and the app looks for the sheet the plan is on, then says
-                      which column it read as what so you can correct it. Or select the cells
-                      yourself and paste them here. A task name is the only column that has to be
-                      there. An outline code, dates, a duration and a price are all read when they
-                      are.
-                    </p>
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-auto p-4">

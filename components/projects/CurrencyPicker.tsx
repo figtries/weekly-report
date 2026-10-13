@@ -30,8 +30,6 @@ export default function CurrencyPicker({
   const [asking, setAsking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const current = CURRENCIES.find((c) => c.code === currency);
-
   return (
     <>
       <NativeSelect
@@ -66,16 +64,7 @@ export default function CurrencyPicker({
               Price this project in {CURRENCIES.find((c) => c.code === asking)?.label}?
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              This changes the label, not the numbers. Every price stays exactly the figure it is
-              now: the app holds no exchange rate, and inventing one would silently restate the
-              contract.
-              {current && (
-                <>
-                  {' '}
-                  Anything already entered as <strong className="text-foreground">{current.code}</strong>{' '}
-                  will read as <strong className="text-foreground">{asking}</strong> afterwards.
-                </>
-              )}
+              Only the label changes; no figure is converted.
             </p>
 
             {error && <p className="mt-2 text-xs text-destructive">{error}</p>}

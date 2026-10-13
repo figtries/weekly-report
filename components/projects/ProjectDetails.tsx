@@ -228,10 +228,6 @@ export default function ProjectDetails({ project }: { project: Project }) {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <h2 className="text-sm font-semibold">Project details</h2>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Saved as you leave each field. The contract value is the signed figure, and the
-                    work packages on Weights can add up to it but never past it.
-                  </p>
 
                   <div className="mt-3 space-y-3">
                     {FIELDS.map((f) => (
@@ -340,11 +336,6 @@ export default function ProjectDetails({ project }: { project: Project }) {
                       </div>
                     ))}
                   </div>
-
-                  <p className="mt-3 rounded-lg bg-muted p-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                    The currency is changed on the project page, next to the contract figure. It
-                    relabels and never converts.
-                  </p>
 
 
                   <Button className="mt-4 h-11 w-full" onClick={() => setOpen(false)}>

@@ -687,14 +687,18 @@ function StageForm({
         <label className={cell}><span className={cap} title={`Back from ${other}`}>Back</span><DateField value={back} onChange={setBack} placeholder="Date" clearable className={cn(box, 'gap-1.5 text-sm md:text-sm')} /></label>
         <label className={cell}><span className={cap}>Letter in</span><input value={inNo} onChange={(e) => setInNo(e.target.value)} placeholder="No." className={cn(box, 'px-2 text-sm tracking-tight md:text-sm')} /></label>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className={cn('mr-1 text-xs', needsCode ? 'font-medium text-bad' : 'text-muted-foreground')}>{needsCode ? 'Choose a code' : 'Code'}</span>
-        {settings.codes.map((c) => (
-          <button key={c.key} type="button" aria-pressed={code === c.key} onClick={() => setCode(code === c.key ? '' : c.key)}
-            className={cn('h-8 rounded-lg border px-3 text-xs font-semibold', code === c.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground/80')}>
-            {c.label}
-          </button>
-        ))}
+      {/* Caption over the codes like every field above; the codes split the
+          full width evenly, so they line up with the boxes over them. */}
+      <div className={cn(cell, 'mt-2.5')}>
+        <span className={cn(cap, needsCode && 'text-bad')}>{needsCode ? 'Choose a code' : 'Code'}</span>
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(settings.codes.length, 1)}, minmax(0, 1fr))` }}>
+          {settings.codes.map((c) => (
+            <button key={c.key} type="button" aria-pressed={code === c.key} onClick={() => setCode(code === c.key ? '' : c.key)}
+              className={cn('h-10 min-w-0 truncate rounded-lg border px-2 text-sm font-semibold', code === c.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground/80')}>
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="mt-3 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="btn-cancel h-9 rounded-lg px-3.5 text-sm">Cancel</button>

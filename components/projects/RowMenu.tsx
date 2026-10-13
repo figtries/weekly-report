@@ -538,12 +538,6 @@ export default function RowMenu({
 
         {mode === 'unit' && (
           <div className="mt-3 space-y-2">
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              A work package gets its own section in the report, and it is its own contract, even
-              when it sits inside another one: a package nested in another keeps its own value,
-              apart from the one around it. The app keeps the packages adding up to the contract,
-              and says so when they do not.
-            </p>
             <label className="block text-[11px] font-medium text-muted-foreground">
               Label
               <input

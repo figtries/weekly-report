@@ -881,11 +881,11 @@ function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
 /** The press under a refusal that only a bigger contract can lift. */
 function RaiseContract({ href }: { href: string }) {
   return (
-    <div className="mt-2 flex sm:justify-end">
+    <div className="mt-2 flex">
       <PressLink
         {...pressMotion}
         href={href}
-        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-background px-4 text-sm font-semibold text-primary ring-1 ring-primary/30"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-background px-4 text-sm font-semibold text-primary ring-1 ring-primary/30"
       >
         Raise the contract value
       </PressLink>
@@ -1235,12 +1235,6 @@ function UnitRows({
       </div>
 
       <RowList rows={unit.rows.filter((r) => !hidden.has(r.id))} {...list} />
-
-      <p className="px-1 text-[13px] text-muted-foreground">
-        {unit.isLeaf
-          ? 'Press the row to change its budget. With no budget it weighs nothing in the report.'
-          : 'Press a row to change its budget, or its share and the budget follows. A row with no budget weighs nothing in the report, and no row can take more than its heading has left.'}
-      </p>
     </div>
   );
 }
@@ -1350,7 +1344,12 @@ function BudgetHeader({
                 <p role="alert" className="text-[13px] font-semibold text-destructive">
                   {error}
                 </p>
-                {list.contractHref && <RaiseContract href={list.contractHref} />}
+                {/* A rule under it: the press leaves the dialog, Cancel and Save stay in it. */}
+                {list.contractHref && (
+                  <div className="border-b border-border pb-4">
+                    <RaiseContract href={list.contractHref} />
+                  </div>
+                )}
               </>
             ) : (
               <ul className="flex flex-col gap-1.5 text-[13px]">
