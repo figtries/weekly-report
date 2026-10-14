@@ -364,7 +364,7 @@ export function checkBudgetEdit(
     const was = beforeAlloc.get(key);
     if (was && a.left >= was.left - HALF_UNIT) continue;
     if (key === nodeId) {
-      return `Its rows already use ${say(a.claimed)}, so keep it at least that.`;
+      return `Can't go below ${say(a.claimed)}, the total of the activities inside.`;
     }
     const where = nameOf(key);
     if (clean == null) return `${where} would go over by ${say(-a.left)}. Lower its rows first.`;

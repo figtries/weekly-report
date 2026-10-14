@@ -156,7 +156,7 @@ check(
 );
 check(
   'a heading cannot be lowered below what its rows take',
-  (tryBudget(capped, 'H', 150) ?? '').startsWith('Its rows already use 200,'),
+  (tryBudget(capped, 'H', 150) ?? '').startsWith("Can't go below 200,"),
   String(tryBudget(capped, 'H', 150))
 );
 // THE CONTRACT CAPS THE PROJECT (8 Oct 2026). The project budget is H 500 +
