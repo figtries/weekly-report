@@ -646,7 +646,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
         ? {
             level: 'warn',
             title: 'Nothing moved this week',
-            detail: `Still at ${fmtPct(gt.curProgressPct)}, the same as week ${week - 1}. Say why in the report.`,
+            detail: `Still at ${fmtPct(gt.curProgressPct)}, the same as week ${week - 1}. Make sure no progress was missed.`,
           }
         : {
             level: 'ok',
