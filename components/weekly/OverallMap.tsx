@@ -3,6 +3,7 @@
 import { m } from 'framer-motion';
 import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
 import type { ForecastView } from '@/lib/forecast-view';
@@ -191,10 +192,34 @@ export default function OverallMap({
   // an item fixed a moment ago drops out of it — reading it live would make the
   // row you just saved vanish from under you, and the last fix would leave a
   // map saying "Nothing matches". Kept, it stays on screen with its new figure.
-  const [blocking] = useState(() => new Set(blockingIds));
+  const [blocking, setBlocking] = useState(() => new Set(blockingIds));
   const [reminder, setReminder] = useState<Reminder>(null);
   const [allReminders, setAllReminders] = useState(false);
   const [lens, setLens] = useState<Lens>(initialLens);
+
+  // THE ROUTER KEEPS THIS PAGE ALIVE between visits, so the state above is
+  // only seeded once: a second press on Check opened the FIRST item's panel
+  // again. A new arrival (another `?item=` or `?lens=`) is applied here, during
+  // render; a cleared one changes nothing, so closing a panel keeps the lens.
+  // Read from the URL itself, not the server props: closing a panel drops
+  // `?item=` with a shallow replace the props never see, and the same row
+  // pressed again must still count as new.
+  const params = useSearchParams();
+  const urlLens = params.get('lens');
+  const urlItem = params.get('item');
+  const arrival = `${urlLens ?? ''}|${urlItem ?? ''}`;
+  const [seen, setSeen] = useState(arrival);
+  if (arrival !== seen) {
+    setSeen(arrival);
+    if (urlLens === 'blocking' || urlLens === 'manual') {
+      setLens(initialLens);
+      setBlocking(new Set(blockingIds));
+    }
+    if (urlItem) {
+      setActiveId(urlItem);
+      setOpenIds((prev) => new Set([...prev, ...trailOf(map.units, urlItem).map((n) => n.id)]));
+    }
+  }
   const [query, setQuery] = useState('');
   /** Branches folded BACK while a filter is showing. */
   const [folded, setFolded] = useState<Set<string>>(() => new Set());
@@ -411,7 +436,15 @@ export default function OverallMap({
         currency={currency}
         forecast={forecast && active ? forecast.leaves[active.id] ?? null : null}
         planReady={figuresReady}
-        onClose={() => setActiveId(null)}
+        onClose={() => {
+          setActiveId(null);
+          // Drop `?item=` so pressing the same row on Check again is a new arrival.
+          const url = new URL(window.location.href);
+          if (url.searchParams.has('item')) {
+            url.searchParams.delete('item');
+            window.history.replaceState(window.history.state, '', url);
+          }
+        }}
         onSaved={(id, pct) => setPending((prev) => ({ ...prev, [id]: pct }))}
       />
     </div>

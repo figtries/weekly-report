@@ -51,12 +51,12 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
             whose evidence is three names glued into a sentence cannot be
             scanned, and the person then has to go hunting for the other three. */}
         {f.rows && f.rows.length > 0 && (
-          <ul className="mt-2.5 divide-y overflow-hidden rounded-lg bg-muted/50">
+          <ul className="group/more mt-2.5 divide-y overflow-hidden rounded-lg bg-muted/50">
             {/* Index in the key, not the label alone: a WBS legitimately
                 carries the same description under several parents ("RTS",
                 "Material On Site" each appear more than once on Gundih), and
                 React drops the duplicates. */}
-            {f.rows.slice(0, 6).map((r, i) => {
+            {f.rows.map((r, i) => {
               const body = (
                 <>
                   <span className="min-w-0 flex-1">
@@ -74,7 +74,7 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                 </>
               );
               return (
-                <li key={`${i}-${r.label}`} className="text-[13px]">
+                <li key={`${i}-${r.label}`} className={cn('text-[13px]', i >= 6 && 'hidden group-has-checked/more:block')}>
                   {/* A row is a way INTO the item, not a description of it:
                       pressing it opens that activity's panel on Fill in, where
                       the figure is edited. The chevron is what tells a phone,
@@ -94,8 +94,13 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
               );
             })}
             {f.rows.length > 6 && (
-              <li className="px-3 py-2 text-[12px] text-muted-foreground">
-                and {f.rows.length - 6} more
+              <li className="group-has-checked/more:hidden">
+                <label
+                  className="flex min-h-11 cursor-pointer items-center px-3 py-2 text-[12px] font-medium text-chart-1"
+                >
+                  <input type="checkbox" className="hidden" />
+                  Show {f.rows.length - 6} more
+                </label>
               </li>
             )}
           </ul>
@@ -126,7 +131,9 @@ export default function WeekChecks({
 }) {
   const { findings, errors, warnings, canIssue } = validation;
   const passed = findings.filter((f) => f.level === 'ok').length;
-  const blocking = blockingIds(validation).length > 0;
+  // The first item that blocks, named in the link so Fill in opens its panel
+  // (and opens it again on a second press: see OverallMap's `arrival`).
+  const blocking = blockingIds(validation)[0];
 
   // Worst first. Someone opening this screen wants the thing that stops them,
   // not a list in the order the code happened to run its checks.
@@ -142,7 +149,7 @@ export default function WeekChecks({
             canIssue ? 'bg-ok-soft ring-ok/25' : 'bg-bad-soft ring-bad/25'
           )}
         >
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="flex min-w-0 items-start gap-3">
               <span
                 className={cn(
@@ -178,8 +185,12 @@ export default function WeekChecks({
                 to the same place, and two doors to one room read as two rooms. */}
             {!canIssue && (
               <Link
-                href={blocking ? `/weekly/${week}/overall?lens=blocking` : `/weekly/${week}/overall`}
-                className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-bad px-4 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]"
+                href={
+                  blocking
+                    ? `/weekly/${week}/overall?lens=blocking&item=${encodeURIComponent(blocking)}`
+                    : `/weekly/${week}/overall`
+                }
+                className="inline-flex min-h-11 shrink-0 items-center max-sm:ml-auto rounded-xl bg-bad px-4 text-[14px] font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.97]"
               >
                 Back to Fill in →
               </Link>
