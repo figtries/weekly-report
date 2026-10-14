@@ -140,7 +140,9 @@ export default function PtwSection({ report, commit, state, open, onToggle, onOp
                 </div>
               )}
 
-              <div className="mt-1 flex items-center gap-5">
+              {/* Phone: the 44px tap target eats into the card's padding, so the
+                  card is no taller than its text and the text sits centred. */}
+              <div className="mt-1 flex items-center gap-5 max-sm:-mt-1.5 max-sm:-mb-3">
                 <button type="button" className={LINK} onClick={() => setEditing(edit ? null : r.id)}>
                   {edit ? 'Done' : 'Edit details'}
                 </button>
