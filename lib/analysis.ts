@@ -492,7 +492,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'error',
           title: `${backwards.length} ${backwards.length === 1 ? 'item has' : 'items have'} gone backwards`,
           detail:
-            'Work that was reported as done is now reported as less done. One of the two weeks is wrong.',
+            'These were further along last week. Check which week has the right figure.',
           rows: backwards.map(({ n }) => ({
             label: n.deskripsi,
             value: `${round(n.prevProgressPct)}% → ${round(n.curProgressPct)}%`,
@@ -515,12 +515,12 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'error',
           title: `Weights total ${fmtPct(total)}, not 100%`,
           detail:
-            'While the weights do not close, every percentage in this report is on the wrong scale.',
+            'Fix the budgets on Weights so they add up to 100%.',
         }
       : {
           level: 'ok',
           title: 'Weights total 100.00%',
-          detail: `All ${leaves.length} leaf items add up, with no weight left dangling.`,
+          detail: `All ${leaves.length} activities add up to 100%.`,
         }
   );
 
@@ -534,7 +534,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'error',
           title: `${unbudgeted.length} ${unbudgeted.length === 1 ? 'activity has' : 'activities have'} no budget`,
           detail:
-            'An activity with no budget weighs nothing, so its progress counts for nothing. Give it a budget on Weights.',
+            'Give each one a budget on Weights so its progress counts.',
           rows: unbudgeted.map((u) => ({
             label: u.name,
             value: u.code || 'no budget',
@@ -563,7 +563,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'warn',
           title: 'This project has no schedule',
           detail:
-            'Without a start and finish week per item the app cannot say what was due, so nothing on this page can be checked against the plan.',
+            'Add start and finish dates in Projects so the app knows what is due each week.',
         }
       : worklist.due.length > 0
         ? {
@@ -577,8 +577,8 @@ export function validateWeek(db: Database, week: number): ValidationResult {
             title: `${worklist.due.length} ${worklist.due.length === 1 ? 'item is' : 'items are'} due this week and unanswered`,
             detail:
               week >= currentWeek
-                ? 'The schedule puts these in this week and nothing has been recorded against them. Recording "no progress" is an answer — leaving them untouched is not.'
-                : `Week ${week} is already closed, so this is flagged rather than blocked — the schedule put these here and the app holds no record of anyone answering them.`,
+                ? 'Fill in each one this week. If nothing moved, record no progress.'
+                : `Week ${week} is closed, so this is only a note. Nobody filled these in at the time.`,
             rows: worklist.due.map((e) => ({
               label: e.node.deskripsi,
               value:
@@ -598,7 +598,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           : {
               level: 'ok',
               title: 'Nothing was scheduled for this week',
-              detail: `No item's span covers week ${week}, so step ① had nothing to hand over.`,
+              detail: `No activity is planned in week ${week}.`,
             }
   );
 
@@ -615,7 +615,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'warn',
           title: `${worklist.stuck.length} ${worklist.stuck.length === 1 ? 'item is' : 'items are'} past their finish date and still open`,
           detail:
-            'Their scheduled finish has gone by while they are short of 100%. They need a revised date or a reason, not a number typed into this week.',
+            'Their finish date has passed. Set a new date or note the reason.',
           rows: worklist.stuck.map((s) => ({
             label: s.node.deskripsi,
             value: `${round(s.pct)}% · ${s.weeksLate}w late`,
@@ -626,7 +626,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       : {
           level: 'ok',
           title: 'Nothing is past its finish date',
-          detail: 'Every item whose scheduled finish has passed is complete.',
+          detail: 'Everything that should have finished is done.',
         }
   );
 
@@ -640,20 +640,20 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       ? {
           level: 'error',
           title: 'The project total went down this week',
-          detail: `This week records ${fmtPct(gt.thisWeekProgressPct)} — a signed report must not go backwards.`,
+          detail: `The total dropped ${fmtPct(-gt.thisWeekProgressPct)} this week. A report should never go down.`,
         }
       : prev && gt.thisWeekProgressPct < 0.001
         ? {
             level: 'warn',
             title: 'Nothing moved this week',
-            detail: `The total is unchanged from week ${week - 1}, at ${fmtPct(gt.curProgressPct)}. A flat week is allowed, but the report has to say why.`,
+            detail: `Still at ${fmtPct(gt.curProgressPct)}, the same as week ${week - 1}. Say why in the report.`,
           }
         : {
             level: 'ok',
             title: 'The project total moved forward',
             detail: prev
               ? `${fmtPct(gt.thisWeekProgressPct)} added since week ${week - 1}.`
-              : 'First week — nothing to compare against yet.',
+              : 'This is the first week, so there is nothing to compare yet.',
           }
   );
 
@@ -668,7 +668,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'warn',
           title: `Week ${week} is ahead of the current week (${currentWeek})`,
           detail:
-            'Its figures are carried forward from the last reported week, not measured. Set it as current once its actuals are in.',
+            'Its figures are copied from the last week. Set it as current once it is filled in.',
         }
       : {
           level: 'ok',
@@ -692,12 +692,12 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'warn',
           title: `${fmtPct(roundedShare)} of progress values are multiples of 5`,
           detail:
-            'Numbers that are always round are estimates, not measurements. Anything actually counted produces figures that are not round.',
+            'Round numbers are usually guesses. Measure what you can.',
         }
       : {
           level: 'ok',
           title: 'Progress figures do not look guessed',
-          detail: `${fmtPct(roundedShare)} of them are multiples of 5, which is a normal share.`,
+          detail: `Only ${fmtPct(roundedShare)} are multiples of 5, which is normal.`,
         }
   );
 
@@ -730,7 +730,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       ? {
           level: 'warn',
           title: 'Hours are being spent on items that have not moved',
-          detail: `${fmtNum(hoursThisWeek)} hours were booked in week ${week} while ${stalled.length} items that should be underway sit at 0%. Either the hours or the progress is wrong.`,
+          detail: `${fmtNum(hoursThisWeek)} hours were booked in week ${week}, but ${stalled.length} activities that should have started are still at 0%. Check the hours or the progress.`,
           // Every one of them, not a sample: the UI does the capping, and
           // truncating twice made "and 2 more" appear under a sentence that had
           // just said 40.
@@ -746,8 +746,8 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           title: 'Hours and progress agree',
           detail:
             hoursThisWeek > 0
-              ? `${fmtNum(hoursThisWeek)} hours booked in week ${week}, and nothing that should be underway is sitting at 0%.`
-              : `No hours were recorded against week ${week}, so there is nothing to disagree with.`,
+              ? `${fmtNum(hoursThisWeek)} hours booked in week ${week}, and everything that should have started has moved.`
+              : `No hours were recorded in week ${week}.`,
         }
   );
 
@@ -764,12 +764,12 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           level: 'warn',
           title: 'No item carries a quantity',
           detail:
-            'Every item is lumpsum, so no progress figure here can be checked again on site.',
+            'Every activity is a lump sum, so nothing can be counted on site.',
         }
       : {
           level: 'ok',
           title: `${quantified} items carry a real quantity`,
-          detail: 'Their percentages come from something countable rather than from an opinion.',
+          detail: 'Their progress comes from what is counted on site.',
         }
   );
 
@@ -778,12 +778,12 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       ? {
           level: 'warn',
           title: 'Contract value is not filled in',
-          detail: 'Without it the report can only speak in percentages — not in money a board will read.',
+          detail: 'Add it in Project details so the report can show money.',
         }
       : {
           level: 'ok',
           title: 'Contract value is set',
-          detail: 'Earned value and the deferred figure can be stated in rupiah.',
+          detail: 'The report can show progress in money.',
         }
   );
 
@@ -811,7 +811,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
               late.length === 1
                 ? '1 activity starts before what it waits for'
                 : `${late.length} activities start before what they wait for`,
-            detail: 'Their plan dates break a link made in Projects. Move them there, or change the link.',
+            detail: 'Move their dates in Projects, or change the link.',
             rows: late.map(([id, r]) => ({
               id,
               label: names.get(id) ?? id,
@@ -824,7 +824,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
       findings.push({
         level: 'warn',
         title: 'A link loops back',
-        detail: 'These links are ignored until one of them is removed in Projects.',
+        detail: 'Remove one of them in Projects. Until then they are ignored.',
         rows: net.ignored.map((l) => ({
           id: l.toId,
           label: names.get(l.toId) ?? l.toId,
