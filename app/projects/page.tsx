@@ -44,13 +44,7 @@ async function ProjectsBody() {
     <RouteTransition id="projects">
       <div className="mx-auto max-w-6xl px-3 py-5 sm:p-6 lg:p-8">
         <header className="animate-enter mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Projects</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Every project you keep. Open one and the whole app follows it: dashboard, weekly
-              progress, daily, reports and document control.
-            </p>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Projects</h1>
           <NewProjectDialog />
         </header>
 
