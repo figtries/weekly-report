@@ -353,8 +353,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
 
       {unreported && (
         <p className="animate-fade-in-up rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2.5 text-sm text-warn">
-          Nothing has been reported after week {reportedWeek}. The actual figures below are
-          carried forward; the plan keeps climbing, so the gap you see is the weeks nobody has filed.
+          No report since week {reportedWeek}. Actual stays at that week while plan keeps rising.
         </p>
       )}
 
@@ -373,7 +372,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               <p className={cn('mt-1.5', TYPE.hero, verdictText[verdict])}>
                 <CountUp value={health.actualPct} />
               </p>
-              <p className="mt-2.5 text-sm text-muted-foreground">Project completed to date</p>
+              <p className="mt-2.5 text-sm text-muted-foreground">Done to date</p>
 
               <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {/* Plain coloured text, not a tinted pill: the pill's padding
@@ -385,7 +384,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   ) : (
                     <TrendingUp className="h-4 w-4" />
                   )}
-                  {fmtPct(Math.abs(health.deviationPct))} {behind ? 'behind' : 'ahead of'} schedule
+                  {fmtPct(Math.abs(health.deviationPct))} {behind ? 'behind' : 'ahead of'} plan
                 </p>
                 {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
                   <p className="text-sm text-muted-foreground">
@@ -393,7 +392,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                         "Rp" on everything, which on a contract priced in
                         dollars is not a rounding error, it is a wrong number. */}
                     ≈ {formatMoneyShort(Math.abs(health.scheduleVarianceRp), data.currency)}{' '}
-                    {behind ? 'undelivered' : 'delivered early'}
+                    {behind ? 'of work late' : 'of work early'}
                   </p>
                 )}
               </div>
@@ -442,13 +441,11 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
       <Reveal delay={0.06}>
         <Card>
           <CardHeader>
-            <CardTitle className={TYPE.cardTitle}>Why the project sits here</CardTitle>
+            <CardTitle className={TYPE.cardTitle}>
+              {behind ? 'Where the gap comes from' : verdict === 'ahead' ? 'Where the lead comes from' : 'Against plan'}
+            </CardTitle>
             <CardDescription className={TYPE.cardDesc}>
-              {behind
-                ? 'The items holding the number back, by how much project percent each one costs'
-                : holding.length === 0
-                  ? 'Nothing is behind plan this week. The items carrying the lead, by how much project percent each one adds'
-                  : 'The items carrying the lead, by how much project percent each one adds'}
+              {behind ? 'Items behind plan, by project % lost' : 'Items ahead of plan, by project % gained'}
             </CardDescription>
             <CardAction className={ACTION}>
               <Link
@@ -465,26 +462,25 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 lead comes from" is followed by numbers that make 16.11. */}
             {behind ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                {holding.length === 1 ? 'One item behind plan holds' : `${fmtNum(holding.length)} items behind plan hold`}{' '}
-                back <span className="font-semibold text-bad">{fmtPct(heldBack)}</span> of project
-                progress{holding.length > 1 ? ' between them' : ''}
+                {holding.length === 1 ? '1 item is' : `${fmtNum(holding.length)} items are`} behind, costing{' '}
+                <span className="font-semibold text-bad">{fmtPct(heldBack)}</span>
                 {/* Said whenever something is ahead, so the sentence ends on
                     the hero's own gap: 4.37 held back, 1.39 given back, 2.98. */}
                 {carrying.length > 0
-                  ? `; ${carrying.length === 1 ? 'one item' : `${fmtNum(carrying.length)} items`} ahead of plan ${carrying.length === 1 ? 'gives' : 'give'} back ${fmtPct(carried)}, which leaves the ${fmtPct(Math.abs(health.deviationPct))} gap.`
+                  ? `. ${fmtNum(carrying.length)} ahead ${carrying.length === 1 ? 'adds' : 'add'} back ${fmtPct(carried)}. Net gap ${fmtPct(Math.abs(health.deviationPct))}.`
                   : '.'}
-                {holding.length > 3 ? ' The three that cost the most:' : ''}
+                {holding.length > 3 ? ' Top 3:' : ''}
               </p>
             ) : verdict === 'ahead' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                The <span className="font-semibold text-ok">{fmtPct(health.deviationPct)}</span> lead
+                Lead <span className="font-semibold text-ok">{fmtPct(health.deviationPct)}</span>
                 {holding.length === 0 && carrying.length <= 3
-                  ? ` comes from ${carrying.length === 1 ? 'one item' : `${fmtNum(carrying.length)} items`}:`
-                  : ` is ${fmtPct(carried)} carried by ${fmtNum(carrying.length)} items, less ${fmtPct(heldBack)} held back by ${fmtNum(holding.length)}. The three adding the most:`}
+                  ? ` from ${carrying.length === 1 ? '1 item' : `${fmtNum(carrying.length)} items`}:`
+                  : `: ${fmtNum(carrying.length)} ahead add ${fmtPct(carried)}, ${fmtNum(holding.length)} behind cost ${fmtPct(heldBack)}. Top 3:`}
               </p>
             ) : (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                The project is exactly on plan this week.
+                Exactly on plan this week.
               </p>
             )}
             {verdict !== 'neutral' && <ContributionList rows={behind ? holding : carrying} limit={3} />}
