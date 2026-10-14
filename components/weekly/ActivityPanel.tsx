@@ -561,7 +561,7 @@ function PanelBody({
   const body = (
     // Closing, the sheet stops taking presses: it is on its way out, and a tap
     // that lands on it mid-slide should reach the page it is uncovering.
-    <div className={cn('fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
+    <div className={cn('vt-panel fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
       {/* No blur: a full-screen backdrop-filter is the most expensive thing a
           phone can be asked to paint, and it was paid on the opening frame. */}
       <div

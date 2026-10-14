@@ -1184,6 +1184,18 @@ a:active {
   mix-blend-mode: normal;
 }
 
+/* An activity panel opened by the arrival itself (Check → `?item=`) lives in a
+   portal on <body>, outside the page's named layer, so the page's crossfade
+   was drawn OVER it: map text through the sheet for the whole fade. Its own
+   layer paints above the page, and plays only its own slide (`sheet-in`). */
+.vt-panel {
+  view-transition-name: activity-panel;
+}
+::view-transition-old(activity-panel),
+::view-transition-new(activity-panel) {
+  animation: none;
+}
+
 @keyframes vt-out {
   to {
     opacity: 0;
