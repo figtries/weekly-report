@@ -288,8 +288,12 @@ export default function WeightsWorkbench({
     for (const r of rowOf.values()) {
       if (r.isLeaf && !live.bobotOf.has(r.id)) out.add(r.id);
     }
+    // Milestones carry no budget anywhere (the gate and every count skip
+    // them), so a box to type one in only reads as something left undone.
+    // Out with them goes any heading that holds nothing else, card or row.
+    for (const id of milestonesOnly(screen.nodes, screen.milestones)) out.add(id);
     return out;
-  }, [screen.looseRows, rowOf, live]);
+  }, [screen.looseRows, screen.nodes, screen.milestones, rowOf, live]);
 
   /** Row and card codes, for a share to say what it is a share OF. */
   const codeOf = useMemo(() => {
@@ -436,7 +440,7 @@ export default function WeightsWorkbench({
         />
       ) : (
         <>
-          {screen.units.map((u) => (
+          {screen.units.filter((u) => !hidden.has(u.id)).map((u) => (
             <UnitCard
               key={u.id}
               unit={u}
@@ -844,6 +848,22 @@ function LooseHeading({ hasUnits }: { hasUnits: boolean }) {
       </p>
     </div>
   );
+}
+
+/** Every milestone, and every heading whose leaves are all milestones. */
+function milestonesOnly(nodes: WeightNode[], milestones: string[]): Set<string> {
+  const ms = new Set(milestones);
+  const kids = new Map<string, WeightNode[]>();
+  for (const n of nodes) if (n.parentId) kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
+  const out = new Set<string>();
+  const only = (n: WeightNode): boolean => {
+    const c = kids.get(n.id) ?? [];
+    const yes = c.length === 0 ? ms.has(n.id) : c.map(only).every(Boolean);
+    if (yes) out.add(n.id);
+    return yes;
+  };
+  nodes.filter((n) => !n.parentId).forEach(only);
+  return out;
 }
 
 /** Drop one key without mutating, so a stale entry cannot outlive its save. */
