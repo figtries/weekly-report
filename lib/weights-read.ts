@@ -31,6 +31,7 @@ export function loadWeightNodes(projectId: string): WeightNode[] {
       unitContractValue: schema.wbsNodes.unitContractValue,
       bobot: schema.wbsNodes.bobot,
       isLeaf: schema.wbsNodes.isLeaf,
+      isMilestone: schema.wbsNodes.isMilestone,
     })
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))

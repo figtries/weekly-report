@@ -389,7 +389,13 @@ export async function setMilestoneAction(nodeId: string, on: boolean): Promise<S
     if (!node) throw new Error('Row not found');
     if (hasChildren(nodeId)) throw new Error('A summary row cannot be a milestone');
 
-    db.update(schema.wbsNodes).set({ isMilestone: on }).where(eq(schema.wbsNodes.id, nodeId)).run();
+    // A milestone carries no budget, so becoming one drops the budget it had
+    // (the planner's menu says so before the press) and the weights follow.
+    db.update(schema.wbsNodes)
+      .set(on ? { isMilestone: true, price: null, workstepFactor: null } : { isMilestone: false })
+      .where(eq(schema.wbsNodes.id, nodeId))
+      .run();
+    if (on && ((node.price ?? 0) > 0 || (node.workstepFactor ?? 0) > 0)) syncDerivedWeights(node.projectId);
 
     const baselineId = getActiveBaselineId(node.projectId);
     const current = baselineId

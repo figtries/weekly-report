@@ -60,6 +60,8 @@ export interface WeightNode {
   unitContractValue: number | null;
   bobot: number | null;
   isLeaf: boolean;
+  /** A milestone weighs nothing, whatever budget is stored on it. */
+  isMilestone?: boolean;
 }
 
 export interface WeightResult {
@@ -196,7 +198,10 @@ export function deriveWeights(nodes: WeightNode[], signedContract?: number): Wei
   const ownContract = new Set<string>();
   const down = (node: WeightNode, parentBudget: number | null) => {
     let own: number | null = null;
-    if ((node.price ?? 0) > 0 && !discarded.has(node.id)) {
+    if (node.isMilestone) {
+      // Weighing nothing is what a milestone is. A budget left on a row that
+      // became one is read as none, so it can never carry hidden weight.
+    } else if ((node.price ?? 0) > 0 && !discarded.has(node.id)) {
       own = node.price ?? 0;
     } else if ((node.workstepFactor ?? 0) > 0 && parentBudget != null && parentBudget > 0) {
       // A STORED PERCENT IS A PERCENT OF THE PARENT'S WHOLE BUDGET, the reading

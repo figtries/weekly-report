@@ -295,7 +295,7 @@ export function resyncWeights(dbPath: string): number {
       .all() as Array<{ id: string; contract_value: number | null }>;
     const rows = file.prepare(
       `select id, parent_id, sort_order, price, workstep_factor, is_reporting_unit,
-              unit_contract_value, bobot, is_leaf
+              unit_contract_value, bobot, is_leaf, is_milestone
        from wbs_nodes where project_id = ? order by sort_order`
     );
     const write = file.prepare('update wbs_nodes set bobot = ? where id = ?');
@@ -312,6 +312,7 @@ export function resyncWeights(dbPath: string): number {
           unitContractValue: (r.unit_contract_value as number | null) ?? null,
           bobot: (r.bobot as number | null) ?? null,
           isLeaf: !!r.is_leaf,
+          isMilestone: !!r.is_milestone,
         }));
         const signed = (p.contract_value ?? 0) > 0 ? (p.contract_value as number) : undefined;
         for (const w of bobotWrites(nodes, deriveWeights(nodes, signed))) {

@@ -169,7 +169,7 @@ export default function RowMenu({
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
   const [unitValue, setUnitValue] = useState('');
-  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind' | 'label'>(initialMode);
+  const [mode, setMode] = useState<'menu' | 'unit' | 'delete' | 'links' | 'kind' | 'label' | 'milestone'>(initialMode);
   const fact = facts[row.id];
   const kindName = fact?.kindId ? KIND_LABEL[fact.kindId] ?? null : null;
   const ownLabel = view.labels.find((l) => l.id === row.barLabel) ?? null;
@@ -398,9 +398,12 @@ export default function RowMenu({
               <Item
                 icon={<Diamond className={`size-4 ${row.isMilestone ? 'fill-foreground' : ''}`} />}
                 onClick={() =>
-                  run(() => setMilestoneAction(row.id, !row.isMilestone), false, undefined, (rs) =>
-                    predictFlags(rs, row.id, { isMilestone: !row.isMilestone })
-                  )
+                  // A budget goes when a row becomes a milestone, so say so first.
+                  !row.isMilestone && (row.price ?? 0) > 0
+                    ? setMode('milestone')
+                    : run(() => setMilestoneAction(row.id, !row.isMilestone), false, undefined, (rs) =>
+                        predictFlags(rs, row.id, { isMilestone: !row.isMilestone })
+                      )
                 }
                 disabled={pending}
               >
@@ -614,6 +617,35 @@ export default function RowMenu({
                 className="h-11 flex-1 rounded-lg bg-destructive text-sm font-medium text-white disabled:opacity-50"
               >
                 {pending ? 'Deleting…' : 'Delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('menu')}
+                className="h-11 rounded-lg border px-4 text-sm font-medium"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'milestone' && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              A milestone has no budget. This row&apos;s budget will be removed and its weight goes to 0.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  run(() => setMilestoneAction(row.id, true), false, undefined, (rs) =>
+                    predictFlags(rs, row.id, { isMilestone: true, price: null })
+                  )
+                }
+                className="h-11 flex-1 rounded-lg bg-primary text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {pending ? 'Saving…' : 'Make it a milestone'}
               </button>
               <button
                 type="button"
