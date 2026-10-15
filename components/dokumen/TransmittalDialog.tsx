@@ -1,14 +1,12 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { CheckBox } from '@/components/ui/CheckBox';
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { Input } from '@/components/ui/input';
 import NativeSelect from '@/components/ui/NativeSelect';
 import DateField from '@/components/ui/DateField';
@@ -33,8 +31,7 @@ import { matchesSearch, searchWords } from '@/lib/search';
  * which is out are decided on the server by the same rule as Outstanding
  * (`DocumentCard.sendNext` / `out`), never worked out again here.
  *
- * Shell copied from ExportExcelDialog: the app's sheet motion (`.sheet-soft`), a plain scrim,
- * focus moved two frames after opening. The rows are native controls: a
+ * On the app's one sheet (`SoftSheet`), as Export Excel is. The rows are native controls: a
  * register can hold hundreds, and Radix per row is what AGENTS.md forbids.
  */
 
@@ -120,9 +117,6 @@ export default function TransmittalDialog({
   }
   const codeName = (key: string) => settings?.codes.find((c) => c.key === key)?.label ?? key;
 
-  const contentRef = useRef<HTMLDivElement>(null);
-  const opener = useRef<HTMLElement | null>(null);
-  const later = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
 
   const rows = useMemo<Row[]>(() => {
     const all = Object.values(cards).flat();
@@ -203,27 +197,21 @@ export default function TransmittalDialog({
     : { out: ['Documents came in', 'From the vendor, at their next stage'], in: ['We replied', 'To the vendor, each with its code'] };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        sheet
-        className="sm:max-w-2xl"
-        bodyClassName="flex flex-col overflow-hidden"
-        ref={contentRef}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          later(() => contentRef.current?.focus({ preventScroll: true }));
-        }}
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          const back = opener.current;
-          if (back) later(() => back.focus({ preventScroll: true }));
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Record transmittal</DialogTitle>
-          <DialogDescription>One letter, every document in it.</DialogDescription>
-        </DialogHeader>
+    <SoftSheet open={open} onClose={() => onOpenChange(false)} label="Record transmittal" size="2xl" className="flex flex-col gap-4 overflow-hidden">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="font-heading text-base leading-none font-medium">Record transmittal</h2>
+          <p className="text-sm text-muted-foreground">One letter, every document in it.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label="Close"
+          className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+        >
+          <X className="size-5" />
+        </button>
+      </div>
 
         <div role="radiogroup" aria-label="What happened" className="grid grid-cols-2 gap-2">
           {(['out', 'in'] as const).map((d) => (
@@ -342,7 +330,6 @@ export default function TransmittalDialog({
             {pending ? 'Saving…' : 'Save'}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+    </SoftSheet>
   );
 }

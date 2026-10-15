@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import SavePdfButton from '@/components/print/SavePdfButton';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { estimatePages, levelsIn, type PrintRowLite } from '@/lib/gantt-print';
 
 /**
@@ -53,11 +54,6 @@ export default function GanttPdfDialog({
   const levelChoices = Array.from({ length: Math.max(0, Math.min(depth - 1, 3)) }, (_, i) => i + 1);
   const levelCols = levelChoices.length === 3 ? 'grid-cols-2 sm:grid-cols-4' : levelChoices.length === 2 ? 'grid-cols-3' : 'grid-cols-2';
 
-  // Focus after the first frames, as in ExportExcelDialog: Radix focusing while
-  // the card mounts costs the open its first frames.
-  const contentRef = useRef<HTMLDivElement>(null);
-  const opener = useRef<HTMLElement | null>(null);
-  const later = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
 
   const option = (active: boolean) =>
     `flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors ${
@@ -65,26 +61,21 @@ export default function GanttPdfDialog({
     }`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        sheet
-        className="sm:max-w-md"
-        ref={contentRef}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          later(() => contentRef.current?.focus({ preventScroll: true }));
-        }}
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          const back = opener.current;
-          if (back) later(() => back.focus({ preventScroll: true }));
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Download PDF</DialogTitle>
-          <DialogDescription>Gantt chart on A4 landscape, with a key on every page.</DialogDescription>
-        </DialogHeader>
+    <SoftSheet open={open} onClose={() => onOpenChange(false)} label="Download PDF" size="md" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="font-heading text-base leading-none font-medium">Download PDF</h2>
+          <p className="text-sm text-muted-foreground">Gantt chart on A4 landscape, with a key on every page.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label="Close"
+          className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+        >
+          <X className="size-5" />
+        </button>
+      </div>
 
         {packages.length > 0 && (
           <div>
@@ -164,7 +155,6 @@ export default function GanttPdfDialog({
             labelAlways
           />}
         </div>
-      </DialogContent>
-    </Dialog>
+    </SoftSheet>
   );
 }

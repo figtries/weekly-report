@@ -6,8 +6,6 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
-import { m } from "framer-motion"
-import { SheetHandle, useSheetDrag } from "@/components/ui/SoftSheet"
 
 function Dialog({
   ...props
@@ -49,91 +47,17 @@ function DialogOverlay({
   )
 }
 
-/**
- * The app's sheet for a Radix dialog (15 Oct 2026): up from below on a phone
- * and flicked down by its handle, a centred rising card from `sm`, both the
- * keyframes SoftSheet plays (`.sheet-soft`, `.scrim-sheet`). `className` is the
- * width, `bodyClassName` the scrolling body; the slide lives on Content and the
- * drag on the card inside it, so the two never write the same transform.
- */
-function SheetDialogContent({
-  className,
-  bodyClassName,
-  overlayClassName,
-  children,
-  showCloseButton,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  bodyClassName?: string
-  overlayClassName?: string
-  showCloseButton: boolean
-}) {
-  const closeRef = React.useRef<HTMLButtonElement>(null)
-  const { controls, dragProps } = useSheetDrag(() => closeRef.current?.click())
-  return (
-    <DialogPortal>
-      <DialogOverlay
-        className={cn("scrim-sheet bg-black/40 supports-backdrop-filter:backdrop-blur-none", overlayClassName)}
-      />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          "sheet-soft fixed inset-x-0 bottom-0 z-50 flex w-full flex-col outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-w-sm sm:-translate-x-1/2 sm:-translate-y-1/2",
-          className
-        )}
-        {...props}
-      >
-        <m.div
-          {...dragProps}
-          className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-popover text-sm text-popover-foreground shadow-2xl sm:max-h-[90dvh] sm:rounded-xl sm:ring-1 sm:ring-foreground/10"
-        >
-          <SheetHandle controls={controls} />
-          <div className={cn("grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-4 pt-1 sm:pt-4", bodyClassName)}>
-            {children}
-          </div>
-          <DialogPrimitive.Close ref={closeRef} className="hidden" tabIndex={-1} aria-hidden />
-          {showCloseButton && (
-            <DialogPrimitive.Close data-slot="dialog-close" asChild>
-              <Button variant="ghost" className="absolute top-2 right-2" size="icon-sm">
-                <XIcon />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogPrimitive.Close>
-          )}
-        </m.div>
-      </DialogPrimitive.Content>
-    </DialogPortal>
-  )
-}
-
 function DialogContent({
   className,
   overlayClassName,
   children,
   showCloseButton = true,
-  sheet = false,
-  bodyClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** For the scrim behind this dialog, e.g. `scrim-soft` (app/globals.css). */
   overlayClassName?: string
   showCloseButton?: boolean
-  /** Open as the app's sheet (see SheetDialogContent). */
-  sheet?: boolean
-  bodyClassName?: string
 }) {
-  if (sheet)
-    return (
-      <SheetDialogContent
-        className={className}
-        bodyClassName={bodyClassName}
-        overlayClassName={overlayClassName}
-        showCloseButton={showCloseButton}
-        {...props}
-      >
-        {children}
-      </SheetDialogContent>
-    )
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />

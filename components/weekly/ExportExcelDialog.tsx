@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import SavePdfButton from '@/components/print/SavePdfButton';
 import { CheckBox } from '@/components/ui/CheckBox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { OVERALL, selectionCount, selectionQuery, type WeeklySelection } from '@/lib/xlsx/weekly-selection';
 
 export interface ExportPackage {
@@ -62,44 +63,23 @@ export default function ExportExcelDialog({
 
   const cell = 'flex min-h-11 items-center justify-center';
 
-  /**
-   * FOCUS MOVES AFTER THE FIRST FRAMES, NOT BEFORE THEM. Radix focuses the first
-   * checkbox while it mounts the card, and a focus() makes the browser lay out the
-   * whole report page under it: 90 ms of the open at CPU 4x, all of it before the
-   * first frame of the animation could be drawn (3 Oct 2026). So the card opens
-   * first and focus follows two frames later, without scrolling anything; on close
-   * it goes back to the button that opened it the same way. Keyboard and screen
-   * reader users still land inside the dialog and return to the button.
-   */
-  const contentRef = useRef<HTMLDivElement>(null);
-  const opener = useRef<HTMLElement | null>(null);
-  const later = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Opens on the app's own motion, not shadcn's 100ms pop: see `.sheet-soft`
-          in app/globals.css. A plain dark scrim, no blur, like the activity sheet. */}
-      <DialogContent
-        sheet
-        className="sm:max-w-lg"
-        ref={contentRef}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          later(() => contentRef.current?.focus({ preventScroll: true }));
-        }}
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          const back = opener.current;
-          if (back) later(() => back.focus({ preventScroll: true }));
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Export Excel</DialogTitle>
-          <DialogDescription>
-            Week {week} · {period}
-          </DialogDescription>
-        </DialogHeader>
+    <SoftSheet open={open} onClose={() => onOpenChange(false)} label="Export Excel" size="lg" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="font-heading text-base leading-none font-medium">Export Excel</h2>
+          <p className="text-sm text-muted-foreground">Week {week} · {period}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label="Close"
+          className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+        >
+          <X className="size-5" />
+        </button>
+      </div>
 
         {!figuresReady && (
           <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
@@ -165,7 +145,6 @@ export default function ExportExcelDialog({
             {error}
           </p>
         </div>
-      </DialogContent>
-    </Dialog>
+    </SoftSheet>
   );
 }
