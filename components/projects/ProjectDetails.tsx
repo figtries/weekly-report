@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { AnimatePresence, m } from 'framer-motion';
 import { Check, Pencil } from 'lucide-react';
 
@@ -124,15 +124,6 @@ export default function ProjectDetails({ project }: { project: Project }) {
   const [error, setError] = useState<{ field: ProjectField; message: string } | null>(null);
   const [saved, setSaved] = useState<ProjectField | null>(null);
 
-  // The overlay is PORTALLED to the body, and that is a bug fix rather than a
-  // preference. This button sits inside the page header, which carries
-  // `.animate-enter` — a keyframe that leaves a translateY behind when it
-  // finishes. A transform on ANY ancestor makes `position: fixed` resolve
-  // against that ancestor instead of the viewport, and the panel opened 333px
-  // above the top of the screen with its first two fields unreachable.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   // `#edit=contractValue`: "Raise the contract value" on Weights, the project
   // strip and the dashboard lands HERE, dialog open and that field focused,
   // so nobody hunts for which button holds it (8 Oct 2026). On arrival and on
@@ -154,13 +145,13 @@ export default function ProjectDetails({ project }: { project: Project }) {
     };
   }, []);
   useEffect(() => {
-    if (!open || !mounted || !focusField.current) return;
+    if (!open || !focusField.current) return;
     const el = document.getElementById(`pd-${focusField.current}`) as HTMLInputElement | null;
     focusField.current = null;
     el?.scrollIntoView({ block: 'center' });
     el?.focus();
     el?.select();
-  }, [open, mounted]);
+  }, [open]);
 
   const valueOf = (k: ProjectField): string => {
     // The four signature halves are not columns: two JSON columns hold them,
@@ -207,26 +198,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
         <span className="hidden sm:inline">Details</span>
       </m.button>
 
-      {mounted &&
-        createPortal(
-          <AnimatePresence>
-            {open && (
-              <m.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-                className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-                onClick={() => setOpen(false)}
-              >
-                <m.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: MOTION.enter, ease: MOTION.ease }}
-                  className="max-h-[88vh] w-full overflow-auto rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-md sm:rounded-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
+            <SoftSheet open={open} onClose={() => setOpen(false)} label="Project details">
                   <h2 className="text-sm font-semibold">Project details</h2>
 
                   <div className="mt-3 space-y-3">
@@ -341,12 +313,7 @@ export default function ProjectDetails({ project }: { project: Project }) {
                   <Button className="mt-4 h-11 w-full" onClick={() => setOpen(false)}>
                     Done
                   </Button>
-                </m.div>
-              </m.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
+      </SoftSheet>
     </>
   );
 }

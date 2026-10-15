@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { m } from 'framer-motion';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { Check } from 'lucide-react';
 
 import { CURRENCIES } from '@/lib/currency';
@@ -28,6 +28,9 @@ export default function CurrencyPicker({
 }) {
   const [pending, startTransition] = useTransition();
   const [asking, setAsking] = useState<string | null>(null);
+  // The pick the sheet names, kept while it slides away after `asking` clears.
+  const [shown, setShown] = useState<string | null>(null);
+  if (asking && asking !== shown) setShown(asking);
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -48,20 +51,9 @@ export default function CurrencyPicker({
         ))}
       </NativeSelect>
 
-      {asking && asking !== currency && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-          onClick={() => setAsking(null)}
-        >
-          <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="w-full rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-sm sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <SoftSheet open={!!asking && asking !== currency} onClose={() => setAsking(null)} label="Currency" size="sm">
             <h2 className="text-sm font-semibold">
-              Price this project in {CURRENCIES.find((c) => c.code === asking)?.label}?
+              Price this project in {CURRENCIES.find((c) => c.code === shown)?.label}?
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
               Only the label changes; no figure is converted.
@@ -75,6 +67,7 @@ export default function CurrencyPicker({
                 disabled={pending}
                 onClick={() =>
                   startTransition(async () => {
+                    if (!asking) return;
                     const res = await setProjectCurrencyAction(projectId, asking);
                     if (!res.ok) {
                       setError(res.error);
@@ -86,7 +79,7 @@ export default function CurrencyPicker({
                 className="btn-primary flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-medium"
               >
                 <Check className="size-4" />
-                {pending ? 'Saving…' : `Use ${asking}`}
+                {pending ? 'Saving…' : `Use ${shown}`}
               </button>
               <button
                 type="button"
@@ -96,9 +89,7 @@ export default function CurrencyPicker({
                 Cancel
               </button>
             </div>
-          </m.div>
-        </div>
-      )}
+      </SoftSheet>
     </>
   );
 }

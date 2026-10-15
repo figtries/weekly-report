@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, m } from 'framer-motion';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { Plus } from 'lucide-react';
 
-import { MOTION } from '@/lib/design';
 import { createProjectAction } from '@/lib/project-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,13 +86,6 @@ export default function NewProjectDialog() {
   const [error, setError] = useState<string | null>(null);
   /** The row exists; what is left is the navigation to its page. */
   const [opening, setOpening] = useState(false);
-
-  // Portalled for the same reason ProjectDetails is: this button sits inside a
-  // header carrying `.animate-enter`, and a transform left behind by that
-  // keyframe makes `position: fixed` resolve against the header instead of the
-  // viewport.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   // Red only after Create was pressed, and each box clears the moment it is filled.
   const [tried, setTried] = useState(false);
@@ -184,26 +175,7 @@ export default function NewProjectDialog() {
         New project
       </Button>
 
-      {mounted &&
-        createPortal(
-          <AnimatePresence>
-            {open && (
-              <m.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-                className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-                onClick={() => !pending && setOpen(false)}
-              >
-                <m.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: MOTION.enter, ease: MOTION.ease }}
-                  className="max-h-[88vh] w-full overflow-auto rounded-t-2xl border bg-card px-5 py-5 shadow-lg sm:max-w-md sm:rounded-2xl sm:px-6"
-                  onClick={(e) => e.stopPropagation()}
-                >
+            <SoftSheet open={open} onClose={() => !pending && setOpen(false)} label="New project" className="px-5 pb-5 sm:px-6 sm:pt-5">
                   <h2 className="text-[17px] font-semibold">New project</h2>
 
                   {/* ONE even grid: the name across the top, then every
@@ -375,12 +347,7 @@ export default function NewProjectDialog() {
                       Made. Setting up its work breakdown and schedule…
                     </p>
                   )}
-                </m.div>
-              </m.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
+      </SoftSheet>
     </>
   );
 }

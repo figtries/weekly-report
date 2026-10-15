@@ -77,11 +77,11 @@ export default function ExportExcelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Opens on the app's own motion, not shadcn's 100ms pop: see `.dialog-soft`
+      {/* Opens on the app's own motion, not shadcn's 100ms pop: see `.sheet-soft`
           in app/globals.css. A plain dark scrim, no blur, like the activity sheet. */}
       <DialogContent
-        className="dialog-soft max-h-[90dvh] overflow-y-auto sm:max-w-lg"
-        overlayClassName="scrim-soft bg-black/40 supports-backdrop-filter:backdrop-blur-none"
+        sheet
+        className="sm:max-w-lg"
         ref={contentRef}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

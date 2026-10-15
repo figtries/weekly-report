@@ -5,6 +5,7 @@ import { m } from 'framer-motion';
 import { Flag, Plus, Trash2, X } from 'lucide-react';
 
 import { pressMotion } from '@/components/motion/Press';
+import SoftSheet from '@/components/ui/SoftSheet';
 import type { SheetRow } from '@/lib/sheet';
 import type { BarFact } from '@/lib/bar-facts';
 import {
@@ -38,7 +39,7 @@ export default function BarsPanel({
   fieldKinds,
   contract,
   onChange,
-  onClose,
+  onClose: onExited,
 }: {
   view: BarView;
   rows: SheetRow[];
@@ -50,6 +51,9 @@ export default function BarsPanel({
   onChange: (next: BarView) => void;
   onClose: () => void;
 }) {
+  // Every way out plays the sheet's exit first; the parent hears it after.
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const [picking, setPicking] = useState<string | null>(null);
   const by = view.colourBy;
   const tasks = rows.filter((r) => !r.isSummary && !r.isMilestone);
@@ -265,13 +269,7 @@ export default function BarsPanel({
     );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-label="Bars"
-        className="animate-enter max-h-[88vh] w-full overflow-auto rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-md sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <SoftSheet open={open} onClose={onClose} onExited={onExited} label="Bars">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold">Bars</p>
@@ -463,7 +461,6 @@ export default function BarsPanel({
             Done
           </m.button>
         </div>
-      </div>
-    </div>
+    </SoftSheet>
   );
 }

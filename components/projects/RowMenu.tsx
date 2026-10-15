@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
+import SoftSheet from '@/components/ui/SoftSheet';
 import {
   ChevronsLeft,
   ChevronsRight,
@@ -75,7 +76,7 @@ import {
 export default function RowMenu({
   row,
   initialMode = 'menu',
-  onClose,
+  onClose: onExited,
   onChanged,
   onDeleted,
   onUndoable,
@@ -165,6 +166,9 @@ export default function RowMenu({
    */
   onAdd: (asChild: boolean) => void;
 }) {
+  // Every way out plays the sheet's exit first; the parent hears it after.
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [unitLabel, setUnitLabel] = useState(row.unitLabel ?? '');
@@ -235,14 +239,7 @@ export default function RowMenu({
     );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="animate-enter max-h-[85vh] w-full overflow-auto rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-sm sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <SoftSheet open={open} onClose={onClose} onExited={onExited} label={row.name} size="sm">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Row {row.code}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
 
@@ -659,8 +656,7 @@ export default function RowMenu({
         )}
 
         {error && <p className="mt-2 text-xs text-destructive animate-fade-in-up">{error}</p>}
-      </div>
-    </div>
+    </SoftSheet>
   );
 }
 

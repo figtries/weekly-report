@@ -5,7 +5,7 @@ import { pressMotion } from '@/components/motion/Press';
 import { m } from 'framer-motion';
 
 import { useState, useTransition } from 'react';
-import { createPortal } from 'react-dom';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { useRouter } from 'next/navigation';
 import { createDailyAction } from '@/lib/actions';
 import DateField from '@/components/ui/DateField';
@@ -13,7 +13,10 @@ import DateField from '@/components/ui/DateField';
 export default function NewDailyButton({ defaultDate }: { defaultDate: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
+  // Set in the navigation's own transition: the sheet leaves with no exit,
+  // because a hidden tree (the router keeps /daily as display: none) runs no
+  // effects and an exit still in flight would come back on Back.
+  const [gone, setGone] = useState(false);
   const [date, setDate] = useState(defaultDate);
   const [error, setError] = useState<string | null>(null);
   // Covers the action AND the navigation that follows, so the dialog keeps
@@ -33,17 +36,12 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
   function openModal() {
     setDate(defaultDate);
     setError(null);
-    setClosing(false);
+    setGone(false);
     setOpen(true);
   }
 
-  // Play the exit animation before unmounting, mirroring the entrance.
   function closeModal() {
-    setClosing(true);
-    setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
-    }, 120);
+    setOpen(false);
   }
 
   function create() {
@@ -70,7 +68,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
       // transition, hence the second `startTransition`.
       startTransition(() => {
         setOpen(false);
-        setClosing(false);
+        setGone(true);
         router.push(`/daily/${date}`);
       });
     });
@@ -88,18 +86,8 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
         New Daily Report
       </m.button>
 
-      {open &&
-        createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className={`absolute inset-0 bg-black/40 backdrop-blur-sm ${closing ? 'animate-fade-out' : 'animate-fade-in'}`}
-            onClick={() => !creating && closeModal()}
-          />
-          <div
-            className={`relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6 ${
-              closing ? 'animate-scale-out' : 'animate-scale-in'
-            }`}
-          >
+      {!gone && (
+        <SoftSheet open={open} onClose={() => !creating && closeModal()} label="New Daily Report" size="sm" className="px-5 pb-5 sm:p-6">
             <h2 className="text-lg font-semibold text-foreground">New Daily Report</h2>
             <p className="mt-1 text-sm text-muted-foreground">Choose the day for this report.</p>
 
@@ -147,9 +135,7 @@ export default function NewDailyButton({ defaultDate }: { defaultDate: string })
                 Setting up the report page. This only takes a moment…
               </p>
             )}
-          </div>
-        </div>,
-        document.body
+        </SoftSheet>
       )}
     </>
   );

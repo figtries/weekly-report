@@ -33,7 +33,7 @@ import { matchesSearch, searchWords } from '@/lib/search';
  * which is out are decided on the server by the same rule as Outstanding
  * (`DocumentCard.sendNext` / `out`), never worked out again here.
  *
- * Shell copied from ExportExcelDialog: `.dialog-soft` motion, a plain scrim,
+ * Shell copied from ExportExcelDialog: the app's sheet motion (`.sheet-soft`), a plain scrim,
  * focus moved two frames after opening. The rows are native controls: a
  * register can hold hundreds, and Radix per row is what AGENTS.md forbids.
  */
@@ -205,8 +205,9 @@ export default function TransmittalDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="dialog-soft flex max-h-[92dvh] flex-col gap-4 overflow-hidden sm:max-w-2xl"
-        overlayClassName="scrim-soft bg-black/40 supports-backdrop-filter:backdrop-blur-none"
+        sheet
+        className="sm:max-w-2xl"
+        bodyClassName="flex flex-col overflow-hidden"
         ref={contentRef}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

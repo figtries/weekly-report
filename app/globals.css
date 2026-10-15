@@ -564,6 +564,57 @@ a:active {
   animation: scrim-out 0.4s var(--ease-ios) both;
 }
 
+/* Every other pop-up opens like the activity sheet (15 Oct 2026,
+   components/ui/SoftSheet.tsx): on a phone the same slide up from below the
+   screen and back down, from `sm` a centred card rising and fading on the same
+   curve and time, because its place there is the middle of the page. The Radix
+   dialogs get the same through `.sheet-soft`, keyed on the data-state Radix
+   writes so its Presence waits for the exit. */
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 32px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes card-sink {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 32px, 0);
+  }
+}
+.animate-sheet-rise,
+.sheet-soft[data-state='open'] {
+  animation: sheet-up 0.5s var(--ease-ios) both;
+}
+.animate-sheet-fall,
+.sheet-soft[data-state='closed'] {
+  animation: sheet-down 0.5s var(--ease-ios) both;
+}
+@media (min-width: 640px) {
+  .animate-sheet-rise,
+  .sheet-soft[data-state='open'] {
+    animation-name: card-rise;
+  }
+  .animate-sheet-fall,
+  .sheet-soft[data-state='closed'] {
+    animation-name: card-sink;
+  }
+}
+.scrim-sheet[data-state='open'] {
+  animation: scrim-in 0.4s var(--ease-ios) both;
+}
+.scrim-sheet[data-state='closed'] {
+  animation: scrim-out 0.4s var(--ease-ios) both;
+}
+
 /* A Radix pop-up opening the way the app's own sheets do (3 Oct 2026). shadcn's
    dialog gives 100ms of fade + zoom over a blurred page: on a phone that is one
    frame after a pause, a pop rather than an opening, and the blur is recomputed

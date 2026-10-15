@@ -67,8 +67,8 @@ export default function GanttPdfDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="dialog-soft max-h-[90dvh] overflow-y-auto sm:max-w-md"
-        overlayClassName="scrim-soft bg-black/40 supports-backdrop-filter:backdrop-blur-none"
+        sheet
+        className="sm:max-w-md"
         ref={contentRef}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

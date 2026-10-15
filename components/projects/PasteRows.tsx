@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence, m } from 'framer-motion';
+import { useRef, useState, useTransition } from 'react';
+import SoftSheet from '@/components/ui/SoftSheet';
 import { ClipboardPaste, CornerDownRight, FileSpreadsheet, TriangleAlert } from 'lucide-react';
 
 import NativeSelect from '@/components/ui/NativeSelect';
-import { MOTION } from '@/lib/design';
 import { applyPasteAction, previewPasteAction, type PastePreview } from '@/lib/paste-actions';
 import {
   FIELDS,
@@ -54,8 +52,6 @@ export default function PasteRows({
   const [preview, setPreview] = useState<PastePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   /** The workbook, when the text came from one. Null for a plain paste. */
   const [book, setBook] = useState<PlanWorkbookRead | null>(null);
@@ -154,26 +150,7 @@ export default function PasteRows({
     <>
       {trigger(() => setOpen(true))}
 
-      {mounted &&
-        createPortal(
-          <AnimatePresence>
-            {open && (
-              <m.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: MOTION.duration, ease: MOTION.ease }}
-                className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-6"
-                onClick={() => !pending && close()}
-              >
-                <m.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: MOTION.enter, ease: MOTION.ease }}
-                  className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl border bg-card shadow-lg sm:max-w-2xl sm:rounded-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
+            <SoftSheet open={open} onClose={() => !pending && close()} label="Bring the plan in from Excel" size="2xl" className="flex flex-col overflow-hidden p-0 sm:pt-0">
                   <div className="shrink-0 border-b p-4">
                     <h2 className="text-sm font-semibold">Bring the plan in from Excel</h2>
                   </div>
@@ -425,12 +402,7 @@ export default function PasteRows({
                       Cancel
                     </button>
                   </div>
-                </m.div>
-              </m.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
+      </SoftSheet>
     </>
   );
 }

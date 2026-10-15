@@ -4,14 +4,12 @@ import { pressMotion } from '@/components/motion/Press';
 
 import { m } from 'framer-motion';
 
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 import Spinner from '@/components/ui/Spinner';
+import SoftSheet from '@/components/ui/SoftSheet';
 
-// Shared confirm dialog with the same motion language as the other modals:
-// the app's soft card (`.dialog-soft`, rises 12px and settles on --ease-ios)
-// over a plain dark scrim (`.scrim-soft`), and the mirrored exit on close.
+// Shared confirm dialog, on the app's one sheet (`SoftSheet`): up from below
+// on a phone like Data Overall's activity sheet, a rising card from `sm`.
 //
 // NO BLUR (4 Oct 2026). The backdrop was `backdrop-blur-sm` over the whole
 // screen, and blurring everything behind it is the most expensive paint a page
@@ -39,40 +37,8 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  // Keep mounted briefly after close so the exit animation can play.
-  const [visible, setVisible] = useState(open);
-  // Opening shows it in the same render, not one effect later: an effect that
-  // set it drew a frame of nothing first (and is what the lint rule flags).
-  if (open && !visible) setVisible(true);
-  useEffect(() => {
-    if (open) return;
-    // As long as `.dialog-soft`'s exit (0.24s), so the card finishes leaving.
-    const t = window.setTimeout(() => setVisible(false), 240);
-    return () => window.clearTimeout(t);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !busy) onCancel();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, busy, onCancel]);
-
-  if (!visible) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div
-        data-state={open ? 'open' : 'closed'}
-        className="scrim-soft absolute inset-0 bg-black/40"
-        onClick={() => !busy && onCancel()}
-      />
-      <div
-        data-state={open ? 'open' : 'closed'}
-        className="dialog-soft relative w-full max-w-sm rounded-2xl border bg-card p-5 shadow-xl sm:p-6"
-      >
+  return (
+    <SoftSheet open={open} onClose={() => !busy && onCancel()} label={title} size="sm" className="px-5 pb-5 sm:p-6">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <div className="mt-1 text-sm text-muted-foreground">{message}</div>
 
@@ -105,8 +71,6 @@ export default function ConfirmDialog({
             {busy ? (busyLabel ?? confirmLabel) : confirmLabel}
           </m.button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </SoftSheet>
   );
 }

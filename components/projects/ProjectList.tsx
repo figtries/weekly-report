@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Spinner from '@/components/ui/Spinner';
+import SoftSheet from '@/components/ui/SoftSheet';
 
 /**
  * The app's first screen.
@@ -243,7 +244,10 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
 }
 
 /** One instance for the whole list, driven by whichever card asked for it. */
-function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: () => void }) {
+function ActionsPanel({ project: p, onClose: onExited }: { project: ProjectCard; onClose: () => void }) {
+  // Every way out plays the sheet's exit first; the parent hears it after.
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [mode, setMode] = useState<'menu' | 'rename' | 'delete'>('menu');
@@ -264,14 +268,7 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="animate-enter w-full rounded-t-2xl border bg-card p-4 shadow-lg sm:max-w-sm sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <SoftSheet open={open} onClose={onClose} onExited={onExited} label={p.name} size="sm">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Project</p>
         <p className="mt-0.5 text-sm font-semibold leading-snug">{p.name}</p>
 
@@ -357,8 +354,7 @@ function ActionsPanel({ project: p, onClose }: { project: ProjectCard; onClose: 
         )}
 
         {error && <p className="mt-2 text-xs text-destructive animate-fade-in-up">{error}</p>}
-      </div>
-    </div>
+    </SoftSheet>
   );
 }
 
