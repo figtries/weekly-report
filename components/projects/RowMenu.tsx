@@ -240,7 +240,7 @@ export default function RowMenu({
 
   return (
     <SoftSheet open={open} onClose={onClose} onExited={onExited} label={row.name} size="sm">
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Row {row.code}</p>
+        <p className="text-[12px] tabular-nums text-muted-foreground">Row {row.code}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
 
         {/* The target date stood here, mirroring the Target column for phones.
@@ -466,6 +466,7 @@ export default function RowMenu({
               names={names}
               suggestions={suggestions}
               onBack={() => (initialMode === 'links' ? onClose() : setMode('menu'))}
+              onCancel={onClose}
               onSaved={(sheet, touched) => {
                 onLinksSaved(sheet, touched);
                 onClose();

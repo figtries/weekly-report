@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X } from 'lucide-react';
 
 import { whySentence, wouldLoop, type Network } from '@/lib/chains';
 import { LINK_TYPES, MAX_WAIT, WAY_LABEL, type LinkType, type StoredLink } from '@/lib/links';
@@ -31,6 +31,7 @@ export default function LinksPanel({
   names,
   suggestions,
   onBack,
+  onCancel,
   onSaved,
 }: {
   projectId: string;
@@ -41,6 +42,8 @@ export default function LinksPanel({
   /** The date-chain guesses, worked out on the client. */
   suggestions: string[];
   onBack: () => void;
+  /** Cancel closes the pop-up; Back returns to the row menu. */
+  onCancel: () => void;
   onSaved: (sheet: Sheet, touched: string[]) => void;
 }) {
   const logic = network.rows.get(row.id);
@@ -123,9 +126,9 @@ export default function LinksPanel({
     const items = side === 'waits' ? waits : holds;
     const set = side === 'waits' ? setWaits : setHolds;
     return items.map((l, i) => (
-      <div key={l.id} className="mt-2 rounded-xl border p-2.5">
-        <div className="flex items-center gap-2 text-[13px]">
-          <span className="min-w-0 flex-1 truncate">{names.get(l.id) ?? l.id}</span>
+      <div key={l.id} className="border-b border-border/70 py-3 last:border-b-0">
+        <div className="flex items-center gap-2 text-[14px]">
+          <span className="min-w-0 flex-1 truncate font-medium">{names.get(l.id) ?? l.id}</span>
           {side === 'waits' && logic?.setsDateBy.includes(l.id) && (
             <span className="shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary">Sets the date</span>
           )}
@@ -133,18 +136,18 @@ export default function LinksPanel({
             type="button"
             aria-label={`Remove ${names.get(l.id) ?? ''}`}
             onClick={() => set(items.filter((_, k) => k !== i))}
-            className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted"
+            className="-mr-2 grid size-11 place-items-center rounded-lg text-muted-foreground transition-colors duration-200 ease-ios hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />
           </button>
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-1.5 flex gap-2">
           <NativeSelect
             aria-label="How it waits"
             value={l.type}
             onChange={(e) => set(items.map((x, k) => (k === i ? { ...x, type: e.target.value as LinkType } : x)))}
             wrapperClassName="min-w-0 flex-1"
-            className="h-11 bg-card pl-3 text-[13px] md:text-[13px]"
+            className="h-11 border-transparent bg-muted/60 pl-3 text-[13px] md:text-[13px]"
           >
             {LINK_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -152,7 +155,7 @@ export default function LinksPanel({
               </option>
             ))}
           </NativeSelect>
-          <label className="flex h-11 items-center gap-1.5 rounded-lg border px-2 text-[13px] text-muted-foreground">
+          <label className="flex h-11 items-center gap-1.5 rounded-lg bg-muted/60 px-3 text-[13px] text-muted-foreground focus-within:ring-2 focus-within:ring-primary/30">
             Wait
             <input
               type="number"
@@ -161,7 +164,7 @@ export default function LinksPanel({
               max={MAX_WAIT}
               value={l.wait}
               onChange={(e) => set(items.map((x, k) => (k === i ? { ...x, wait: clampWait(e.target.value) } : x)))}
-              className="w-12 bg-transparent text-right tabular-nums text-foreground outline-none"
+              className="w-10 bg-transparent text-right font-medium tabular-nums text-foreground outline-none"
             />
             days
           </label>
@@ -186,18 +189,27 @@ export default function LinksPanel({
       .filter((r) => !q || r.code.startsWith(q) || matchesSearch(words, r.name, ...above(r)))
       .slice(0, 50);
     return (
-      <div className="mt-2 rounded-xl border p-2">
-        <label className="flex h-11 items-center gap-2 rounded-lg border px-2">
-          <Search className="size-4 text-muted-foreground" aria-hidden />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find an activity"
-            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-          />
-        </label>
-        <ul className="mt-1 max-h-64 overflow-y-auto">
+      <div className="mt-2">
+        <div className="flex items-center gap-1">
+          <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl bg-muted/60 px-3 focus-within:ring-2 focus-within:ring-primary/30">
+            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find an activity"
+              className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setAdding(null)}
+            className="min-h-11 shrink-0 rounded-lg px-3 text-[14px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary/5"
+          >
+            Cancel
+          </button>
+        </div>
+        <ul className="mt-1.5 max-h-64 overflow-y-auto">
           {shown.map((r) => {
             const loop = loops(r.id, side);
             return (
@@ -212,7 +224,7 @@ export default function LinksPanel({
                     setAdding(null);
                     setQuery('');
                   }}
-                  className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] hover:bg-muted disabled:opacity-50"
+                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[14px] transition-colors duration-200 ease-ios hover:bg-muted/60 active:bg-muted disabled:opacity-50"
                 >
                   <span className="shrink-0 rounded bg-muted px-1.5 text-[10.5px] font-semibold tabular-nums text-muted-foreground">{r.code}</span>
                   <span className="min-w-0 flex-1 truncate">{r.name}</span>
@@ -222,9 +234,6 @@ export default function LinksPanel({
             );
           })}
         </ul>
-        <button type="button" onClick={() => setAdding(null)} className="mt-1 min-h-9 w-full rounded-lg text-[12px] text-muted-foreground hover:bg-muted">
-          Close
-        </button>
       </div>
     );
   };
@@ -239,8 +248,9 @@ export default function LinksPanel({
           setAdding(side);
           setQuery('');
         }}
-        className="mt-2 min-h-11 w-full rounded-xl border border-dashed border-primary/40 text-[13px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary/5"
+        className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-1 text-[14px] font-semibold text-primary transition-colors duration-200 ease-ios hover:bg-primary/5"
       >
+        <Plus className="size-4" aria-hidden />
         {label}
       </button>
     );
@@ -261,9 +271,9 @@ export default function LinksPanel({
         )}
       </div>
 
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Waits for</p>
+      <p className="mt-5 text-[14px] font-semibold text-foreground">Waits for</p>
       {list('waits')}
-      {addButton('waits', '+ Add what it waits for')}
+      {addButton('waits', 'Add what it waits for')}
       {row.links === null &&
         offered.map((id) => (
           <div key={id} className="mt-2 flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -279,13 +289,13 @@ export default function LinksPanel({
           </div>
         ))}
 
-      <p className="mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Holds up</p>
+      <p className="mt-6 text-[14px] font-semibold text-foreground">Holds up</p>
       {list('holds')}
-      {addButton('holds', '+ Add what waits for this')}
+      {addButton('holds', 'Add what waits for this')}
 
       {error && <p className="mt-3 rounded-lg bg-bad-soft px-3 py-2 text-[13px] text-bad">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onBack} className="btn-cancel min-h-11 rounded-lg px-4 text-[13px]">
+        <button type="button" onClick={onCancel} className="btn-cancel min-h-11 rounded-lg px-4 text-[13px]">
           Cancel
         </button>
         <button
