@@ -486,6 +486,19 @@ this page is measured A/B against a baseline build with
 `scripts/verify-projects-perf.mjs`; this machine's load moves the numbers more
 than the code does, so never compare against a figure taken at another time.
 
+**The planner's two scrollers are OPAQUE, and nothing hovers while they move**
+(19 Oct 2026, "berat sekali, g smooth"). Below 1.5x pixel density (Windows at
+100-125%, this machine) Chrome only scrolls an overflow box on the GPU if its
+background is opaque; the panes were transparent, so every frame of a wheel
+scroll repainted the planner on the main thread. `bg-card` on both panes is
+that fix, not a colour. And while either pane scrolls, `data-scrolling` on the
+shell turns off pointer events inside them (150 ms after the last scroll it
+clears): a row sliding under a still cursor lit up every 44px, and that repaint
+held the mirror back. Measured at DPR 1.25: wheel to screen 75 ms to 28 ms on
+the sheet, 81 to 43 on the Gantt. A phone (DPR 2-3) was already composited and
+did not change. Never trace with `invalidationTracking` when timing: it
+inflates every DOM commit tenfold and invents long tasks.
+
 # No figure until the weights close, and every figure adds up
 
 Decided 26 Sep 2026 from a card-by-card breakdown of the dashboard against

@@ -1557,7 +1557,9 @@ export default function ScheduleSheet({
   }, [undo, selectedId, visible, structureUndoable, addRow, resolveId]);
 
   const syncing = useRef(false);
-  const mirror = (from: 'l' | 'r') => () => {
+  const scrollIdle = useRef(0);
+  useEffect(() => () => clearTimeout(scrollIdle.current), []);
+  const mirror = (from: 'l' | 'r') => {
     const a = from === 'l' ? leftRef.current : rightRef.current;
     const b = from === 'l' ? rightRef.current : leftRef.current;
     // The mirror stays on the event itself. It is one property write and it has
@@ -1573,6 +1575,17 @@ export default function ScheduleSheet({
     // The window does not. Every scroll of either pane asks for a recompute,
     // mirrored or not, but they collapse into one per frame.
     scheduleRange(a);
+    // No hover while the list moves (see the panes' pointer-events): a row
+    // sliding under a still cursor lit up and faded out every 44px, and each
+    // of those was a repaint the main thread owed before it could mirror.
+    const shell = shellRef.current;
+    if (shell) {
+      if (!('scrolling' in shell.dataset)) shell.dataset.scrolling = '';
+      clearTimeout(scrollIdle.current);
+      scrollIdle.current = window.setTimeout(() => {
+        delete shell.dataset.scrolling;
+      }, 150);
+    }
   };
 
   const shellRef = useRef<HTMLDivElement>(null);
@@ -1868,9 +1881,15 @@ export default function ScheduleSheet({
         </AnimatePresence>
         <div
           ref={leftRef}
-          onScroll={mirror('l')}
+          onScroll={() => mirror('l')}
           style={splitPx > 0 ? { width: splitPx } : { flex: '1 1 0%' }}
-          className={`min-h-0 min-w-0 shrink-0 overflow-auto max-md:!w-full ${
+          // bg-card is what makes this scroll SMOOTH, not a colour (19 Oct 2026).
+          // Below 1.5x pixel density Chrome will only hand a scroller to the
+          // GPU if its background is opaque; without one, every frame of a
+          // scroll repainted the whole planner on the main thread (measured:
+          // no scroll layer at DPR 1, two with this). Windows at 100-125% is
+          // exactly that screen.
+          className={`min-h-0 min-w-0 shrink-0 overflow-auto bg-card [[data-scrolling]_&>*]:pointer-events-none max-md:!w-full ${
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
@@ -2047,8 +2066,9 @@ export default function ScheduleSheet({
         <div className={`relative min-h-0 min-w-0 flex-1 ${pane === 'sheet' ? 'max-md:hidden' : ''}`}>
           <div
             ref={rightRef}
-            onScroll={mirror('r')}
-            className="h-full min-h-0 min-w-0 overflow-auto"
+            onScroll={() => mirror('r')}
+            // Opaque for the same reason as the sheet's pane: composited scroll.
+            className="h-full min-h-0 min-w-0 overflow-auto bg-card [[data-scrolling]_&>*]:pointer-events-none"
           >
           {/* The FULL list, plus the window. The surface has to keep its true
               height or every bar below the fold sits on the wrong line. */}
