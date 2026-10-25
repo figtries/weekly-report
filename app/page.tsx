@@ -374,7 +374,9 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               </p>
               <p className="mt-2.5 text-sm text-muted-foreground">Done to date</p>
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {/* Always stacked: a wrapping row put the money beside the
+                  verdict one week and under it the next (25 Oct 2026). */}
+              <div className="mt-4 flex flex-col items-start gap-1.5">
                 {/* Plain coloured text, not a tinted pill: the pill's padding
                     pushed its words in past the left edge every other line in
                     this column starts on (26 Sep 2026). */}
