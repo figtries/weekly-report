@@ -95,37 +95,45 @@ export function SummaryScreen({
           <span className={cn('text-[46px] font-bold leading-none tracking-[-0.03em] tabular-nums', against ? (against.diff < 0 ? 'text-bad' : 'text-ok') : 'text-foreground')}>
             {r1(summary.actual).toFixed(1)}<span className={cn('ml-0.5 text-[22px] font-semibold', !against && 'text-muted-foreground')}>%</span>
           </span>
-          {against && (
-            <span className='w-fit rounded-md bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/80 tabular-nums'>
-              {against.diff > 0 ? `+${against.diff.toFixed(1)} pts ahead` : against.diff === 0 ? 'On plan' : `${Math.abs(against.diff).toFixed(1)} pts behind`} · Plan {r1(summary.plan!).toFixed(1)}%
-            </span>
-          )}
-          <span className="text-[13px] text-foreground/75 tabular-nums"><b className="font-semibold text-foreground">{summary.documents}</b> documents</span>
+          {/* 25 Oct 2026: ledger rows like "This week", flush with the figure
+              (the padded chips sat 10px in from it); the gap is the figure's colour. */}
+          <div className="tabular-nums">
+            {[
+              ...(hasPlan ? [['Plan', `${r1(summary.plan!).toFixed(1)}%`]] : []),
+              ['Documents', summary.documents],
+            ].map(([w, n]) => (
+              <div key={w as string} className="flex items-baseline justify-between border-b border-border/70 py-1.5 text-[13px] text-foreground/80">
+                <span>{w}</span><b className="font-semibold text-foreground">{n}</b>
+              </div>
+            ))}
+          </div>
           {stale && (
-            <span className="w-fit rounded-md bg-warn-soft px-2.5 py-0.5 text-xs font-medium text-warn">
-              Nothing recorded since week {summary.evidenceWeek}
-            </span>
+            <span className="text-xs font-medium text-warn">● Nothing recorded since week {summary.evidenceWeek}</span>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-y-5 border-b border-border/70 py-5 lg:border-b-0">
+        {/* Each stage is a subgrid over three shared rows (name, figure, foot):
+            a name that wraps moves all three figures together, never just its own. */}
+        <div className="grid grid-cols-3 gap-y-5 border-b border-border/70 py-5 [grid-auto-rows:auto_1fr_auto] lg:border-b-0">
           {stages.map((s, i) => {
             const st = stageOf(settings, s.stage);
             const pct = summary.documents ? (s.reached / summary.documents) * 100 : 0;
             const left = summary.documents - s.reached;
             return (
-              <div key={s.stage} className={cn('flex min-w-0 flex-col gap-2.5 px-3.5 sm:px-5', i % 3 > 0 && 'border-l border-dashed border-border')}>
+              <div key={s.stage} className={cn('row-span-3 grid min-w-0 grid-rows-subgrid gap-y-2.5 px-3.5 sm:px-5', i % 3 > 0 && 'border-l border-dashed border-border')}>
                 {/* The full name always shows, on its own line: an abbreviation cut to "…" explains nothing. */}
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <b className="text-[14px] font-semibold text-foreground">{st.label}</b>
-                  <span className="text-xs leading-snug text-foreground/65">{st.name}</span>
+                  <b className="text-[14px] font-semibold text-foreground xl:text-base">{st.label}</b>
+                  <span className="text-xs leading-snug text-foreground/65 xl:text-[13px]">{st.name}</span>
                 </div>
-                <span className="text-2xl font-bold leading-none tracking-[-0.02em] text-foreground tabular-nums sm:text-[32px]">
-                  {s.reached}<span className="text-sm font-medium text-muted-foreground sm:text-[15px]"> / {summary.documents}</span>
+                <span className="self-center text-2xl font-bold leading-none tracking-[-0.02em] whitespace-nowrap text-foreground tabular-nums sm:text-[32px] xl:text-[46px] xl:tracking-[-0.03em]">
+                  {s.reached}<span className="text-sm font-medium text-muted-foreground sm:text-[15px] xl:text-[22px]"> / {summary.documents}</span>
                 </span>
-                <span className="h-1.5 rounded-full bg-muted"><span className="block h-1.5 rounded-full" style={{ width: `${clamp(pct)}%`, background: st.color }} /></span>
-                <span className={cn('text-xs font-medium tabular-nums', left <= 0 ? 'text-ok' : 'text-bad')}>
-                  ● {left <= 0 ? 'Complete' : <>{left} to go<span className="max-sm:hidden"> · {pct.toFixed(1)}%</span></>}
-                </span>
+                <div className="flex flex-col gap-2.5">
+                  <span className="h-1.5 rounded-full bg-muted xl:h-2"><span className="block h-full rounded-full" style={{ width: `${clamp(pct)}%`, background: st.color }} /></span>
+                  <span className={cn('text-xs font-medium tabular-nums xl:text-[13px]', left <= 0 ? 'text-ok' : 'text-bad')}>
+                    ● {left <= 0 ? 'Complete' : <>{left} to go<span className="max-sm:hidden"> · {pct.toFixed(1)}%</span></>}
+                  </span>
+                </div>
               </div>
             );
           })}
