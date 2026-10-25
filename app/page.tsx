@@ -2,7 +2,7 @@ import { RouteTransition } from '@/components/motion/RouteTransition';
 import { ScrollReveal } from '@/components/motion/ScrollReveal';
 import Link from 'next/link';
 import EmptyState from '@/components/ui/EmptyState';
-import { Suspense } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import {
   ArrowRight,
   ChartLine,
@@ -47,7 +47,7 @@ import {
 } from '@/components/dashboard/charts';
 import DashboardWeekBar from '@/components/dashboard/DashboardWeekBar';
 import { Reveal } from '@/components/motion/Reveal';
-import { CountUp } from '@/components/motion/CountUp';
+import { CountUp, Tween } from '@/components/motion/CountUp';
 import { TYPE, verdictChip, verdictOf, verdictText } from '@/lib/design';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -332,7 +332,6 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   const weeksLeft = Math.max(0, health.lastWeek - health.week);
   const curveWeeks = curve.map((r) => r.week);
   const firstWeek = curveWeeks.length ? Math.min(...curveWeeks) : health.week;
-  const unreported = reportedWeek > 0 && week > reportedWeek;
 
   return (
     // Beside the sidebar the page ends one card-gap (16px, the `space-y-4`
@@ -350,12 +349,6 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
         currentWeek={currentWeek}
         anchorEnd={db.project.weekAnchorEndDate}
       />
-
-      {unreported && (
-        <p className="animate-fade-in-up rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2.5 text-sm text-warn">
-          No report since week {reportedWeek}. Actual stays at that week while plan keeps rising.
-        </p>
-      )}
 
       {/* ------------------------------------------------ tier 1 · where we are */}
       <Reveal>
@@ -386,7 +379,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   ) : (
                     <TrendingUp className="h-4 w-4" />
                   )}
-                  {fmtPct(Math.abs(health.deviationPct))} {behind ? 'behind' : 'ahead of'} plan
+                  <Tween value={Math.abs(health.deviationPct)} /> {behind ? 'behind' : 'ahead of'} plan
                 </p>
                 {health.scheduleVarianceRp !== null && Math.abs(health.scheduleVarianceRp) > 0 && (
                   <p className="text-sm text-muted-foreground">
@@ -402,9 +395,9 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
               {/* The rail carries the three figures that qualify the headline,
                   each said exactly once on this page. */}
               <dl className="mt-6 grid grid-cols-3 divide-x rounded-xl border bg-muted/40">
-                <Stat label="Plan this week" value={fmtPct(health.planPct)} />
-                <Stat label="Schedule index" value={fmtNum(health.spi, 3)} />
-                <Stat label="Weeks left" value={fmtNum(weeksLeft)} />
+                <Stat label="Plan this week" value={<Tween value={health.planPct} />} />
+                <Stat label="Schedule index" value={<Tween value={health.spi} suffix="" decimals={3} />} />
+                <Stat label="Weeks left" value={<Tween value={weeksLeft} suffix="" decimals={0} />} />
               </dl>
             </div>
 
@@ -422,7 +415,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                   still in flow above the chart and never overlapped anything,
                   so only the floating case moves. */}
               <MeasureLegend className="justify-end px-5 pb-2 lg:absolute lg:left-8 lg:top-6 lg:justify-start lg:px-0 lg:pb-0" />
-              <ProgressCurve rows={curve} className="block h-40 w-full sm:h-56 lg:h-full" />
+              <ProgressCurve rows={curve} padTo={health.lastWeek} className="block h-40 w-full sm:h-56 lg:h-full" />
               <div
                 className={cn(
                   'pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-5 pb-2 lg:px-8 lg:pb-3',
@@ -711,14 +704,25 @@ function DashboardHeader({
           {/* The week used to be stated here too — ' · reported up to week 43' — and
               once the picker beside it carries the Current badge that is the same
               fact printed twice, disagreeing with itself on the one project whose
-              two stores disagree. The picker owns the week; the banner below owns
-              how far the figures actually go. */}
+              two stores disagree. The picker owns the week; the chip after this
+              line owns how far the figures actually go. */}
           {/* `currentWeek` was in this test until 17 Sep 2026, when it stopped
               meaning "somebody filed something" and started meaning "the week the
               calendar says we are in", which is never zero. Leaving it here would
               have retired this line permanently. Only the REPORTED week can say
               whether anything has been reported. */}
           {reportedWeek > 0 ? '' : ' · Nothing reported yet'}
+          {/* WHERE THE FIGURES STOP, ON A LINE THAT IS ALWAYS THERE. It was a
+              full-width banner between this header and the hero, so crossing
+              the last reported week pushed every card down 50px and back up
+              again, which read as a bug (25 Oct 2026). On this line it takes
+              no height when absent and none when present: `h-5` is the line's
+              own `text-sm` height, border included. */}
+          {reportedWeek > 0 && week > reportedWeek && (
+            <span className="ml-2 inline-flex h-5 animate-fade-in-up items-center whitespace-nowrap rounded-md border border-warn/30 bg-warn-soft px-1.5 align-top text-xs font-medium leading-none text-warn">
+              No report since week {reportedWeek}
+            </span>
+          )}
         </p>
       </div>
       {/* Data Overall's row is 312px at desktop and the screen's width on a
@@ -737,7 +741,7 @@ function DashboardHeader({
 }
 
 /** One cell of the hero's rail. Label above, figure below, divider between. */
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     // The rail is three fixed 1fr columns, so a figure that outgrows its
     // track spills over the divider into the next one. At 390 (the width this

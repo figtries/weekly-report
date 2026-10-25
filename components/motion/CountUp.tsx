@@ -1,4 +1,7 @@
+'use client';
+
 import { MOTION } from '@/lib/design';
+import { useTween } from '@/components/motion/useTween';
 
 /**
  * A number that arrives with its own small movement. Used only for the two or
@@ -46,7 +49,29 @@ export function CountUp({
       className="tabular-nums animate-fade-in-up"
       style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
-      {value.toFixed(decimals)}
+      <Tween value={value} suffix={suffix} decimals={decimals} />
+    </span>
+  );
+}
+
+/**
+ * A figure that counts to its new value when it changes (a week picked on the
+ * dashboard), with no entrance of its own. The server HTML carries the real
+ * figure; see `useTween`.
+ */
+export function Tween({
+  value,
+  suffix = '%',
+  decimals = 2,
+}: {
+  value: number;
+  suffix?: string;
+  decimals?: number;
+}) {
+  const [shown] = useTween([value]);
+  return (
+    <span className="tabular-nums">
+      {shown.toFixed(decimals)}
       {suffix}
     </span>
   );

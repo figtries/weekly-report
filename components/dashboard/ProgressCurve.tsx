@@ -1,5 +1,8 @@
+'use client';
+
 import type { SCurveRow } from '@/lib/scurve';
 import { cn } from '@/lib/utils';
+import { useTween } from '@/components/motion/useTween';
 
 /**
  * The plan and actual lines, drawn small.
@@ -15,14 +18,34 @@ import { cn } from '@/lib/utils';
  * bad week — which this component used to do — removes the only thing that
  * tells the two lines apart, on the week it matters most.
  */
-export default function ProgressCurve({
+export default function ProgressCurve(props: {
+  rows: SCurveRow[];
+  /** The project's last week: every line is padded to it so two weeks' curves
+   *  have the same number of points and can glide from one to the other. */
+  padTo?: number;
+  className?: string;
+}) {
+  if (props.rows.length < 2) return null;
+  return <Curve {...props} />;
+}
+
+/**
+ * A CLIENT COMPONENT SINCE 25 OCT 2026, for one job: picking another week
+ * glides the lines, the cut-off and the dots to the new week (`useTween`)
+ * instead of swapping them in one frame. The server still renders the final
+ * curve, so the first paint is unchanged.
+ */
+type Pt = { x: number; y: number };
+
+function Curve({
   rows,
+  padTo = 0,
   className,
 }: {
   rows: SCurveRow[];
+  padTo?: number;
   className?: string;
 }) {
-  if (rows.length < 2) return null;
 
   const W = 1000;
   const H = 180;
@@ -68,10 +91,9 @@ export default function ProgressCurve({
    * So the curve is smoother to look at and still says exactly what the numbers
    * say, which is the only version worth having on a report people sign.
    */
-  const line = (pick: (r: SCurveRow) => number | null) => {
-    const pts = rows
-      .filter((r) => pick(r) !== null)
-      .map((r) => ({ x: x(r.week), y: y(pick(r) as number) }));
+  const line = (raw: Pt[]) => {
+    // A padded line repeats its last point; a zero-width step has no slope.
+    const pts = raw.filter((p, i) => i === 0 || p.x - raw[i - 1].x > 0.01);
     if (pts.length === 0) return null;
     if (pts.length < 3) return `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('L')}`;
 
@@ -107,14 +129,43 @@ export default function ProgressCurve({
     return d;
   };
 
-  const planPath = line((r) => r.planPct);
-  const actualPath = line((r) => r.actualPct);
-
+  const pointsOf = (pick: (r: SCurveRow) => number | null): Pt[] =>
+    rows
+      .filter((r) => pick(r) !== null)
+      .map((r) => ({ x: x(r.week), y: y(pick(r) as number) }));
+  const planPts = pointsOf((r) => r.planPct);
+  const actualPts = pointsOf((r) => r.actualPct);
   const lastActual = [...rows].reverse().find((r) => r.actualPct !== null);
   const lastPlan = [...rows].reverse().find((r) => r.planPct !== null);
+
+  // Both lines padded to the project's length and glided as one array, with
+  // the two endpoint figures on the end of it.
+  const pad = (pts: Pt[]) => {
+    const last = pts[pts.length - 1] ?? { x: 0, y: H };
+    return Array.from({ length: Math.max(padTo, pts.length) }, (_, i) => pts[i] ?? last);
+  };
+  const P = pad(planPts).length;
+  const A = pad(actualPts).length;
+  const flat = useTween([
+    ...pad(planPts).flatMap((p) => [p.x, p.y]),
+    ...pad(actualPts).flatMap((p) => [p.x, p.y]),
+    lastPlan?.planPct ?? 0,
+    lastActual?.actualPct ?? 0,
+  ]);
+  const unpack = (from: number, n: number): Pt[] =>
+    Array.from({ length: n }, (_, i) => ({ x: flat[from + 2 * i], y: flat[from + 2 * i + 1] }));
+  const planShown = planPts.length ? unpack(0, P) : [];
+  const actualShown = actualPts.length ? unpack(2 * P, A) : [];
+  const planEnd = planShown[planShown.length - 1];
+  const actualEnd = actualShown[actualShown.length - 1];
+  const planValue = flat[2 * P + 2 * A];
+  const actualValue = flat[2 * P + 2 * A + 1];
+
+  const planPath = line(planShown);
+  const actualPath = line(actualShown);
   const area =
-    actualPath && lastActual
-      ? `${actualPath}L${x(lastActual.week).toFixed(1)},${H}L${x(minW).toFixed(1)},${H}Z`
+    actualPath && actualEnd
+      ? `${actualPath}L${actualEnd.x.toFixed(1)},${H}L${x(minW).toFixed(1)},${H}Z`
       : null;
 
   // Quarter lines only. On a card this short anything denser reads as texture
@@ -195,11 +246,11 @@ export default function ProgressCurve({
           It is a rule and not a dot because the viewBox is stretched
           horizontally (preserveAspectRatio="none"), which turns any circle into
           an ellipse; the round markers are HTML, over the top. */}
-      {lastActual && (
+      {actualEnd && (
         <line
-          x1={x(lastActual.week)}
+          x1={actualEnd.x}
           y1={TOP}
-          x2={x(lastActual.week)}
+          x2={actualEnd.x}
           y2={H}
           stroke="currentColor"
           strokeOpacity="0.22"
@@ -227,19 +278,19 @@ export default function ProgressCurve({
 
         They arrive after the wipe has passed them, so each dot lands on a line
         that has already been drawn instead of racing it. */}
-    {lastPlan && lastPlan.planPct !== null && (
+    {planEnd && (
       <EndDot
-        leftPct={(x(lastPlan.week) / W) * 100}
-        topPct={(y(lastPlan.planPct) / H) * 100}
-        value={lastPlan.planPct}
+        leftPct={(planEnd.x / W) * 100}
+        topPct={(planEnd.y / H) * 100}
+        value={planValue}
         tone="plan"
       />
     )}
-    {lastActual && lastActual.actualPct !== null && (
+    {actualEnd && (
       <EndDot
-        leftPct={(x(lastActual.week) / W) * 100}
-        topPct={(y(lastActual.actualPct) / H) * 100}
-        value={lastActual.actualPct}
+        leftPct={(actualEnd.x / W) * 100}
+        topPct={(actualEnd.y / H) * 100}
+        value={actualValue}
         tone="actual"
       />
     )}
