@@ -74,7 +74,7 @@ export function RegisterTabs({
         >
           {/* Data screens only, placed as the weekly report places its Export
               Excel: in the row on a phone, the page's top corner from md. */}
-          {register && <RegisterMarks register={register} className="flex md:hidden" />}
+          {register && <RegisterMarks register={register} week={selectedWeek} className="flex md:hidden" />}
         </WeekRow>
         <PhoneRegisterBar active={active} selectedWeek={selectedWeek} />
         <WeekSteps
@@ -89,7 +89,7 @@ export function RegisterTabs({
           }))}
         />
       </div>
-      {register && <RegisterMarks register={register} className="absolute top-4 right-6 hidden md:flex lg:right-8" />}
+      {register && <RegisterMarks register={register} week={selectedWeek} className="absolute top-4 right-6 hidden md:flex lg:right-8" />}
 
       {/* The line explaining EDL against VDRL went on 3 Oct 2026: the people
           who work here know the pair, and on every screen it was the first
@@ -195,13 +195,13 @@ function PhoneRegisterBar({ active, selectedWeek }: { active: string; selectedWe
  * never inside it: the column's entrance animation leaves a transform that
  * would anchor `absolute` to the column instead of the page.
  */
-export function RegisterMarks({ register, className }: { register: 'edl' | 'vdrl'; className?: string }) {
+export function RegisterMarks({ register, week, className }: { register: 'edl' | 'vdrl'; week: number; className?: string }) {
   const name = register === 'edl' ? 'EDL' : 'VDRL';
   const mark = 'inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium text-white shadow-sm transition-colors duration-300 ease-ios hover:shadow-md max-[380px]:size-10 lg:w-auto lg:px-3 xl:px-4';
   return (
     <div className={cn('shrink-0 items-center gap-2 max-[380px]:gap-1.5', className)}>
       <a
-        href={`/api/register/export?register=${register}`}
+        href={`/api/register/export?register=${register}&week=${week}`}
         download
         aria-label={`Export Excel (${name})`}
         title={`Export the ${name} to Excel`}
