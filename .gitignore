@@ -19,6 +19,8 @@
 # concurrent dev/preview server. Pure build cache, regenerated on demand.
 /.next-preview*/
 /.next-buildcheck/
+/.next-build/
+/.worktrees/
 /out/
 
 # production

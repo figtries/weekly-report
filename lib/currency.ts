@@ -65,7 +65,9 @@ export function formatMoney(value: number | null | undefined, currency: string):
 export function formatMoneyShort(value: number | null | undefined, currency: string): string {
   if (value == null || !Number.isFinite(value)) return '—';
   try {
-    return new Intl.NumberFormat('en-GB', {
+    // en-US, not en-GB: its compact suffixes are K / M / B, which people read
+    // more readily than en-GB's "bn" (27 Oct 2026).
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
       notation: 'compact',
