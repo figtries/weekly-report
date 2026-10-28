@@ -1964,8 +1964,19 @@ a:active {
    the router keeps /login in the DOM, hidden by React with an inline
    `display: none` on that same node, and a bare `:has([data-login])` kept the
    menu gone on the Dashboard (measured 28 Oct 2026). */
-body:has([data-login]:not([style*="display: none"])) [data-app-chrome] {
+body:has(:is([data-login], [data-checkout]):not([style*="display: none"])) [data-app-chrome] {
   display: none;
+}
+
+/* Payment's stepper band: the login's three brand colours, washed almost to
+   white so the form below stays the cleanest thing on the page. */
+.checkout-band {
+  background: linear-gradient(
+    100deg,
+    color-mix(in oklab, #c5dbfe 60%, white) 0%,
+    color-mix(in oklab, #00d0d4 12%, white) 55%,
+    color-mix(in oklab, #0077ff 14%, white) 100%
+  );
 }
 
 /* The brand's three colours from the mark, as blurred light behind the page:
