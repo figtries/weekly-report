@@ -27,30 +27,27 @@ export function LoginScreen() {
         <div className="login-blob -right-[12%] -top-[18%] size-[26rem] bg-[#0077ff]/25" />
       </div>
 
-      <div className="mx-auto grid min-h-dvh w-full max-w-[1600px] grid-rows-[auto_1fr_auto] lg:grid-cols-[11fr_9fr] lg:grid-rows-1">
-        <section className="flex flex-col px-5 pt-6 sm:px-8 sm:pt-8 lg:px-14 lg:py-12 xl:px-20">
+      {/* One screen on desktop: the showcase takes whatever height is left, never more. */}
+      <div className="mx-auto grid min-h-dvh w-full max-w-[1680px] grid-rows-[auto_1fr_auto] lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)] lg:grid-rows-1">
+        <section className="flex min-h-0 flex-col px-5 pt-6 sm:px-8 sm:pt-8 lg:px-12 lg:py-8 xl:px-16">
           <div className="flex items-center gap-2.5">
-            {/* On a white tile: the mark's pale half is the gradient's own colour. */}
-            <span className="grid size-12 place-items-center rounded-xl bg-white/90 shadow-[0_6px_16px_-8px_rgba(20,60,140,0.35)]">
-              <Image src="/lucille-mark.png" alt="" width={20} height={34} className="h-8 w-auto" priority />
-            </span>
+            <Image src="/lucille-mark.png" alt="" width={20} height={34} className="h-9 w-auto" priority />
             <span className="text-xl font-semibold tracking-tight text-foreground">Lucille</span>
           </div>
 
-          <div className="animate-enter mt-8 lg:my-auto lg:py-10">
-            <h1 className="max-w-[16ch] text-[1.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl xl:text-[2.75rem]">
-              Project control for EPC work.
+          <div className="animate-enter mt-8 flex min-h-0 flex-1 flex-col lg:mt-[4vh]">
+            <h1 className="text-[2rem] font-semibold leading-[1.05] tracking-[-0.035em] text-foreground sm:text-5xl xl:text-[3.75rem]">
+              Every project,
+              <br />
+              <span className="text-primary">precisely in hand.</span>
             </h1>
-            <p className="mt-3 max-w-md text-base text-muted-foreground sm:text-lg">
-              Track every project against plan, week by week.
-            </p>
-            <CurveCard className="animate-enter stagger-2 mt-10 hidden lg:block" />
+            <Showcase className="animate-enter stagger-2 mb-6 mt-10 hidden lg:block" />
           </div>
 
           <Footer className="hidden lg:flex" />
         </section>
 
-        <section className="flex items-start justify-center px-4 pb-8 pt-7 sm:px-8 lg:items-center lg:py-12">
+        <section className="flex items-start justify-center px-4 pb-8 pt-7 sm:px-8 lg:items-center lg:py-8">
           <SignInCard />
         </section>
 
@@ -270,83 +267,57 @@ function Footer({ className }: { className?: string }) {
   );
 }
 
-// The decoration's figures come from its own curve, so they add up on a calculator.
-const WEEKS = 60;
-const NOW = 36;
-const ease = (t: number) => t * t * (3 - 2 * t);
-const planAt = (w: number) => ease(w / WEEKS);
-const actualAt = (w: number) => ease(Math.min(1, (w + 1.6) / WEEKS));
-const y = (v: number) => 40 - v * 38;
-const points = (f: (w: number) => number, to: number) =>
-  Array.from({ length: to + 1 }, (_, w) => `${((w / WEEKS) * 100).toFixed(2)},${y(f(w)).toFixed(2)}`).join(' ');
-const r2 = (n: number) => Math.round(n * 100) / 100;
-const PLAN = r2(planAt(NOW) * 100);
-const ACTUAL = r2(actualAt(NOW) * 100);
-const AHEAD = r2(ACTUAL - PLAN);
-const NOW_X = (NOW / WEEKS) * 100;
 
-function CurveCard({ className }: { className?: string }) {
+// Real screens of the demo project, captured from the app (public/login/*).
+// Rename a file when re-capturing: next/image caches by URL.
+function Showcase({ className }: { className?: string }) {
   return (
-    <div
-      aria-hidden
-      className={cn(
-        'max-w-md rounded-2xl border border-white/80 bg-white/65 p-5 shadow-[0_24px_56px_-32px_rgba(20,60,140,0.5)] backdrop-blur-md',
-        className,
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">Overall progress</p>
-        <span className="rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">Week {NOW}</span>
-      </div>
-      <div className="mt-3 flex gap-7">
-        <Figure label="Actual" value={`${ACTUAL.toFixed(2)}%`} dot="#3b82f6" />
-        <Figure label="Plan" value={`${PLAN.toFixed(2)}%`} dot="#ef4444" />
-        <Figure label="Ahead" value={`+${AHEAD.toFixed(2)}%`} />
-      </div>
-      <div className="relative mt-4 h-28">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
-          <defs>
-            <linearGradient id="login-actual-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#3b82f6" stopOpacity="0.22" />
-              <stop offset="1" stopColor="#3b82f6" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[10, 20, 30].map((g) => (
-            <line key={g} x1="0" x2="100" y1={g} y2={g} stroke="#e5e7eb" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-          ))}
-          <polygon points={`0,40 ${points(actualAt, NOW)} ${NOW_X},40`} fill="url(#login-actual-fill)" />
-          <polyline points={points(planAt, WEEKS)} fill="none" stroke="#ef4444" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-          <polyline
-            points={points(actualAt, NOW)}
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <span
-          className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#3b82f6] shadow"
-          style={{ left: `${NOW_X}%`, top: `${(y(actualAt(NOW)) / 40) * 100}%` }}
-        />
-      </div>
-      <div className="mt-2 flex justify-between text-[0.6875rem] text-muted-foreground">
-        <span>Start</span>
-        <span>Finish</span>
+    <div aria-hidden className={cn('relative min-h-0 flex-1 [container-type:size]', className)}>
+      <div className="absolute left-0 top-1/2 aspect-[16/9] w-[min(100cqw,calc(100cqh*16/9))] -translate-y-1/2">
+        <Frame src="/login/gantt-links.webp" w={720} h={450} label="Plan" className="right-[2%] top-[2%] w-[67%]" />
+        <Frame src="/login/dash-progress.webp" w={962} h={341} label="Dashboard" className="bottom-0 right-0 w-[46%]" />
+        <div className="absolute bottom-0 left-0 h-[84%] rounded-[2.25rem] bg-neutral-900 p-2 shadow-[0_40px_80px_-30px_rgba(15,23,42,0.6)]">
+          <div className="h-full overflow-hidden rounded-[1.75rem] bg-white">
+            <Image
+              src="/login/phone-panel.webp"
+              alt=""
+              width={780}
+              height={1474}
+              sizes="320px"
+              className="h-full w-auto"
+              priority
+            />
+          </div>
+          <Chip className="-top-3.5 left-6">From your phone</Chip>
+        </div>
       </div>
     </div>
   );
 }
 
-function Figure({ label, value, dot }: { label: string; value: string; dot?: string }) {
+function Frame({ src, w, h, label, className }: { src: string; w: number; h: number; label: string; className: string }) {
   return (
-    <div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {dot && <span className="size-2 rounded-full" style={{ background: dot }} />}
-        {label}
-      </p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums text-foreground">{value}</p>
+    <div
+      className={cn(
+        'absolute rounded-2xl border border-black/5 bg-white p-1.5 shadow-[0_1px_2px_rgba(16,24,40,0.06),0_32px_64px_-28px_rgba(20,60,140,0.55)]',
+        className,
+      )}
+    >
+      <Image src={src} alt="" width={w * 2} height={h * 2} sizes="900px" className="block h-auto w-full rounded-xl" priority />
+      <Chip className="-top-3.5 right-5">{label}</Chip>
     </div>
+  );
+}
+
+function Chip({ className, children }: { className?: string; children: string }) {
+  return (
+    <span
+      className={cn(
+        'absolute whitespace-nowrap rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white shadow-[0_10px_24px_-10px_rgba(29,78,216,0.8)]',
+        className,
+      )}
+    >
+      {children}
+    </span>
   );
 }
