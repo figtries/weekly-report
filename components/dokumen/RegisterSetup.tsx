@@ -417,7 +417,7 @@ export function RegisterSetup({
                       </button>
                     )}
                     {hold.documents && (
-                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'documents' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-3 text-[13px] font-semibold text-primary">
+                      <button type="button" onClick={() => setAdding({ id: node.id, mode: 'documents' })} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-3 text-[13px] font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
                         <Plus className="h-3.5 w-3.5" />Add
                       </button>
                     )}
