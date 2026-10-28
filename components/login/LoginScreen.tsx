@@ -38,9 +38,9 @@ export function LoginScreen() {
 
           <div className="animate-enter mt-8 flex min-h-0 flex-1 flex-col lg:mt-[4vh]">
             <h1 className="text-[2rem] font-semibold leading-[1.05] tracking-[-0.035em] text-foreground sm:text-5xl xl:text-[3.75rem]">
-              Every project,
+              Precision that fits
               <br />
-              <span className="text-primary">precisely in hand.</span>
+              <span className="text-primary">in your pocket.</span>
             </h1>
             <Showcase className="animate-enter stagger-2 mb-6 mt-10 hidden lg:block" />
           </div>
