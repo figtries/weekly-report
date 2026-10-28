@@ -539,7 +539,7 @@ export default function Sidebar({
           app's chrome from the page scrolling beneath it (25 Sep 2026). It no
           longer carries the open project's initial: that lives on the card at
           the foot of the menu. */}
-      <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2.5 border-b bg-card pl-4 pr-2 lg:hidden print:hidden">
+      <header data-app-chrome className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2.5 border-b bg-card pl-4 pr-2 lg:hidden print:hidden">
         {/* The mark and the name, not <Brand>: the desktop sidebar already
             renders that <h1>, and both halves sit in the DOM at once. They stay
             OUTSIDE the boundary below, in the static shell, so the bar is never
@@ -561,7 +561,7 @@ export default function Sidebar({
 
       {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
           card at its foot can print a contract title whole in a few lines. */}
-      <aside className="hidden h-screen w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
+      <aside data-app-chrome className="hidden h-screen w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
         <div className="flex h-full flex-col overflow-y-auto">
           <div className="flex h-16 shrink-0 items-center px-6">
             <Brand />

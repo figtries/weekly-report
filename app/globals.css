@@ -1955,3 +1955,45 @@ a:active {
     opacity: 1;
   }
 }
+
+/* ---------- Sign in ---------- */
+
+/* The one screen without the app's chrome. The page marks itself with
+   `data-login` and the menu steps aside, so the root layout stays the only
+   layout and reads nothing new. The `:not` is load-bearing: after signing in
+   the router keeps /login in the DOM, hidden by React with an inline
+   `display: none` on that same node, and a bare `:has([data-login])` kept the
+   menu gone on the Dashboard (measured 28 Oct 2026). */
+body:has([data-login]:not([style*="display: none"])) [data-app-chrome] {
+  display: none;
+}
+
+/* The brand's three colours from the mark, as blurred light behind the page:
+   the pale blue is the ground, cyan a glow, the strong blue only in corners so
+   it never takes over. Off-white (`--background`) is what they fade into. */
+.login-mesh {
+  background:
+    radial-gradient(55% 60% at 8% 6%, #c5dbfe 0%, transparent 72%),
+    radial-gradient(40% 38% at 34% 70%, color-mix(in oklab, #00d0d4 30%, transparent) 0%, transparent 72%),
+    radial-gradient(30% 34% at 100% 0%, color-mix(in oklab, #0077ff 42%, transparent) 0%, transparent 72%),
+    radial-gradient(28% 30% at 0% 100%, color-mix(in oklab, #0077ff 22%, transparent) 0%, transparent 72%),
+    radial-gradient(70% 80% at 28% 40%, #e6efff 0%, transparent 78%),
+    var(--background);
+}
+.login-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  will-change: transform;
+  animation: login-drift 24s ease-in-out infinite alternate;
+}
+.login-blob:nth-child(2) { animation-duration: 31s; animation-direction: alternate-reverse; }
+.login-blob:nth-child(3) { animation-duration: 27s; }
+@keyframes login-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(5%, -4%, 0) scale(1.08); }
+}
+/* `none`, not the global 0.01ms: an infinite alternate at 0.01ms jitters. */
+@media (prefers-reduced-motion: reduce) {
+  .login-blob { animation: none !important; }
+}
