@@ -58,9 +58,13 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                 React drops the duplicates. */}
             {f.rows.map((r, i) => {
               const body = (
-                <>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{r.label}</span>
+                // A short value ("0%") sits beside the name; a long one ("Waits
+                // for Building MEP ...") wraps under it. Kept beside at any
+                // length, it squeezed the name to "G..." on a phone. Both clamp
+                // at two lines; pressing the row opens the whole activity.
+                <span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-0.5">
+                  <span className="min-w-0 flex-1 basis-40">
+                    <span className="line-clamp-2 font-medium">{r.label}</span>
                     {/* The last two ancestors. Without them six rows read
                         "RTS", "Material On Site", "RTS" — the same WBS
                         description under different parents. */}
@@ -70,8 +74,8 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                       </span>
                     )}
                   </span>
-                  <span className="shrink-0 font-semibold tabular-nums">{r.value}</span>
-                </>
+                  <span className="line-clamp-2 max-w-full font-semibold tabular-nums text-foreground/70">{r.value}</span>
+                </span>
               );
               return (
                 <li key={`${i}-${r.label}`} className={cn('text-[13px]', i >= 6 && 'hidden group-has-checked/more:block')}>
@@ -82,7 +86,7 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                   {r.id ? (
                     <Link
                       href={`/weekly/${week}/overall?item=${encodeURIComponent(r.id)}`}
-                      className="flex min-h-11 items-center gap-3 px-3 py-2 transition-colors duration-200 ease-ios hover:bg-muted active:bg-muted"
+                      className="flex min-h-11 items-center gap-3 px-3 py-2.5 transition-colors duration-200 ease-ios hover:bg-muted active:bg-muted"
                     >
                       {body}
                       <ChevronRight className="h-4 w-4 shrink-0 text-foreground/40" strokeWidth={2} aria-hidden="true" />
