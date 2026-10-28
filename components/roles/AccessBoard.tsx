@@ -195,15 +195,16 @@ export function AccessBoard({ projects }: { projects: Project[] }) {
 
       <section aria-label="Accounts at a glance" className="grid grid-cols-2 gap-3 lg:grid-cols-4 animate-enter stagger-2">
         <Stat label="Accounts" value={accounts.length} note={`1 Master · ${accounts.length - 1} others`}>
-          <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-track" aria-hidden>
-            <i className="bg-ok" style={{ width: `${(count('active') / accounts.length) * 100}%` }} />
-            <i className="bg-warn" style={{ width: `${(count('invited') / accounts.length) * 100}%` }} />
-            <i className="bg-bad" style={{ width: `${(count('suspended') / accounts.length) * 100}%` }} />
+          {/* Work spread's meter and colours: green done, blue running, grey idle. */}
+          <div className="mt-3 flex h-2 gap-[2px] overflow-hidden rounded-full" aria-hidden>
+            <i className="bg-chart-3 first:rounded-l-full last:rounded-r-full" style={{ width: `${(count('active') / accounts.length) * 100}%` }} />
+            <i className="bg-chart-1 first:rounded-l-full last:rounded-r-full" style={{ width: `${(count('invited') / accounts.length) * 100}%` }} />
+            <i className="bg-chart-5/45 first:rounded-l-full last:rounded-r-full" style={{ width: `${(count('suspended') / accounts.length) * 100}%` }} />
           </div>
         </Stat>
-        <Stat label="Active" dot="bg-ok" value={count('active')} note="Signing in and working" />
-        <Stat label="Invited" dot="bg-warn" value={count('invited')} note={count('invited') ? 'Not signed in yet' : 'Nobody waiting'} />
-        <Stat label="Suspended" dot="bg-bad" value={count('suspended')} note={count('suspended') ? 'Kept, but locked out' : 'Nobody suspended'} />
+        <Stat label="Active" dot="bg-chart-3" value={count('active')} note="Signing in and working" />
+        <Stat label="Invited" dot="bg-chart-1" value={count('invited')} note={count('invited') ? 'Not signed in yet' : 'Nobody waiting'} />
+        <Stat label="Suspended" dot="bg-chart-5/45" value={count('suspended')} note={count('suspended') ? 'Kept, but locked out' : 'Nobody suspended'} />
       </section>
 
       <div className="flex flex-wrap gap-2 rounded-xl border bg-card p-3 animate-enter stagger-3">
@@ -327,7 +328,7 @@ export function AccessBoard({ projects }: { projects: Project[] }) {
       </div>
 
       {!wide && (
-        <SoftSheet open={sheetOpen && !!shown} onClose={() => setSheetOpen(false)} label={shown?.name ?? 'Account'} size="lg" className="p-0">
+        <SoftSheet open={sheetOpen && !!shown} onClose={() => setSheetOpen(false)} label={shown?.name ?? 'Account'} size="lg" className="flex flex-col overflow-hidden p-0">
           {panel}
         </SoftSheet>
       )}
@@ -433,8 +434,10 @@ function AccountPanel({
   const canSave = a.name.trim() !== '' && validEmail(a.email);
 
   return (
-    <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
-      <div className="overflow-y-auto p-5">
+    // Who it is and what can be done to it stay pinned; only the middle scrolls,
+    // so on a phone nobody has to drag the sheet to find either end.
+    <div className="flex max-h-[calc(100dvh-2rem)] min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b px-5 pb-4 pt-2 sm:pt-5">
         <div className="flex items-center gap-3">
           <Avatar account={a} big />
           <div className="min-w-0">
@@ -449,7 +452,9 @@ function AccountPanel({
             <p className="truncate text-sm text-muted-foreground">{a.email}</p>
           </div>
         </div>
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">
         {locked && (
           <div className="mt-4 flex gap-2.5 rounded-lg border border-check/25 bg-check-soft px-3.5 py-3 text-sm text-foreground">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-check" aria-hidden />
@@ -457,7 +462,7 @@ function AccountPanel({
           </div>
         )}
 
-        <h3 className="mt-6 mb-2 text-[13px] font-semibold text-foreground">Account</h3>
+        <h3 className="mt-5 mb-2 text-[13px] font-semibold text-foreground">Account</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name">
             <Input value={a.name} onChange={(e) => onEdit({ name: e.target.value })} className="h-11 sm:h-10" />
@@ -519,27 +524,13 @@ function AccountPanel({
           </div>
         )}
         <AccessMatrix access={a.access} locked={locked} label={a.name} onChange={(k, v) => onEdit({ access: { ...a.access, [k]: v } })} />
-
-        {!locked && (
-          <div className="mt-6 flex flex-wrap gap-2 border-t pt-4">
-            {a.status === 'suspended' ? (
-              <button type="button" onClick={onToggleStatus} className="min-h-11 rounded-lg border px-3 text-sm font-semibold hover:bg-muted sm:min-h-9">
-                Reactivate
-              </button>
-            ) : (
-              <button type="button" onClick={onToggleStatus} className="min-h-11 rounded-lg border border-bad/30 px-3 text-sm font-semibold text-bad hover:bg-bad-soft sm:min-h-9">
-                Suspend
-              </button>
-            )}
-            <button type="button" onClick={onRemove} className="min-h-11 rounded-lg border border-bad/30 px-3 text-sm font-semibold text-bad hover:bg-bad-soft sm:min-h-9">
-              Remove account
-            </button>
-          </div>
-        )}
       </div>
 
-      {dirty && (
-        <div role="region" aria-label="Unsaved changes" className="flex items-center justify-between gap-3 border-t bg-card px-5 py-3 animate-fade-in-up">
+      {/* Phones get 5rem more at the foot: iOS 26 Safari's floating toolbar
+          covers the bottom of the sheet, and without viewport-fit=cover the
+          safe-area inset reads 0 there (29 Oct 2026). */}
+      {dirty ? (
+        <div role="region" aria-label="Unsaved changes" className="flex shrink-0 items-center justify-between gap-3 border-t bg-card px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 max-sm:pb-[calc(5rem+env(safe-area-inset-bottom))] animate-fade-in-up">
           <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="size-2 shrink-0 rounded-full bg-warn" aria-hidden />
             {canSave ? 'Unsaved changes' : 'Name and a valid email are needed'}
@@ -553,6 +544,23 @@ function AccountPanel({
             </button>
           </span>
         </div>
+      ) : (
+        !locked && (
+          <div className="flex shrink-0 flex-wrap gap-2 border-t bg-card px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 max-sm:pb-[calc(5rem+env(safe-area-inset-bottom))]">
+            {a.status === 'suspended' ? (
+              <button type="button" onClick={onToggleStatus} className="min-h-11 rounded-lg border px-3 text-sm font-semibold hover:bg-muted sm:min-h-9">
+                Reactivate
+              </button>
+            ) : (
+              <button type="button" onClick={onToggleStatus} className="min-h-11 rounded-lg border border-bad/30 px-3 text-sm font-semibold text-bad hover:bg-bad-soft sm:min-h-9">
+                Suspend
+              </button>
+            )}
+            <button type="button" onClick={onRemove} className="min-h-11 rounded-lg border border-bad/30 px-3 text-sm font-semibold text-bad hover:bg-bad-soft sm:min-h-9">
+              Remove account
+            </button>
+          </div>
+        )
       )}
     </div>
   );
