@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent } from 'react';
 
+import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layout/NavIcons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -31,7 +32,7 @@ export function LoginScreen() {
       <div className="mx-auto grid min-h-dvh w-full max-w-[1680px] grid-rows-[auto_1fr_auto] lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)] lg:grid-rows-1">
         <section className="flex min-h-0 flex-col px-5 pt-6 sm:px-8 sm:pt-8 lg:px-12 lg:py-8 xl:px-16">
           <div className="flex items-center gap-2.5">
-            <Image src="/lucille-mark.png" alt="" width={20} height={34} className="h-9 w-auto" priority />
+            <Image src="/lucille-mark-on-light.png" alt="" width={20} height={34} className="h-10 w-auto drop-shadow-[0_0_0.75px_rgba(29,78,216,0.55)] drop-shadow-[0_6px_12px_rgba(29,78,216,0.28)]" priority />
             <span className="text-xl font-semibold tracking-tight text-foreground">Lucille</span>
           </div>
 
@@ -274,49 +275,75 @@ function Showcase({ className }: { className?: string }) {
   return (
     <div aria-hidden className={cn('relative min-h-0 flex-1 [container-type:size]', className)}>
       <div className="absolute left-0 top-1/2 aspect-[16/9] w-[min(100cqw,calc(100cqh*16/9))] -translate-y-1/2">
-        <Frame src="/login/gantt-links.webp" w={720} h={450} label="Plan" className="right-[2%] top-[2%] w-[67%]" />
-        <Frame src="/login/dash-progress.webp" w={962} h={341} label="Dashboard" className="bottom-0 right-0 w-[46%]" />
-        <div className="absolute bottom-0 left-0 h-[84%] rounded-[2.25rem] bg-neutral-900 p-2 shadow-[0_40px_80px_-30px_rgba(15,23,42,0.6)]">
-          <div className="h-full overflow-hidden rounded-[1.75rem] bg-white">
-            <Image
-              src="/login/phone-panel.webp"
-              alt=""
-              width={780}
-              height={1474}
-              sizes="320px"
-              className="h-full w-auto"
-              priority
-            />
+        {/* Stacked, so the dashboard always starts just under the Gantt's late row. */}
+        <div className="absolute inset-y-0 right-0 flex w-[66%] flex-col">
+          <Frame src="/login/gantt-late.webp" w={720} h={392} icon={ProjectsIcon} label="Plan" note="Links and delays" className="mr-[3%]" />
+          <Frame src="/login/dash-progress.webp" w={962} h={341} icon={DashboardIcon} label="Dashboard" note="Progress this week" className="-mt-3 ml-auto w-[68%]" />
+        </div>
+        <div className="absolute bottom-0 left-0 h-[80%]">
+          <Tag icon={DataOverallIcon} className="absolute bottom-full left-1/2 mb-3 -translate-x-1/2">
+            Update from site
+          </Tag>
+          <div className="h-full rounded-[2.25rem] bg-neutral-900 p-2 shadow-[0_40px_80px_-30px_rgba(15,23,42,0.6)]">
+            <div className="h-full overflow-hidden rounded-[1.75rem] bg-white">
+              <Image src="/login/phone-panel.webp" alt="" width={780} height={1474} sizes="320px" className="h-full w-auto" priority />
+            </div>
           </div>
-          <Chip className="-top-3.5 left-6">From your phone</Chip>
         </div>
       </div>
     </div>
   );
 }
 
-function Frame({ src, w, h, label, className }: { src: string; w: number; h: number; label: string; className: string }) {
+type Icon = typeof DashboardIcon;
+
+function Frame({
+  src,
+  w,
+  h,
+  icon: I,
+  label,
+  note,
+  className,
+}: {
+  src: string;
+  w: number;
+  h: number;
+  icon: Icon;
+  label: string;
+  note: string;
+  className: string;
+}) {
   return (
     <div
       className={cn(
-        'absolute rounded-2xl border border-black/5 bg-white p-1.5 shadow-[0_1px_2px_rgba(16,24,40,0.06),0_32px_64px_-28px_rgba(20,60,140,0.55)]',
+        'relative shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.06),0_32px_64px_-28px_rgba(20,60,140,0.55)]',
         className,
       )}
     >
-      <Image src={src} alt="" width={w * 2} height={h * 2} sizes="900px" className="block h-auto w-full rounded-xl" priority />
-      <Chip className="-top-3.5 right-5">{label}</Chip>
+      <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
+        <span className="grid size-5 place-items-center rounded-md bg-primary-soft text-primary">
+          <I className="scale-[0.72] text-primary" />
+        </span>
+        <span className="text-xs font-semibold text-foreground">{label}</span>
+        <span className="ml-auto text-[0.6875rem] text-muted-foreground">{note}</span>
+      </div>
+      <Image src={src} alt="" width={w * 2} height={h * 2} sizes="900px" className="block h-auto w-full" priority />
     </div>
   );
 }
 
-function Chip({ className, children }: { className?: string; children: string }) {
+function Tag({ icon: I, className, children }: { icon: Icon; className?: string; children: string }) {
   return (
     <span
       className={cn(
-        'absolute whitespace-nowrap rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white shadow-[0_10px_24px_-10px_rgba(29,78,216,0.8)]',
+        'flex items-center gap-1.5 whitespace-nowrap rounded-full border border-black/5 bg-white/90 py-1 pl-1 pr-3 text-xs font-semibold text-foreground shadow-[0_8px_20px_-10px_rgba(20,60,140,0.5)]',
         className,
       )}
     >
+      <span className="grid size-5 place-items-center rounded-full bg-primary-soft text-primary">
+        <I className="scale-[0.72] text-primary" />
+      </span>
       {children}
     </span>
   );
