@@ -1216,6 +1216,7 @@ export function getRegisterOutline(projectId: string, register: RegisterKind): O
     children.set(c.parentId ?? null, list);
   }
   const node = (c: (typeof categories)[number]): OutlineNode => ({
+    id: c.id,
     name: c.name,
     documents: documents.filter((d) => d.categoryId === c.id).map((d) => ({ title: d.title, kind: kindOf(d.kind) })),
     children: (children.get(c.id) ?? []).map(node),
@@ -1231,7 +1232,7 @@ export function getRegisterOutline(projectId: string, register: RegisterKind): O
 export function getRegisterExisting(projectId: string, register: RegisterKind): ExistingNode[] {
   const map = (n: OutlineNode): ExistingNode => {
     const children = n.children.map(map);
-    return { name: n.name, documents: n.documents.length + children.reduce((sum, c) => sum + c.documents, 0), children };
+    return { id: n.id, name: n.name, documents: n.documents.length + children.reduce((sum, c) => sum + c.documents, 0), children };
   };
   return getRegisterOutline(projectId, register).map(map);
 }

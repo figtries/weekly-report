@@ -172,7 +172,7 @@ export function RegisterWorkbench({
   };
 
   const existing = useMemo(() => {
-    const map = (n: RegisterNode): ExistingNode => ({ name: n.name, documents: n.documents, children: n.children.map(map) });
+    const map = (n: RegisterNode): ExistingNode => ({ id: n.id, name: n.name, documents: n.documents, children: n.children.map(map) });
     return tree.map(map);
   }, [tree]);
 

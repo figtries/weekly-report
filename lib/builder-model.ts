@@ -44,8 +44,11 @@ export interface BuilderDoc {
 export interface BuilderNode {
   id: string;
   name: string;
-  /** Already in the register: shown and added to, never renamed or removed here. */
+  /** Already in the register. Renaming or removing it is written on Save. */
   locked: boolean;
+  /** The saved category behind a locked node, and the name it is saved under. */
+  savedId?: string;
+  savedName?: string;
   /** Documents the register already holds under it. */
   existing: number;
   docs: BuilderDoc[];
@@ -54,6 +57,7 @@ export interface BuilderNode {
 
 /** A register's outline as it is read from the database or copied from another project. */
 export interface OutlineNode {
+  id?: string;
   name: string;
   documents: { title: string; kind: Kind }[];
   children: OutlineNode[];
@@ -61,6 +65,7 @@ export interface OutlineNode {
 
 /** What a saved register already holds, for the builder to add into. */
 export interface ExistingNode {
+  id?: string;
   name: string;
   documents: number;
   children: ExistingNode[];
@@ -93,7 +98,7 @@ export function linesOf(text: string): string[] {
 }
 
 export function fromExisting(nodes: ExistingNode[]): BuilderNode[] {
-  return nodes.map((n) => ({ ...newNode(n.name, true, n.documents), children: fromExisting(n.children) }));
+  return nodes.map((n) => ({ ...newNode(n.name, true, n.documents), savedId: n.id, savedName: n.name, children: fromExisting(n.children) }));
 }
 
 export function fromOutline(nodes: OutlineNode[]): BuilderNode[] {
@@ -232,11 +237,23 @@ export function addDocs(tree: BuilderNode[], parentId: string, titles: string[])
 }
 
 export function removeNode(tree: BuilderNode[], id: string): BuilderNode[] {
-  return updateNode(tree, id, (n) => (n.locked ? n : null));
+  return updateNode(tree, id, () => null);
 }
 
 export function renameNode(tree: BuilderNode[], id: string, name: string): BuilderNode[] {
-  return updateNode(tree, id, (n) => (n.locked ? n : { ...n, name }));
+  return updateNode(tree, id, (n) => ({ ...n, name }));
+}
+
+/** Saved headings whose name was changed here, as `renameCategory` takes them. */
+export function savedRenames(tree: BuilderNode[]): { id: string; name: string }[] {
+  return flatten(tree).flatMap(({ node: n }) =>
+    n.savedId && n.name.trim() && n.name.trim() !== n.savedName ? [{ id: n.savedId, name: n.name.trim() }] : []);
+}
+
+/** Saved category ids that were in `before` and are gone from `after`. */
+export function savedRemovals(before: BuilderNode[], after: BuilderNode[]): string[] {
+  const kept = new Set(flatten(after).map((r) => r.node.savedId));
+  return flatten(before).flatMap(({ node: n }) => (n.savedId && !kept.has(n.savedId) ? [n.savedId] : []));
 }
 
 export function updateDoc(tree: BuilderNode[], nodeId: string, docId: string, patch: Partial<BuilderDoc> | null): BuilderNode[] {

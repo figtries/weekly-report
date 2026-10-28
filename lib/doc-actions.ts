@@ -669,6 +669,54 @@ export async function deleteCategory(input: {
   }
 }
 
+/**
+ * Setup's changes to SAVED headings: renames, and removals that take every
+ * heading and document under them (`doc_stages` cascades from `documents`).
+ * A plan row reading a removed heading goes back to a typed percent, exactly
+ * as switching its link off does, so no leaf points at a category that is gone.
+ */
+export async function editSavedHeadings(input: {
+  projectId: string; register: RegisterKind;
+  renames: { id: string; name: string }[];
+  removals: string[];
+}): Promise<ActionResult> {
+  await beforeWrite();
+  try {
+    const all = db.select().from(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, input.projectId), eq(schema.docCategories.register, input.register)))
+      .all();
+    const gone = new Set<string>();
+    const take = (id: string) => {
+      if (gone.has(id) || !all.some((c) => c.id === id)) return;
+      gone.add(id);
+      for (const c of all) if (c.parentId === id) take(c.id);
+    };
+    input.removals.forEach(take);
+    const ids = [...gone];
+
+    db.transaction((tx) => {
+      for (const r of input.renames) {
+        const name = r.name.trim();
+        if (!name || gone.has(r.id) || !all.some((c) => c.id === r.id)) continue;
+        tx.update(schema.docCategories).set({ name }).where(eq(schema.docCategories.id, r.id)).run();
+      }
+      if (ids.length > 0) {
+        tx.update(schema.wbsNodes)
+          .set({ progressMethod: 'lumpsum', linkedCategoryId: null, linkedStage: null })
+          .where(inArray(schema.wbsNodes.linkedCategoryId, ids)).run();
+        tx.delete(schema.documents).where(inArray(schema.documents.categoryId, ids)).run();
+        tx.delete(schema.docCategories).where(inArray(schema.docCategories.id, ids)).run();
+      }
+    });
+
+    refreshRegister();
+    if (ids.length > 0) revalidatePath('/weekly', 'layout');
+    return { ok: true, changed: input.renames.length + ids.length };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 /** `General Prosedur` → `GENERAL-PROSEDUR`, and `-2` when that is taken. */
 function categoryCode(name: string, taken: Set<string>): string {
   const base = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'CATEGORY';

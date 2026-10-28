@@ -10,10 +10,10 @@ import DateField from '@/components/ui/DateField';
 import { Textarea } from '@/components/ui/textarea';
 import {
   MAX_DEPTH, addDocs, addHeadings, canHold, countDocuments, countNewHeadings, flatten, fromExisting, fromOutline,
-  fromPaste, guessKind, holdsTyped, removeNode, renameNode, renumber, toDraftGroups, updateDoc,
+  fromPaste, guessKind, holdsTyped, removeNode, renameNode, renumber, savedRemovals, savedRenames, toDraftGroups, updateDoc,
   type BuilderDoc, type BuilderNode, type ExistingNode, type OutlineNode,
 } from '@/lib/builder-model';
-import { addFromDraft, readRegisterFile, saveNumbering, saveRegisterSettings } from '@/lib/doc-actions';
+import { addFromDraft, editSavedHeadings, readRegisterFile, saveNumbering, saveRegisterSettings } from '@/lib/doc-actions';
 import { defaultRule, disciplineFor, knownDiscipline, nextNumber, typeFor, type NumberingRule } from '@/lib/register-numbering';
 import { parseRegisterPaste } from '@/lib/register-paste';
 import {
@@ -77,7 +77,9 @@ export function RegisterSetup({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const [tree, setTree] = useState<BuilderNode[]>(() => fromExisting(existing));
+  // `base` is the register as saved, so removing a saved heading is a difference Save can write.
+  const [base, setBase] = useState<BuilderNode[]>(() => fromExisting(existing));
+  const [tree, setTree] = useState<BuilderNode[]>(base);
   const [origin, setOrigin] = useState<string | null>(null);
   const [adding, setAdding] = useState<Adding>(null);
   const [confirmRemove, setConfirmRemove] = useState<BuilderNode | null>(null);
@@ -102,6 +104,8 @@ export function RegisterSetup({
   const rows = useMemo(() => flatten(numbered), [numbered]);
   const newDocs = countDocuments(numbered);
   const newHeadings = countNewHeadings(tree);
+  const renames = useMemo(() => savedRenames(tree), [tree]);
+  const removals = useMemo(() => savedRemovals(base, tree), [base, tree]);
   const allDocs = rows.filter((r) => r.depth === 1).reduce((n, r) => n + docsUnder(r.node), 0);
   const startable = !hasDocuments && tree.length === 0;
   const spoken = useMemo(() => [...taken, ...rows.flatMap((r) => r.node.docs.map((d) => d.docNo).filter(Boolean))], [taken, rows]);
@@ -183,7 +187,7 @@ export function RegisterSetup({
 
   /* -------------------------------------------------------------- saving */
 
-  const dirty = newDocs > 0 || newHeadings > 0 || ruleDirty || settingsDirty;
+  const dirty = newDocs > 0 || newHeadings > 0 || renames.length > 0 || removals.length > 0 || ruleDirty || settingsDirty;
 
   const save = () => {
     setError(null);
@@ -208,6 +212,15 @@ export function RegisterSetup({
         });
         if (!r.ok) { setError(r.error); return; }
       }
+      if (renames.length > 0 || removals.length > 0) {
+        const r = await editSavedHeadings({ projectId, register, renames, removals });
+        if (!r.ok) { setError(r.error); return; }
+        const settle = (ns: BuilderNode[]): BuilderNode[] =>
+          ns.map((n) => ({ ...n, savedName: n.savedId ? n.name.trim() : n.savedName, children: settle(n.children) }));
+        const next = settle(tree);
+        setTree(next);
+        setBase(next);
+      }
       if (newDocs > 0 || newHeadings > 0) {
         const r = await addFromDraft({ projectId, register, groups: toDraftGroups(numbered) });
         if (!r.ok) { setError(r.error); return; }
@@ -230,9 +243,19 @@ export function RegisterSetup({
   };
 
   const remove = (node: BuilderNode) => {
-    if (node.locked) return;
-    if (holdsTyped(node)) { setConfirmRemove(node); return; }
+    if (node.existing > 0 || holdsTyped(node)) { setConfirmRemove(node); return; }
     edit((t) => removeNode(t, node.id));
+  };
+
+  /** A main heading's code follows its name, or a renamed discipline loses its code. */
+  const rename = (node: BuilderNode, name: string) => {
+    const code = rule.disciplines[node.name];
+    if (code !== undefined && name !== node.name) {
+      const rest = { ...rule.disciplines };
+      delete rest[node.name];
+      editRule({ disciplines: { ...rest, [name]: code } });
+    }
+    edit((t) => renameNode(t, node.id, name));
   };
 
   /** The number the next document typed here would get, for the add box. */
@@ -375,15 +398,14 @@ export function RegisterSetup({
                   <div className="flex min-h-12 items-center gap-2 border-b border-border/60 bg-[#f8faff] py-1.5 pr-3" style={{ paddingLeft: `${20 + (depth - 1) * 20}px` }}>
                     {/* Name and count wrap rather than truncate: "Instrument &…" hid which discipline a row was. */}
                     <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    {node.locked ? (
-                      <span className={cn('min-w-0 break-words font-semibold text-foreground', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}>{node.name}</span>
-                    ) : (
-                      <input
-                        value={node.name}
-                        onChange={(e) => edit((t) => renameNode(t, node.id, e.target.value))}
-                        aria-label={`${node.name} name`}
-                        className={cn('min-w-0 max-w-full rounded-lg bg-transparent px-1 py-1 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
-                      />
+                    <input
+                      value={node.name}
+                      onChange={(e) => rename(node, e.target.value)}
+                      aria-label={`${node.name} name`}
+                      className={cn('min-w-0 max-w-full rounded-lg bg-transparent px-1 py-1 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
+                    />
+                    {node.savedId && node.name.trim() !== node.savedName && (
+                      <span className="shrink-0 text-xs text-foreground/60">was {node.savedName}</span>
                     )}
                     <span className="shrink-0 text-xs text-foreground/60 tabular-nums">
                       {plural(docsUnder(node), 'doc')}{code && ` · code ${code}`}{node.locked && node.existing > 0 && ' · saved'}
@@ -399,11 +421,9 @@ export function RegisterSetup({
                         <Plus className="h-3.5 w-3.5" />Add
                       </button>
                     )}
-                    {!node.locked && (
-                      <button type="button" onClick={() => remove(node)} aria-label={`Remove ${node.name}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground/50 hover:bg-bad-soft hover:text-bad">
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button type="button" onClick={() => remove(node)} aria-label={`Remove ${node.name}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground/50 hover:bg-bad-soft hover:text-bad">
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
 
                   {node.docs.map((d) => (
@@ -512,7 +532,9 @@ export function RegisterSetup({
       <ConfirmDialog
         open={confirmRemove !== null}
         title={`Remove ${confirmRemove?.name ?? ''}?`}
-        message="What was typed under it goes too. Nothing has been saved yet, so nothing in the register changes."
+        message={confirmRemove && confirmRemove.existing > 0
+          ? `Its ${plural(confirmRemove.existing, 'saved document')} and their history are deleted from the register when you press Save.`
+          : 'What was typed under it goes too. Nothing has been saved yet, so nothing in the register changes.'}
         confirmLabel="Remove"
         onConfirm={() => { if (confirmRemove) edit((t) => removeNode(t, confirmRemove.id)); setConfirmRemove(null); }}
         onCancel={() => setConfirmRemove(null)}
