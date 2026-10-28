@@ -1152,8 +1152,13 @@ Summary. That is the "entrance is a keyframe" rule above, proved again.
 Added 3 Oct 2026. **Roles took Settings' slot at the foot of the sidebar**; the
 lists Settings held are daily-report lists the daily report edits itself, so
 `/settings` stays reachable by its URL and is linked from nowhere (the same
-treatment as the unlinked PDF routes). `/roles` shows six role cards; pressing
-one opens None / View / Edit per destination, and the Master is always Edit.
+treatment as the unlinked PDF routes). Since 28 Oct 2026 `/roles` is Access
+management, set PER ACCOUNT (`components/roles/AccessBoard.tsx`): accounts on
+the left, the selected one's projects and No access / View / Edit per
+destination on the right (a sheet below lg), changed on a draft that lands only
+on Save. A role is only a PRESET that fills an account in ("· Custom" once
+changed). The Master is always Edit everywhere and cannot be suspended or
+removed.
 NOTHING IS SAVED AND NOTHING IS RESTRICTED: there is no login (board item 22),
 so the page says "Draft" above the cards and a reload puts `lib/roles.ts` back.
 That file is the whole content (roles, destinations, defaults); the user will
