@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useState,
   useSyncExternalStore,
   type ComponentType,
@@ -166,7 +167,7 @@ function NavItem({ dest, week, pathname }: { dest: Destination; week: number | n
   const Icon = dest.icon;
   const active = pathname ? dest.match(pathname) : false;
   return (
-    <PressLink href={dest.href(week)} className={itemClass(active)} {...pressMotion}>
+    <PressLink href={dest.href(week)} data-area={dest.area} className={itemClass(active)} {...pressMotion}>
       <Icon className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
       <span>{dest.label}</span>
     </PressLink>
@@ -199,7 +200,7 @@ function NavGroup({ group, week, pathname }: { group: Group; week: number | null
   }, [childActive]);
 
   return (
-    <div>
+    <div data-area={group.items.map((i) => i.area).join(' ')}>
       <m.button
         type="button"
         {...pressMotion}
@@ -304,8 +305,12 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
    * invisible; on a phone it is the connection busy at the moment somebody taps.
    */
 
-  // What the signed-in account may open; the server and hydration show all.
+  // What the signed-in account may open; the server and hydration show all, and
+  // the inline LOCK_SCRIPT's `data-deny` hides the rest until this list is real.
   const account = useCurrentAccount();
+  useLayoutEffect(() => {
+    if (pathname !== null) document.documentElement.removeAttribute('data-deny');
+  }, [pathname]);
   const shown = dests
     .map((d) => (isGroup(d) ? { ...d, items: d.items.filter((i) => canOpen(account, i.area)) } : d))
     .filter((d) => (isGroup(d) ? d.items.length > 0 : canOpen(account, d.area)));

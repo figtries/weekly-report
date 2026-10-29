@@ -259,6 +259,18 @@ html {
 html[data-locked] main {
   visibility: hidden;
 }
+/* ...and its No access sidebar rows never paint (data-deny lists the areas).
+   The Reports group goes only when both its rows do. */
+html[data-deny~="dashboard"] [data-area="dashboard"],
+html[data-deny~="overall"] [data-area="overall"],
+html[data-deny~="weekly"] [data-area="weekly"],
+html[data-deny~="daily"] [data-area="daily"],
+html[data-deny~="dokumen"] [data-area="dokumen"],
+html[data-deny~="projects"] [data-area="projects"],
+html[data-deny~="roles"] [data-area="roles"],
+html[data-deny~="weekly"][data-deny~="daily"] [data-area="weekly daily"] {
+  display: none;
+}
 @media screen and (min-width: 1024px) {
   html[data-fit] {
     --z: var(--fit-zoom, 1);
