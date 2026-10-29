@@ -2,14 +2,16 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { NO_ACCESS, SEED_ACCOUNTS, type Account, type AreaKey } from '@/lib/roles';
+import { NO_ACCESS, ROLES, SEED_ACCOUNTS, type Account, type AreaKey, type Role } from '@/lib/roles';
 
 /*
  * Who signed in and what each account may open, as a DRAFT until login exists
  * (board item 22). Both live in THIS BROWSER only: the Master's changes on
  * Roles are saved here, and signing in here as another account shows what that
- * account can open (29 Oct 2026). Every account uses DEMO_PASSWORD. Nothing on
- * the server checks any of it: a hidden page is hidden, not protected.
+ * account can open (29 Oct 2026). The Master sets each account's password and
+ * edits the roles; an account given no password uses DEMO_PASSWORD. Passwords
+ * sit in plain text in this browser and nothing on the server checks any of
+ * it: a hidden page is hidden, not protected.
  *
  * Nobody signed in reads as the Master, which is how the app behaved before.
  */
@@ -18,6 +20,7 @@ export const DEMO_PASSWORD = 'lucille2026';
 
 const WHO = 'lucille-signed-in';
 const ACCOUNTS = 'lucille-accounts';
+const ROLE_LIST = 'lucille-roles';
 const EVENT = 'lucille-signed-in';
 
 function get(key: string): string | null {
@@ -53,24 +56,35 @@ export function seedAccounts(projectIds: string[] = []): Account[] {
   }));
 }
 
-// Parsed once per stored string, so the snapshot keeps its identity between reads.
-let cache: { raw: string | null; list: Account[] | null } = { raw: null, list: null };
-function storedAccounts(): Account[] | null {
-  const raw = get(ACCOUNTS);
-  if (raw !== cache.raw) {
-    let list: Account[] | null = null;
-    try {
-      list = raw ? (JSON.parse(raw) as Account[]) : null;
-    } catch {}
-    cache = { raw, list };
-  }
-  return cache.list;
+// Parsed once per stored string, so a snapshot keeps its identity between reads.
+const cache = new Map<string, { raw: string | null; list: unknown[] | null }>();
+function stored<T>(key: string): T[] | null {
+  const raw = get(key);
+  const hit = cache.get(key);
+  if (hit && hit.raw === raw) return hit.list as T[] | null;
+  let list: T[] | null = null;
+  try {
+    list = raw ? (JSON.parse(raw) as T[]) : null;
+  } catch {}
+  cache.set(key, { raw, list });
+  return list;
 }
+const storedAccounts = () => stored<Account>(ACCOUNTS);
+const storedRoles = () => stored<Role>(ROLE_LIST);
 
 /** What the Master saved on Roles, or null until anything has been. */
 export function useStoredAccounts(): Account[] | null {
   return useSyncExternalStore(subscribe, storedAccounts, () => null);
 }
+
+/** The roles an account can start from: the Master's edits, else the seed. The Master's own is never one. */
+export const SEED_ROLES: Role[] = ROLES.filter((r) => !r.master);
+export function useRoles(): Role[] {
+  return useSyncExternalStore(subscribe, storedRoles, () => null) ?? SEED_ROLES;
+}
+export const saveRoles = (list: Role[]) => put(ROLE_LIST, JSON.stringify(list));
+
+export const passwordOf = (a: Account) => a.password || DEMO_PASSWORD;
 
 export const saveAccounts = (list: Account[]) => put(ACCOUNTS, JSON.stringify(list));
 

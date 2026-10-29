@@ -105,6 +105,8 @@ export interface Account {
   /** The preset it started from, or null when set by hand. */
   preset: string | null;
   status: AccountStatus;
+  /** Set by the Master; none means the demo password (`lib/signed-in.ts`). */
+  password?: string;
   lastActive: string | null;
   projects: 'all' | string[];
   access: Record<AreaKey, Access>;

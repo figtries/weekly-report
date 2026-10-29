@@ -17,9 +17,6 @@ export default function RolesPage() {
       <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:p-6 lg:p-8">
         <header className="animate-enter">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Access management</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Who can open which page, and on which project. Set one account at a time.
-          </p>
         </header>
         <Suspense fallback={null}>
           <Board />
