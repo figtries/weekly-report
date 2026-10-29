@@ -248,6 +248,61 @@ html {
   color-scheme: light;
 }
 
+/* Full screen on a desktop: see lib/fit-screen.ts. `--z` is the zoom in
+   force (1 otherwise). Zoom multiplies viewport units too, so a height written
+   in vh/dvh divides by `--z`, or a 100dvh box comes out taller than the screen. */
+:root {
+  --z: 1;
+}
+@media screen and (min-width: 1024px) {
+  html[data-fit] {
+    --z: var(--fit-zoom, 1);
+  }
+  html[data-fit] body {
+    zoom: var(--z);
+    padding-left: 48px;
+  }
+  html[data-fit] aside[data-app-chrome] {
+    display: none;
+  }
+  html[data-fit] .fit-exit {
+    display: block;
+    position: fixed;
+    top: 12px;
+    left: 8px;
+    z-index: 40;
+    /* The page is zoomed, the logo and button are not: they stay small. */
+    zoom: calc(1 / var(--z));
+  }
+}
+
+/* The toggle's motion (lib/fit-screen.ts): named only while it runs, so route
+   transitions are untouched. The page morphs from its old box to the zoomed
+   one; the sidebar and the exit column fade. */
+html[data-fitting] main {
+  view-transition-name: fit-main;
+}
+html[data-fitting] aside[data-app-chrome] {
+  view-transition-name: fit-aside;
+}
+html[data-fitting] .fit-exit {
+  view-transition-name: fit-exit;
+}
+::view-transition-group(fit-main),
+::view-transition-old(fit-aside),
+::view-transition-new(fit-aside),
+::view-transition-old(fit-exit),
+::view-transition-new(fit-exit) {
+  animation-duration: 420ms;
+  animation-timing-function: var(--ease-ios);
+}
+::view-transition-old(fit-main),
+::view-transition-new(fit-main) {
+  height: 100%;
+  animation-duration: 420ms;
+  animation-timing-function: var(--ease-ios);
+}
+
 body {
   -webkit-tap-highlight-color: transparent;
   font-family: var(--font-sans);

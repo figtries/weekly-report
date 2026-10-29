@@ -352,7 +352,7 @@ export function RegisterWorkbench({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh-18.75rem)] md:overflow-y-auto md:scrollbar-none">
+        <div className="flex flex-col gap-3 md:block md:max-h-[calc(100dvh/var(--z)-18.75rem)] md:overflow-y-auto md:scrollbar-none">
           {/* Column names: thin, like the Excel register's own header row. */}
           <div className={cn('sticky top-0 z-20 hidden h-9 items-center gap-x-3 border-b border-border/70 bg-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-card))] px-4 text-xs font-medium text-muted-foreground backdrop-blur-none md:grid', COLS)}>
             <span />

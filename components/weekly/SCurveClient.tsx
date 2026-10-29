@@ -167,7 +167,7 @@ export default function SCurveClient({
               zero and ResponsiveContainer would render nothing at all. */}
           <div
             className="w-full [--plot-gap:560px] sm:[--plot-gap:480px]"
-            style={{ height: 'clamp(220px, calc(100dvh - var(--plot-gap, 560px)), 460px)' }}
+            style={{ height: 'clamp(220px, calc(100dvh / var(--z) - var(--plot-gap, 560px)), 460px)' }}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 32, right: 14, left: 8, bottom: 4 }}>

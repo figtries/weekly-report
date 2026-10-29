@@ -21,7 +21,7 @@ type Phase = 'idle' | 'checking' | 'done';
 
 export function LoginScreen() {
   return (
-    <div data-login className="login-mesh relative isolate min-h-dvh overflow-hidden">
+    <div data-login className="login-mesh relative isolate min-h-[calc(100dvh/var(--z))] overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="login-blob -left-[14%] -top-[20%] size-[46rem] bg-[#c5dbfe]/70" />
         <div className="login-blob left-[16%] top-[50%] size-[30rem] bg-[#00d0d4]/20" />
@@ -29,7 +29,7 @@ export function LoginScreen() {
       </div>
 
       {/* One screen on desktop: the showcase takes whatever height is left, never more. */}
-      <div className="mx-auto grid min-h-dvh w-full max-w-[1680px] grid-rows-[auto_1fr_auto] lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)] lg:grid-rows-1">
+      <div className="mx-auto grid min-h-[calc(100dvh/var(--z))] w-full max-w-[1680px] grid-rows-[auto_1fr_auto] lg:h-[calc(100dvh/var(--z))] lg:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)] lg:grid-rows-1">
         <section className="flex min-h-0 flex-col px-5 pt-6 sm:px-8 sm:pt-8 lg:px-12 lg:py-8 xl:px-16">
           <div className="flex items-center gap-2.5">
             <Image src="/lucille-mark-on-light.png" alt="" width={20} height={34} className="h-10 w-auto drop-shadow-[0_0_0.75px_rgba(29,78,216,0.55)] drop-shadow-[0_6px_12px_rgba(29,78,216,0.28)]" priority />

@@ -349,7 +349,7 @@ function WeekDropdown({
       {open && (
         <div
           ref={listRef}
-          className={`absolute inset-x-0 z-30 mt-2 max-h-[60vh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-card px-1 pb-1 shadow-xl ${
+          className={`absolute inset-x-0 z-30 mt-2 max-h-[calc(60vh/var(--z))] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-card px-1 pb-1 shadow-xl ${
             closing ? 'animate-dropdown-out' : 'animate-dropdown-in'
           }`}
         >

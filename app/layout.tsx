@@ -9,6 +9,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { AccessGate } from "@/components/layout/AccessGate";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
+import { FIT_SCRIPT } from "@/lib/fit-screen";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,7 +43,7 @@ export default async function RootLayout({
   return (
     // data-scroll-behavior lets Next.js suspend smooth scrolling during route
     // transitions so page changes don't visibly scroll-animate.
-    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} h-full antialiased`}>
+    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       {/* THE APP IS LIGHT, DELIBERATELY. A `ThemeProvider` was mounted here for
           a few hours and taken back out: the point of the token pass was one
           palette written down once, not two palettes to keep in step. Every
@@ -61,6 +62,9 @@ export default async function RootLayout({
             elements render featureless and simply sit still, with no error to
             tell you. MotionRoot adds no DOM, so the flex layout above still
             applies to Sidebar and the div exactly as it did. */}
+        {/* Full screen (desktop) is set before the first paint, so a reload
+            never flashes at normal size. See lib/fit-screen.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
         <MotionRoot>
           {/* The project card is the ONE thing in this layout that may not come
               from the prerendered shell — a shell is per deployment, and the

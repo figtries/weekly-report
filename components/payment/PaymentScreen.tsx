@@ -268,7 +268,7 @@ export function PaymentScreen() {
   };
 
   return (
-    <div data-checkout className="flex min-h-dvh flex-col bg-background">
+    <div data-checkout className="flex min-h-[calc(100dvh/var(--z))] flex-col bg-background">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-card">
         <div className={cn(WRAP, 'flex h-16 items-center justify-between gap-4')}>
           <div className="flex items-center gap-2.5">

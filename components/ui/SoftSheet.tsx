@@ -177,7 +177,7 @@ export default function SoftSheet({
           aria-modal="true"
           aria-label={label}
           tabIndex={-1}
-          className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl outline-none sm:rounded-2xl sm:border"
+          className="flex max-h-[calc(88dvh/var(--z))] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl outline-none sm:rounded-2xl sm:border"
         >
           {/* The grab handle: the affordance for the flick, phone only. */}
           <div

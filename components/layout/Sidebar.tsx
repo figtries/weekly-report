@@ -16,7 +16,8 @@ import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Maximize2, Menu, Minimize2 } from 'lucide-react';
+import { setFit } from '@/lib/fit-screen';
 import type { AreaKey } from '@/lib/roles';
 import { canOpen, signOut, useCurrentAccount } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
@@ -619,10 +620,11 @@ export default function Sidebar({
 
       {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
           card at its foot can print a contract title whole in a few lines. */}
-      <aside data-app-chrome className="hidden h-screen w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
+      <aside data-app-chrome className="hidden h-full w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
         <div className="flex h-full flex-col overflow-y-auto">
-          <div className="flex h-16 shrink-0 items-center px-6">
+          <div className="flex h-16 shrink-0 items-center justify-between pl-6 pr-3">
             <Brand />
+            <FitButton on={false} />
           </div>
 
           <NavList
@@ -632,6 +634,37 @@ export default function Sidebar({
           />
         </div>
       </aside>
+      {/* Shown by globals.css only while full screen hides the aside. */}
+      <div className="fit-exit hidden print:hidden">
+        <div className="flex flex-col items-center gap-3">
+          <PressLink href="/" aria-label="Lucille, go to Dashboard" {...pressMotion} className="grid h-9 w-9 place-items-center">
+            <Image src="/lucille-mark.png" alt="" width={17} height={28} className="h-7 w-auto" />
+          </PressLink>
+          <FitButton on />
+        </div>
+      </div>
     </>
+  );
+}
+
+/**
+ * Full screen (desktop): hides the sidebar and zooms the page to the screen
+ * (lib/fit-screen.ts). Which of the two buttons shows is CSS's job, so neither
+ * needs to know the current state.
+ */
+function FitButton({ on }: { on: boolean }) {
+  const Icon = on ? Minimize2 : Maximize2;
+  const label = on ? 'Exit full screen' : 'Full screen';
+  return (
+    <m.button
+      type="button"
+      {...pressMotion}
+      onClick={() => setFit(!on)}
+      aria-label={label}
+      title={label}
+      className="grid h-8 w-8 place-items-center rounded-lg border bg-card text-foreground transition-colors hover:bg-muted"
+    >
+      <Icon className="h-4 w-4" strokeWidth={2.5} />
+    </m.button>
   );
 }

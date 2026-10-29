@@ -383,7 +383,7 @@ export default function DateField({
               left: place?.left ?? -9999,
               top: place?.top ?? -9999,
               width: place?.width ?? MIN_W_PX,
-              maxHeight: `calc(100dvh - ${EDGE_PX * 2}px)`,
+              maxHeight: `calc(100dvh / var(--z) - ${EDGE_PX * 2}px)`,
               transformOrigin: place?.above ? 'bottom left' : 'top left',
             }}
           >
