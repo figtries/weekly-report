@@ -8,6 +8,7 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layout/NavIcons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { signIn } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 
 // ponytail: demo only, nothing is checked (board item 22 brings real login).
@@ -99,6 +100,7 @@ function SignInCard() {
         return;
       }
       setPhase('done');
+      signIn(who);
       window.setTimeout(() => router.push('/'), 700);
     }, 900);
   }

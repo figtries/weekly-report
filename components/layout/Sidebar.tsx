@@ -11,11 +11,12 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
-import { ChevronDown, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { isMasterEmail, signOut, useSignedIn } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 import {
   DailyReportsIcon,
@@ -304,6 +305,36 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
 }
 
 /**
+ * The foot: the Master (or nobody signed in, the draft's default) sees Roles;
+ * whoever signed in also sees Log out, which takes Roles' place for any other
+ * account (29 Oct 2026). Who signed in is browser-only (`lib/signed-in.ts`), so
+ * the server and hydration draw Roles and the swap lands after.
+ */
+function Foot({ roles }: { roles: ReactNode }) {
+  const who = useSignedIn();
+  const router = useRouter();
+  return (
+    <>
+      {(!who || isMasterEmail(who)) && roles}
+      {who && (
+        <m.button
+          type="button"
+          {...pressMotion}
+          onClick={() => {
+            signOut();
+            router.push('/login');
+          }}
+          className={cn(itemClass(false), 'w-full text-left')}
+        >
+          <LogOut className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
+          <span>Log out</span>
+        </m.button>
+      )}
+    </>
+  );
+}
+
+/**
  * The menu's frame. The links arrive as SLOTS rather than being drawn here,
  * because on the desktop they swap from an unlit list to a lit one after
  * hydration (see `ActiveLinks`) — and the project card must not swap with
@@ -473,7 +504,7 @@ function DrawerOverlay({
 
           <NavList
             links={<Links dests={DESTINATIONS} pathname={pathname} />}
-            foot={<Links dests={[ROLES]} pathname={pathname} />}
+            foot={<Foot roles={<Links dests={[ROLES]} pathname={pathname} />} />}
             card={switcher}
           />
         </div>
@@ -569,7 +600,7 @@ export default function Sidebar({
 
           <NavList
             links={<ActiveLinks dests={DESTINATIONS} />}
-            foot={<ActiveLinks dests={[ROLES]} />}
+            foot={<Foot roles={<ActiveLinks dests={[ROLES]} />} />}
             card={switcher}
           />
         </div>
