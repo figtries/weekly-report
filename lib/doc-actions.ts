@@ -8,6 +8,7 @@ import { beforeWrite, db, schema } from './sqlite';
 import { transmittalId, writeDocumentStatus, writeStage, writeTransmittal, type TransmittalInput } from './transmittal-write';
 import { STAGE_ORDER, baseOfAdded, isAddedStage, isStageKey, stageRank } from './register-shared';
 import type { StatusWhere } from './register-status';
+import { isAddedCode, parseCodes } from './register-settings';
 import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
 import type { DocStage, RegisterKind } from './schema';
@@ -610,15 +611,37 @@ export async function saveRegisterSettings(input: {
 
       if (input.codes !== undefined || input.area !== undefined) {
         const values: Partial<typeof schema.docNumbering.$inferInsert> = {};
-        if (input.codes !== undefined) {
-          values.codes = JSON.stringify(input.codes
-            .filter((c) => ['APP', 'AWC', 'RWC'].includes(c.key))
-            .map((c) => ({ key: c.key, label: c.label.trim().slice(0, 8), meaning: c.meaning.trim().slice(0, 60) })));
-        }
-        if (input.area !== undefined) values.area = input.area.trim().toUpperCase().slice(0, 8) || null;
         const numbering = tx.select().from(schema.docNumbering)
           .where(and(eq(schema.docNumbering.projectId, input.projectId), eq(schema.docNumbering.register, register)))
           .all()[0];
+        if (input.codes !== undefined) {
+          const codes = input.codes.filter((c) => ['APP', 'AWC', 'RWC'].includes(c.key) || isAddedCode(c.key));
+          const labels = new Set<string>();
+          for (const c of codes) {
+            const label = c.label.trim().toUpperCase();
+            if (!label) throw new Error('Give every client code its letters');
+            if (labels.has(label)) throw new Error(`Two codes read ${label}`);
+            labels.add(label);
+          }
+          // An added code goes again only while no reply was recorded with it, as an added stage.
+          const kept = new Set(codes.map((c) => c.key));
+          const gone = parseCodes(numbering?.codes).filter((c) => isAddedCode(c.key) && !kept.has(c.key));
+          if (gone.length) {
+            const docIds = tx.select({ id: schema.documents.id }).from(schema.documents)
+              .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)))
+              .all().map((d) => d.id);
+            const used = docIds.length === 0 ? [] : tx.select({ code: schema.docStages.returnCode }).from(schema.docStages)
+              .where(and(inArray(schema.docStages.documentId, docIds), inArray(schema.docStages.returnCode, gone.map((c) => c.key))))
+              .all();
+            if (used.length) {
+              const label = gone.find((c) => c.key === used[0].code)?.label || used[0].code;
+              throw new Error(`${label} is already on ${used.length === 1 ? 'a reply' : `${used.length} replies`}, so it stays`);
+            }
+          }
+          values.codes = JSON.stringify(codes
+            .map((c) => ({ key: c.key, label: c.label.trim().toUpperCase().slice(0, 8), meaning: c.meaning.trim().slice(0, 60) })));
+        }
+        if (input.area !== undefined) values.area = input.area.trim().toUpperCase().slice(0, 8) || null;
         if (numbering) {
           tx.update(schema.docNumbering).set(values).where(eq(schema.docNumbering.id, numbering.id)).run();
         } else {

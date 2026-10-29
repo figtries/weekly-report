@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 
 import {
   getRegisterCards, getRegisterParties, getRegisterSettings, getRegisterSummary, getRegisterTree,
-  isDone, REGISTER_INFO, stageRank,
+  codeAct, isDone, REGISTER_INFO, stageRank,
   type DocumentCard, type DocumentStageDetail, type RegisterNode,
 } from '../register';
 import { outlineCode } from '../register-outline';
@@ -94,6 +94,8 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
   const labels = new Map(settings.stages.map((s) => [s.stage, s.label || s.stage]));
   const names = new Map(settings.stages.map((s) => [s.stage, s.name || s.label || s.stage]));
   const blocks: DocStage[] = settings.stages.map((s) => s.stage);
+  // A code reads as the client writes it; an added one's key (`RWC-2`) is never shown.
+  const codeName = (k: string | null | undefined) => (k ? settings.codes.find((c) => c.key === k)?.label ?? k : null);
   const allCards = Object.values(cards).flat();
   // AS-BUILT is no stage on Setup, but an imported register may carry it.
   if (allCards.some((c) => c.stages.some((s) => s.stage === 'ASBUILT' && s.submitted))) {
@@ -251,8 +253,8 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
       const status = done ? 'Complete'
         : !latest ? 'Not sent'
         : c.out ? `${labelOf(c.out.stage, labels)} sent`
-        : code === 'APP' ? `${labelOf(latest.stage, labels)} approved`
-        : `${labelOf(latest.stage, labels)} returned${code ? ` ${code}` : ''}`;
+        : codeAct(code) === 'APP' ? `${labelOf(latest.stage, labels)} approved`
+        : `${labelOf(latest.stage, labels)} returned${code ? ` ${codeName(code)}` : ''}`;
       const row = ws.addRow([
         no, c.docNo ?? '', c.revision ?? '', c.title, c.kind ?? '', c.pic ?? '',
         status, done ? 'Complete' : c.out ? client : contractor,
@@ -270,7 +272,7 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
         const back = sent && returned(sent) ? sent : null;
         const values: (Date | string | null)[] = [
           date(plan), date(sent?.submittedAt ?? null), sent?.submitTransmittal ?? null,
-          date(back?.returnedAt ?? null), back?.returnTransmittal ?? null, back?.returnCode ?? null,
+          date(back?.returnedAt ?? null), back?.returnTransmittal ?? null, codeName(back?.returnCode),
         ];
         values.forEach((v, k) => {
           const cell = row.getCell(from + k);
@@ -279,7 +281,7 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         });
         const code = back?.returnCode?.trim().toUpperCase();
-        if (code && CODE_FILL[code]) row.getCell(from + 5).fill = solid(CODE_FILL[code]);
+        if (code && CODE_FILL[codeAct(code) ?? code]) row.getCell(from + 5).fill = solid(CODE_FILL[codeAct(code) ?? code]);
         // A plan date that passed with nothing sent is what "late" means.
         if (plan && !sent && plan < summary.asOfDate) {
           row.getCell(from).font = { name: FONT, size: 9, bold: true, color: { argb: RED } };
@@ -328,14 +330,14 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
           const back = returned(s);
           const row = ws.addRow([
             c.docNo ?? '', c.title, labelOf(s.stage, labels), date(s.submittedAt), s.submitTransmittal,
-            back ? date(s.returnedAt) : null, back ? s.returnTransmittal : null, back ? s.returnCode : null,
+            back ? date(s.returnedAt) : null, back ? s.returnTransmittal : null, back ? codeName(s.returnCode) : null,
             back ? s.waiting : null,
           ]);
           body(row, cols.length, null, false);
           for (const k of [3, 4, 5, 6, 7, 8, 9]) row.getCell(k).alignment = { horizontal: 'center', vertical: 'middle' };
           for (const k of [4, 6]) row.getCell(k).numFmt = 'dd mmm yy';
           const code = back ? s.returnCode?.trim().toUpperCase() : undefined;
-          if (code && CODE_FILL[code]) row.getCell(8).fill = solid(CODE_FILL[code]);
+          if (code && CODE_FILL[codeAct(code) ?? code]) row.getCell(8).fill = solid(CODE_FILL[codeAct(code) ?? code]);
         }
       }
       walk(node.children);

@@ -35,7 +35,7 @@ import { matchesSearch, searchWords } from '@/lib/search';
  * register can hold hundreds, and Radix per row is what AGENTS.md forbids.
  */
 
-const CODES = ['APP', 'AWC', 'RWC'] as const;
+const CODES = ['APP', 'AWC', 'RWC'];
 
 const today = () => {
   const d = new Date();
@@ -129,7 +129,7 @@ export default function TransmittalDialog({
           const o = byId.get(c.id);
           const reason = !o ? null
             : o.kind === 'late' ? { text: `Late ${plural(o.days ?? 0, 'day')}`, tone: TONE.late }
-            : o.kind === 'comments' ? { text: `${o.returnCode ?? 'Back'} ${dayMonth(o.since)}`.trim(), tone: TONE.comments }
+            : o.kind === 'comments' ? { text: `${o.returnCode ? settings?.codes.find((x) => x.key === o.returnCode)?.label ?? o.returnCode : 'Back'} ${dayMonth(o.since)}`.trim(), tone: TONE.comments }
             : o.kind === 'soon' ? { text: `Due ${dayMonth(o.since)}`, tone: TONE.soon }
             : null;
           return { card: c, group: groupNames[c.categoryId] ?? '', reason, stage: c.sendNext! };
@@ -149,7 +149,7 @@ export default function TransmittalDialog({
         stage: c.out!.stage,
       }))
       .sort((a, b) => (b.card.out!.days ?? 0) - (a.card.out!.days ?? 0));
-  }, [cards, obstacles, groupNames, direction]);
+  }, [cards, obstacles, groupNames, direction, settings]);
 
   const words = searchWords(query);
   const shown = rows.filter((r) => matchesSearch(words, r.card.title, r.card.docNo, r.group));
@@ -308,7 +308,7 @@ export default function TransmittalDialog({
                           className={cn('pr-8 text-[13px] md:text-[13px]', missingCodes && ticked.has(r.card.id) && !codeOf[r.card.id] && 'border-bad text-bad')}
                         >
                           <option value="">Code</option>
-                          {CODES.map((c) => <option key={c} value={c}>{codeName(c)}</option>)}
+                          {(settings?.codes.map((c) => c.key) ?? CODES).map((c) => <option key={c} value={c}>{codeName(c)}</option>)}
                         </NativeSelect>
                       )}
                     </li>

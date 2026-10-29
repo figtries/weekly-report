@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
-import { isStageKey, stageRank } from './register-shared';
+import { codeAct, isStageKey, stageRank } from './register-shared';
 import { planStatus, type StatusWhere } from './register-status';
 import type { DocStage, RegisterKind } from './schema';
 
@@ -21,7 +21,8 @@ type StageRow = typeof schema.docStages.$inferInsert;
 type Writer = Pick<typeof db, 'select' | 'update' | 'insert'>;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const CODES = new Set(['APP', 'AWC', 'RWC']);
+// A reply code is one of the three or one added on Setup (`RWC-2`); its act is in its key.
+const CODES = { has: (c: string) => codeAct(c) !== null };
 
 /** The transmittal with this number and direction, created the first time it is named. */
 export function transmittalId(

@@ -7,7 +7,7 @@ import type {
   EngineeringBridge, Obstacle, RegisterNode, RegisterSummary, WeekMovement,
 } from '@/lib/register-shared';
 import { isAddedStage } from '@/lib/register-shared';
-import { CODE_TONE, DEFAULT_SETTINGS, codeLabel, stageOf, type RegisterSettings } from '@/lib/register-settings';
+import { DEFAULT_SETTINGS, codeLabel, codeTone, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -278,7 +278,7 @@ function ActionColumn({
         const reason = o.kind === 'late'
           ? { text: `Late ${o.days ?? 0} d · send ${label(o.next)}`, tone: 'bg-bad-soft text-bad' }
           : o.kind === 'comments'
-            ? { text: `${codeLabel(settings, o.returnCode)} ${o.days ?? 0} d ago · send ${label(o.next)}`, tone: CODE_TONE[o.returnCode ?? 'AWC'] ?? 'bg-warn-soft text-warn' }
+            ? { text: `${codeLabel(settings, o.returnCode)} ${o.days ?? 0} d ago · send ${label(o.next)}`, tone: codeTone(o.returnCode ?? 'AWC') ?? 'bg-warn-soft text-warn' }
             : o.kind === 'soon'
               ? { text: `Due ${fmt(o.since)} · ${label(o.next)}`, tone: 'bg-primary-soft text-primary' }
               : { text: `${o.days ?? 0} d${(o.days ?? 0) > 14 ? ' · overdue' : ' waiting'}`, tone: (o.days ?? 0) > 14 ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn' };

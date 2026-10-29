@@ -1,4 +1,4 @@
-import { baseOfAdded, stageLabel, stageRank } from './register-shared';
+import { baseOfAdded, codeAct, stageLabel, stageRank } from './register-shared';
 import type { DocStage } from './schema';
 
 /**
@@ -77,7 +77,7 @@ export function planStatus(rows: StageFacts[], t: StatusTarget, label: (s: DocSt
   let write: Omit<StageWrite, 'stage'>;
   if (t.where === 'them') {
     // Sent again after a "revise and resubmit": that is the next round, not the same one.
-    const next = last && lastRow?.returnCode === 'RWC' && lastRow.returnedAt ? chain[chain.indexOf(last) + 1] : undefined;
+    const next = last && lastRow?.returnedAt && codeAct(lastRow.returnCode) === 'RWC' ? chain[chain.indexOf(last) + 1] : undefined;
     target = next ?? last ?? t.stage;
     write = { submitted: true, submittedAt: t.date, submitLetter: t.letter || undefined, returnedAt: null, returnLetter: null, returnCode: null };
   } else if (t.code) {

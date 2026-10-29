@@ -11,7 +11,7 @@
  * Plain data, no server imports: the screens and the server share it.
  */
 import type { DocStage } from './schema';
-import { baseOfAdded, isAddedStage, stageFull, stageLabel } from './register-shared';
+import { baseOfAdded, codeAct, isAddedStage, stageFull, stageLabel, type CodeAct } from './register-shared';
 
 export interface StageSetting {
   stage: DocStage;
@@ -29,7 +29,8 @@ export interface StageSetting {
   revStart: string;
 }
 
-export type CodeKey = 'APP' | 'AWC' | 'RWC';
+/** APP, AWC, RWC, or one added on Setup with its act in the key: `RWC-2`. */
+export type CodeKey = string;
 
 export interface CodeSetting {
   key: CodeKey;
@@ -65,15 +66,20 @@ export const DEFAULT_CODES: CodeSetting[] = [
   { key: 'RWC', label: 'RWC', meaning: 'Revise and resubmit' },
 ];
 
-/** What a code DOES, fixed by its key: the words are the project's, the rule is not. */
-/** A code's chip colours, by what it means: green goes on, amber carries comments, red goes back. */
-export const CODE_TONE: Record<string, string> = {
+/** A code's chip colours, by what it does: green goes on, amber carries comments, red goes back. */
+const TONE: Record<CodeAct, string> = {
   APP: 'bg-ok-soft text-ok',
   AWC: 'bg-warn-soft text-warn',
   RWC: 'bg-bad-soft text-bad',
 };
 
-export const CODE_EFFECT: Record<CodeKey, string> = {
+export function codeTone(code: string | null | undefined): string | undefined {
+  const act = codeAct(code);
+  return act ? TONE[act] : undefined;
+}
+
+/** What a code DOES, fixed by its key: the words are the project's, the rule is not. */
+export const CODE_EFFECT: Record<CodeAct, string> = {
   APP: 'Goes on to the next stage',
   AWC: 'Next stage, comments carried into it',
   RWC: 'Sent again at the same stage',
@@ -153,7 +159,7 @@ export function parseCodes(raw: string | null | undefined): CodeSetting[] {
     const value: unknown = raw ? JSON.parse(raw) : [];
     if (Array.isArray(value)) stored = value as Partial<CodeSetting>[];
   } catch { /* the defaults below */ }
-  return DEFAULT_CODES.map((d) => {
+  const three = DEFAULT_CODES.map((d) => {
     const s = stored.find((x) => x?.key === d.key);
     return {
       key: d.key,
@@ -161,6 +167,21 @@ export function parseCodes(raw: string | null | undefined): CodeSetting[] {
       meaning: s?.meaning?.trim() || d.meaning,
     };
   });
+  const added = stored
+    .filter((x): x is CodeSetting => typeof x?.key === 'string' && isAddedCode(x.key))
+    .map((x) => ({ key: x.key, label: x.label?.trim() ?? '', meaning: x.meaning?.trim() ?? '' }));
+  return [...three, ...added];
+}
+
+/** A code the register added on Setup, not one of the three. */
+export function isAddedCode(key: string): boolean {
+  return /^(APP|AWC|RWC)-\d+$/.test(key);
+}
+
+/** The code the + on Setup adds: the next free number, doing what `act` does. */
+export function newCode(codes: CodeSetting[], act: CodeAct): CodeSetting {
+  const used = codes.map((c) => /-(\d+)$/.exec(c.key)).filter(Boolean).map((m) => Number(m![1]));
+  return { key: `${act}-${(used.length ? Math.max(...used) : 0) + 1}`, label: '', meaning: '' };
 }
 
 /** The stages a document is shown going through: the three, then the ones the register added. */

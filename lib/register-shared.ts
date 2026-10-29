@@ -535,7 +535,19 @@ export const STAGE_FULL: Record<BaseStage, string> = {
 const APPROVED = new Set(['APP', 'APPROVED', 'FINISH']);
 
 export function isApproved(code: string | null | undefined): boolean {
-  return code ? APPROVED.has(code.trim().toUpperCase()) : false;
+  return code ? APPROVED.has(code.trim().toUpperCase()) || codeAct(code) === 'APP' : false;
+}
+
+export type CodeAct = 'APP' | 'AWC' | 'RWC';
+
+/**
+ * What a reply code DOES. A code added on Setup (29 Oct 2026) carries its act
+ * in its key, `RWC-2`, so every rule reads it without the register's settings
+ * and the act can never drift from what was recorded under it.
+ */
+export function codeAct(code: string | null | undefined): CodeAct | null {
+  const m = /^(APP|AWC|RWC)(?:-\d+)?$/.exec((code ?? '').trim().toUpperCase());
+  return m ? (m[1] as CodeAct) : null;
 }
 
 const DAY = 86_400_000;

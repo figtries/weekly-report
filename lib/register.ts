@@ -31,7 +31,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from './sqlite';
 import {
-  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, compareStages, daysBetween, isAddedStage, isApproved, isFull, stageChain,
+  LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, codeAct, compareStages, daysBetween, isAddedStage, isApproved, isFull, stageChain,
   type DocumentCard, type LogEvent, type Obstacle,
   type ObstacleKind, type RegisterNode, type RegisterSummary, type StageReach,
   type LinkStage, type Trend, type WeekPoint, type DisciplineLink,
@@ -288,7 +288,7 @@ function sendNextOf(rows: StageRow[], loaded: Loaded): DocStage | null {
   const nextInOrder = chain[order(latest.stage) + 1] ?? null;
   const code = (latest.returnCode ?? '').trim().toUpperCase();
   if (isApproved(code)) return nextWeighted;
-  if (code === 'RWC') return nextInOrder;
+  if (codeAct(code) === 'RWC') return nextInOrder;
   return nextWeighted ?? nextInOrder;
 }
 

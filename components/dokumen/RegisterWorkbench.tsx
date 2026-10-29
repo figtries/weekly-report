@@ -10,7 +10,7 @@ import { knownDiscipline, nextNumber, defaultRule, type NumberingRule } from '@/
 import {
   REGISTER_INFO, isDone, needsAction, withUs, type DocumentCard, dataGroups, type DataGroup, type Obstacle, type RegisterNode, type RegisterSource,
 } from '@/lib/register-shared';
-import { CODE_TONE, codeLabel, docRev, stageOf, type RegisterSettings } from '@/lib/register-settings';
+import { codeLabel, codeTone, docRev, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { ExistingNode } from '@/lib/builder-model';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
@@ -512,7 +512,7 @@ function Row({
       ? <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', late && 'font-semibold text-bad')}>{other === 'client' ? 'Client' : 'Vendor'}{days !== null ? ` · ${days} d` : ''}{late && <span className="rounded-md bg-bad-soft px-1.5 text-[11px] font-semibold leading-5">Overdue</span>}</span>
       : <span><b className="font-semibold text-foreground">Us</b>{c.sendNext && <span className="text-muted-foreground"> · send {stageOf(settings, c.sendNext).label}</span>}</span>;
   const code = c.returnCode
-    ? <span className={cn('rounded-md px-1.5 text-[11px] font-bold leading-5', CODE_TONE[c.returnCode] ?? 'bg-muted text-foreground')}>{codeLabel(settings, c.returnCode)}</span>
+    ? <span className={cn('rounded-md px-1.5 text-[11px] font-bold leading-5', codeTone(c.returnCode) ?? 'bg-muted text-foreground')}>{codeLabel(settings, c.returnCode)}</span>
     : <span className="text-muted-foreground">—</span>;
   // A late document shows the date the Summary counts its lateness from.
   const plan = lateAt

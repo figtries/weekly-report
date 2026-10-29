@@ -8,7 +8,7 @@ import { Check, ChevronDown, ChevronUp, Clock, Pencil, Send, Trash2, X } from 'l
 import { deleteDocument, saveDocument, saveStage, setDocumentStatus } from '@/lib/doc-actions';
 import type { StatusWhere } from '@/lib/register-status';
 import { REPLY_DAYS, baseOfAdded, type DocumentCard, type DocumentStageDetail } from '@/lib/register-shared';
-import { CODE_TONE, codeLabel, docRev, mainStagesOf, revAt, stageOf, type RegisterSettings } from '@/lib/register-settings';
+import { codeLabel, codeTone, docRev, mainStagesOf, revAt, stageOf, type RegisterSettings } from '@/lib/register-settings';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 import NativeSelect from '@/components/ui/NativeSelect';
@@ -353,7 +353,7 @@ export function DocumentSheet({
                         <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-foreground">
                           {s.label}
                           {r?.returnedAt && r.returnCode && (
-                            <span className={cn('rounded px-1 text-[10.5px] leading-4', CODE_TONE[r.returnCode] ?? 'bg-muted')}>{codeLabel(settings, r.returnCode)}</span>
+                            <span className={cn('rounded px-1 text-[10.5px] leading-4', codeTone(r.returnCode) ?? 'bg-muted')}>{codeLabel(settings, r.returnCode)}</span>
                           )}
                         </div>
                       </>
@@ -444,7 +444,7 @@ export function DocumentSheet({
                           <div className="mb-2">
                             <div className="flex min-h-5 items-center gap-2 tabular-nums">
                               <span className="text-[13px] font-semibold text-foreground">Back from {other}</span>
-                              {h.returnCode && <span className={cn('rounded-md px-1.5 text-[11px] font-semibold leading-[18px]', CODE_TONE[h.returnCode] ?? 'bg-muted')}>{codeLabel(settings, h.returnCode)}</span>}
+                              {h.returnCode && <span className={cn('rounded-md px-1.5 text-[11px] font-semibold leading-[18px]', codeTone(h.returnCode) ?? 'bg-muted')}>{codeLabel(settings, h.returnCode)}</span>}
                               <span className="ml-auto text-xs text-muted-foreground">{fmtY(h.returnedAt)}</span>
                               <EditButton onClick={() => setEditing(h.stage)} />
                             </div>

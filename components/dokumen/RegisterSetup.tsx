@@ -17,9 +17,9 @@ import { addFromDraft, editSavedHeadings, readRegisterFile, saveNumbering, saveR
 import { defaultRule, disciplineFor, knownDiscipline, nextNumber, typeFor, type NumberingRule } from '@/lib/register-numbering';
 import { parseRegisterPaste } from '@/lib/register-paste';
 import {
-  CODE_EFFECT, CODE_TONE, STAGE_PALETTE, newStage, type CodeSetting, type RegisterSettings, type StageSetting,
+  CODE_EFFECT, STAGE_PALETTE, codeTone, isAddedCode, newCode, newStage, type CodeSetting, type RegisterSettings, type StageSetting,
 } from '@/lib/register-settings';
-import { REGISTER_INFO, isAddedStage, type RegisterSource } from '@/lib/register-shared';
+import { REGISTER_INFO, codeAct, isAddedStage, type CodeAct, type RegisterSource } from '@/lib/register-shared';
 import type { DocStage, RegisterKind } from '@/lib/schema';
 import { cn } from '@/lib/utils';
 
@@ -124,6 +124,11 @@ export function RegisterSetup({
     setCodes((all) => all.map((c) => (c.key === key ? { ...c, ...patch } : c)));
     setSettingsDirty(true); setSaved(false);
   };
+  // An added code's act is in its key, so choosing it (only while new) re-keys it, number kept.
+  const savedCodes = useMemo(() => new Set(initialSettings.codes.map((c) => c.key)), [initialSettings.codes]);
+  const actCode = (key: string, act: CodeAct) => editCode(key, { key: key.replace(/^[A-Z]+/, act) });
+  const addCode = () => { setCodes((all) => [...all, newCode(all, 'RWC')]); setSettingsDirty(true); setSaved(false); };
+  const removeCode = (key: string) => { setCodes((all) => all.filter((c) => c.key !== key)); setSettingsDirty(true); setSaved(false); };
 
   /* -------------------------------------------------------- what is missing */
 
@@ -137,7 +142,9 @@ export function RegisterSetup({
   const weightsOff = Math.abs(total - 100) > 0.001;
   const blankStage = stages.filter((s) => !s.label.trim());
   const blankReply = codes.filter((c) => !c.label.trim());
-  const blocking = blankCodes.length + (weightsOff ? 1 : 0) + blankStage.length + blankReply.length;
+  const replyLabels = codes.map((c) => c.label.trim()).filter(Boolean);
+  const dupeReplies = new Set(replyLabels.filter((l, i) => replyLabels.indexOf(l) !== i));
+  const blocking = blankCodes.length + (weightsOff ? 1 : 0) + blankStage.length + blankReply.length + dupeReplies.size;
   const reminders = blocking + emptyGroups.length + (noPlan.length > 0 ? 1 : 0);
 
   const toFirst = () => document.querySelector('[data-reminder]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -277,7 +284,8 @@ export function RegisterSetup({
   /* -------------------------------------------------------------- render */
 
   return (
-    <div className="flex flex-col gap-4 pb-24 sm:pb-6">
+    // pb-17 is the phone Save bar (68px) and nothing more: pb-24 left a strip of empty page to scroll into.
+    <div className="flex flex-col gap-4 pb-17 sm:pb-6">
       <input
         ref={fileInput}
         type="file"
@@ -395,19 +403,19 @@ export function RegisterSetup({
               const code = edl && depth === 1 ? disciplineFor(node.name, rule) : null;
               return (
                 <div key={node.id}>
-                  <div className="flex min-h-12 items-center gap-2 border-b border-border/60 bg-[#f8faff] py-1.5 pr-3" style={{ paddingLeft: `${20 + (depth - 1) * 20}px` }}>
-                    {/* Name and count wrap rather than truncate: "Instrument &…" hid which discipline a row was. */}
-                    <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <div className="flex min-h-14 items-center gap-1.5 border-b border-border/60 bg-[#f8faff] py-2 pr-2" style={{ paddingLeft: `${20 + (depth - 1) * 20}px` }}>
+                    {/* Name over count, always: wrapping only when it did not fit put some rows on one line and some on two. */}
+                    <div className="flex min-w-0 flex-1 flex-col">
                     <input
                       value={node.name}
                       onChange={(e) => rename(node, e.target.value)}
                       aria-label={`${node.name} name`}
-                      className={cn('min-w-0 max-w-full rounded-lg bg-transparent px-1 py-1 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
+                      className={cn('min-w-0 max-w-full self-start rounded-lg bg-transparent px-1 py-0.5 font-semibold text-foreground outline-none [field-sizing:content] focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/40', depth === 1 ? 'text-[14px]' : 'text-[13.5px]')}
                     />
                     {node.savedId && node.name.trim() !== node.savedName && (
-                      <span className="shrink-0 text-xs text-foreground/60">was {node.savedName}</span>
+                      <span className="px-1 text-xs text-foreground/60">was {node.savedName}</span>
                     )}
-                    <span className="shrink-0 text-xs text-foreground/60 tabular-nums">
+                    <span className="px-1 text-xs text-foreground/60 tabular-nums">
                       {plural(docsUnder(node), 'doc')}{code && ` · code ${code}`}{node.locked && node.existing > 0 && ' · saved'}
                     </span>
                     </div>
@@ -519,7 +527,7 @@ export function RegisterSetup({
       {/* ------------------------------------------- client codes · stages */}
       <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_27rem]">
         <StagesCard stages={stages} total={total} weightsOff={weightsOff} onStage={editStage} onAdd={addStage} onRemove={removeStage} className="animate-enter stagger-3" />
-        <CodesCard codes={codes} edl={edl} onCode={editCode} className="animate-enter stagger-4" />
+        <CodesCard codes={codes} saved={savedCodes} dupes={dupeReplies} edl={edl} onCode={editCode} onAct={actCode} onAdd={addCode} onRemove={removeCode} className="animate-enter stagger-4" />
       </div>
 
       {/* Phones: Save stays under the thumb. */}
@@ -743,7 +751,7 @@ function NumberCard({
   const discipline = disciplineFor(sample, rule);
   const type = `G${typeFor(types[0] ?? 'Drawing', rule)}`;
   const example = [rule.prefix, rule.area, discipline, type, '001'.padStart(rule.digits, '0')].filter((x) => x && x.trim()).join('-');
-  const seg = 'flex h-10 min-w-11 items-center justify-center rounded-xl border px-2 font-mono text-[13px] font-semibold sm:h-11 sm:min-w-14 sm:px-3 sm:text-[15px]';
+  const seg = 'flex h-11 w-full min-w-0 items-center justify-center rounded-xl border px-1 font-mono text-[13px] font-semibold sm:text-[15px]';
   // Each part of the number has a length. Typing past it used to do nothing
   // at all, which read as a broken box; now the box turns red and says why,
   // and clears on the next keystroke that fits.
@@ -761,7 +769,8 @@ function NumberCard({
         <span className="truncate font-mono text-[13px] font-medium text-foreground/75">{example}</span>
       </div>
 
-      <div className="flex flex-wrap items-start gap-x-1 gap-y-2 sm:gap-x-1.5">
+      {/* Five equal parts on ONE row at every width: wrapped, Sequence dropped to a line of its own on a phone. */}
+      <div className="flex items-start gap-1">
         {[
           { label: 'Project', node: <span className={cn(seg, 'border-primary bg-primary text-primary-foreground')}>{rule.prefix || '—'}</span> },
           {
@@ -774,7 +783,7 @@ function NumberCard({
                 aria-invalid={over?.key === 'area' ? true : undefined}
                 placeholder="—"
                 aria-label="Area code, optional"
-                className={cn(seg, 'min-w-14 px-1.5 [field-sizing:content] bg-card sm:min-w-20 sm:px-3 text-center outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40', !rule.area && 'border-dashed', overRing('area'))}
+                className={cn(seg, 'bg-card text-center outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40', !rule.area && 'border-dashed', overRing('area'))}
               />
             ),
           },
@@ -782,9 +791,9 @@ function NumberCard({
           { label: 'Type', node: <span className={cn(seg, 'border-border bg-card text-foreground')}>{type}</span> },
           { label: 'Sequence', node: <span className={cn(seg, 'border-dashed border-border bg-card text-foreground/70')}>{'1'.padStart(rule.digits, '0')}</span> },
         ].map((s, i) => (
-          <div key={s.label} className="flex items-start gap-1.5">
-            {i > 0 && <span className="mt-2.5 text-foreground/40 sm:mt-3">-</span>}
-            <div className="flex flex-col items-center gap-1">
+          <div key={s.label} className="flex min-w-0 flex-1 items-start gap-1">
+            {i > 0 && <span className="mt-3 text-foreground/40">-</span>}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
               {s.node}
               <span className="text-[11px] text-foreground/60">{s.label}</span>
             </div>
@@ -827,68 +836,116 @@ function NumberCard({
         {over?.key.startsWith('d:') && <Reminder>{over.text}</Reminder>}
       </div>
 
+      {/* Only when a sub-heading has a type to edit; the explanations here were read as clutter (29 Oct 2026). */}
+      {types.length > 0 && (
       <div className="border-t border-border/70 pt-4">
         <h3 className="text-[13.5px] font-bold text-foreground">Types</h3>
-        {types.length === 0 ? (
-          <p className="mt-2 text-[13px] text-foreground/65">
-            A document straight under a discipline takes its type from its title: a datasheet is DS, a drawing DW. Sub-headings get a code of their own here.
-          </p>
-        ) : (
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          {/* The Disciplines tile, exactly: two looks for one kind of box read as two kinds of thing. */}
+          <div className="mt-2.5 grid grid-cols-2 gap-2">
             {types.map((t) => (
-              <label key={t} className={cn('inline-flex h-10 items-center gap-1.5 rounded-xl border border-transparent bg-primary-soft/70 pl-1.5 pr-3', overRing(`t:${t}`))}>
+              <label key={t} className={cn('flex h-11 min-w-0 items-center gap-2 rounded-xl border border-border bg-card pl-2 pr-3', overRing(`t:${t}`))}>
                 <input
                   value={rule.types[t] ?? typeFor(t, rule)}
                   onChange={(e) => onRule({ types: { ...rule.types, [t]: take(`t:${t}`, `${t}'s type code`, 3, e.target.value) } })}
                   onBlur={() => setOver(null)}
                   aria-invalid={over?.key === `t:${t}` ? true : undefined}
                   aria-label={`${t} type code`}
-                  className="h-7 w-11 rounded-lg bg-card text-center font-mono text-xs font-bold text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="h-8 w-12 shrink-0 rounded-lg bg-primary-soft text-center font-mono text-[13px] font-bold text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 />
-                <span className="text-[13px] text-foreground">{t}</span>
+                <span className="min-w-0 break-words text-[13px] leading-tight text-foreground">{t}</span>
               </label>
             ))}
           </div>
-        )}
         {over?.key.startsWith('t:') && <Reminder>{over.text}</Reminder>}
-        <p className="mt-2.5 text-xs text-foreground/60">The type starts with D for a document and G for a drawing.</p>
       </div>
+      )}
     </section>
   );
 }
 
 /* ----------------------------------------------------------- codes card */
 
+/**
+ * The three codes and any the register added (29 Oct 2026). An added code is
+ * the client's letters and words doing what one of the three does; what it
+ * does is chosen while it is new and fixed once saved, because it is in the
+ * key every recorded reply carries (`RWC-2`). Laid out as the stages card:
+ * the same hairline rows and the same dashed "Add" row.
+ */
 function CodesCard({
-  codes, edl, onCode, className,
-}: { codes: CodeSetting[]; edl: boolean; onCode: (key: string, patch: Partial<CodeSetting>) => void; className?: string }) {
+  codes, saved, dupes, edl, onCode, onAct, onAdd, onRemove, className,
+}: {
+  codes: CodeSetting[];
+  /** Keys as saved: an added code's act can change only before it is. */
+  saved: Set<string>;
+  dupes: Set<string>;
+  edl: boolean;
+  onCode: (key: string, patch: Partial<CodeSetting>) => void;
+  onAct: (key: string, act: CodeAct) => void;
+  onAdd: () => void;
+  onRemove: (key: string) => void;
+  className?: string;
+}) {
+  const cols = 'grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-2';
   return (
     <section className={cn(card, 'flex min-w-0 flex-col p-5', className)}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className={title}>{edl ? 'Client codes' : 'Vendor return codes'}</h2>
-        <span className="text-[13px] text-foreground/70">What a reply means. The words are yours; what each one does stays.</span>
+      <h2 className={title}>{edl ? 'Client codes' : 'Vendor return codes'}</h2>
+      <p className="mt-1 text-[13px] text-foreground/70">The code on a reply and what it means. Add any code the {edl ? 'client' : 'vendor'} uses.</p>
+      <div className="mt-2 flex flex-col">
+        {codes.map((c) => {
+          const act = codeAct(c.key) ?? 'RWC';
+          const added = isAddedCode(c.key);
+          const label = c.label.trim();
+          return (
+            <div key={c.key} className="border-b border-border/60 py-2.5">
+              <div className={cols}>
+                <input
+                  value={c.label}
+                  onChange={(e) => onCode(c.key, { label: e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 6) })}
+                  aria-label={`Code for ${c.meaning || 'this reply'}`}
+                  aria-invalid={!label || dupes.has(label) ? true : undefined}
+                  placeholder={added ? 'CODE' : undefined}
+                  className={cn('h-11 w-full min-w-0 rounded-xl text-center font-mono text-[14px] font-bold outline-none placeholder:text-current/40 focus-visible:ring-3 focus-visible:ring-ring/40', codeTone(c.key), (!label || dupes.has(label)) && bad)}
+                />
+                <div className="relative min-w-0">
+                  <input
+                    value={c.meaning}
+                    onChange={(e) => onCode(c.key, { meaning: e.target.value })}
+                    aria-label={`What ${label || 'this code'} means`}
+                    placeholder={added ? 'What it means, e.g. Rejected' : undefined}
+                    className={cn(field, 'h-11 w-full font-semibold', added && 'pr-11')}
+                  />
+                  {added && (
+                    <button type="button" onClick={() => onRemove(c.key)} aria-label={`Remove ${label || 'this code'}`} className="absolute right-0.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-foreground/45 hover:bg-bad-soft hover:text-bad">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {added && !saved.has(c.key) ? (
+                  <select
+                    value={act}
+                    onChange={(e) => onAct(c.key, e.target.value as CodeAct)}
+                    aria-label={`What ${label || 'this code'} does`}
+                    className={cn(field, 'col-start-2 mt-1.5 h-10 w-full text-[13px] md:text-[13px]')}
+                  >
+                    {(['APP', 'AWC', 'RWC'] as const).map((a) => <option key={a} value={a}>{CODE_EFFECT[a]}</option>)}
+                  </select>
+                ) : (
+                  <span className="col-start-2 mt-1 pl-1 text-[12.5px] leading-snug text-foreground/60">{CODE_EFFECT[act]}</span>
+                )}
+              </div>
+              {!label && <Reminder>Write the code the client puts on a reply{c.meaning.trim() ? <> that means &ldquo;{c.meaning.trim()}&rdquo;</> : ''}.</Reminder>}
+              {label && dupes.has(label) && <Reminder>Two codes read {label}. Give each its own.</Reminder>}
+            </div>
+          );
+        })}
       </div>
-      <div className="mt-3 flex flex-col">
-        {codes.map((c) => (
-          <div key={c.key} className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b border-border/60 py-3 last:border-b-0">
-            <input
-              value={c.label}
-              onChange={(e) => onCode(c.key, { label: e.target.value.toUpperCase().slice(0, 6) })}
-              aria-label={`Code for ${c.meaning}`}
-              aria-invalid={!c.label.trim() ? true : undefined}
-              className={cn('h-11 w-full rounded-xl text-center font-mono text-[15px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/40', CODE_TONE[c.key], !c.label.trim() && bad)}
-            />
-            <input
-              value={c.meaning}
-              onChange={(e) => onCode(c.key, { meaning: e.target.value })}
-              aria-label={`What ${c.label || c.key} means`}
-              className={cn(field, 'h-11 font-semibold')}
-            />
-            <span className="col-start-2 pl-1 text-[13px] text-foreground/65">{CODE_EFFECT[c.key]}</span>
-            {!c.label.trim() && <div className="col-span-full"><Reminder>Write the code the client puts on a reply that means &ldquo;{c.meaning}&rdquo;.</Reminder></div>}
-          </div>
-        ))}
-      </div>
+      <button type="button" onClick={onAdd} className={cn(cols, 'group mt-2.5 min-h-11 w-full rounded-xl text-left')}>
+        <span className="flex h-11 items-center justify-center rounded-xl border-[1.5px] border-dashed border-primary/45 text-primary transition-colors duration-200 ease-ios group-hover:border-primary group-hover:bg-primary-soft">
+          <Plus className="h-4 w-4" />
+        </span>
+        <span className="text-[13px] font-semibold text-primary">Add a code</span>
+      </button>
     </section>
   );
 }
