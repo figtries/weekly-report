@@ -254,6 +254,11 @@ html {
 :root {
   --z: 1;
 }
+/* An account with no access to this page: <main> stays unpainted until
+   AccessGate's cover is up (lib/access-lock.ts). */
+html[data-locked] main {
+  visibility: hidden;
+}
 @media screen and (min-width: 1024px) {
   html[data-fit] {
     --z: var(--fit-zoom, 1);

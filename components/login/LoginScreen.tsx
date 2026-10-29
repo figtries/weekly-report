@@ -2,8 +2,7 @@
 
 import { Check, CircleAlert, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layout/NavIcons';
 import { Button } from '@/components/ui/button';
@@ -48,7 +47,7 @@ export function LoginScreen() {
           <Footer className="hidden lg:flex" />
         </section>
 
-        <section className="flex items-start justify-center px-4 pb-8 pt-7 sm:px-8 lg:items-center lg:py-8">
+        <section className="flex items-center justify-center px-4 py-8 sm:px-8">
           <SignInCard />
         </section>
 
@@ -59,7 +58,6 @@ export function LoginScreen() {
 }
 
 function SignInCard() {
-  const router = useRouter();
   const emailId = useId();
   const passwordId = useId();
   const forgotId = useId();
@@ -73,6 +71,15 @@ function SignInCard() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [problem, setProblem] = useState<Problem>(null);
   const [phase, setPhase] = useState<Phase>('idle');
+
+  // Back from the app restores this page from the bfcache still on "Signed in".
+  useEffect(() => {
+    const reset = (e: PageTransitionEvent) => {
+      if (e.persisted) setPhase('idle');
+    };
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -100,7 +107,9 @@ function SignInCard() {
       }
       setPhase('done');
       signIn(account!);
-      window.setTimeout(() => router.push('/'), 700);
+      // A full load, not router.push: after switching accounts a few times the
+      // client router could sit on "Signed in" and never land (29 Oct 2026).
+      window.setTimeout(() => window.location.assign('/'), 700);
     }, 900);
   }
 

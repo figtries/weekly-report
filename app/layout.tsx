@@ -10,6 +10,8 @@ import { AccessGate } from "@/components/layout/AccessGate";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 import { FIT_SCRIPT } from "@/lib/fit-screen";
+import { LOCK_SCRIPT } from "@/lib/access-lock";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -65,6 +67,8 @@ export default async function RootLayout({
         {/* Full screen (desktop) is set before the first paint, so a reload
             never flashes at normal size. See lib/fit-screen.ts. */}
         <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
+        {/* A page this account cannot open never paints. See lib/access-lock.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: LOCK_SCRIPT }} />
         <MotionRoot>
           {/* The project card is the ONE thing in this layout that may not come
               from the prerendered shell — a shell is per deployment, and the
@@ -90,11 +94,12 @@ export default async function RootLayout({
                 THIS file blocks every route in the app — it failed the build on
                 /print/daily/[date] once already. The boundaries live in the
                 sections and pages, which know who they are for free. */}
-            <main className="flex-1 min-h-0 overflow-auto print:h-auto print:overflow-visible">
+            <main className="flex-1 min-h-0 overflow-auto [scrollbar-gutter:stable] print:h-auto print:overflow-visible">
               {children}
             </main>
             <AccessGate />
           </div>
+          <Toaster position="top-center" className="print:hidden" />
         </MotionRoot>
       </body>
     </html>

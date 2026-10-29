@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Eye, EyeOff, KeyRound, Lock, Plus, Search, SearchX, ShieldCheck, Trash2, X } from 'lucide-react';
 
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -36,6 +37,9 @@ import { cn } from '@/lib/utils';
 
 type Project = { id: string; name: string };
 type Confirm = { title: string; message: string; label: string; onYes: () => void };
+
+// One size for the three filters, small enough that "Project" fits at 390px.
+const FILTER = 'bg-card pl-3 pr-8 text-sm sm:h-9';
 
 const STATUS: Record<AccountStatus, { label: string; cls: string }> = {
   active: { label: 'Active', cls: 'bg-ok-soft text-ok' },
@@ -182,6 +186,7 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
         setDraft(null);
         setSelectedId(null);
         setSheetOpen(false);
+        toast.success('Account removed', { description: current.name });
       },
     });
   };
@@ -199,8 +204,14 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
         if (!draft) return;
         saveAccounts(accounts.map((a) => (a.id === draft.id ? draft : a)));
         setDraft(null);
+        setSheetOpen(false);
+        toast.success('Changes saved', { description: draft.name });
       }}
-      onDiscard={() => setDraft(null)}
+      onDiscard={() => {
+        setDraft(null);
+        setSheetOpen(false);
+        toast('Changes discarded');
+      }}
       onClose={() => setSheetOpen(false)}
     />
   );
@@ -222,15 +233,15 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
         </button>
       </div>
 
-      <section aria-label="Accounts at a glance" className="grid grid-cols-4 divide-x rounded-xl border bg-card">
+      <section aria-label="Accounts at a glance" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="min-w-0 px-2.5 py-3 sm:px-5 sm:py-4">
+          <div key={s.label} className="min-w-0 bg-card px-4 py-3 sm:px-5 sm:py-4">
             <p className="flex items-center gap-1.5 truncate text-xs font-medium text-muted-foreground sm:text-[13px]">
-              <span className={cn('hidden size-2 shrink-0 rounded-full sm:block', s.dot)} aria-hidden />
+              <span className={cn('size-2 shrink-0 rounded-full', s.dot)} aria-hidden />
               {s.label}
             </p>
-            <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl">{s.value}</p>
-            <p className="hidden truncate text-xs text-muted-foreground sm:block">{s.note}</p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">{s.value}</p>
+            <p className="truncate text-xs text-muted-foreground">{s.note}</p>
           </div>
         ))}
       </section>
@@ -253,19 +264,19 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
                   <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email" aria-label="Search accounts by name or email" className="h-11 pl-9 sm:h-9" />
                 </label>
                 <div className="grid grid-cols-3 gap-2 xl:contents">
-                  <NativeSelect aria-label="Filter by status" value={fStatus} onChange={(e) => setFStatus(e.target.value)} wrapperClassName="min-w-0" className="bg-card pl-3 sm:h-9">
+                  <NativeSelect aria-label="Filter by status" value={fStatus} onChange={(e) => setFStatus(e.target.value)} wrapperClassName="min-w-0" className={FILTER}>
                     <option value="">Status</option>
                     <option value="active">Active</option>
                     <option value="invited">Invited</option>
                     <option value="suspended">Suspended</option>
                   </NativeSelect>
-                  <NativeSelect aria-label="Filter by project" value={fProject} onChange={(e) => setFProject(e.target.value)} wrapperClassName="min-w-0" className="bg-card pl-3 sm:h-9">
+                  <NativeSelect aria-label="Filter by project" value={fProject} onChange={(e) => setFProject(e.target.value)} wrapperClassName="min-w-0" className={FILTER}>
                     <option value="">Project</option>
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </NativeSelect>
-                  <NativeSelect aria-label="Filter by access" value={fLevel} onChange={(e) => setFLevel(e.target.value)} wrapperClassName="min-w-0" className="bg-card pl-3 sm:h-9">
+                  <NativeSelect aria-label="Filter by access" value={fLevel} onChange={(e) => setFLevel(e.target.value)} wrapperClassName="min-w-0" className={FILTER}>
                     <option value="">Level</option>
                     <option value="edit">Can edit</option>
                     <option value="view">View only</option>
@@ -340,6 +351,7 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
         onAdd={(a) => {
           saveAccounts([...accounts, a]);
           setAdding(false);
+          toast.success('Account added', { description: a.name });
           setSelectedId(a.id);
           setDraft(null);
         }}
@@ -525,7 +537,7 @@ function AddAccountSheet({
   };
 
   return (
-    <SoftSheet open={open} onClose={onClose} onExited={reset} label="Add account" size="lg" className="flex flex-col overflow-hidden p-0">
+    <SoftSheet open={open} onClose={onClose} onExited={reset} label="Add account" size="lg" className="flex flex-col overflow-hidden p-0 sm:pt-0">
       <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
         <PanelShell onClose={onClose}
           head={
@@ -632,6 +644,8 @@ function RolesView({ tabs, accounts, roles }: { tabs: React.ReactNode; accounts:
         saveAccounts(accounts.map((a) => (a.preset === old.key && same(a.access, old.access) ? { ...a, access: { ...next.access } } : a)));
     }
     setDraft(null);
+    setSheetOpen(false);
+    toast.success(isNew ? 'Role added' : 'Changes saved', { description: next.name });
   };
 
   const remove = () => {
@@ -647,6 +661,7 @@ function RolesView({ tabs, accounts, roles }: { tabs: React.ReactNode; accounts:
         setDraft(null);
         setSelectedKey(null);
         setSheetOpen(false);
+        toast.success('Role removed', { description: current.name });
       },
     });
   };
@@ -670,7 +685,7 @@ function RolesView({ tabs, accounts, roles }: { tabs: React.ReactNode; accounts:
             problem={!shown.name.trim() ? 'Type a name' : roles.some((r) => r.key !== shown.key && r.name.trim().toLowerCase() === shown.name.trim().toLowerCase()) ? 'That name is taken' : null}
             note={!isNew && current && !same(current.access, shown.access) && followers(current).length ? `Also updates ${followers(current).length} account${followers(current).length === 1 ? '' : 's'}` : undefined}
             saveLabel={isNew ? 'Add role' : 'Save'}
-            onDiscard={() => { setDraft(null); if (isNew) { setSelectedKey(roles[0]?.key ?? null); setSheetOpen(false); } }}
+            onDiscard={() => { setDraft(null); if (isNew) setSelectedKey(roles[0]?.key ?? null); setSheetOpen(false); toast('Changes discarded'); }}
             onSave={save}
           />
         )
@@ -785,7 +800,7 @@ function Split({ list, panel, sheetOpen, onClose, label }: { list: React.ReactNo
   return (
     <>
       {list}
-      <SoftSheet open={sheetOpen && !!panel} onClose={onClose} label={label} size="2xl" className="flex flex-col overflow-hidden p-0">
+      <SoftSheet open={sheetOpen && !!panel} onClose={onClose} label={label} size="2xl" className="flex flex-col overflow-hidden p-0 sm:pt-0">
         {panel}
       </SoftSheet>
     </>

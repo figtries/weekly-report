@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useLayoutEffect, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { Lock } from 'lucide-react';
 
@@ -21,6 +21,11 @@ export function AccessGate() {
     () => true,
     () => false
   );
+  // The inline LOCK_SCRIPT hid <main> before the first paint; the cover is drawn
+  // in this same commit, so handing over here never shows the page underneath.
+  useLayoutEffect(() => {
+    if (live) document.documentElement.removeAttribute('data-locked');
+  }, [live]);
   return live ? <Cover /> : null;
 }
 

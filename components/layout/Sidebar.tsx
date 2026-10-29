@@ -16,8 +16,9 @@ import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { ChevronDown, LogOut, Maximize2, Menu, Minimize2 } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, PanelLeft } from 'lucide-react';
 import { setFit } from '@/lib/fit-screen';
+import { toast } from 'sonner';
 import type { AreaKey } from '@/lib/roles';
 import { canOpen, signOut, useCurrentAccount } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
@@ -355,6 +356,7 @@ function Foot({ roles }: { roles: ReactNode }) {
           setAsking(false);
           signOut();
           router.push('/login');
+          toast("You're logged out");
         }}
         onCancel={() => setAsking(false)}
       />
@@ -620,11 +622,14 @@ export default function Sidebar({
 
       {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
           card at its foot can print a contract title whole in a few lines. */}
-      <aside data-app-chrome className="hidden h-full w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
+      <aside data-app-chrome className="relative hidden h-full w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
+        {/* Sits just OUTSIDE the sidebar's edge, outside the scroller so it is never clipped. */}
+        <div className="absolute left-full top-0 z-10 -ml-px">
+          <FitButton on={false} className="w-7 rounded-none rounded-br-lg border-l-0 border-t-0" />
+        </div>
         <div className="flex h-full flex-col overflow-y-auto">
-          <div className="flex h-16 shrink-0 items-center justify-between pl-6 pr-3">
+          <div className="flex h-16 shrink-0 items-center pl-6 pr-3">
             <Brand />
-            <FitButton on={false} />
           </div>
 
           <NavList
@@ -652,8 +657,7 @@ export default function Sidebar({
  * (lib/fit-screen.ts). Which of the two buttons shows is CSS's job, so neither
  * needs to know the current state.
  */
-function FitButton({ on }: { on: boolean }) {
-  const Icon = on ? Minimize2 : Maximize2;
+function FitButton({ on, className }: { on: boolean; className?: string }) {
   const label = on ? 'Exit full screen' : 'Full screen';
   return (
     <m.button
@@ -662,9 +666,9 @@ function FitButton({ on }: { on: boolean }) {
       onClick={() => setFit(!on)}
       aria-label={label}
       title={label}
-      className="grid h-8 w-8 place-items-center rounded-lg border bg-card text-foreground transition-colors hover:bg-muted"
+      className={cn('grid h-8 w-8 place-items-center rounded-lg border bg-card text-foreground transition-colors hover:bg-muted', className)}
     >
-      <Icon className="h-4 w-4" strokeWidth={2.5} />
+      <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
     </m.button>
   );
 }

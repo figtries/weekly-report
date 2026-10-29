@@ -126,14 +126,4 @@ export function canOpen(account: Account | null, area: AreaKey | null): boolean 
   return account.status !== 'suspended' && account.access[area] !== 'none';
 }
 
-/** Which Roles row a path belongs to; null for pages no row covers (login, print). */
-export function areaOf(pathname: string): AreaKey | null {
-  if (pathname === '/') return 'dashboard';
-  if (/^\/weekly\/[^/]+\/(overall|control|weights)(\/|$)/.test(pathname)) return 'overall';
-  if (pathname.startsWith('/weekly')) return 'weekly';
-  if (pathname.startsWith('/daily')) return 'daily';
-  if (pathname.startsWith('/dokumen')) return 'dokumen';
-  if (pathname.startsWith('/projects') || pathname.startsWith('/portfolio')) return 'projects';
-  if (pathname.startsWith('/roles') || pathname.startsWith('/settings')) return 'roles';
-  return null;
-}
+export { areaOf } from '@/lib/access-lock';
