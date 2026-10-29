@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { Lock } from 'lucide-react';
 
@@ -26,6 +26,30 @@ export function AccessGate() {
   useLayoutEffect(() => {
     if (live) document.documentElement.removeAttribute('data-locked');
   }, [live]);
+
+  // A link into an area this account cannot open does nothing: pressed, it would
+  // start the route transition and show the page under the cover for a moment.
+  // It looks like any other link (no fading, by request); the capture listener
+  // runs before Next's Link handler, so no navigation ever starts.
+  const account = useCurrentAccount();
+  useEffect(() => {
+    if (!live || AREAS.every((a) => canOpen(account, a.key))) return;
+    const guard = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Enter') return;
+      const link = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!link || link.origin !== location.origin) return;
+      if (canOpen(account, areaOf(link.pathname))) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener('click', guard, true);
+    document.addEventListener('keydown', guard, true);
+    return () => {
+      document.removeEventListener('click', guard, true);
+      document.removeEventListener('keydown', guard, true);
+    };
+  }, [account, live]);
+
   return live ? <Cover /> : null;
 }
 

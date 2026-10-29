@@ -99,7 +99,7 @@ export default async function RootLayout({
             </main>
             <AccessGate />
           </div>
-          <Toaster position="top-center" className="print:hidden" />
+          <Toaster position="bottom-center" duration={2000} className="print:hidden" />
         </MotionRoot>
       </body>
     </html>
