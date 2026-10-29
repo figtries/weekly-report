@@ -8,13 +8,12 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layout/NavIcons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { signIn } from '@/lib/signed-in';
+import { DEMO_PASSWORD, findAccount, signIn } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 
-// ponytail: demo only, nothing is checked (board item 22 brings real login).
-// Typing one of these two addresses shows its refusal; anything else that is
-// an email with 8+ characters of password gets in.
-const DEMO = { wrong: 'wrong@lucille.app', suspended: 'suspended@lucille.app' };
+// ponytail: demo login (board item 22 brings real login). The email must be an
+// account on Roles, every account's password is DEMO_PASSWORD, and all of it
+// is checked in this browser (`lib/signed-in.ts`).
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Problem = null | 'wrong' | 'suspended';
@@ -90,9 +89,9 @@ function SignInCard() {
 
     setPhase('checking');
     window.setTimeout(() => {
-      const who = typed.toLowerCase();
+      const account = findAccount(typed);
       const refused: Problem =
-        who === DEMO.suspended ? 'suspended' : who === DEMO.wrong || password.length < 8 ? 'wrong' : null;
+        !account || password !== DEMO_PASSWORD ? 'wrong' : account.status === 'suspended' ? 'suspended' : null;
       if (refused) {
         setProblem(refused);
         setPhase('idle');
@@ -100,7 +99,7 @@ function SignInCard() {
         return;
       }
       setPhase('done');
-      signIn(who);
+      signIn(account!);
       window.setTimeout(() => router.push('/'), 700);
     }, 900);
   }

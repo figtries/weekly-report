@@ -6,6 +6,7 @@ import LiveProjectSwitcher, {
   ProjectSwitcherFallback,
 } from "@/components/layout/LiveProjectSwitcher";
 import Sidebar from "@/components/layout/Sidebar";
+import { AccessGate } from "@/components/layout/AccessGate";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 
@@ -88,6 +89,7 @@ export default async function RootLayout({
             <main className="flex-1 min-h-0 overflow-auto print:h-auto print:overflow-visible">
               {children}
             </main>
+            <AccessGate />
           </div>
         </MotionRoot>
       </body>

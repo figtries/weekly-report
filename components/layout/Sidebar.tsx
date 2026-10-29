@@ -15,8 +15,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { ChevronDown, LogOut, Menu } from 'lucide-react';
-import { isMasterEmail, signOut, useSignedIn } from '@/lib/signed-in';
+import type { AreaKey } from '@/lib/roles';
+import { canOpen, signOut, useCurrentAccount } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 import {
   DailyReportsIcon,
@@ -50,6 +52,8 @@ interface Destination {
   icon: NavIconComponent;
   href: (week: number | null) => string;
   match: (pathname: string) => boolean;
+  /** Its row on Roles: an account with No access there does not see it. */
+  area: AreaKey;
 }
 
 /**
@@ -79,6 +83,7 @@ const REPORTS: Group = {
       label: 'Weekly Reports',
       icon: WeeklyReportsIcon,
       href: (w) => (w ? `/weekly/${w}/summary` : '/weekly/summary'),
+      area: 'weekly',
       // `/weekly/` is load-bearing, not decoration: Document Control's tabs are
       // named `summary` and `detail` too, so a bare endsWith lit this entry as well
       // on every /dokumen page — two destinations highlighted at once.
@@ -88,6 +93,7 @@ const REPORTS: Group = {
       label: 'Daily Reports',
       icon: DailyReportsIcon,
       href: () => '/daily',
+      area: 'daily',
       match: (p) => p.startsWith('/daily'),
     },
   ],
@@ -98,12 +104,14 @@ const DESTINATIONS: Entry[] = [
     label: 'Dashboard',
     icon: DashboardIcon,
     href: () => '/',
+    area: 'dashboard',
     match: (p) => p === '/',
   },
   {
     label: 'Data Overall',
     icon: DataOverallIcon,
     href: (w) => (w ? `/weekly/${w}/overall` : '/weekly'),
+    area: 'overall',
     match: (p) => DATA_OVERALL.some((k) => p.startsWith('/weekly/') && p.endsWith(`/${k}`)),
   },
   REPORTS,
@@ -111,6 +119,7 @@ const DESTINATIONS: Entry[] = [
     label: 'Document Control',
     icon: DocumentControlIcon,
     href: (w) => (w ? `/dokumen/${w}/summary` : '/dokumen'),
+    area: 'dokumen',
     match: (p) => p.startsWith('/dokumen'),
   },
   {
@@ -119,6 +128,7 @@ const DESTINATIONS: Entry[] = [
     label: 'Projects',
     icon: ProjectsIcon,
     href: () => '/projects',
+    area: 'projects',
     match: (p) => p.startsWith('/projects') || p.startsWith('/portfolio'),
   },
 ];
@@ -131,6 +141,7 @@ const ROLES: Destination = {
   label: 'Roles',
   icon: RolesIcon,
   href: () => '/roles',
+  area: 'roles',
   match: (p) => p.startsWith('/roles'),
 };
 
@@ -291,9 +302,15 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
    * invisible; on a phone it is the connection busy at the moment somebody taps.
    */
 
+  // What the signed-in account may open; the server and hydration show all.
+  const account = useCurrentAccount();
+  const shown = dests
+    .map((d) => (isGroup(d) ? { ...d, items: d.items.filter((i) => canOpen(account, i.area)) } : d))
+    .filter((d) => (isGroup(d) ? d.items.length > 0 : canOpen(account, d.area)));
+
   return (
     <>
-      {dests.map((dest) =>
+      {shown.map((dest) =>
         isGroup(dest) ? (
           <NavGroup key={dest.label} group={dest} week={week} pathname={pathname} />
         ) : (
@@ -305,31 +322,41 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
 }
 
 /**
- * The foot: the Master (or nobody signed in, the draft's default) sees Roles;
- * whoever signed in also sees Log out, which takes Roles' place for any other
- * account (29 Oct 2026). Who signed in is browser-only (`lib/signed-in.ts`), so
- * the server and hydration draw Roles and the swap lands after.
+ * The foot: Roles when the account may open it (always the Master, who is
+ * also who the app acts as while nobody has signed in), and Log out always,
+ * asked first (29 Oct 2026). `Links` drops Roles for No access like any other
+ * row; who signed in is browser-only (`lib/signed-in.ts`), so the server and
+ * hydration draw the Master's menu and an account's swap lands after.
  */
 function Foot({ roles }: { roles: ReactNode }) {
-  const who = useSignedIn();
   const router = useRouter();
+  const [asking, setAsking] = useState(false);
   return (
     <>
-      {(!who || isMasterEmail(who)) && roles}
-      {who && (
-        <m.button
-          type="button"
-          {...pressMotion}
-          onClick={() => {
-            signOut();
-            router.push('/login');
-          }}
-          className={cn(itemClass(false), 'w-full text-left')}
-        >
-          <LogOut className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
-          <span>Log out</span>
-        </m.button>
-      )}
+      {roles}
+      <m.button
+        type="button"
+        {...pressMotion}
+        onClick={() => setAsking(true)}
+        className={cn(itemClass(false), 'w-full text-left')}
+      >
+        <LogOut className="h-[18px] w-[18px] transition-transform duration-300 ease-spring group-hover:scale-110" />
+        <span>Log out</span>
+      </m.button>
+      {/* Asked first: one stray tap on the foot of the menu must not end a session. */}
+      <ConfirmDialog
+        open={asking}
+        title="Log out?"
+        message="You will need your email and password to sign in again."
+        confirmLabel="Log out"
+        destructive
+        onConfirm={() => {
+          setAsking(false);
+          signOut();
+          router.push('/login');
+        }}
+        onCancel={() => setAsking(false)}
+      />
     </>
   );
 }

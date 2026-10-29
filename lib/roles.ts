@@ -1,9 +1,10 @@
 /**
  * Who may open what: the DRAFT behind the Roles page.
  *
- * Nothing reads this to restrict anybody yet. There is no login (board item
- * 22), so the page shows what a role would be allowed and lets the Master try
- * changes on screen; a reload puts this file back. It is one file on purpose:
+ * There is no real login yet (board item 22): the demo sign-in and the
+ * Master's changes live in the browser (`lib/signed-in.ts`), which starts from
+ * the seed below and hides the menu rows and pages an account has No access
+ * to. No server checks it. It is one file on purpose:
  * renaming a role, adding one or changing what it opens is an edit here and
  * nowhere else.
  */

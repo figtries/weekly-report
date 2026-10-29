@@ -15,19 +15,19 @@ import {
   AREAS,
   NO_ACCESS,
   ROLES,
-  SEED_ACCOUNTS,
   type Access,
   type Account,
   type AccountStatus,
 } from '@/lib/roles';
+import { DEMO_PASSWORD, saveAccounts, seedAccounts, useStoredAccounts } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 
 /**
  * Access per ACCOUNT, not per role (28 Oct 2026). A role is a preset that
  * fills an account's pages in; the account keeps its own copy.
  *
- * A DRAFT, and it says so: with no login nothing here restricts anybody, and
- * a reload puts `lib/roles.ts` back. Changes are made on a copy of the
+ * Saved in this browser (`lib/signed-in.ts`, 29 Oct 2026), where it is also
+ * what the demo sign-in checks against. Changes are made on a copy of the
  * selected account (`draft`) and only land on Save, so a half-made change
  * never shows in the list as if it were done.
  */
@@ -73,12 +73,12 @@ function useWide() {
 type Confirm = { title: string; message: string; label: string; onYes: () => void };
 
 export function AccessBoard({ projects }: { projects: Project[] }) {
-  const [accounts, setAccounts] = useState<Account[]>(() =>
-    SEED_ACCOUNTS.map((s) => ({
-      ...s,
-      projects: s.projects === 'all' ? 'all' : s.projects.map((i) => projects[i]?.id).filter((x): x is string => !!x),
-    }))
-  );
+  // Saved in this browser (`lib/signed-in.ts`): what the Master sets here is
+  // what an account signed in on this browser can open. The seed until then.
+  const stored = useStoredAccounts();
+  const seed = useMemo(() => seedAccounts(projects.map((p) => p.id)), [projects]);
+  const accounts = stored ?? seed;
+  const setAccounts = (next: (as: Account[]) => Account[]) => saveAccounts(next(accounts));
   const [selectedId, setSelectedId] = useState<string | null>('u02');
   const [draft, setDraft] = useState<Account | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -179,8 +179,8 @@ export function AccessBoard({ projects }: { projects: Project[] }) {
         <div className="flex gap-3 rounded-lg border border-primary/20 bg-primary-soft px-4 py-3 text-sm text-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <p>
-            <span className="mr-1 font-semibold">Draft.</span>
-            {"Changes here aren't saved and don't restrict anyone yet. That comes with login."}
+            <span className="mr-1 font-semibold">Saved on this browser only.</span>
+            Sign in here as any account to see what it can open. Every account&apos;s password is <span className="font-semibold">{DEMO_PASSWORD}</span>.
           </p>
         </div>
         <button
