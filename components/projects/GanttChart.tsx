@@ -88,6 +88,19 @@ function pxPerDay(days: number, paneWidth: number): number {
   return Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, target / days));
 }
 
+/**
+ * No hover while the planner scrolls (ScheduleSheet's `mirror` sets
+ * `data-scrolling` on the shell): a row sliding under a still cursor lit up
+ * every 44px. One transparent sheet over each pane's content takes the pointer
+ * instead. It used to be `pointer-events: none` on the content, and an
+ * inherited property toggled on a subtree re-styles all of it: ~900 elements
+ * when a scroll started and again when it stopped (12 Nov 2026). Inside the
+ * scroller, so the wheel still scrolls the pane; nothing painted.
+ */
+export function ScrollShield() {
+  return <div aria-hidden className="absolute inset-0 z-50 hidden [[data-scrolling]_&]:block" />;
+}
+
 export default function GanttChart({
   rows,
   spanStart,
@@ -491,6 +504,7 @@ export default function GanttChart({
 
   return (
     <div ref={paneRef} className="relative" style={{ width }}>
+      <ScrollShield />
       <div
         className="sticky top-0 z-20 border-b bg-card"
         style={{ height: headH }}

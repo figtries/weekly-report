@@ -2030,13 +2030,13 @@ a:active {
 
 /* ---------- Sign in ---------- */
 
-/* The one screen without the app's chrome. The page marks itself with
-   `data-login` and the menu steps aside, so the root layout stays the only
-   layout and reads nothing new. The `:not` is load-bearing: after signing in
-   the router keeps /login in the DOM, hidden by React with an inline
-   `display: none` on that same node, and a bare `:has([data-login])` kept the
-   menu gone on the Dashboard (measured 28 Oct 2026). */
-body:has(:is([data-login], [data-checkout]):not([style*="display: none"])) [data-app-chrome] {
+/* The screens without the app's chrome (sign in, checkout) mark <html> with
+   `data-bare` (BARE_SCRIPT before the first paint, `useBareScreen` after), so
+   the root layout stays the only layout and reads nothing new. NEVER a
+   `body:has(...)` here: it was one until 12 Nov 2026, and every DOM insert and
+   inline style change anywhere re-styled the whole page, ~2,600 elements per
+   planner scroll step. */
+html[data-bare] [data-app-chrome] {
   display: none;
 }
 

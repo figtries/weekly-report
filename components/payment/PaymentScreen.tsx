@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 
+import { useBareScreen } from '@/components/layout/use-bare-screen';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,6 +134,7 @@ function checkCard(c: CardForm): Problems {
 }
 
 export function PaymentScreen() {
+  useBareScreen();
   const router = useRouter();
   const ids = useId();
   const [method, setMethod] = useState<MethodId>('va');

@@ -10,7 +10,7 @@ import { AccessGate } from "@/components/layout/AccessGate";
 import StorageWarning from "@/components/layout/StorageWarning";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 import { FIT_SCRIPT } from "@/lib/fit-screen";
-import { LOCK_SCRIPT } from "@/lib/access-lock";
+import { BARE_SCRIPT, LOCK_SCRIPT } from "@/lib/access-lock";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
@@ -69,6 +69,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
         {/* A page this account cannot open never paints. See lib/access-lock.ts. */}
         <script dangerouslySetInnerHTML={{ __html: LOCK_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: BARE_SCRIPT }} />
         <MotionRoot>
           {/* The project card is the ONE thing in this layout that may not come
               from the prerendered shell — a shell is per deployment, and the

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layout/NavIcons';
+import { useBareScreen } from '@/components/layout/use-bare-screen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { findAccount, passwordOf, signIn } from '@/lib/signed-in';
@@ -19,6 +20,7 @@ type Problem = null | 'wrong' | 'suspended';
 type Phase = 'idle' | 'checking' | 'done';
 
 export function LoginScreen() {
+  useBareScreen();
   return (
     <div data-login className="login-mesh relative isolate min-h-[calc(100dvh/var(--z))] overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">

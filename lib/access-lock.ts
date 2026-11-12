@@ -27,4 +27,7 @@ export function areaOf(pathname: string): AreaKey | null {
 const SEED = JSON.stringify(SEED_ACCOUNTS.map(({ email, master, status, access }) => ({ email, master, status, access })));
 const AREA_KEYS = JSON.stringify(Object.keys(SEED_ACCOUNTS[0].access));
 
+/** Sign in and checkout paint without the app's chrome; see `useBareScreen`. */
+export const BARE_SCRIPT = `if(/^\\/(login|payment)(\\/|$)/.test(location.pathname))document.documentElement.setAttribute('data-bare','')`;
+
 export const LOCK_SCRIPT = `(function(){try{var who=localStorage.getItem('lucille-signed-in');if(!who)return;var list=JSON.parse(localStorage.getItem('lucille-accounts')||'null')||${SEED};var a=null;for(var i=0;i<list.length;i++)if(list[i].email.toLowerCase()===who)a=list[i];if(a&&a.master)return;var keys=${AREA_KEYS},deny=[];for(var k=0;k<keys.length;k++)if(!a||a.status==='suspended'||a.access[keys[k]]==='none')deny.push(keys[k]);var r=document.documentElement;if(deny.length)r.setAttribute('data-deny',deny.join(' '));var area=(${areaOf.toString()})(location.pathname);if(area&&deny.indexOf(area)>=0)r.setAttribute('data-locked','')}catch(e){}})()`;

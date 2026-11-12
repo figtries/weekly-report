@@ -499,6 +499,23 @@ the sheet, 81 to 43 on the Gantt. A phone (DPR 2-3) was already composited and
 did not change. Never trace with `invalidationTracking` when timing: it
 inflates every DOM commit tenfold and invents long tasks.
 
+**A style rule can make every scroll re-style the whole page** (12 Nov 2026,
+"masih berat bgt", a Mac at DPR 2). Two rules did, found with the trace's
+`UpdateLayoutTree` element counts. `body:has(...[style*="display: none"])`
+(the login's "hide the chrome") re-checked on every DOM insert and every inline
+style change anywhere, so each windowing step of the planner re-styled ~2,600
+elements; the chrome now hides on `html[data-bare]` (`useBareScreen`,
+`BARE_SCRIPT`). And `[data-scrolling] .pane > *` had `*` on the right, so
+toggling `data-scrolling` invalidated the whole planner, and `pointer-events`
+is inherited, so it re-styled all ~1,000 elements under it anyway: the hover
+block is now ONE transparent `ScrollShield` per pane, shown while scrolling.
+Measured on Merbau at DPR 2, 4x CPU, 50 wheel steps: style 2,050 ms to ~210;
+on 30 rows 300 ms to 10. Rules: no `:has()` on `html`/`body`, no `*` as the
+rightmost part of a selector keyed on a toggled attribute, never toggle an
+inherited property on a big subtree. And build into a dist dir `.gitignore`
+covers (`.next-preview*`): Tailwind scans every file git does not ignore, so a
+build left in `.next-perf/` fed its old classes back into the next build's CSS.
+
 # No figure until the weights close, and every figure adds up
 
 Decided 26 Sep 2026 from a card-by-card breakdown of the dashboard against

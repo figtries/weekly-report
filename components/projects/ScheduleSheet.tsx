@@ -66,7 +66,7 @@ import {
 } from './links-panel-loader';
 import { barSentence } from '@/lib/bar-sentence';
 import type { LinkType } from '@/lib/links';
-import GanttChart, { GanttLegend } from './GanttChart';
+import GanttChart, { GanttLegend, ScrollShield } from './GanttChart';
 import { DEFAULT_BAR_VIEW, labelsByRow, paintCss, paintOf as barPaintOf, type BarView } from '@/lib/bar-view';
 import { setBarLabelAction } from '@/lib/bar-view-actions';
 import type { BarFact } from '@/lib/bar-facts';
@@ -1575,7 +1575,7 @@ export default function ScheduleSheet({
     // The window does not. Every scroll of either pane asks for a recompute,
     // mirrored or not, but they collapse into one per frame.
     scheduleRange(a);
-    // No hover while the list moves (see the panes' pointer-events): a row
+    // No hover while the list moves (see `ScrollShield`): a row
     // sliding under a still cursor lit up and faded out every 44px, and each
     // of those was a repaint the main thread owed before it could mirror.
     const shell = shellRef.current;
@@ -1889,7 +1889,7 @@ export default function ScheduleSheet({
           // scroll repainted the whole planner on the main thread (measured:
           // no scroll layer at DPR 1, two with this). Windows at 100-125% is
           // exactly that screen.
-          className={`min-h-0 min-w-0 shrink-0 overflow-auto bg-card [[data-scrolling]_&>*]:pointer-events-none max-md:!w-full ${
+          className={`min-h-0 min-w-0 shrink-0 overflow-auto bg-card max-md:!w-full ${
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
@@ -1899,6 +1899,7 @@ export default function ScheduleSheet({
               with no scrollbar in sight to say so. The 19rem mobile floor is
               unchanged, because the mobile grid is. */}
           <div className={`relative min-w-[19rem] sm:min-w-[30.625rem] ${drag ? 'select-none' : ''}`}>
+            <ScrollShield />
             {/* WHERE IT WILL LAND, drawn at the depth it will land at.
                 The one drop a list like this cannot express by position alone
                 is the gap under the last line of a package — inside it, or
@@ -2068,7 +2069,7 @@ export default function ScheduleSheet({
             ref={rightRef}
             onScroll={() => mirror('r')}
             // Opaque for the same reason as the sheet's pane: composited scroll.
-            className="h-full min-h-0 min-w-0 overflow-auto bg-card [[data-scrolling]_&>*]:pointer-events-none"
+            className="h-full min-h-0 min-w-0 overflow-auto bg-card"
           >
           {/* The FULL list, plus the window. The surface has to keep its true
               height or every bar below the fold sits on the wrong line. */}
