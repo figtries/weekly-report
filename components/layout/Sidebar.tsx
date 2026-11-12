@@ -385,6 +385,18 @@ function Foot({ roles }: { roles: ReactNode }) {
 function NavList({ links, foot, card }: { links: ReactNode; foot: ReactNode; card: ReactNode }) {
   return (
     <nav className="flex flex-1 flex-col px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
+      {/* The client the app is run for (13 Nov 2026, chosen after trying it
+          without a box and with a "Workspace" caption): Lucille keeps the top,
+          the client sits under it in its own colours, in a tile wearing the
+          project card's surface so it reads as identity, not a menu row.
+          ALIGNED TO THE MENU like Brand: the tile's edges are a nav item's, the
+          shell on the icon column (24px), the name on the labels (54px): 24
+          tall is 21.9 wide, + gap-2 = 53.9. */}
+      <div className="mb-3 flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+        <Image src="/indoturbine-mark.png" alt="" width={175} height={192} className="h-6 w-auto shrink-0" />
+        <p className="text-sm font-semibold text-foreground">Indoturbine</p>
+      </div>
+
       <div className="space-y-1">{links}</div>
 
       <div className="mt-auto pt-4">{card}</div>
