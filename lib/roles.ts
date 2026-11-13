@@ -1,10 +1,10 @@
 /**
- * Who may open what: the DRAFT behind the Roles page.
+ * Who may open what: the roles and account shape behind the Roles page.
  *
- * There is no real login yet (board item 22): the demo sign-in and the
- * Master's changes live in the browser (`lib/signed-in.ts`), which starts from
- * the seed below and hides the menu rows and pages an account has No access
- * to. No server checks it. It is one file on purpose:
+ * Accounts and sign-in live on the server (`lib/auth-store.ts`, 12 Nov 2026);
+ * the menu rows and pages an account has No access to are hidden by the client
+ * (`lib/signed-in.ts`). Roles below are the presets an account starts from.
+ * It is one file on purpose:
  * renaming a role, adding one or changing what it opens is an edit here and
  * nowhere else.
  */
@@ -92,8 +92,7 @@ export const ROLES: Role[] = [
 /**
  * Access is set PER ACCOUNT (28 Oct 2026). A role above is only a preset that
  * fills an account's pages in; the account then keeps its own copy, changed
- * freely. Sample accounts until login exists: `projects` is an index into the
- * real project list ('all' for every project), resolved on the page.
+ * freely. `projects` is project ids, or 'all'.
  */
 export type AccountStatus = 'active' | 'invited' | 'suspended';
 
@@ -105,28 +104,12 @@ export interface Account {
   /** The preset it started from, or null when set by hand. */
   preset: string | null;
   status: AccountStatus;
-  /** Set by the Master; none means the demo password (`lib/signed-in.ts`). */
+  /** Only while the Master types a new one; the server keeps a hash, never this. */
   password?: string;
   lastActive: string | null;
   projects: 'all' | string[];
   access: Record<AreaKey, Access>;
 }
-
-export type AccountSeed = Omit<Account, 'projects'> & { projects: 'all' | number[] };
-
-const preset = (key: string) => ({ ...ROLES.find((r) => r.key === key)!.access });
-
-export const SEED_ACCOUNTS: AccountSeed[] = [
-  { id: 'u01', name: 'Fajar Nugroho', email: 'fajar@figtries.id', master: true, preset: 'master', status: 'active', lastActive: 'Now', projects: 'all', access: all('edit') },
-  { id: 'u02', name: 'Rina Wulandari', email: 'rina.w@figtries.id', preset: 'pm', status: 'active', lastActive: '12 min ago', projects: [0, 1], access: preset('pm') },
-  { id: 'u03', name: 'Dimas Prakoso', email: 'dimas.p@figtries.id', preset: 'pc', status: 'active', lastActive: '1 hr ago', projects: [0], access: { ...preset('pc'), dokumen: 'edit' } },
-  { id: 'u04', name: 'Ayu Lestari', email: 'ayu.lestari@figtries.id', preset: 'doc', status: 'active', lastActive: 'Yesterday', projects: [0, 2], access: preset('doc') },
-  { id: 'u05', name: 'Bagus Santoso', email: 'bagus.s@figtries.id', preset: 'site', status: 'active', lastActive: '3 hr ago', projects: [0], access: preset('site') },
-  { id: 'u06', name: 'Andika Wijaya', email: 'andika.wijaya@client.co.id', preset: 'viewer', status: 'active', lastActive: '2 days ago', projects: [0], access: preset('viewer') },
-  { id: 'u07', name: 'Sari Handayani', email: 'sari.h@figtries.id', preset: 'site', status: 'invited', lastActive: null, projects: [1], access: preset('site') },
-  { id: 'u08', name: 'Yoga Pratama', email: 'yoga.p@figtries.id', preset: 'pc', status: 'invited', lastActive: null, projects: [2], access: preset('pc') },
-  { id: 'u09', name: 'Hendra Kusuma', email: 'hendra.k@figtries.id', preset: 'pm', status: 'suspended', lastActive: '3 weeks ago', projects: [1], access: preset('pm') },
-];
 
 export const NO_ACCESS = all('none');
 

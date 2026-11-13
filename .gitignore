@@ -78,3 +78,7 @@ next-env.d.ts
 /data/verify.db
 /data/verify.db-shm
 /data/verify.db-wal
+
+# accounts and sessions on a developer machine (lib/auth-store.ts)
+/data/auth.json
+/data/auth.key

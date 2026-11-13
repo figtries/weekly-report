@@ -16,7 +16,7 @@ import { tidyName } from '@/lib/tidy-name';
  * `lib/priority-actions.ts`; this only draws it.
  *
  * Three things here are decisions, not taste. THE PILL SAYS WHY AND ITS COLOUR
- * SAYS HOW URGENT: "Late 2 wk", "Finish W38", "Catch up", "Start W39" as in
+ * SAYS HOW URGENT: "Late 2 w", "Finish W38", "Catch up", "Start W39" as in
  * variant A, in three colours only, red for P1, amber for P2, blue for P3. The
  * first build printed "P1".."P3" in the pill with the reason underneath; he
  * wanted A's words back and the priority carried by the colour. EVERY PILL IS
@@ -41,11 +41,11 @@ const LEVEL_TONE: Record<PriorityLevel, string> = {
   3: 'bg-chart-1/10 text-primary',
 };
 
-/** The pill's words. Every one fits the fixed pill, "Late 104 wk" included. */
+/** The pill's words. Every one fits the fixed pill, "Late 104 w" included. */
 function labelOf(a: PriorityAction): string {
   switch (a.kind) {
     case 'late':
-      return `Late ${a.weeksLate} wk`;
+      return `Late ${a.weeksLate} w`;
     case 'finish':
       return `Finish W${a.week}`;
     case 'behind':
@@ -53,7 +53,7 @@ function labelOf(a: PriorityAction): string {
     case 'start':
       return `Start W${a.week}`;
     case 'slips':
-      return `Slips ${a.weeksLate} wk`;
+      return `Slips ${a.weeksLate} w`;
   }
 }
 

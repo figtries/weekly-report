@@ -1298,13 +1298,37 @@ a:active {
 /* An activity panel opened by the arrival itself (Check → `?item=`) lives in a
    portal on <body>, outside the page's named layer, so the page's crossfade
    was drawn OVER it: map text through the sheet for the whole fade. Its own
-   layer paints above the page, and plays only its own slide (`sheet-in`). */
-.vt-panel {
-  view-transition-name: activity-panel;
+   layer paints above the page, and plays only its own slide (`sheet-in`).
+   Every overlay (useOverlayLayer) does the same: painted above both pages,
+   leaving with the old one, and one that the arrival opens plays its own
+   entrance. Naming it is not enough: a layer only the OLD page had is stacked
+   below the new page's, so a sheet a press navigated away from showed through
+   the arriving page while it faded in (Set in plan → Gantt, Nov 2026). */
+::view-transition-group(.overlay) {
+  z-index: 1;
 }
-::view-transition-old(activity-panel),
-::view-transition-new(activity-panel) {
+::view-transition-old(.overlay) {
+  animation: 120ms var(--ease-ios) both vt-out;
+}
+::view-transition-new(.overlay) {
   animation: none;
+}
+/* A sheet leaves the way it closes, SOLID: faded, its text sat over both
+   pages' at once. Its scrim is a plain `.overlay` and fades. */
+::view-transition-old(.side),
+::view-transition-old(.card) {
+  animation: 0.4s var(--ease-ios) both sheet-down;
+}
+::view-transition-old(.drawer) {
+  animation: 0.4s var(--ease-ios) both sheet-right;
+}
+@media (min-width: 640px) {
+  ::view-transition-old(.side) {
+    animation-name: sheet-right;
+  }
+  ::view-transition-old(.card) {
+    animation-name: card-sink;
+  }
 }
 
 @keyframes vt-out {

@@ -69,7 +69,7 @@ export default function WeightGateNotice({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border bg-muted/40 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-[11px] font-semibold text-muted-foreground">
             Weight so far
           </p>
           <p className="mt-1 text-3xl font-semibold tabular-nums">{fmtPct(gate.total)}</p>
@@ -88,7 +88,7 @@ export default function WeightGateNotice({
           // heading it meant; each line here is the row, its figures and the
           // one press that lands on it.
           <div className="rounded-xl border bg-warn-soft/40 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-warn">
+            <p className="text-[11px] font-semibold text-warn">
               What to fix · {fixes.length}
             </p>
             <ul className="mt-1.5 divide-y">
@@ -118,7 +118,7 @@ export default function WeightGateNotice({
           </div>
         ) : (
         <div className="rounded-xl border bg-muted/40 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-[11px] font-semibold text-muted-foreground">
             {gate.unbudgeted.length === 0
               ? 'Every activity has a budget'
               : `No budget yet · ${gate.unbudgeted.length} ${gate.unbudgeted.length === 1 ? 'activity' : 'activities'}`}

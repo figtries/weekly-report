@@ -4,6 +4,7 @@ import * as React from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useOverlayLayer } from "@/components/motion/overlay-layer"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
@@ -35,6 +36,7 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const layer = useOverlayLayer()
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
@@ -43,6 +45,7 @@ function DialogOverlay({
         className
       )}
       {...props}
+      style={{ ...layer, ...props.style }}
     />
   )
 }
@@ -58,6 +61,7 @@ function DialogContent({
   overlayClassName?: string
   showCloseButton?: boolean
 }) {
+  const layer = useOverlayLayer()
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
@@ -68,6 +72,7 @@ function DialogContent({
           className
         )}
         {...props}
+        style={{ ...layer, ...props.style }}
       >
         {children}
         {showCloseButton && (

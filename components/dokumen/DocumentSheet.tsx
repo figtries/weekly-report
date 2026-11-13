@@ -16,6 +16,7 @@ import DateField from '@/components/ui/DateField';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { SlideTab } from '@/components/motion/SlideTab';
 import { numberTooLong, type NumberingRule } from '@/lib/register-numbering';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 /**
  * One document, everything about it, over the list that was not disturbed to
@@ -78,6 +79,8 @@ export function DocumentSheet({
   onNext: (() => void) | null;
   onClose: () => void;
 }) {
+  const scrimLayer = useOverlayLayer();
+  const layer = useOverlayLayer('side');
   const edl = register === 'edl';
   const other = edl ? 'client' : 'vendor';
   const [closing, setClosing] = useState(false);
@@ -109,6 +112,8 @@ export function DocumentSheet({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState(0);
+  const [note, setNote] = useState<{ id: string; at: number } | null>(null);
+  const noteAt = note?.id === doc.id ? note.at : 0;
   const [editing, setEditing] = useState<DocStage | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [noTooLong, setNoTooLong] = useState<string | null>(null);
@@ -185,9 +190,10 @@ export function DocumentSheet({
 
   const body = (
     <div className={cn('fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
-      <div className={cn('absolute inset-0 bg-black/40', closing ? 'animate-scrim-out' : 'animate-scrim-in')} onClick={close} />
+      <div className={cn('absolute inset-0 bg-black/40', closing ? 'animate-scrim-out' : 'animate-scrim-in')} style={scrimLayer} onClick={close} />
       <div
         className={cn('relative mt-auto flex w-full flex-col sm:mt-0 sm:h-full sm:w-[27rem]', closing ? 'animate-sheet-out' : 'animate-sheet-in')}
+        style={layer}
         onAnimationEnd={(e) => { if (closing && e.target === e.currentTarget) handOver(closedRef, onCloseRef); }}
       >
         <m.div
@@ -465,12 +471,33 @@ export function DocumentSheet({
             </div>
 
             <label className="block">
-              <span className="text-xs text-muted-foreground">Remarks</span>
+              <span className="flex items-center text-xs text-muted-foreground">
+                Remarks
+                {/* Said beside the box: the foot's "Saved" was too far away to
+                    tell anyone that typing here had been kept (Nov 2026). */}
+                {noteAt > 0 && (
+                  <span className="ml-auto inline-flex items-center gap-1">
+                    {pending ? 'Saving…' : savedAt >= noteAt ? <><Check className="h-3.5 w-3.5 text-ok" />Saved</> : null}
+                  </span>
+                )}
+              </span>
               <textarea
                 defaultValue={doc.remarks ?? ''}
                 key={`rm-${doc.id}-${doc.remarks}`}
                 placeholder="Add a note: the comments, who is on it"
-                onBlur={(e) => { if (e.target.value.trim() !== (doc.remarks ?? '')) saveDoc({ remarks: e.target.value }); }}
+                enterKeyHint="done"
+                // Enter keeps the note (the blur saves it); Shift+Enter is a new line.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value.trim() === (doc.remarks ?? '')) return;
+                  setNote({ id: doc.id, at: Date.now() });
+                  saveDoc({ remarks: e.target.value });
+                }}
                 className={cn(field, 'mt-1 h-auto min-h-12 resize-none py-3 text-left leading-6 md:leading-6 [field-sizing:content]')}
               />
             </label>
@@ -599,7 +626,7 @@ function StatusForm({
   const said = where === 'them'
     ? `${name} is with the ${other}.`
     : code ? `${name} came back ${codeLabel(settings, code)}.` : `${name} is being prepared, not sent yet.`;
-  const cap = 'text-[11px] font-medium uppercase tracking-wider text-muted-foreground';
+  const cap = 'text-[11px] font-medium text-muted-foreground';
   const box = 'h-10 w-full min-w-0 rounded-lg border border-border bg-card px-2.5 text-sm text-foreground outline-none focus-visible:border-ring md:text-sm';
   // Every question is the SAME control, the header's Doc / Dwg toggle: a grey
   // track, equal segments, the picked one blue. Three different shapes (a

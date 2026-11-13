@@ -75,7 +75,7 @@ export function forecastFromDb(db: Database, week: number): ForecastRead | null 
  * plan's word alone is left out: the worklist already calls those late.
  *
  * One function because two screens name these rows, the dashboard's Priority
- * Actions ("Slips N wk") and Data Overall's "will slip", and they must name
+ * Actions ("Slips N w") and Data Overall's "will slip", and they must name
  * the same ones.
  */
 export function slippingOf(db: Database, forecast: ProjectForecast): Record<string, number> {

@@ -8,6 +8,9 @@ const REDIS_CONFIGURED = Boolean(
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   cacheComponents: true,
+  // `next dev` refuses its own scripts to any origin but localhost, so the app
+  // opened through a Cloudflare quick tunnel rendered but never hydrated.
+  allowedDevOrigins: ['*.trycloudflare.com'],
   // Auto-memoizes every client component — keeps typing in the big forms
   // (DailyForm, DataOverallWorkbench) smooth without manual memo() work.
   reactCompiler: true,

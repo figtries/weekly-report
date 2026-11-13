@@ -3,6 +3,7 @@
 import { m } from 'framer-motion';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 import Link from 'next/link';
 import { ArrowLeftRight, ChevronRight, Clock, TriangleAlert } from 'lucide-react';
 
@@ -212,6 +213,8 @@ function PanelBody({
   onClose: () => void;
   onSaved: (id: string, pct: number) => void;
 }) {
+  const scrimLayer = useOverlayLayer();
+  const layer = useOverlayLayer('side');
   /**
    * The kind of work is the PLAN's (7 Oct 2026). It is set in Projects, with
    * the plan, and this panel only reads it: the stages it gives are what get
@@ -561,11 +564,12 @@ function PanelBody({
   const body = (
     // Closing, the sheet stops taking presses: it is on its way out, and a tap
     // that lands on it mid-slide should reach the page it is uncovering.
-    <div className={cn('vt-panel fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
+    <div className={cn('fixed inset-0 z-50 flex sm:justify-end', closing && 'pointer-events-none')}>
       {/* No blur: a full-screen backdrop-filter is the most expensive thing a
           phone can be asked to paint, and it was paid on the opening frame. */}
       <div
         className={cn('absolute inset-0 bg-black/40', closing ? 'animate-scrim-out' : 'animate-scrim-in')}
+        style={scrimLayer}
         onClick={close}
       />
 
@@ -578,6 +582,7 @@ function PanelBody({
           'relative mt-auto flex w-full flex-col sm:mt-0 sm:h-full sm:w-[27rem]',
           closing ? 'animate-sheet-out' : 'animate-sheet-in'
         )}
+        style={layer}
         onAnimationEnd={(e) => {
           if (closing && e.target === e.currentTarget) handOver(closedRef, onCloseRef);
         }}

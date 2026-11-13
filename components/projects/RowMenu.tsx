@@ -15,6 +15,7 @@ import {
   Shapes,
   Tag,
   Trash2,
+  X,
 } from 'lucide-react';
 
 import type { Sheet, SheetRow } from '@/lib/sheet';
@@ -240,8 +241,24 @@ export default function RowMenu({
 
   return (
     <SoftSheet open={open} onClose={onClose} onExited={onExited} label={row.name} size="sm">
-        <p className="text-[12px] tabular-nums text-muted-foreground">Row {row.code}</p>
-        <p className="mt-0.5 truncate text-sm font-semibold">{row.name}</p>
+        {/* The kind view has no Back of its own (12 Nov 2026): the X closes the
+            sheet, top right, where the activity panel has its. */}
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] tabular-nums text-muted-foreground">Row {row.code}</p>
+            <p className="mt-0.5 text-sm font-semibold leading-snug">{row.name}</p>
+          </div>
+          {mode === 'kind' && (
+            <button
+              type="button"
+              onClick={() => onClose()}
+              aria-label="Close"
+              className="-mr-2 -mt-1 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-5" strokeWidth={1.75} aria-hidden />
+            </button>
+          )}
+        </div>
 
         {/* The target date stood here, mirroring the Target column for phones.
             Both are gone: the user's decision was that the target leaves the
@@ -527,7 +544,6 @@ export default function RowMenu({
             row={row}
             rows={rows}
             facts={facts}
-            view={view}
             projectId={projectId}
             onBack={() => (initialMode === 'kind' ? onClose() : setMode('menu'))}
             onSaved={(sheet, next) => {

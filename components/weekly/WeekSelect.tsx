@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { weekRangeLabel } from '@/lib/daily-week';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 export default function WeekSelect({
   weeks: weeksAsGiven,
@@ -59,6 +60,7 @@ export default function WeekSelect({
   /** Read out for the trigger, for a picker whose sentence names it. */
   label?: string;
 }) {
+  const layer = useOverlayLayer();
   const router = useRouter();
   // Newest first, as the Daily Reports filter lists them, so every week list in the
   // app reads the same way up.
@@ -353,7 +355,7 @@ export default function WeekSelect({
           <div
             ref={panelRef}
             role="listbox"
-            style={{
+            style={{ ...layer,
               position: 'fixed',
               left: anchor.left,
               top: anchor.top,

@@ -4,6 +4,7 @@ import * as React from "react"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useOverlayLayer } from "@/components/motion/overlay-layer"
 
 function DropdownMenu({
   ...props
@@ -25,6 +26,7 @@ function DropdownMenuContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const layer = useOverlayLayer()
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -36,6 +38,7 @@ function DropdownMenuContent({
           className
         )}
         {...props}
+        style={{ ...layer, ...props.style }}
       />
     </DropdownMenuPrimitive.Portal>
   )

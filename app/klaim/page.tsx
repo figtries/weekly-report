@@ -72,7 +72,7 @@ async function KlaimBody() {
             className="animate-enter rounded-lg border bg-card p-3"
             style={{ animationDelay: `${(i + 1) * 60}ms` }}
           >
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.l}</div>
+            <div className="text-[11px] text-muted-foreground">{s.l}</div>
             <div className="mt-1 text-xl font-semibold tabular-nums">{s.v}</div>
             <div className="text-xs text-muted-foreground">{s.s}</div>
           </div>
@@ -100,7 +100,7 @@ async function KlaimBody() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-sm">
               <thead>
-                <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b bg-muted/40 text-[11px] text-muted-foreground">
                   <th className="px-4 py-2 text-left font-medium">Cause</th>
                   <th className="px-3 py-2 text-right font-medium">Hours</th>
                   <th className="px-3 py-2 text-right font-medium">Equivalent days</th>
@@ -157,7 +157,7 @@ async function KlaimBody() {
             { l: "With GPS", v: fmtNum(reg.photosWithGps), s: "location baked into the file" },
           ].map((s2) => (
             <div key={s2.l} className="rounded-lg border bg-card p-3">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{s2.l}</div>
+              <div className="text-[11px] text-muted-foreground">{s2.l}</div>
               <div className="mt-1 text-lg font-semibold tabular-nums">{s2.v}</div>
               <div className="text-xs text-muted-foreground">{s2.s}</div>
             </div>

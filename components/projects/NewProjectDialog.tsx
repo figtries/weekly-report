@@ -271,8 +271,10 @@ export default function NewProjectDialog() {
                           aria-label="Currency"
                           value={currency}
                           onChange={(e) => setCurrency(e.target.value)}
-                          wrapperClassName="w-[5.25rem] shrink-0"
-                          className="h-full min-h-0 rounded-none border-0 border-r border-input bg-muted text-base font-medium focus-visible:ring-0 sm:min-h-0 md:text-sm"
+                          // Wide enough, and small enough, to read the whole
+                          // code: at 5.25rem and 16px it showed "S…" for SGD.
+                          wrapperClassName="w-24 shrink-0"
+                          className="h-full min-h-0 rounded-none border-0 border-r border-input bg-muted text-sm font-medium focus-visible:ring-0 sm:min-h-0"
                         >
                           {CURRENCIES.map((c) => (
                             <option key={c.code} value={c.code}>

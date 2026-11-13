@@ -178,7 +178,7 @@ export default function DailyReportsView({
                 first row of its week (not as a sibling), so every child of AnimatePresence
                 stays a keyed motion element. */}
             {d.week !== null && d.week !== filtered[idx - 1]?.week && (
-              <p className="bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:px-6">
+              <p className="bg-muted/50 px-4 py-2 text-[11px] font-semibold text-muted-foreground sm:px-6">
                 Week {d.week}
                 <span className="font-medium normal-case tracking-normal"> · {weekLabels[d.week]}</span>
               </p>

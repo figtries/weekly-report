@@ -37,7 +37,7 @@ export default function TodayLog({ rows, onRemove }: { rows: LogRow[]; onRemove:
   return (
     <section className="rounded-xl border border-border bg-card px-4 pb-3 pt-3.5 shadow-sm sm:px-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Today so far</h2>
+        <h2 className="text-[11px] font-semibold text-gray-400">Today so far</h2>
         <span className="text-[12px] font-medium tabular-nums text-gray-400">{rows.length} logged</span>
       </div>
 

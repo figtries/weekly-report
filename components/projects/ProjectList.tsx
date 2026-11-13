@@ -178,7 +178,7 @@ function Card({ project: p, onActions }: { project: ProjectCard; onActions: () =
                 initial in the mobile top bar, so one colour answers "which
                 project is the app following" in both places. */}
             {p.isActive && (
-              <span className="rounded bg-primary px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
+              <span className="rounded bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
                 Open
               </span>
             )}
@@ -269,7 +269,7 @@ function ActionsPanel({ project: p, onClose: onExited }: { project: ProjectCard;
 
   return (
     <SoftSheet open={open} onClose={onClose} onExited={onExited} label={p.name} size="sm">
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Project</p>
+        <p className="text-[11px] text-muted-foreground">Project</p>
         <p className="mt-0.5 text-sm font-semibold leading-snug">{p.name}</p>
 
         {mode === 'menu' && (

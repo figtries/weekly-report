@@ -34,7 +34,7 @@ export const sameHint = (hasPredecessor: boolean) => (hasPredecessor ? 'same as 
 export function GroupCard({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
     <section className={cn('overflow-hidden rounded-xl border border-border bg-card shadow-sm', className)}>
-      <h2 className="px-4 pb-1 pt-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 sm:px-5">{title}</h2>
+      <h2 className="px-4 pb-1 pt-3.5 text-[11px] font-semibold text-gray-400 sm:px-5">{title}</h2>
       {children}
     </section>
   );

@@ -21,6 +21,7 @@ import { verdict } from './verdict';
 import { OPEN_SETUP } from './RegisterTabs';
 import NativeSelect from '@/components/ui/NativeSelect';
 import { Button } from '@/components/ui/button';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 // The Record transmittal pop-up went on 9 Oct 2026: a status is set on the
 // document itself (DocumentSheet's StatusForm). TransmittalDialog.tsx stays, unlinked.
@@ -683,6 +684,7 @@ function GroupMenu({
   onDelete: () => Promise<{ ok: boolean }>;
   onClose: () => void;
 }) {
+  const layer = useOverlayLayer();
   const [mode, setMode] = useState<'menu' | 'rename' | 'sub'>('menu');
   const [value, setValue] = useState(name);
   const [pending, start] = useTransition();
@@ -726,7 +728,7 @@ function GroupMenu({
   return createPortal(
     <div
       ref={panel}
-      style={{ position: 'fixed', left: at.left, top: at.top, bottom: at.bottom, width: at.width, zIndex: 70, transformOrigin: `${at.flip ? 'bottom' : 'top'} ${at.fromLeft ? 'left' : 'right'}` }}
+      style={{ ...layer, position: 'fixed', left: at.left, top: at.top, bottom: at.bottom, width: at.width, zIndex: 70, transformOrigin: `${at.flip ? 'bottom' : 'top'} ${at.fromLeft ? 'left' : 'right'}` }}
       className="animate-dropdown-in rounded-2xl border bg-card p-1.5 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.18)] ring-1 ring-foreground/5"
     >
       {mode === 'menu' ? (

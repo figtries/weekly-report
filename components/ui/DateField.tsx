@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 /* ---------------------------------------------------------------------------
  * A date field that is entirely ours.
@@ -103,6 +104,7 @@ export default function DateField({
   'aria-label'?: string;
   'aria-invalid'?: boolean;
 }) {
+  const layer = useOverlayLayer();
   const picked = parse(value);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -379,7 +381,7 @@ export default function DateField({
             // 150ms and swallowed the keyboard focus this panel opens with.
             // The layout effect places it before the first paint either way, so
             // nobody ever sees -9999.
-            style={{
+            style={{ ...layer,
               left: place?.left ?? -9999,
               top: place?.top ?? -9999,
               width: place?.width ?? MIN_W_PX,
@@ -458,7 +460,7 @@ export default function DateField({
             <div aria-hidden={mode !== 'days' || undefined} className={mode !== 'days' ? 'invisible' : undefined}>
             <div className="mt-2 grid grid-cols-7 gap-0.5">
               {WEEKDAYS.map((w) => (
-                <span key={w} className="py-1 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span key={w} className="py-1 text-center text-[11px] font-medium text-muted-foreground">
                   {w}
                 </span>
               ))}

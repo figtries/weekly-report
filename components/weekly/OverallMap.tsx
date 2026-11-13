@@ -82,7 +82,7 @@ function Pill({
   return (
     <span
       className={cn(
-        'rounded-md px-2.5 py-0.5 text-[11.5px] font-semibold tracking-[0.045em] uppercase tabular-nums',
+        'rounded-md px-2.5 py-0.5 text-[11.5px] font-semibold tabular-nums',
         PILL_TONE[tone]
       )}
     >
@@ -108,7 +108,7 @@ const WeightPill = ({ weight }: { weight: number }) =>
       <Figure>{fmt2(weight)}%</Figure> weight
     </Pill>
   ) : (
-    <Pill tone="warn">no weight yet</Pill>
+    <Pill tone="warn">No weight yet</Pill>
   );
 
 /**
@@ -824,12 +824,12 @@ const Row = memo(function Row({
           )}
           {!isBranch && node.lateBy !== undefined && (
             <Pill tone="warn">
-              Late {node.lateBy} {node.lateBy === 1 ? 'wk' : 'wks'}
+              Late {node.lateBy} w
             </Pill>
           )}
           {!isBranch && node.dueIn !== undefined && (
             <Pill tone="due">
-              {node.dueIn === 0 ? 'Ends this week' : `Ends in ${node.dueIn} ${node.dueIn === 1 ? 'wk' : 'wks'}`}
+              {node.dueIn === 0 ? 'Ends this week' : `Ends in ${node.dueIn} w`}
             </Pill>
           )}
           {!isBranch &&

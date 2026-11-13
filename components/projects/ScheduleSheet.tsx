@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -77,6 +78,7 @@ import RowMenu from './RowMenu';
 import DateField from '@/components/ui/DateField';
 import SheetToolbar from './SheetToolbar';
 import { pressMotion } from '@/components/motion/Press';
+import { routeSettled } from '@/components/motion/overlay-layer';
 
 /**
  * The schedule sheet, and the timeline beside it.
@@ -684,30 +686,56 @@ export default function ScheduleSheet({
   // `#row=<id>&open=kind`: the row is opened up, scrolled to, selected, and its
   // kind of work view opens. A hash, because a searchParam on this route would
   // need its own <Suspense> under cacheComponents.
-  useEffect(() => {
+  //
+  // The row is put in place BEFORE the first paint (Nov 2026). Done from a
+  // passive effect it took three renders after the page was already on screen:
+  // the plan arrived at its top with the first thirty rows, jumped to the row,
+  // showed an empty strip with only the link arrows until the window caught up,
+  // and each of those renders held the route's fade still. Here the scroll and
+  // the window are set in the same commit the page arrives in.
+  const arrival = useRef<{ row: SheetRow; kind: boolean } | null>(null);
+  useLayoutEffect(() => {
     const hash = window.location.hash;
     const m = /row=([^&]+)/.exec(hash);
     if (!m) return;
-    history.replaceState(null, '', window.location.pathname + window.location.search);
     const id = decodeURIComponent(m[1]);
     const row = rows.find((r) => r.id === id);
     if (!row) return;
+    arrival.current = { row, kind: /open=kind/.test(hash) };
     const up = new Map(rows.map((r) => [r.id, r.parentId]));
-    revealRef.current = id;
     setCollapsed((c) => {
       const next = new Set(c);
       for (let p = row.parentId; p; p = up.get(p) ?? null) next.delete(p);
-      return next;
+      return next.size === c.size ? c : next;
     });
     setSelectedId(id);
-    if (/open=kind/.test(hash)) {
-      void warmKindView().then(() => {
-        setMenuRow(row);
-        setMenuMode('kind');
-      });
+    const i = visible.findIndex((r) => r.id === id);
+    const el = leftRef.current?.clientHeight ? leftRef.current : rightRef.current;
+    if (i < 0 || !el?.clientHeight) {
+      // Folded away or not measurable yet: the reveal effect finds it later.
+      revealRef.current = id;
+      return;
     }
+    const top = Math.max(0, i * ROW_H - el.clientHeight / 3);
+    if (leftRef.current) leftRef.current.scrollTop = top;
+    if (rightRef.current) rightRef.current.scrollTop = top;
+    recomputeRange(el);
     // Once, on arrival: the hash is gone after the first read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const a = arrival.current;
+    if (!a) return;
+    arrival.current = null;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (!a.kind) return;
+    // The kind view opens once the route's own transition has played out. Opened
+    // during it, the sheet was not in either snapshot, so the transition had to
+    // be cut short for it: the page snapped in and the sheet rose over a jolt.
+    void Promise.all([warmKindView(), routeSettled()]).then(() => {
+      setMenuRow(a.row);
+      setMenuMode('kind');
+    });
   }, []);
 
   const windowed = useMemo(
@@ -1923,7 +1951,7 @@ export default function ScheduleSheet({
               </div>
             )}
             <div
-              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
+              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
               style={{ height: HEAD_H }}
             >
               {/* `invisible`, not `hidden`. A display:none grid child leaves the
@@ -2351,7 +2379,7 @@ const Row = memo(function Row({
           className="truncate"
         />
         {r.isReportingUnit && (
-          <span className="shrink-0 rounded bg-background px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+          <span className="shrink-0 rounded bg-background px-1 py-px text-[9px] font-medium text-muted-foreground ring-1 ring-border">
             {r.unitLabel || 'Unit'}
           </span>
         )}

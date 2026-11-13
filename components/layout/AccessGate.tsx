@@ -5,15 +5,15 @@ import { usePathname } from 'next/navigation';
 import { Lock } from 'lucide-react';
 
 import { AREAS } from '@/lib/roles';
-import { areaOf, canOpen, useCurrentAccount } from '@/lib/signed-in';
+import { areaOf, canOpen, syncAuth, useCurrentAccount } from '@/lib/signed-in';
 
 /*
  * A page whose Roles row is No access for the signed-in account is covered,
  * with what to do about it (29 Oct 2026). A SIBLING of the page, never a
  * wrapper: swapping the page's parent after hydration would remount it. Drawn
  * only once mounted, which keeps `usePathname()` off the prerender (the note
- * above `ActiveLinks` in Sidebar.tsx). A cover, not protection: the draft's
- * accounts live in the browser (`lib/signed-in.ts`).
+ * above `ActiveLinks` in Sidebar.tsx). Sign-in itself is enforced by proxy.ts;
+ * this cover is the per-page No access.
  */
 export function AccessGate() {
   const live = useSyncExternalStore(
@@ -25,6 +25,12 @@ export function AccessGate() {
   // in this same commit, so handing over here never shows the page underneath.
   useLayoutEffect(() => {
     if (live) document.documentElement.removeAttribute('data-locked');
+  }, [live]);
+
+  // The cache follows the server on every load, so a change the Master made on
+  // another device (access, suspension, removal) reaches this one.
+  useEffect(() => {
+    if (live && !location.pathname.startsWith('/login')) syncAuth();
   }, [live]);
 
   // A link into an area this account cannot open does nothing: pressed, it would

@@ -407,7 +407,7 @@ export function WeekStory({
     // the card with a bordered box per item inside that, three frames deep, and
     // read as clutter. Sections are divided by rules, like the key above them.
     <div className="flex h-full flex-col">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="text-[11px] font-semibold text-muted-foreground">
         Week {week}
       </p>
       <div className="mt-2.5 grid grid-cols-2 gap-4">
@@ -474,7 +474,7 @@ export function WeekStory({
         </div>
       </div>
 
-      <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mt-6 text-[11px] font-semibold text-muted-foreground">
         What moved
       </p>
       {shown.length === 0 ? (

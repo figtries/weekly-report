@@ -103,23 +103,23 @@ function statusOf(cum: number, plan: number) {
 
 function gapText(cum: number, plan: number): { text: string; cls: string } {
   const gap = round2(cum - plan);
-  if (Math.abs(gap) < 0.05) return { text: 'on plan', cls: 'text-muted-foreground' };
-  if (gap >= -1 && gap < 0) return { text: 'nearly on plan', cls: 'text-muted-foreground' };
+  if (Math.abs(gap) < 0.05) return { text: 'On plan', cls: 'text-muted-foreground' };
+  if (gap >= -1 && gap < 0) return { text: 'Nearly on plan', cls: 'text-muted-foreground' };
   if (gap < 0) return { text: `${Math.abs(gap).toFixed(1)}% behind`, cls: 'text-bad' };
   return { text: `${gap.toFixed(1)}% ahead`, cls: 'text-ok' };
 }
 
-/* The behind/ahead verdict, always uppercase in its status colour. From sm up
+/* The behind/ahead verdict, in its status colour (sentence case: no all-caps labels, 12 Nov 2026). From sm up
  * it stays inline at the end of the meta line; on phones it moves to its own
  * bottom row instead of wrapping mid-sentence. */
 function GapInline({ cum, plan }: { cum: number; plan: number }) {
   const gap = gapText(cum, plan);
-  return <span className={`hidden font-semibold uppercase sm:inline ${gap.cls}`}> · {gap.text}</span>;
+  return <span className={`hidden font-semibold sm:inline ${gap.cls}`}> · {gap.text}</span>;
 }
 
 function GapBottomRow({ cum, plan, className = 'mt-1' }: { cum: number; plan: number; className?: string }) {
   const gap = gapText(cum, plan);
-  return <div className={`text-[12px] font-bold uppercase tracking-wide sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
+  return <div className={`text-[12px] font-bold sm:hidden ${gap.cls} ${className}`}>{gap.text}</div>;
 }
 
 /** One plain-language sentence describing where an activity stands. */
@@ -546,7 +546,7 @@ function OverviewHero({
       {/* Header line — what this card is, and the project's verdict */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-400">Overall project progress</p>
+          <p className="text-[12px] font-semibold text-gray-400">Overall project progress</p>
           <span className={`rounded-md px-3 py-1 text-[13px] font-semibold ${st.chip}`}>{st.label}</span>
         </div>
         {dist.total > 0 && (
@@ -572,7 +572,7 @@ function OverviewHero({
 
         {dist.total > 0 && (
           <div className="min-w-0 flex-1 md:order-2">
-            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Activity status</p>
+            <p className="mb-2.5 text-[10px] font-semibold text-gray-400">Activity status</p>
             {/* Storage-style meter: one thick clipped track, segments packed
                edge to edge with hairline seams — the container owns the
                (slightly rounder-than-macOS) corners */}
@@ -680,7 +680,7 @@ function HeroGauge({ actual, plan, color, textColor }: { actual: number; plan: n
 function RailStat({ label, value, valueCls = 'text-gray-900' }: { label: string; value: string; valueCls?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="text-[10px] font-semibold text-gray-400">{label}</span>
       <span className={`text-[15px] font-semibold tabular-nums lg:text-base ${valueCls}`}>{value}</span>
     </div>
   );

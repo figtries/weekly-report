@@ -21,15 +21,15 @@ import {
   type AccountStatus,
   type Role,
 } from '@/lib/roles';
-import { DEMO_PASSWORD, saveAccounts, saveRoles, seedAccounts, useRoles, useStoredAccounts } from '@/lib/signed-in';
+import { saveAccounts, saveRoles, useCurrentAccount, useRoles, useStoredAccounts } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 
 /**
  * Access per ACCOUNT, not per role (28 Oct 2026). A role is a preset that
  * fills an account's pages in; the account keeps its own copy.
  *
- * Saved in this browser (`lib/signed-in.ts`, 29 Oct 2026), where it is also
- * what the demo sign-in checks against. The Master sets each account's
+ * Saved on the server (`app/api/auth`, 12 Nov 2026), which re-checks every
+ * rule. The Master sets each account's
  * password and edits the roles themselves (Roles tab). Changes are made on a
  * copy (`draft`) and only land on Save, so a half-made change never shows in
  * the list as if it were done.
@@ -74,6 +74,9 @@ function scopeText(a: Pick<Account, 'projects'>, projects: Project[]) {
 }
 
 
+const NO_ACCOUNTS: Account[] = [];
+const ALL_EDIT = Object.fromEntries(AREAS.map((x) => [x.key, 'edit'])) as Account['access'];
+
 const BTN = 'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 ease-ios active:scale-[0.98] disabled:opacity-50 sm:min-h-9';
 const BTN_PRIMARY = cn(BTN, 'bg-primary text-primary-foreground hover:bg-primary-hover');
 const BTN_OUTLINE = cn(BTN, 'border bg-card hover:bg-muted');
@@ -81,8 +84,7 @@ const BTN_DANGER = cn(BTN, 'border border-bad/30 bg-card text-bad hover:bg-bad-s
 
 export function AccessBoard({ projects }: { projects: Project[] }) {
   const stored = useStoredAccounts();
-  const seed = useMemo(() => seedAccounts(projects.map((p) => p.id)), [projects]);
-  const accounts = stored ?? seed;
+  const accounts = stored ?? NO_ACCOUNTS;
   const roles = useRoles();
   const [tab, setTab] = useState<'accounts' | 'roles'>('accounts');
 
@@ -149,6 +151,7 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
   }, [accounts, q, fStatus, fProject, fLevel]);
 
   const count = (s: AccountStatus) => accounts.filter((a) => a.status === s).length;
+  const masters = accounts.filter((a) => a.master).length;
   const filtersOn = !!(q || fStatus || fProject || fLevel);
 
   const open = (id: string) => {
@@ -182,11 +185,10 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
       message: 'The account and its access are deleted. What they entered in reports stays.',
       label: 'Remove',
       onYes: () => {
-        saveAccounts(accounts.filter((a) => a.id !== current.id));
+        saveAccounts(accounts.filter((a) => a.id !== current.id)).then(() => toast.success('Account removed', { description: current.name }), () => {});
         setDraft(null);
         setSelectedId(null);
         setSheetOpen(false);
-        toast.success('Account removed', { description: current.name });
       },
     });
   };
@@ -202,10 +204,14 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
       onRemove={remove}
       onSave={() => {
         if (!draft) return;
-        saveAccounts(accounts.map((a) => (a.id === draft.id ? draft : a)));
-        setDraft(null);
-        setSheetOpen(false);
-        toast.success('Changes saved', { description: draft.name });
+        saveAccounts(accounts.map((a) => (a.id === draft.id ? draft : a))).then(
+          () => {
+            setDraft(null);
+            setSheetOpen(false);
+            toast.success('Changes saved', { description: draft.name });
+          },
+          () => {}
+        );
       }}
       onDiscard={() => {
         setDraft(null);
@@ -217,7 +223,7 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
   );
 
   const stats: { label: string; value: number; note: string; dot: string }[] = [
-    { label: 'Accounts', value: accounts.length, note: `1 Master · ${accounts.length - 1} others`, dot: 'bg-primary' },
+    { label: 'Accounts', value: accounts.length, note: `${masters} Master · ${accounts.length - masters} others`, dot: 'bg-primary' },
     { label: 'Active', value: count('active'), note: 'Signing in and working', dot: 'bg-chart-3' },
     { label: 'Invited', value: count('invited'), note: count('invited') ? 'Not signed in yet' : 'Nobody waiting', dot: 'bg-chart-1' },
     { label: 'Suspended', value: count('suspended'), note: count('suspended') ? 'Kept, but locked out' : 'Nobody suspended', dot: 'bg-chart-5/45' },
@@ -349,11 +355,15 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
         taken={accounts.map((a) => a.email.toLowerCase())}
         onClose={() => setAdding(false)}
         onAdd={(a) => {
-          saveAccounts([...accounts, a]);
-          setAdding(false);
-          toast.success('Account added', { description: a.name });
-          setSelectedId(a.id);
-          setDraft(null);
+          saveAccounts([...accounts, a]).then(
+            () => {
+              setAdding(false);
+              toast.success('Account added', { description: a.name });
+              setSelectedId(a.id);
+              setDraft(null);
+            },
+            () => {}
+          );
         }}
       />
 
@@ -395,13 +405,15 @@ function AccountPanel({
   const locked = !!a.master;
   const r = roleOf(roles, a.preset);
   const custom = isCustom(a, roles);
-  // `??`, not passwordOf's `||`: an emptied box must stay empty while it is retyped.
-  const password = a.password ?? DEMO_PASSWORD;
+  // The server keeps only a hash: the box is empty, and empty keeps the password.
+  const password = a.password ?? '';
+  const me = useCurrentAccount();
+  const self = me?.id === a.id;
   const problem = !a.name.trim()
     ? 'Type a name'
     : !validEmail(a.email)
       ? 'Type a valid email'
-      : password.length < MIN_PASSWORD
+      : password && password.length < MIN_PASSWORD
         ? `Password needs ${MIN_PASSWORD}+ characters`
         : null;
 
@@ -422,7 +434,7 @@ function AccountPanel({
       {locked && (
         <div className="flex gap-2.5 rounded-lg border border-check/25 bg-check-soft px-3 py-2.5 text-sm text-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-check" aria-hidden />
-          <p>The Master always has Edit on every page and project, and can&apos;t be suspended or removed.</p>
+          <p>A Master always has Edit on every page and project, manages accounts, and can&apos;t be suspended or removed. Turn Master off first.</p>
         </div>
       )}
 
@@ -434,10 +446,28 @@ function AccountPanel({
           <Field label="Email">
             <Input type="email" value={a.email} disabled={locked} onChange={(e) => onEdit({ email: e.target.value })} className="h-11 sm:h-9" />
           </Field>
-          <Field label="Password" className="sm:col-span-2">
-            <PasswordField value={password} onChange={(password) => onEdit({ password })} />
+          {/* Re-keyed when a new password is typed or saved, so it never shows a stale one. */}
+          {me?.master && <CurrentPassword key={`${a.id}:${password ? 'new' : 'kept'}`} id={a.id} />}
+          <Field label="New password" className="sm:col-span-2">
+            <PasswordField value={password} placeholder="Leave empty to keep the current one" onChange={(password) => onEdit({ password })} />
           </Field>
         </div>
+        {me?.master && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">Master</span>
+              <span className="block text-xs text-muted-foreground">
+                {self ? "You can't take Master away from yourself." : 'Edit everywhere, and gives other people their access'}
+              </span>
+            </span>
+            <Switch
+              checked={!!a.master}
+              disabled={self}
+              onCheckedChange={(on) => onEdit(on ? { master: true, status: 'active', preset: null, projects: 'all', access: ALL_EDIT } : { master: false })}
+              aria-label="Make this account a Master"
+            />
+          </div>
+        )}
         {!locked && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
             <span className="min-w-0">
@@ -882,7 +912,7 @@ function Field({ label, className, children }: { label: string; className?: stri
   );
 }
 
-function PasswordField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function PasswordField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [show, setShow] = useState(false);
   return (
     <span className="flex gap-2">
@@ -890,6 +920,7 @@ function PasswordField({ value, onChange }: { value: string; onChange: (v: strin
         <Input
           type={show ? 'text' : 'password'}
           value={value}
+          placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="new-password"
           spellCheck={false}
@@ -909,6 +940,64 @@ function PasswordField({ value, onChange }: { value: string; onChange: (v: strin
         Generate
       </button>
     </span>
+  );
+}
+
+/**
+ * The password an account signs in with, for a Master only. It is not in the
+ * page: the eye asks the server for it (`reveal`), and hiding it drops it.
+ */
+function CurrentPassword({ id }: { id: string }) {
+  // undefined = hidden, null = the server kept none, string = shown
+  const [pw, setPw] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const shown = pw !== undefined;
+  const toggle = async () => {
+    if (shown) return setPw(undefined);
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reveal', id }),
+      });
+      if (!res.ok) throw new Error();
+      setPw(((await res.json()) as { password: string | null }).password);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label="Current password" className="sm:col-span-2">
+      <span className="relative block">
+        <Input
+          readOnly
+          value={pw ?? (shown ? '' : '••••••••')}
+          placeholder="Not kept yet"
+          spellCheck={false}
+          className="h-11 bg-muted/40 pr-11 sm:h-9"
+        />
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={busy}
+          aria-label={shown ? 'Hide current password' : 'Show current password'}
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+        >
+          {shown ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+        </button>
+      </span>
+      {pw === null && (
+        <span className="text-xs text-muted-foreground">
+          This one was set before passwords were kept. It shows after their next sign-in, or set a new one below.
+        </span>
+      )}
+      {failed && <span className="text-xs text-destructive">Could not load it. Press the eye to try again.</span>}
+    </Field>
   );
 }
 

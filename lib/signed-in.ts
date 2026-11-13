@@ -1,22 +1,22 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { toast } from 'sonner';
 
-import { NO_ACCESS, ROLES, SEED_ACCOUNTS, type Account, type AreaKey, type Role } from '@/lib/roles';
+import { NO_ACCESS, ROLES, type Account, type AreaKey, type Role } from '@/lib/roles';
 
 /*
- * Who signed in and what each account may open, as a DRAFT until login exists
- * (board item 22). Both live in THIS BROWSER only: the Master's changes on
- * Roles are saved here, and signing in here as another account shows what that
- * account can open (29 Oct 2026). The Master sets each account's password and
- * edits the roles; an account given no password uses DEMO_PASSWORD. Passwords
- * sit in plain text in this browser and nothing on the server checks any of
- * it: a hidden page is hidden, not protected.
- *
- * Nobody signed in reads as the Master, which is how the app behaved before.
+ * The browser's CACHE of who signed in and what each account may open
+ * (12 Nov 2026). The truth is on the server (`app/api/auth`, `lib/auth-store.ts`):
+ * sign-in sets an httpOnly cookie and `proxy.ts` opens nothing without it. This
+ * copy is what the sidebar, AccessGate and the inline LOCK_SCRIPT read before
+ * the first paint; `syncAuth` refreshes it from the server on every load, and
+ * every save on Roles goes to the server and comes back from it. Passwords
+ * never reach this file except while the Master types a new one.
  */
 
-export const DEMO_PASSWORD = 'lucille2026';
+/** What GET/POST/PUT /api/auth answer. */
+export interface AuthView { needsSetup: boolean; me: Account | null; accounts?: Account[]; roles?: Role[] | null }
 
 const WHO = 'lucille-signed-in';
 const ACCOUNTS = 'lucille-accounts';
@@ -48,14 +48,6 @@ function subscribe(cb: () => void) {
   };
 }
 
-/** The seed with its project indices resolved; with no list, scopes come out empty. */
-export function seedAccounts(projectIds: string[] = []): Account[] {
-  return SEED_ACCOUNTS.map((s) => ({
-    ...s,
-    projects: s.projects === 'all' ? 'all' : s.projects.map((i) => projectIds[i]).filter((x): x is string => !!x),
-  }));
-}
-
 // Parsed once per stored string, so a snapshot keeps its identity between reads.
 const cache = new Map<string, { raw: string | null; list: unknown[] | null }>();
 function stored<T>(key: string): T[] | null {
@@ -72,7 +64,7 @@ function stored<T>(key: string): T[] | null {
 const storedAccounts = () => stored<Account>(ACCOUNTS);
 const storedRoles = () => stored<Role>(ROLE_LIST);
 
-/** What the Master saved on Roles, or null until anything has been. */
+/** The accounts as the server last said, or null before the first answer. */
 export function useStoredAccounts(): Account[] | null {
   return useSyncExternalStore(subscribe, storedAccounts, () => null);
 }
@@ -82,41 +74,73 @@ export const SEED_ROLES: Role[] = ROLES.filter((r) => !r.master);
 export function useRoles(): Role[] {
   return useSyncExternalStore(subscribe, storedRoles, () => null) ?? SEED_ROLES;
 }
-export const saveRoles = (list: Role[]) => put(ROLE_LIST, JSON.stringify(list));
 
-export const passwordOf = (a: Account) => a.password || DEMO_PASSWORD;
-
-export const saveAccounts = (list: Account[]) => put(ACCOUNTS, JSON.stringify(list));
-
-export function findAccount(email: string): Account | null {
-  const e = email.trim().toLowerCase();
-  return (storedAccounts() ?? seedAccounts()).find((a) => a.email.toLowerCase() === e) ?? null;
+/** Writes what the server said into the cache. Someone who may not open Roles caches only themself. */
+export function applyAuth(v: AuthView) {
+  try {
+    window.localStorage.setItem(ACCOUNTS, JSON.stringify(v.accounts ?? (v.me ? [v.me] : [])));
+    if (v.roles) window.localStorage.setItem(ROLE_LIST, JSON.stringify(v.roles));
+    else window.localStorage.removeItem(ROLE_LIST);
+  } catch {}
+  put(WHO, v.me ? v.me.email.toLowerCase() : null);
 }
 
-/** Signs in and marks an invited account active, the way a first sign-in would. */
-export function signIn(account: Account) {
-  const list = storedAccounts() ?? seedAccounts();
-  if (account.status === 'invited' || account.lastActive !== 'Now')
-    saveAccounts(list.map((a) => (a.id === account.id ? { ...a, status: a.status === 'invited' ? 'active' : a.status, lastActive: 'Now' } : a)));
-  put(WHO, account.email.toLowerCase());
+async function call(method: string, body?: unknown): Promise<AuthView> {
+  const res = await fetch('/api/auth', {
+    method,
+    cache: 'no-store',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status });
+  return data as AuthView;
 }
 
-export const signOut = () => put(WHO, null);
+export const fetchAuth = () => call('GET');
+export const syncAuth = () => call('GET').then(applyAuth, () => {});
+
+export const login = (email: string, password: string) =>
+  call('POST', { action: 'login', email, password }).then((v) => (applyAuth(v), v));
+export const setupMaster = (name: string, email: string, password: string) =>
+  call('POST', { action: 'setup', name, email, password }).then((v) => (applyAuth(v), v));
+
+/** Saves on the server; the screen moves at once and is put back if the server refuses. */
+function save(body: { accounts?: Account[]; roles?: Role[] }) {
+  if (body.accounts) put(ACCOUNTS, JSON.stringify(body.accounts.map(({ password: _p, ...a }) => a)));
+  if (body.roles) put(ROLE_LIST, JSON.stringify(body.roles));
+  return call('PUT', body).then(applyAuth, (e: Error) => {
+    toast.error('Not saved', { description: e.message });
+    syncAuth();
+    throw e;
+  });
+}
+export const saveRoles = (list: Role[]) => void save({ roles: list }).catch(() => {});
+export const saveAccounts = (list: Account[]) => save({ accounts: list });
+
+export async function signOut() {
+  await call('POST', { action: 'logout' }).catch(() => {});
+  try {
+    window.localStorage.removeItem(ACCOUNTS);
+    window.localStorage.removeItem(ROLE_LIST);
+  } catch {}
+  put(WHO, null);
+}
 
 /** The signed-in email, or null; always null on the server and through hydration. */
 export function useSignedIn(): string | null {
   return useSyncExternalStore(subscribe, () => get(WHO), () => null);
 }
 
-/** The signed-in account, or null for nobody (who reads as the Master). Hooks
- *  re-read on every sign-in, sign-out and save, in this tab and others. */
+/** The signed-in account, or null before the cache knows (the server already let
+ *  this page through, so nothing is hidden meanwhile). Re-read on every change. */
 export function useCurrentAccount(): Account | null {
   const who = useSignedIn();
   const stored = useStoredAccounts();
   if (!who) return null;
   // An account the Master removed since opens nothing, never everything.
   return (
-    (stored ?? seedAccounts()).find((a) => a.email.toLowerCase() === who) ??
+    (stored ?? []).find((a) => a.email.toLowerCase() === who) ??
     { id: 'removed', name: '', email: who, preset: null, status: 'suspended', lastActive: null, projects: [], access: NO_ACCESS }
   );
 }

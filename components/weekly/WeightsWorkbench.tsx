@@ -537,7 +537,7 @@ function PricingHero({
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
           <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <p className="text-xs font-semibold text-muted-foreground">
               Project budget
             </p>
             <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
@@ -548,7 +548,7 @@ function PricingHero({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <p className="text-xs font-semibold text-muted-foreground">
               Weights total
             </p>
             <p
@@ -988,7 +988,7 @@ function UnitFace({
         </span>
         <p className="min-w-0 flex-1 pt-0.5 text-[15px] leading-snug font-semibold">{name}</p>
         <div className="shrink-0 text-right">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <p className="text-[11px] font-semibold text-muted-foreground">
             Of project
           </p>
           <p className="text-lg leading-tight font-semibold tabular-nums text-chart-1">
@@ -1014,7 +1014,7 @@ function UnitFace({
       </div>
 
       <div className="mt-3.5 flex items-center gap-2">
-        <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        <p className="text-[11px] font-semibold text-muted-foreground">
           {label}
         </p>
         {fromRows && <Pill tone="quiet">From its rows</Pill>}
@@ -1490,7 +1490,7 @@ function RowList({
 
   return (
     <>
-      <div className="mt-1 hidden items-center gap-4 px-4 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:grid sm:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="mt-1 hidden items-center gap-4 px-4 text-[11px] font-semibold text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_15rem]">
         <span>Activity</span>
         <span className="flex">
           <span className="flex-1 text-right">Budget</span>

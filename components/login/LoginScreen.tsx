@@ -8,15 +8,16 @@ import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layou
 import { useBareScreen } from '@/components/layout/use-bare-screen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { findAccount, passwordOf, signIn } from '@/lib/signed-in';
+import { fetchAuth, login, setupMaster } from '@/lib/signed-in';
 import { cn } from '@/lib/utils';
 
-// ponytail: demo login (board item 22 brings real login). The email must be an
-// account on Roles, the password is the one the Master set there, and all of it
-// is checked in this browser (`lib/signed-in.ts`).
+// Checked on the server (app/api/auth). While nobody has an account yet, this
+// card makes the first Master instead (once, ever); after that only the Master
+// makes accounts, on Roles.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Problem = null | 'wrong' | 'suspended';
+// 'wrong' and 'suspended' are worded below; anything else is shown as written.
+type Problem = null | string;
 type Phase = 'idle' | 'checking' | 'done';
 
 export function LoginScreen() {
@@ -73,6 +74,13 @@ function SignInCard() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [problem, setProblem] = useState<Problem>(null);
   const [phase, setPhase] = useState<Phase>('idle');
+  const [name, setName] = useState('');
+  const [setup, setSetup] = useState(false);
+
+  // Nobody has an account yet: this card makes the first Master.
+  useEffect(() => {
+    fetchAuth().then((v) => setSetup(v.needsSetup), () => {});
+  }, []);
 
   // Back from the app restores this page from the bfcache still on "Signed in".
   useEffect(() => {
@@ -83,7 +91,7 @@ function SignInCard() {
     return () => window.removeEventListener('pageshow', reset);
   }, []);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (phase !== 'idle') return;
     const typed = email.trim();
@@ -96,23 +104,27 @@ function SignInCard() {
     if (next.email) return emailRef.current?.focus();
     if (next.password) return passwordRef.current?.focus();
 
+    if (setup && !name.trim()) return setProblem('Type your name.');
+    if (setup && password.length < 6) return setProblem('Set a password of 6 or more characters.');
+
     setPhase('checking');
-    window.setTimeout(() => {
-      const account = findAccount(typed);
-      const refused: Problem =
-        !account || password !== passwordOf(account) ? 'wrong' : account.status === 'suspended' ? 'suspended' : null;
-      if (refused) {
-        setProblem(refused);
-        setPhase('idle');
-        if (refused === 'wrong') passwordRef.current?.select();
-        return;
-      }
-      setPhase('done');
-      signIn(account!);
-      // A full load, not router.push: after switching accounts a few times the
-      // client router could sit on "Signed in" and never land (29 Oct 2026).
-      window.setTimeout(() => window.location.assign('/'), 700);
-    }, 900);
+    try {
+      if (setup) await setupMaster(name.trim(), typed, password);
+      else await login(typed, password);
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      setProblem(setup ? (err as Error).message : status === 403 ? 'suspended' : status === 401 ? 'wrong' : "Can't reach the server. Try again.");
+      if (setup && status === 409) setSetup(false);
+      setPhase('idle');
+      if (status === 401) passwordRef.current?.select();
+      return;
+    }
+    setPhase('done');
+    // Back to the page that sent them here, never off this site.
+    const back = new URLSearchParams(window.location.search).get('next');
+    // A full load, not router.push: after switching accounts a few times the
+    // client router could sit on "Signed in" and never land (29 Oct 2026).
+    window.setTimeout(() => window.location.assign(back && /^\/(?!\/)/.test(back) ? back : '/'), 400);
   }
 
   function edit(field: 'email' | 'password', value: string) {
@@ -124,8 +136,12 @@ function SignInCard() {
 
   return (
     <div className="animate-enter stagger-1 w-full max-w-[440px] rounded-2xl border border-border/70 bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_28px_64px_-32px_rgba(20,60,140,0.4)] sm:p-9">
-      <h2 className="text-2xl font-semibold tracking-tight text-foreground">Sign in</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Use the account your Master gave you.</p>
+      <h2 className="text-2xl font-semibold tracking-tight text-foreground">{setup ? 'Create the Master account' : 'Sign in'}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {setup
+          ? 'Nobody has an account yet. You become the Master and give everyone else their access.'
+          : 'Use the account your Master gave you.'}
+      </p>
 
       <div aria-live="polite">
         {problem && (
@@ -139,13 +155,32 @@ function SignInCard() {
             <p>
               {problem === 'wrong'
                 ? 'Email or password is incorrect.'
-                : 'This account is suspended. Contact your Master.'}
+                : problem === 'suspended'
+                  ? 'This account is suspended. Contact your Master.'
+                  : problem}
             </p>
           </div>
         )}
       </div>
 
       <form noValidate onSubmit={submit} className="mt-6 space-y-5">
+        {setup && (
+          <div>
+            <label htmlFor={`${emailId}-name`} className="text-sm font-medium text-foreground">
+              Your name
+            </label>
+            <Input
+              id={`${emailId}-name`}
+              autoComplete="name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (problem) setProblem(null);
+              }}
+              className={FIELD}
+            />
+          </div>
+        )}
         <div>
           <label htmlFor={emailId} className="text-sm font-medium text-foreground">
             Email
@@ -189,7 +224,7 @@ function SignInCard() {
               ref={passwordRef}
               id={passwordId}
               type={show ? 'text' : 'password'}
-              autoComplete="current-password"
+              autoComplete={setup ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => edit('password', e.target.value)}
               aria-invalid={errors.password ? true : undefined}
@@ -231,7 +266,7 @@ function SignInCard() {
               Signed in
             </>
           ) : (
-            'Sign in'
+            setup ? 'Create Master account' : 'Sign in'
           )}
         </Button>
       </form>

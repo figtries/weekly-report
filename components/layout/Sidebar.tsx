@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { m } from 'framer-motion';
 
 import { PressLink, pressMotion } from '@/components/motion/Press';
@@ -22,6 +22,7 @@ import { setFit } from '@/lib/fit-screen';
 import { toast } from 'sonner';
 import type { AreaKey } from '@/lib/roles';
 import { canOpen, signOut, useCurrentAccount } from '@/lib/signed-in';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 import { cn } from '@/lib/utils';
 import {
   DailyReportsIcon,
@@ -336,7 +337,6 @@ function Links({ dests, pathname }: { dests: Entry[]; pathname: string | null })
  * hydration draw the Master's menu and an account's swap lands after.
  */
 function Foot({ roles }: { roles: ReactNode }) {
-  const router = useRouter();
   const [asking, setAsking] = useState(false);
   return (
     <>
@@ -359,8 +359,8 @@ function Foot({ roles }: { roles: ReactNode }) {
         destructive
         onConfirm={() => {
           setAsking(false);
-          signOut();
-          router.push('/login');
+          // A full load: no page of the account just signed out stays in the router cache.
+          signOut().then(() => window.location.assign('/login'));
           toast("You're logged out");
         }}
         onCancel={() => setAsking(false)}
@@ -505,6 +505,9 @@ function DrawerOverlay({
   onClose: () => void;
   switcher: ReactNode;
 }) {
+  // Named only while open: a parked drawer would be captured on every route change.
+  const scrimLayer = useOverlayLayer();
+  const layer = useOverlayLayer('drawer');
   const pathname = usePathname();
 
   // Following any link in the drawer closes it.
@@ -523,6 +526,7 @@ function DrawerOverlay({
           'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden print:hidden',
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
+        style={open ? scrimLayer : undefined}
         onClick={onClose}
       />
 
@@ -541,6 +545,7 @@ function DrawerOverlay({
           'ease-[cubic-bezier(0.32,0.72,0,1)]',
           open ? 'translate-x-0 shadow-2xl' : 'translate-x-full shadow-none'
         )}
+        style={open ? layer : undefined}
       >
         <div className="flex h-full flex-col overflow-y-auto">
           {/* No close button: tapping the dimmed backdrop closes the
@@ -640,13 +645,10 @@ export default function Sidebar({
       {/* Desktop: full sidebar. 256px (w-64), up from 224px, so the project
           card at its foot can print a contract title whole in a few lines. */}
       <aside data-app-chrome className="relative hidden h-full w-64 flex-shrink-0 border-r bg-card lg:block print:hidden">
-        {/* Sits just OUTSIDE the sidebar's edge, outside the scroller so it is never clipped. */}
-        <div className="absolute left-full top-0 z-10 -ml-px">
-          <FitButton on={false} className="w-7 rounded-none rounded-br-lg border-l-0 border-t-0" />
-        </div>
         <div className="flex h-full flex-col overflow-y-auto">
-          <div className="flex h-16 shrink-0 items-center pl-6 pr-3">
+          <div className="flex h-16 shrink-0 items-center justify-between pl-6 pr-3">
             <Brand />
+            <FitButton on={false} className="h-9 w-9 border-0 bg-transparent text-muted-foreground hover:text-foreground" />
           </div>
 
           <NavList

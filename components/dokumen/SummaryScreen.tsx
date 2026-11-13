@@ -88,7 +88,7 @@ export function SummaryScreen({
           stages side by side (unnumbered: he rejected the 1-2-3 squares), the week as a short ledger. */}
       <section className={cn(card, 'grid grid-cols-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,1.3fr)_minmax(0,2.9fr)_minmax(0,1.3fr)]')}>
         <div className='flex flex-col justify-center gap-2.5 border-b border-border/70 p-5 lg:border-b-0 lg:border-r'>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
+          <span className="text-[11px] font-semibold text-muted-foreground">{edl ? 'Engineering progress' : 'Vendor documents'}</span>
           {/* ONLY the figure takes the verdict's colour (9 Oct 2026: the card stays
               white like every other, the chip neutral): red behind plan,
               green on or ahead of it, plain with no plan to read against. */}
@@ -139,7 +139,7 @@ export function SummaryScreen({
           })}
         </div>
         <div className="flex flex-col justify-center bg-[#f8faff] p-5 lg:border-l lg:border-border/70">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          <span className="text-[11px] font-semibold text-muted-foreground">
             This week{movement && <> · {fmt(movement.startDate)} – {fmt(movement.endDate)}</>}
           </span>
           <div className="mt-2 tabular-nums">

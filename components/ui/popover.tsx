@@ -4,6 +4,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useOverlayLayer } from "@/components/motion/overlay-layer"
 
 function Popover({
   ...props
@@ -23,6 +24,7 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const layer = useOverlayLayer()
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -34,6 +36,7 @@ function PopoverContent({
           className
         )}
         {...props}
+        style={{ ...layer, ...props.style }}
       />
     </PopoverPrimitive.Portal>
   )

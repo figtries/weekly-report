@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 /*
  * Every pop-up in the app opens the way Data Overall's activity sheet does
@@ -95,6 +96,8 @@ export default function SoftSheet({
   className?: string;
   children: React.ReactNode;
 }) {
+  const scrimLayer = useOverlayLayer();
+  const layer = useOverlayLayer('card');
   // Kept on screen after `open` goes false until the exit has played. Opening
   // shows it in the same render, so no frame of nothing comes first.
   const [present, setPresent] = useState(open);
@@ -161,12 +164,14 @@ export default function SoftSheet({
     >
       <div
         className={cn('absolute inset-0 bg-black/40', closing ? 'animate-scrim-out' : 'animate-scrim-in')}
+        style={scrimLayer}
         onClick={() => onCloseRef.current()}
       />
       {/* The slide lives on this wrapper and the flick on the card inside, so
           the two never write the same transform. */}
       <div
         className={cn('relative flex w-full flex-col', WIDTH[size], closing ? 'animate-sheet-fall' : 'animate-sheet-rise')}
+        style={layer}
         onAnimationEnd={(e) => {
           if (closing && e.target === e.currentTarget) finish();
         }}

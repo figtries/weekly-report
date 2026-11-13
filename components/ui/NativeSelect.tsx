@@ -4,6 +4,7 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
+import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 type Option = { value: string; label: React.ReactNode; disabled?: boolean; title?: string };
 
@@ -73,6 +74,7 @@ export default function NativeSelect({
    */
   wrapperClassName?: string;
 }) {
+  const layer = useOverlayLayer();
   const options = optionsOf(children);
   const [inner, setInner] = React.useState(() =>
     defaultValue != null ? String(defaultValue) : (optionsOf(children)[0]?.value ?? '')
@@ -287,7 +289,7 @@ export default function NativeSelect({
             role="listbox"
             // Keeps focus (and a dialog's focus trap) on the trigger.
             onMouseDown={(e) => e.preventDefault()}
-            style={{
+            style={{ ...layer,
               position: 'fixed',
               left: anchor.left,
               top: anchor.top,

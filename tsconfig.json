@@ -56,7 +56,9 @@
     ".next-verifydb/types/**/*.ts",
     ".next-verifydb/dev/types/**/*.ts",
     ".next-preview-kind/types/**/*.ts",
-    ".next-preview-kind/dev/types/**/*.ts"
+    ".next-preview-kind/dev/types/**/*.ts",
+    ".next-buildcheck/types/**/*.ts",
+    ".next-buildcheck/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

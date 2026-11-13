@@ -197,7 +197,7 @@ export default function PasteRows({
                         <div className="flex flex-col gap-1.5">
                           <label
                             htmlFor="plan-sheet"
-                            className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                            className="text-[11px] font-medium text-muted-foreground"
                           >
                             Sheet
                           </label>
@@ -216,7 +216,7 @@ export default function PasteRows({
                         </div>
 
                         <div>
-                          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                          <p className="text-[11px] font-medium text-muted-foreground">
                             Which column is which?
                           </p>
                           <div className="mt-2 grid gap-3 sm:grid-cols-2">
@@ -328,7 +328,7 @@ export default function PasteRows({
                         )}
 
                         <div>
-                          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                          <p className="text-[11px] font-medium text-muted-foreground">
                             First rows
                           </p>
                           <div className="mt-1 overflow-hidden rounded-lg border">

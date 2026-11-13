@@ -143,8 +143,8 @@ export default function ForecastBlock({
     : gap === 0
       ? { label: 'On plan', tone: 'bg-emerald-100 text-emerald-700' }
       : gap < 0
-        ? { label: `${-gap} wk early`, tone: 'bg-emerald-100 text-emerald-700' }
-        : { label: `${gap} wk late`, tone: 'bg-red-100 text-red-700' };
+        ? { label: `${-gap} w early`, tone: 'bg-emerald-100 text-emerald-700' }
+        : { label: `${gap} w late`, tone: 'bg-red-100 text-red-700' };
 
   return (
     <section aria-label="Forecast" className="mt-5 space-y-3">
@@ -284,7 +284,7 @@ export default function ForecastBlock({
                       {l.code && <CodeChip>{l.code}</CodeChip>}
                       <span className="line-clamp-2 min-w-0 flex-1 break-words">{l.name}</span>
                       <span className={cn(chip, l.state === 'late' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
-                        {l.state === 'late' ? `${l.lateWeeks} wk late` : l.state === 'done' ? 'Done' : 'On plan'}
+                        {l.state === 'late' ? `${l.lateWeeks} w late` : l.state === 'done' ? 'Done' : 'On plan'}
                       </span>
                     </li>
                   ))}

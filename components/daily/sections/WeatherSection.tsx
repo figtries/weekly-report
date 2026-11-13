@@ -8,6 +8,12 @@ import { cn } from '@/lib/utils';
 import { INPUT_CLS } from '../fields';
 import { RowButton, SectionRow, type SectionProps } from '../SectionRow';
 
+// iOS draws a time box at its own width and ignores `width: 100%` until its
+// native look is switched off: two of them side by side ran over each other and
+// out of the card (12 Nov 2026, iPhone). `appearance-none` gives the width back.
+const TIME_CLS =
+  'block w-full min-w-0 max-w-full appearance-none tabular-nums sm:w-32 [&::-webkit-date-and-time-value]:text-left';
+
 const OPTIONS = [
   ['hujanDeras', CloudRain],
   ['hujanSedang', CloudDrizzle],
@@ -68,7 +74,7 @@ export default function WeatherSection({
           aria-label="Start time"
           value={w.waktuMulai}
           onChange={(e) => patch({ waktuMulai: e.target.value })}
-          className={cn(INPUT_CLS, 'w-full min-w-0 tabular-nums sm:w-32')}
+          className={cn(INPUT_CLS, TIME_CLS)}
         />
         <ArrowRight className="hidden size-4 shrink-0 text-gray-400 sm:block" aria-hidden />
         <input
@@ -76,7 +82,7 @@ export default function WeatherSection({
           aria-label="End time"
           value={w.waktuSelesai}
           onChange={(e) => patch({ waktuSelesai: e.target.value })}
-          className={cn(INPUT_CLS, 'w-full min-w-0 tabular-nums sm:w-32')}
+          className={cn(INPUT_CLS, TIME_CLS)}
         />
       </div>
     </SectionRow>

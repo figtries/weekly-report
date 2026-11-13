@@ -234,11 +234,11 @@ export default function TransmittalDialog({
 
         <div className="grid grid-cols-[9.5rem_minmax(0,1fr)] gap-2">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Date</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Date</span>
             <DateField value={date} onChange={setDate} className="h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-base text-foreground md:text-sm" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Letter</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Letter</span>
             <Input
               className="h-11 font-mono"
               value={letter}
