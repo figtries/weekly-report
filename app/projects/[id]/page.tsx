@@ -1,11 +1,9 @@
-import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, TriangleAlert } from 'lucide-react';
 
 import { RouteTransition } from '@/components/motion/RouteTransition';
 import OpenProjectButton from '@/components/projects/OpenProjectButton';
-import PlannerSkeleton from '@/components/projects/PlannerSkeleton';
 import ProjectDetails from '@/components/projects/ProjectDetails';
 import GanttPdfButton from '@/components/projects/GanttPdfButton';
 import { packagesOf } from '@/lib/gantt-print';
@@ -42,47 +40,25 @@ function fmtDay(iso: string | null): string {
  * The chrome above is deliberately thin — a header, one line of facts — because
  * the plan is what people came for.
  */
-export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  // `params` is a runtime read. Under `cacheComponents` awaiting it in the page
-  // component itself fails with "Runtime data ... accessed outside of
-  // <Suspense>" — the same wall `/print/*` hit.
-  //
-  // THIS FALLBACK IS THE PRERENDERED SHELL, which is why it may not be `null`.
-  // It was, and the consequence was measured: Next served this route as a page
-  // whose `<main>` held one empty `<template>`, so the shell painted instantly
-  // and painted nothing, and the whole wait — segment fetch plus 119 KB of
-  // client chunks that are not requested until the click — happened on a blank
-  // screen. 496 ms on a five-row project, 1.4 s on Gundih, on localhost with no
-  // network in the way. The frame does not depend on the id; only the words do.
-  //
-  // THE FALLBACK IS WRAPPED IN `RouteTransition` TOO, and that is what makes
-  // opening a project look like a route change instead of a cut. The body's
-  // wrapper is the only one that used to exist, and the body is exactly the
-  // part that is NOT on screen when the navigation commits — React shows this
-  // shell instead. So the list played `page-exit` and faded away over an
-  // incoming page that had no `page-enter` name at all, which means it was
-  // never captured and simply appeared, whole, in one frame. Every other route
-  // in the app crossfades; this one snapped, and then snapped a second time
-  // when the plan replaced the shell.
-  //
-  // Named on both branches, the swap is a crossfade at each step: list → shell
-  // → plan. The id is the SAME on purpose. It says the two are one page in two
-  // states, and the pair being in different slots of the boundary is what still
-  // gives React a genuine unmount/mount to animate.
-  return (
-    <Suspense
-      fallback={
-        <RouteTransition id="project-home">
-          <PlannerSkeleton />
-        </RouteTransition>
-      }
-    >
-      <ProjectBody params={params} />
-    </Suspense>
-  );
-}
-
-async function ProjectBody({ params }: { params: Promise<{ id: string }> }) {
+/**
+ * ONE BOUNDARY ABOVE THIS PAGE, AND IT IS `loading.tsx` (13 Nov 2026).
+ *
+ * `params` is a runtime read, so the page postpones and its `loading.tsx`
+ * (PlannerSkeleton, the shape this route lands in) is the prerendered shell.
+ * There used to be three boundaries on the way down: the project LIST's
+ * `loading.tsx`, this route's, and a `<Suspense>` of the page's own with the
+ * same skeleton. The outer two FINISHED during the prerender (each resolved to
+ * the next one's fallback), React outlined them as `S:2` and `S:3`, and the
+ * resume handed the same ids to the page's own segments. On every full load of
+ * a plan the Details button and the Open button were spliced into the wrong
+ * place, React threw #418 and rebuilt the page on the client: the planner
+ * mounted twice, so `#row=…&open=kind` was consumed by the copy thrown away
+ * and the kind view never opened. A phone reloads a tab far more often than a
+ * desktop does, which is where it was seen. The list's loading file now lives in `(list)/` and covers the
+ * list alone. `scripts/verify-hydration.mjs` is the proof; see AGENTS.md, "no
+ * `<Suspense>` in the shell may complete during the prerender".
+ */
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let project = getProject(id);
   // A project this instance has never heard of is the one case where staleness

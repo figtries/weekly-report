@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 /**
  * Held space for the project list.
  *
- * Shared by the page's own Suspense fallback and by `app/projects/loading.tsx`
+ * Shared by the page's own Suspense fallback and by `app/projects/(list)/loading.tsx`
  * so a navigation and a page load show the SAME shape — two different skeletons
  * for one screen reads as a flicker, not as loading.
  */

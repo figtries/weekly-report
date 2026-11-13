@@ -574,11 +574,11 @@ WBS. Late and finishing are the worklist's `stuck` and `soon`, so the worklist's
 due-soon window was widened to this week plus three to match: Data Overall's
 "ending soon" and this card count the same finishes. The week's checks are one
 pill to Control; the full list of findings lives there. The row pill reads
-the REASON as in the chosen variant ("Late 2 wk", "Finish W38", "Catch up",
+the REASON as in the chosen variant ("Late 2 w", "Finish W38", "Catch up",
 "Start W39") and its COLOUR is the priority: red P1, amber P2, blue P3, every
 pill one fixed size. Printing "P1" in the pill was built and rejected the
 same day. Since 28 Sep 2026 a fifth ground, checked LAST so it never
-relabels a row: "Slips N wk", an activity the FORECAST finishes a week or
+relabels a row: "Slips N w", an activity the FORECAST finishes a week or
 more past its plan on evidence (a vendor, site or client date, a measured
 rate, or a late activity it waits for), P1 if it sets the project finish,
 P2 otherwise, and the only ground that reaches past the window. Plan dates
@@ -588,7 +588,7 @@ alone never make a slip (`ForecastSummary.slipping`).
 (28 Sep 2026). The forecast is the dashboard's. Over the map there is no
 forecast strip: "will slip" and "to check" sit beside "late" and "ending
 soon" as reminder buttons. "Will slip"
-and "Slips N wk" both read `slippingOf` in `lib/forecast-read.ts`, so the two
+and "Slips N w" both read `slippingOf` in `lib/forecast-read.ts`, so the two
 screens name the same rows. "To check" lists only findings the panel can
 answer (kind vs heading, material ticked before delivery, the path without a
 date); a repeated ladder and typed-vs-ticks are still found but not listed
@@ -1164,7 +1164,46 @@ not framer-motion: its `initial` clip shipped hidden in the server HTML and held
 the route's view transition at frame zero, so headless Chrome never painted the
 Summary. That is the "entrance is a keyframe" rule above, proved again.
 
-# Roles: a draft until login exists
+# One boundary above a page, never a stack
+
+**A route may have ONE `<Suspense>` between the shell and the page that
+postpones** (13 Nov 2026). `/projects/[id]` had three: the list's
+`loading.tsx`, its own, and a `<Suspense>` in the page with the same skeleton.
+The outer two finished during the prerender, were outlined as `S:2` / `S:3`,
+and the resume reused those ids: every full load of a plan threw #418 and
+mounted the planner twice, so `#row=…&open=kind` was consumed by the copy
+thrown away and the kind view never opened. Seen on phones, which reload a tab
+far more often. The list now lives in `app/projects/(list)/` so its
+`loading.tsx` covers the list alone, and the plan page awaits `params` straight
+under its own `loading.tsx`. A `loading.tsx` covers every route beneath it:
+before adding one above a dynamic child, give the sibling page a route group.
+Only a production build shows it. `scripts/verify-hydration.mjs` predates
+sign-in and is redirected to /login; until it mints a session, use
+`scripts/_press-set-in-plan.mjs` (Data Overall, Set in plan, Cancel, Escape,
+Back, the deep link, the menu's card), which fails on any console error.
+
+# Roles and sign-in
+
+**Sign-in is real since 12 Nov 2026.** Before it, accounts and passwords lived in
+the Master's browser only, so an account made on one browser could not sign in
+on another ("Email or password is incorrect"). Now `lib/auth-store.ts` keeps
+accounts (scrypt hashes for sign-in; the password is also kept AES-sealed so a
+MASTER can read it back through `action: 'reveal'`, never in any other answer;
+key = AUTH_SECRET, else the Redis token, else `data/auth.key`; an account made
+before this shows after its next sign-in), the Master's roles and the sessions in
+ONE document: Redis key `weekly-report:auth` on the deployment, `data/auth.json`
+(gitignored) locally. `app/api/auth/route.ts` is the only door (login, logout,
+first-Master setup, Roles' saves) and re-checks every rule: only a Master makes,
+unmakes or edits a Master; nobody removes, suspends or un-Masters themself; at
+least one Master stays. `proxy.ts` opens nothing without a valid session
+(`/login`, `/api/auth`, `/api/health`, `/print/*` and static files excepted;
+`/print` because headless Chromium has no cookie). **While the document holds no
+account, /login creates the first Master, once** — so on a fresh deployment the
+Master must open /login first. `lib/signed-in.ts` is now a CACHE of the
+server's answer for the sidebar, AccessGate and LOCK_SCRIPT; AccessGate re-syncs
+it on every load. Still only client-side: View vs No access per page (the
+cover), and Server Functions do not check the account's access themselves.
+The text below predates this and its "nothing is saved" no longer holds.
 
 Added 3 Oct 2026. **Roles took Settings' slot at the foot of the sidebar**; the
 lists Settings held are daily-report lists the daily report edits itself, so
