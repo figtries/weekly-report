@@ -16,7 +16,9 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
+import { requireEdit } from './auth/require-edit';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -31,10 +33,6 @@ function iso(ms: number): string {
 
 /**
  * Seven-day blocks from the project start, the last one clipped at the finish.
- *
- * Gundih's weeks end on a Thursday because its reporting week does; that is a
- * per-project agreement nobody has been asked for yet, so a new project gets
- * the one rule that needs no answer — week 1 starts the day the project does.
  */
 export function weekRowsFor(projectId: string, startDate: string, finishDate: string) {
   const start = utc(startDate);
@@ -42,8 +40,6 @@ export function weekRowsFor(projectId: string, startDate: string, finishDate: st
   const rows: { id: string; projectId: string; weekNo: number; startDate: string; endDate: string }[] = [];
   let cursor = start;
   let n = 1;
-  // 20 years of weeks is far past any EPC contract and stops a typo'd century
-  // from trying to write a million rows.
   while (cursor <= finish && n <= 1040) {
     const end = Math.min(cursor + 6 * MS_PER_DAY, finish);
     rows.push({
@@ -74,50 +70,50 @@ export function weekRowsFor(projectId: string, startDate: string, finishDate: st
  *
  * Returns what it did, which is what the verify script asserts on.
  */
-export function relayWeeks(projectId: string): { moved: number; added: number; removed: number; kept: number } {
+export async function relayWeeks(projectId: string): Promise<{ moved: number; added: number; removed: number; kept: number }> {
+  await requireEdit();
   const done = { moved: 0, added: 0, removed: 0, kept: 0 };
-  const project = db
+
+  const projectRows = await db
     .select({ startDate: schema.projects.startDate, finishDate: schema.projects.finishDate })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project?.startDate || !project?.finishDate) return done;
   if (utc(project.finishDate) < utc(project.startDate)) return done;
 
   const wanted = weekRowsFor(projectId, project.startDate, project.finishDate);
   if (!wanted.length) return done;
 
-  const have = db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId)).all();
+  const [have, usedLeaf, usedMs, usedApprovals] = await Promise.all([
+    db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId)),
+    db.select({ weekId: schema.leafProgress.weekId }).from(schema.leafProgress),
+    db.select({ weekId: schema.milestoneProgress.weekId }).from(schema.milestoneProgress),
+    db.select({ weekId: schema.approvals.weekId }).from(schema.approvals),
+  ]);
+
   const byNo = new Map(have.map((w) => [w.weekNo, w]));
   const takenIds = new Set(have.map((w) => w.id));
+  const used = new Set<string>([
+    ...usedLeaf.map((r) => r.weekId),
+    ...usedMs.map((r) => r.weekId),
+    ...usedApprovals.map((r) => r.weekId),
+  ]);
 
-  const used = new Set<string>();
-  for (const r of db.select({ weekId: schema.leafProgress.weekId }).from(schema.leafProgress).all())
-    used.add(r.weekId);
-  for (const r of db
-    .select({ weekId: schema.milestoneProgress.weekId })
-    .from(schema.milestoneProgress)
-    .all())
-    used.add(r.weekId);
-  for (const r of db.select({ weekId: schema.approvals.weekId }).from(schema.approvals).all())
-    used.add(r.weekId);
-
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const w of wanted) {
       const cur = byNo.get(w.weekNo);
       if (!cur) {
-        // The generated id is `<project>:W<n>`, which an importer's own
-        // numbering could already be holding under a different week number.
         const id = takenIds.has(w.id) ? `${w.id}:${randomUUID().slice(0, 4)}` : w.id;
-        tx.insert(schema.weeks).values({ ...w, id }).run();
+        await tx.insert(schema.weeks).values({ ...w, id });
         done.added += 1;
         continue;
       }
       if (cur.startDate === w.startDate && cur.endDate === w.endDate) continue;
-      tx.update(schema.weeks)
+      await tx
+        .update(schema.weeks)
         .set({ startDate: w.startDate, endDate: w.endDate })
-        .where(eq(schema.weeks.id, cur.id))
-        .run();
+        .where(eq(schema.weeks.id, cur.id));
       done.moved += 1;
     }
     for (const cur of have) {
@@ -126,7 +122,7 @@ export function relayWeeks(projectId: string): { moved: number; added: number; r
         done.kept += 1;
         continue;
       }
-      tx.delete(schema.weeks).where(eq(schema.weeks.id, cur.id)).run();
+      await tx.delete(schema.weeks).where(eq(schema.weeks.id, cur.id));
       done.removed += 1;
     }
   });

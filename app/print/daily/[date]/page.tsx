@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { weatherLabels } from '@/lib/catalogs';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
+import { verifyPdfToken } from '@/lib/pdf-token';
 import { dailyProgressFor } from '@/lib/daily-progress';
 import { getPrintJsonDb, getProjectStatus } from '@/lib/data';
 import { getActiveProjectId } from '@/lib/projects';
@@ -19,7 +20,7 @@ type Props = {
   // `project` is set by app/api/pdf/daily/[date]/route.ts, which resolves the
   // open project in the USER's request — headless Chromium carries no cookie,
   // and a daily report belongs to one project now (see lib/legacy-bridge.ts).
-  searchParams: Promise<{ project?: string }>;
+  searchParams: Promise<{ project?: string; token?: string }>;
 };
 
 export default function DailyPrintPage(props: Props) {
@@ -31,7 +32,8 @@ export default function DailyPrintPage(props: Props) {
 }
 
 async function DailyPrintBody({ params, searchParams }: Props) {
-  const [{ date }, { project: projectParam }] = await Promise.all([params, searchParams]);
+  const [{ date }, { project: projectParam, token }] = await Promise.all([params, searchParams]);
+  if (!token || !verifyPdfToken(token)) notFound();
   const projectId = projectParam ?? null;
   const db = await getPrintJsonDb(projectId);
   const labels = weatherLabels(db);

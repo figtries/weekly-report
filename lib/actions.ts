@@ -1,5 +1,6 @@
 'use server';
 
+import { requireEdit } from './auth/require-edit';
 import { refresh, updateTag } from 'next/cache';
 import { after } from 'next/server';
 import { mutateOpenDb } from './db';
@@ -27,10 +28,13 @@ import {
 import type { LeafWeekLog, WeekEvidence } from './week-log';
 import { readLeafLog } from './week-log-read';
 import { and, eq } from 'drizzle-orm';
-import { beforeWrite, db as sqlite, flushDbSnapshot, schema as sqliteSchema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { deleteUploadedPhoto } from './upload';
 import { BUILT_IN_KINDS, type Shape } from './work-kind';
 import { ladderFor } from './work-kind-apply';
+import { getSession } from './auth/get-session';
+import { generatePdfToken } from './pdf-token';
 import type {
   CatalogEntry,
   DailyPatch,
@@ -70,15 +74,11 @@ async function sqliteProject(explicit?: string | null): Promise<string | null> {
 const NO_PROJECT_OPEN: ActionResult = { ok: false, error: 'No project is open. Open one from Projects first.' };
 
 /**
- * A SQLite write, wrapped the way every other one in this app is: the snapshot
- * pulled before it and pushed after it (see lib/db-snapshot.ts), and the read
- * caches expired so the page that called it renders its own write.
+ * A PostgreSQL write, wrapped with cache tag expiry and page refresh.
  */
-async function sqliteWrite(run: () => void): Promise<ActionResult> {
+async function pgWrite(run: () => Promise<void>): Promise<ActionResult> {
   try {
-    await beforeWrite();
-    run();
-    await flushDbSnapshot();
+    await run();
     updateTag('db');
     refresh();
     return { ok: true };
@@ -101,26 +101,26 @@ function fail(err: unknown): { ok: false; error: string } {
  * dates still answer when nothing is pinned; see `currentWeekOf`.
  */
 export async function setCurrentWeekAction(week: number): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject();
   if (projectId) {
-    return sqliteWrite(() => {
-      const exists = sqlite
-        .select({ id: sqliteSchema.weeks.id })
-        .from(sqliteSchema.weeks)
-        .where(and(eq(sqliteSchema.weeks.projectId, projectId), eq(sqliteSchema.weeks.weekNo, week)))
-        .all();
+    return pgWrite(async () => {
+      const exists = await db
+        .select({ id: schema.weeks.id })
+        .from(schema.weeks)
+        .where(and(eq(schema.weeks.projectId, projectId), eq(schema.weeks.weekNo, week)));
       if (exists.length === 0) throw new Error(`Week ${week} not found`);
-      sqlite
-        .update(sqliteSchema.projects)
+      await db
+        .update(schema.projects)
         .set({ pinnedCurrentWeek: week, updatedAt: new Date().toISOString() })
-        .where(eq(sqliteSchema.projects.id, projectId))
-        .run();
+        .where(eq(schema.projects.id, projectId));
     });
   }
   return NO_PROJECT_OPEN;
 }
 
 export async function createDailyAction(date: string): Promise<ActionResult> {
+  await requireEdit();
   try {
     await mutateOpenDb((db) => applyCreateDaily(db, date));
     // No refresh() here: the caller navigates straight to the new report, so
@@ -138,6 +138,7 @@ export async function createDailyAction(date: string): Promise<ActionResult> {
 }
 
 export async function deleteDailyAction(date: string): Promise<ActionResult> {
+  await requireEdit();
   try {
     // applyDeleteDaily is idempotent: deleting a report that is already gone
     // (a stale list can show rows that no longer exist) is treated as done,
@@ -185,6 +186,7 @@ export async function patchDailyAction(
   patch: DailyPatch,
   logs: LogEntry[] = []
 ): Promise<ActionResult> {
+  await requireEdit();
   try {
     await mutateOpenDb((db) => applyPatchDaily(db, date, patch, logs));
     updateTag('db');
@@ -199,8 +201,9 @@ export async function saveWeekUpdatesAction(
   updates: Record<string, Partial<LeafSnapshot>>,
   forProject?: string | null
 ): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => saveWeekUpdatesSqlite(projectId, week, updates));
+  if (projectId) return pgWrite(() => saveWeekUpdatesSqlite(projectId, week, updates));
   return NO_PROJECT_OPEN;
 }
 
@@ -209,8 +212,9 @@ export async function saveFieldProgressAction(
   updates: FieldProgressUpdate[],
   forProject?: string | null
 ): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => saveFieldProgressSqlite(projectId, week, updates));
+  if (projectId) return pgWrite(() => saveFieldProgressSqlite(projectId, week, updates));
   return NO_PROJECT_OPEN;
 }
 
@@ -225,8 +229,9 @@ export async function markNoProgressAction(
   leafIds: string[],
   forProject?: string | null
 ): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => markNoProgressSqlite(projectId, week, leafIds));
+  if (projectId) return pgWrite(() => markNoProgressSqlite(projectId, week, leafIds));
   return NO_PROJECT_OPEN;
 }
 
@@ -235,8 +240,9 @@ export async function setProgressMethodAction(
   method: ProgressMethod,
   opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
 ): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject();
-  if (projectId) return sqliteWrite(() => setProgressMethodSqlite(leafId, method, opts));
+  if (projectId) return pgWrite(() => setProgressMethodSqlite(leafId, method, opts));
   return NO_PROJECT_OPEN;
 }
 
@@ -253,6 +259,7 @@ export async function setWorkKindAction(
   opts: { steps?: Milestone[]; vol?: number | null; satuan?: string | null; part?: string | null } = {},
   forProject?: string | null
 ): Promise<ActionResult> {
+  await requireEdit();
   // One door for all four forms, because the panel now asks one question. A
   // gate and a ladder are both milestone, a typed percent is lumpsum, and a
   // count is qty carrying the total it was given.
@@ -263,7 +270,7 @@ export async function setWorkKindAction(
     shape === 'qty' ? { vol: opts.vol, satuan: opts.satuan } : { milestones };
 
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts, opts.part ?? null));
+  if (projectId) return pgWrite(() => setWorkKindSqlite(leafId, kindId, method, methodOpts, opts.part ?? null));
   return NO_PROJECT_OPEN;
 }
 
@@ -278,8 +285,9 @@ export async function setLeafForecastAction(
   week: number,
   forProject?: string | null
 ): Promise<ActionResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
-  if (projectId) return sqliteWrite(() => setLeafForecastSqlite(projectId, leafId, value, week));
+  if (projectId) return pgWrite(() => setLeafForecastSqlite(projectId, leafId, value, week));
   return NO_PROJECT_OPEN;
 }
 
@@ -287,6 +295,7 @@ export async function saveCatalogAction(
   key: CatalogKey,
   entries: CatalogEntry[]
 ): Promise<ActionResult> {
+  await requireEdit();
   try {
     await mutateOpenDb((db) => applyCatalog(db, key, entries));
     updateTag('db');
@@ -326,12 +335,11 @@ export async function saveLeafWeeksAction(
   opts: { allowSigned?: boolean },
   forProject?: string | null
 ): Promise<SaveLeafWeeksResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
   if (!projectId) return { ok: false, error: READ_ONLY_HISTORY };
   try {
-    await beforeWrite();
-    const undo = saveLeafWeeksSqlite(projectId, nodeId, edits, opts);
-    await flushDbSnapshot();
+    const undo = await saveLeafWeeksSqlite(projectId, nodeId, edits, opts);
     updateTag('db');
     refresh();
     return { ok: true, undo, log: await readLeafLog(nodeId, projectId, { fresh: false }) };
@@ -347,16 +355,30 @@ export async function restoreLeafWeeksAction(
   before: LeafWeekBefore[],
   forProject?: string | null
 ): Promise<LeafWeeksResult> {
+  await requireEdit();
   const projectId = await sqliteProject(forProject);
   if (!projectId) return { ok: false, error: READ_ONLY_HISTORY };
   try {
-    await beforeWrite();
-    restoreLeafWeeksSqlite(projectId, nodeId, before);
-    await flushDbSnapshot();
+    await restoreLeafWeeksSqlite(projectId, nodeId, before);
     updateTag('db');
     refresh();
     return { ok: true, log: await readLeafLog(nodeId, projectId, { fresh: false }) };
   } catch (err) {
     return fail(err);
+  }
+}
+
+/**
+ * Generate a short-lived HMAC token that the /print/* routes require.
+ * Called by SavePdfButton before it fetches the PDF API route, so the token
+ * travels API route → Puppeteer URL → print page verification.
+ */
+export async function createPdfTokenAction(resource: string): Promise<string | null> {
+  try {
+    const session = await getSession();
+    if (!session) return null;
+    return generatePdfToken(session.userId, resource);
+  } catch {
+    return null;
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { pressMotion } from '@/components/motion/Press';
+import { createPdfTokenAction } from '@/lib/actions';
 
 import { m } from 'framer-motion';
 
@@ -143,7 +144,11 @@ export default function SavePdfButton({
         if (mountedRef.current) setPhase('idle');
         return;
       }
-      const res = await fetch(url);
+      // Append a short-lived HMAC token so the /print/* target rejects
+      // unauthenticated renders. The API route reads it and passes it to Puppeteer.
+      const token = await createPdfTokenAction(url);
+      const fetchUrl = token ? `${url}${url.includes('?') ? '&' : '?'}_t=${encodeURIComponent(token)}` : url;
+      const res = await fetch(fetchUrl);
       if (!res.ok) throw new Error(`${noun} route answered ${res.status}`);
       const blob = await readWithProgress(res, (pct) => {
         if (mountedRef.current) setProgress(pct);

@@ -1,10 +1,12 @@
 'use server';
 
+import { requireEdit } from './auth/require-edit';
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { eq } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 
-import { beforeWrite, db, flushDbSnapshot, schema, sqlite } from './sqlite';
+import { db, type Db } from './pg';
+import * as schema from './schema';
 import { coverChildren, getActiveBaselineId } from './sheet';
 import { pruneLinks } from './links-sqlite';
 import { syncDerivedWeights } from './weights-auto';
@@ -12,19 +14,6 @@ import { completeDates, parsePaste, type ParseResult } from './paste';
 
 /**
  * Writing a pasted plan.
- *
- * The parse itself is pure and lives in `lib/paste.ts`; this is the part that
- * touches the database, and it does the whole paste in ONE transaction. 285
- * rows arriving one insert at a time would leave a half-built tree behind if
- * anything threw halfway, and a half-built tree is worse than no tree — the
- * outline codes would be wrong and nobody could tell which rows were real.
- *
- * **Preview first, always.** `previewPasteAction` returns exactly what
- * `applyPasteAction` would write, so the UI can show the tree, the count and
- * every assumption before a single row exists. This is the same shape as the
- * weights recalculation: an irreversible bulk write shows its damage first.
- *
- * **Dates land on the ACTIVE baseline**, like every other schedule write here.
  */
 
 export type PasteResult = { ok: true; added: number } | { ok: false; error: string };
@@ -33,14 +22,12 @@ function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : 'Something went wrong' };
 }
 
-/** A shrunk-down parse, safe to send to the client and enough to draw a preview. */
 export interface PastePreview {
   ok: true;
   count: number;
   depthFrom: ParseResult['depthFrom'];
   notes: string[];
   skipped: { line: number; text: string }[];
-  /** The first rows, to show the shape without shipping 285 of them twice. */
   sample: { depth: number; name: string; start: string | null; finish: string | null; price: number | null }[];
   withDates: number;
   withPrices: number;
@@ -50,7 +37,6 @@ export interface PastePreview {
 export async function previewPasteAction(
   text: string
 ): Promise<PastePreview | { ok: false; error: string }> {
-  await beforeWrite();
   try {
     const parsed = parsePaste(text);
     if (parsed.rows.length === 0) throw new Error('Nothing in that paste looked like a row');
@@ -61,9 +47,6 @@ export async function previewPasteAction(
     for (const r of parsed.rows) {
       const d = completeDates(r);
       if (d.startDate) withDates += 1;
-      // Only a COUNT of priced rows, never their sum: prices nest, so
-      // adding them all up gives 16.9M against Gundih's 5.9M contract — the
-      // same money three times over. See topLevelPricedTotal in lib/weights.ts.
       if (r.price != null && r.price > 0) withPrices += 1;
       if (r.isMilestone) milestones += 1;
     }
@@ -96,33 +79,27 @@ export async function previewPasteAction(
 export async function applyPasteAction(
   projectId: string,
   text: string,
-  /** Paste under this row instead of at the end of the plan. */
   afterNodeId?: string | null
 ): Promise<PasteResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const parsed = parsePaste(text);
     if (parsed.rows.length === 0) throw new Error('Nothing in that paste looked like a row');
     if (parsed.rows.length > 5000) throw new Error('That is more than 5,000 rows. Split it up');
 
-    const project = db
+    const projectRows = await db
       .select({ id: schema.projects.id })
       .from(schema.projects)
-      .where(eq(schema.projects.id, projectId))
-      .all()[0];
-    if (!project) throw new Error('Project not found');
+      .where(eq(schema.projects.id, projectId));
+    if (!projectRows[0]) throw new Error('Project not found');
 
-    const baselineId = getActiveBaselineId(projectId);
+    const baselineId = await getActiveBaselineId(projectId);
 
-    // Where the block goes. Pasting "after" a row means after its WHOLE subtree,
-    // not between it and its first child — otherwise a paste onto a summary
-    // silently adopts the block into it.
-    const all = db
+    const all = await db
       .select({ id: schema.wbsNodes.id, parentId: schema.wbsNodes.parentId, order: schema.wbsNodes.order })
       .from(schema.wbsNodes)
       .where(eq(schema.wbsNodes.projectId, projectId))
-      .orderBy(schema.wbsNodes.order)
-      .all();
+      .orderBy(schema.wbsNodes.order);
 
     let anchorParent: string | null = null;
     let insertAt = all.length;
@@ -145,9 +122,6 @@ export async function applyPasteAction(
       }
     }
 
-    // Build the whole block in memory first, parents resolved by depth — the
-    // last row seen at depth d-1 is the parent of a row at depth d, which is
-    // exactly how an outline reads.
     const stamp = Date.now().toString(36);
     const lastAtDepth: (string | null)[] = [anchorParent];
     const values: (typeof schema.wbsNodes.$inferInsert)[] = [];
@@ -163,8 +137,6 @@ export async function applyPasteAction(
         id,
         projectId,
         parentId,
-        // Parked out of the way; `renumberProject` writes the real outline code
-        // a moment later, in the same transaction.
         wbsCode: `~${id}`,
         deskripsi: r.name,
         order: insertAt + i,
@@ -189,52 +161,35 @@ export async function applyPasteAction(
       }
     });
 
-    db.transaction((tx) => {
-      sqlite
-        .prepare('update wbs_nodes set sort_order = sort_order + ? where project_id = ? and sort_order >= ?')
-        .run(values.length, projectId, insertAt);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.wbsNodes)
+        .set({ order: sql`sort_order + ${values.length}` })
+        .where(and(eq(schema.wbsNodes.projectId, projectId), gte(schema.wbsNodes.order, insertAt)));
 
-      // Chunked because SQLite caps a statement at 999 bound parameters and a
-      // wbs_nodes row binds a dozen of them.
       for (let i = 0; i < values.length; i += 50) {
-        tx.insert(schema.wbsNodes).values(values.slice(i, i + 50)).run();
+        await tx.insert(schema.wbsNodes).values(values.slice(i, i + 50));
       }
       for (let i = 0; i < schedules.length; i += 100) {
-        tx.insert(schema.nodeSchedules).values(schedules.slice(i, i + 100)).run();
+        await tx.insert(schema.nodeSchedules).values(schedules.slice(i, i + 100));
       }
 
-      renumberProject(projectId, tx);
-      // A pasted BOQ arrives with its prices, so the weights it implies exist
-      // the moment the rows land. Refused on a project whose weights are
-      // authoritative — see lib/weights-auto.ts.
-      syncDerivedWeights(projectId, tx);
-      tx.update(schema.projects)
+      await renumberProject(projectId, tx);
+      await syncDerivedWeights(projectId, tx);
+      await tx.update(schema.projects)
         .set({ updatedAt: new Date().toISOString() })
-        .where(eq(schema.projects.id, projectId))
-        .run();
+        .where(eq(schema.projects.id, projectId));
     });
 
     revalidatePath('/projects', 'layout');
-    // Awaited, not left to after(): the sheet refreshes the moment this
-    // resolves, and a push still in flight is that refresh being answered from
-    // bytes taken before the paste. Same reasoning as lib/sheet-structure.ts.
-    await flushDbSnapshot();
     return { ok: true, added: values.length };
   } catch (e) {
     return fail(e);
   }
 }
 
-type Writer = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * The same two-pass renumber `lib/sheet-structure.ts` runs after every
- * structural change, duplicated here rather than exported from a `'use server'`
- * file — every export of one of those becomes a server action, and a
- * transaction-scoped helper cannot be one.
- */
-function renumberProject(projectId: string, tx: Writer) {
-  const nodes = db
+async function renumberProject(projectId: string, tx: Pick<Db, 'update' | 'select'>) {
+  const nodes = await tx
     .select({
       id: schema.wbsNodes.id,
       parentId: schema.wbsNodes.parentId,
@@ -242,8 +197,7 @@ function renumberProject(projectId: string, tx: Writer) {
     })
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(schema.wbsNodes.order)
-    .all();
+    .orderBy(schema.wbsNodes.order);
 
   const kids = new Map<string | null, typeof nodes>();
   for (const n of nodes) {
@@ -265,30 +219,27 @@ function renumberProject(projectId: string, tx: Writer) {
   };
   walk(null, 0, '');
 
-  for (const f of flat) {
-    tx.update(schema.wbsNodes).set({ wbsCode: `~${f.id}` }).where(eq(schema.wbsNodes.id, f.id)).run();
-  }
-  for (const f of flat) {
-    tx.update(schema.wbsNodes)
-      .set({
-        order: f.order,
-        depth: f.depth,
-        wbsCode: f.code,
-        isLeaf: f.isLeaf,
-        // Same rule as lib/sheet-structure.ts: a row with children cannot be a
-        // milestone. A pasted block can easily make a parent out of a row the
-        // workbook marked as one.
-        ...(f.isLeaf ? {} : { isMilestone: false }),
-      })
-      .where(eq(schema.wbsNodes.id, f.id))
-      .run();
-  }
+  await Promise.all(
+    flat.map((f) =>
+      tx.update(schema.wbsNodes).set({ wbsCode: `~${f.id}` }).where(eq(schema.wbsNodes.id, f.id))
+    )
+  );
+  await Promise.all(
+    flat.map((f) =>
+      tx
+        .update(schema.wbsNodes)
+        .set({
+          order: f.order,
+          depth: f.depth,
+          wbsCode: f.code,
+          isLeaf: f.isLeaf,
+          ...(f.isLeaf ? {} : { isMilestone: false }),
+        })
+        .where(eq(schema.wbsNodes.id, f.id))
+    )
+  );
 
-  // And the same rule again: a package covers what the paste put inside it.
-  const baselineId = getActiveBaselineId(projectId);
-  if (baselineId) coverChildren(projectId, baselineId, tx);
-
-  // AND THE LINKS: a group row carries none, and none point at a row that is
-  // gone or has become a group. See pruneLinks.
-  pruneLinks(projectId, tx);
+  const baselineId = await getActiveBaselineId(projectId);
+  if (baselineId) await coverChildren(projectId, baselineId, tx);
+  await pruneLinks(projectId, tx);
 }

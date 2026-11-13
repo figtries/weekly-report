@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { verifyPdfToken } from '@/lib/pdf-token';
 import { getPrintDb, getPrintJsonDb, getPrintWeekRollup } from '@/lib/data';
 import { weeklyPhotosOf } from '@/lib/weekly-photos';
 import { getSummaryRows } from '@/lib/rollup';
@@ -26,7 +27,7 @@ type Props = {
   params: Promise<{ week: string }>;
   // `project` is set by app/api/pdf/weekly/[week]/route.ts, which resolves the
   // open project in the USER's request — headless Chromium carries no cookie.
-  searchParams: Promise<{ only?: string; project?: string }>;
+  searchParams: Promise<{ only?: string; project?: string; token?: string }>;
 };
 
 // Reading searchParams is dynamic, and under cacheComponents dynamic reads must
@@ -42,7 +43,8 @@ export default function WeeklyPrintTarget(props: Props) {
 }
 
 async function WeeklyPrintBody({ params, searchParams }: Props) {
-  const [{ week: weekParam }, { only, project }] = await Promise.all([params, searchParams]);
+  const [{ week: weekParam }, { only, project, token }] = await Promise.all([params, searchParams]);
+  if (!token || !verifyPdfToken(token)) notFound();
   const week = Number(weekParam);
   const projectId = project ?? null;
   const [db, result] = await Promise.all([

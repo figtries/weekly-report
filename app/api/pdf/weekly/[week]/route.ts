@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
 import { getActiveProjectId } from '@/lib/projects';
+import { getSession } from '@/lib/auth/get-session';
+import { generatePdfToken } from '@/lib/pdf-token';
 
 // Chromium is slow to boot: give the function room. (No `runtime`/`dynamic`
 // segment config — cacheComponents rejects both; a route handler is dynamic by
@@ -29,8 +31,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ week
   // WHICH PROJECT, decided here and carried in the URL. This handler runs in the
   // user's own request and can read the cookie that holds their open project;
   // the headless browser that renders the page cannot. See getPrintDb.
-  const projectId = await getActiveProjectId();
+  const [projectId, session] = await Promise.all([getActiveProjectId(), getSession()]);
   if (projectId) target.searchParams.set('project', projectId);
+  // Short-lived HMAC token so the /print/* route is not publicly accessible.
+  if (session) target.searchParams.set('token', generatePdfToken(session.userId, `weekly:${week}`));
 
   let pdf: Uint8Array;
   try {

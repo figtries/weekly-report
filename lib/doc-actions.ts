@@ -1,10 +1,12 @@
 'use server';
 
+import { requireEdit } from './auth/require-edit';
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { beforeWrite, db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { transmittalId, writeDocumentStatus, writeStage, writeTransmittal, type TransmittalInput } from './transmittal-write';
 import { STAGE_ORDER, baseOfAdded, isAddedStage, isStageKey, stageRank } from './register-shared';
 import type { StatusWhere } from './register-status';
@@ -12,29 +14,6 @@ import { isAddedCode, parseCodes } from './register-settings';
 import { writeDraft, writeSeed, type DraftGroup, type SeedInput } from './register-seed';
 import { pickRegisterSheet, readWorkbookGrids } from './register-xlsx';
 import type { DocStage, RegisterKind } from './schema';
-
-/**
- * The register's write path — the thing item 15 exists for.
- *
- * Until now the document register could only be read: the importer filled it
- * from a workbook and every screen looked at it. A document controller had
- * nowhere to record that a transmittal went out, so the Excel file stayed the
- * real register and this app stayed a viewer.
- *
- * Two rules hold everything here together:
- *
- * **A field is saved as it was typed, one at a time.** The first attempt made
- * people tick documents and then choose a mode — "record submission" or
- * "record return" — before they could touch anything, and the modes were what
- * confused them. Correcting a wrong date is the commonest thing a controller
- * does, so it costs one click and one keystroke.
- *
- * **Progress is never typed.** Nothing here writes a percentage. What happened
- * is written down, and every figure on every screen — the category, the
- * register total, the weekly curve, and the WBS leaf once it is linked — is
- * recomputed from it by `lib/register.ts`. That is decision 17 actually
- * running, rather than described.
- */
 
 export type ActionResult = { ok: true; changed: number } | { ok: false; error: string };
 
@@ -44,7 +23,6 @@ function fail(err: unknown): { ok: false; error: string } {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Empty is a real answer here: it means “clear this date”. */
 function optionalDate(value: string, what: string): string | null {
   const v = value.trim();
   if (v === '') return null;
@@ -66,28 +44,19 @@ function assertStage(value: string): DocStage {
   return value;
 }
 
-/** Documents that really belong to this project and this register. */
-function ownedDocuments(projectId: string, register: RegisterKind, documentIds: string[]) {
+async function ownedDocuments(projectId: string, register: RegisterKind, documentIds: string[]) {
   if (documentIds.length === 0) throw new Error('No documents selected');
-  const rows = db.select().from(schema.documents)
+  const rows = await db.select().from(schema.documents)
     .where(and(
       eq(schema.documents.projectId, projectId),
       eq(schema.documents.register, register),
       inArray(schema.documents.id, documentIds),
-    )).all();
+    ));
   if (rows.length !== documentIds.length) throw new Error('Some documents are not in this register');
   return rows;
 }
 
-/**
- * A transmittal number is the same letter for everyone on it, so it is looked
- * up before it is created. Its date is the date of the first thing recorded
- * under it — a later correction updates the letter, not a second letter.
- */
 function refreshRegister() {
-  // Every read in this module is a synchronous SQLite query that prerenders
-  // into the static shell (see lib/sqlite.ts), so nothing here carries a cache
-  // tag to expire — the route itself is what has to be rebuilt.
   revalidatePath('/dokumen', 'layout');
 }
 
@@ -98,46 +67,19 @@ export interface StageInput {
   register: RegisterKind;
   documentId: string;
   stage: string;
-  /** All four are free text. An empty string clears the field. */
   sentAt: string;
   sentTransmittal: string;
   returnedAt: string;
   returnTransmittal: string;
-  /**
-   * Left out by the working screen, which no longer asks for it. Undefined
-   * means "leave whatever is stored alone" — an imported APP/AWC is what marks
-   * a document as still out for comment, and a screen that stopped asking must
-   * not quietly erase it.
-   */
   returnCode?: string;
-  /**
-   * The date this stage is planned to go out. It is what the engineering plan
-   * curve is counted from (decided 3 Oct 2026: plan comes from the EDL), and
-   * until then nothing in the app could type one. Undefined leaves it alone;
-   * an empty string clears it. A plan never marks a stage as sent.
-   */
   planSubmitDate?: string;
 }
 
-/**
- * Save one stage of one document, exactly as it was typed.
- *
- * This replaced a tick-the-boxes-then-fill-a-dialog flow that made people stop
- * and think about which mode they were in before they could correct anything.
- * A controller is not filing a transaction; they are fixing a row that is
- * wrong. So every field is editable in place and this writes what is there —
- * including clearing it again.
- *
- * `submitted` is DERIVED, never asked for: a stage counts as reached when
- * anything at all is known about it going out. The percentage that follows is
- * then ours to compute, which is the whole arrangement — they keep the facts
- * right, the app keeps the arithmetic right.
- */
 export async function saveStage(input: StageInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const stage = assertStage(input.stage);
-    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
+    const [doc] = await ownedDocuments(input.projectId, input.register, [input.documentId]);
 
     const sentAt = optionalDate(input.sentAt, 'Sent');
     const returnedAt = optionalDate(input.returnedAt, 'Returned');
@@ -147,22 +89,21 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
     const sentNo = input.sentTransmittal.trim();
     const returnNo = input.returnTransmittal.trim();
 
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       const outId = sentNo
-        ? transmittalId(input.projectId, input.register, sentNo, 'out', sentAt ?? returnedAt ?? today(), tx)
+        ? await transmittalId(input.projectId, input.register, sentNo, 'out', sentAt ?? returnedAt ?? today(), tx)
         : null;
       const inId = returnNo
-        ? transmittalId(input.projectId, input.register, returnNo, 'in', returnedAt ?? sentAt ?? today(), tx)
+        ? await transmittalId(input.projectId, input.register, returnNo, 'in', returnedAt ?? sentAt ?? today(), tx)
         : null;
 
-      const existing = tx.select().from(schema.docStages)
-        .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)))
-        .all()[0];
+      const existingRows = await tx.select().from(schema.docStages)
+        .where(and(eq(schema.docStages.documentId, doc.id), eq(schema.docStages.stage, stage)));
+      const existing = existingRows[0];
 
       const code = input.returnCode === undefined
         ? existing?.returnCode ?? null
         : input.returnCode.trim().toUpperCase() || null;
-      // Anything known about the outbound leg means it went out.
       const submitted = Boolean(sentAt || sentNo || returnedAt || returnNo || code);
 
       const values = {
@@ -175,8 +116,7 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
         ...(plan !== undefined ? { planSubmitDate: plan } : {}),
       };
 
-      // One writer for a stage row, shared with Record transmittal.
-      writeStage(tx, doc.id, stage, values);
+      await writeStage(tx, doc.id, stage, values);
     });
 
     refreshRegister();
@@ -188,19 +128,14 @@ export async function saveStage(input: StageInput): Promise<ActionResult> {
 
 /* ------------------------------------------------- status, set directly */
 
-/**
- * Stage + who has it (lib/register-status.ts, written by
- * `writeDocumentStatus`). Anything it would replace comes back as `confirm`
- * until the person has seen the list and said yes.
- */
 export async function setDocumentStatus(input: {
   projectId: string; register: RegisterKind; documentId: string;
   stage: string; where: StatusWhere; code: string | null; date: string; letter: string;
   confirmed: boolean;
 }): Promise<ActionResult | { ok: false; error: string; confirm: string[] }> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const r = writeDocumentStatus({ ...input, register: assertRegister(input.register), stage: assertStage(input.stage) });
+    const r = await writeDocumentStatus({ ...input, register: assertRegister(input.register), stage: assertStage(input.stage) });
     if ('confirm' in r) return { ok: false, error: 'Already recorded', confirm: r.confirm };
     refreshRegister();
     return { ok: true, changed: r.written };
@@ -211,15 +146,10 @@ export async function setDocumentStatus(input: {
 
 /* ---------------------------------------------------- one letter, many */
 
-/**
- * Record one transmittal for every document in it (3 Oct 2026). The letter is
- * the unit people hold in their hand; typing its date and number into each
- * document separately was the chore this replaces. See lib/transmittal-write.ts.
- */
 export async function recordTransmittal(input: TransmittalInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const changed = writeTransmittal({ ...input, register: assertRegister(input.register) });
+    const changed = await writeTransmittal({ ...input, register: assertRegister(input.register) });
     refreshRegister();
     return { ok: true, changed };
   } catch (err) {
@@ -235,7 +165,6 @@ export interface DocumentInput {
   documentId: string;
   docNo: string;
   title: string;
-  /** Each left out keeps what is stored (the detail sheet saves one field at a time). */
   kind?: string;
   categoryId?: string;
   revision?: string;
@@ -243,23 +172,22 @@ export interface DocumentInput {
   remarks?: string;
 }
 
-/** Fix the document itself — its number and its title. */
 export async function saveDocument(input: DocumentInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
+    const [doc] = await ownedDocuments(input.projectId, input.register, [input.documentId]);
     const title = input.title.trim();
     if (!title) throw new Error('Title cannot be empty');
 
     const docNo = input.docNo.trim() || null;
     if (docNo && docNo !== doc.docNo) {
-      const clash = db.select().from(schema.documents)
+      const clashRows = await db.select().from(schema.documents)
         .where(and(
           eq(schema.documents.projectId, input.projectId),
           eq(schema.documents.register, input.register),
           eq(schema.documents.docNo, docNo),
-        )).all()[0];
-      if (clash) throw new Error(`${docNo} is already used`);
+        ));
+      if (clashRows[0]) throw new Error(`${docNo} is already used`);
     }
 
     const extra: Partial<typeof schema.documents.$inferInsert> = {};
@@ -268,18 +196,18 @@ export async function saveDocument(input: DocumentInput): Promise<ActionResult> 
     if (input.pic !== undefined) extra.pic = input.pic.trim() || null;
     if (input.remarks !== undefined) extra.remarks = input.remarks.trim() || null;
     if (input.categoryId !== undefined && input.categoryId !== doc.categoryId) {
-      const target = db.select().from(schema.docCategories)
+      const targetRows = await db.select().from(schema.docCategories)
         .where(and(
           eq(schema.docCategories.id, input.categoryId),
           eq(schema.docCategories.projectId, input.projectId),
           eq(schema.docCategories.register, input.register),
-        )).all()[0];
-      if (!target) throw new Error('That discipline is not in this register');
-      extra.categoryId = target.id;
+        ));
+      if (!targetRows[0]) throw new Error('That discipline is not in this register');
+      extra.categoryId = targetRows[0].id;
     }
 
-    db.update(schema.documents).set({ docNo, title, ...extra })
-      .where(eq(schema.documents.id, doc.id)).run();
+    await db.update(schema.documents).set({ docNo, title, ...extra })
+      .where(eq(schema.documents.id, doc.id));
 
     refreshRegister();
     return { ok: true, changed: 1 };
@@ -300,37 +228,35 @@ export interface NewDocumentInput {
 }
 
 export async function addDocument(input: NewDocumentInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const title = input.title.trim();
     if (!title) throw new Error('Document title is required');
 
-    const category = db.select().from(schema.docCategories)
+    const categoryRows = await db.select().from(schema.docCategories)
       .where(and(
         eq(schema.docCategories.id, input.categoryId),
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
-      )).all()[0];
+      ));
+    const category = categoryRows[0];
     if (!category) throw new Error('Category not found');
 
     const docNo = input.docNo.trim() || null;
     if (docNo) {
-      const clash = db.select().from(schema.documents)
+      const clashRows = await db.select().from(schema.documents)
         .where(and(
           eq(schema.documents.projectId, input.projectId),
           eq(schema.documents.register, input.register),
           eq(schema.documents.docNo, docNo),
-        )).all()[0];
-      if (clash) throw new Error(`Number ${docNo} is already in use`);
+        ));
+      if (clashRows[0]) throw new Error(`Number ${docNo} is already in use`);
     }
 
-    // Adding a document changes every percentage in its category: the weight is
-    // one document out of the register, so the denominator moves too. That is
-    // the point — a register that grows should dilute, not quietly ignore.
-    const siblings = db.select().from(schema.documents)
-      .where(eq(schema.documents.categoryId, category.id)).all();
+    const siblings = await db.select().from(schema.documents)
+      .where(eq(schema.documents.categoryId, category.id));
 
-    db.insert(schema.documents).values({
+    await db.insert(schema.documents).values({
       id: randomUUID(),
       projectId: input.projectId,
       register: input.register,
@@ -339,7 +265,7 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
       title,
       kind: input.kind.trim() || 'Doc',
       order: siblings.reduce((a, s) => Math.max(a, s.order), 0) + 1,
-    }).run();
+    });
 
     refreshRegister();
     return { ok: true, changed: 1 };
@@ -350,25 +276,10 @@ export async function addDocument(input: NewDocumentInput): Promise<ActionResult
 
 /* ------------------------------------------------- building a new register */
 
-/**
- * The list someone pasted, turned into a register.
- *
- * Until this existed the only way to fill a register was to run
- * `scripts/import-edl.ts` — an importer written for one workbook — so the module
- * worked for exactly one project: the one whose data somebody else had already
- * imported.
- *
- * Client and contractor names are asked for here because a register has two
- * sides and those sides are named. On the Petrogas EDL they ARE the column
- * headings: "INDOTURBINE Submission" against "PETROGAS Response".
- *
- * The writing itself lives in `lib/register-seed.ts`, which imports nothing from
- * Next and can therefore be proved by a script.
- */
 export async function seedRegister(input: SeedInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const written = writeSeed(input);
+    const written = await writeSeed(input);
     refreshRegister();
     return { ok: true, changed: written.documents };
   } catch (err) {
@@ -376,23 +287,15 @@ export async function seedRegister(input: SeedInput): Promise<ActionResult> {
   }
 }
 
-/**
- * The numbering rule, set once and editable afterwards.
- *
- * Kept deliberately small: a prefix, the per-section and per-group codes that
- * differ from the defaults, and how many digits. Everything else is derived, so
- * there is nothing here to drift out of step with the register itself.
- */
 export async function saveNumbering(input: {
   projectId: string;
   register: RegisterKind;
   prefix: string;
   disciplines: Record<string, string>;
   types: Record<string, string>;
-  /** Left out keeps the stored area. */
   area?: string;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const prefix = input.prefix.trim().toUpperCase();
     if (!prefix) throw new Error('A project code is required');
@@ -408,19 +311,20 @@ export async function saveNumbering(input: {
       ...(input.area !== undefined ? { area: input.area.trim().toUpperCase() || null } : {}),
     };
 
-    const existing = db.select().from(schema.docNumbering)
+    const existingRows = await db.select().from(schema.docNumbering)
       .where(and(
         eq(schema.docNumbering.projectId, input.projectId),
         eq(schema.docNumbering.register, input.register),
-      )).all()[0];
+      ));
+    const existing = existingRows[0];
 
     if (existing) {
-      db.update(schema.docNumbering).set(values)
-        .where(eq(schema.docNumbering.id, existing.id)).run();
+      await db.update(schema.docNumbering).set(values)
+        .where(eq(schema.docNumbering.id, existing.id));
     } else {
-      db.insert(schema.docNumbering).values({
+      await db.insert(schema.docNumbering).values({
         id: randomUUID(), projectId: input.projectId, register: input.register, ...values,
-      }).run();
+      });
     }
 
     refreshRegister();
@@ -430,22 +334,14 @@ export async function saveNumbering(input: {
   }
 }
 
-/**
- * The sections someone filled in, written as one register.
- *
- * Its counterpart `seedRegister` takes text and has to work out the structure
- * from it. Here the structure was chosen by pressing sections, so it arrives as
- * paths and nothing has to be inferred — which is the entire reason building a
- * register no longer requires learning a format first.
- */
 export async function addFromDraft(input: {
   projectId: string;
   register: RegisterKind;
   groups: DraftGroup[];
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const written = writeDraft(input);
+    const written = await writeDraft(input);
     refreshRegister();
     return { ok: true, changed: written.documents + written.updated };
   } catch (err) {
@@ -457,17 +353,7 @@ export type ReadFileResult =
   | { ok: true; text: string; sheet: string; sheets: string[] }
   | { ok: false; error: string };
 
-/**
- * A workbook, read into the SAME text a paste produces — and nothing more.
- *
- * It deliberately does not write. The first version wrote the moment a file was
- * chosen, which meant picking the wrong file put another project's register
- * into this one before anyone could see what was in it. Reading and writing are
- * now two separate presses with the preview between them, exactly as pasting
- * has always been: one path, one confirmation.
- */
 export async function readRegisterFile(form: FormData): Promise<ReadFileResult> {
-  await beforeWrite();
   try {
     const file = form.get('file');
     if (!(file instanceof File)) throw new Error('No file was chosen');
@@ -487,30 +373,24 @@ export async function readRegisterFile(form: FormData): Promise<ReadFileResult> 
   }
 }
 
-/**
- * Stage weights are an agreement per contract, not a law — Gundih and Petrogas
- * happen to share 0.5/0.3/0.2, but another contract may not. What is not
- * allowed is a total other than 100: every percentage in the register is
- * computed from these, so a total of 90 reads a finished document as 90%.
- */
 export async function saveStageWeights(input: {
   projectId: string; register: RegisterKind; weights: { stage: string; weight: number }[];
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const total = input.weights.reduce((a, w) => a + w.weight, 0);
     if (Math.abs(total - 100) > 0.001) throw new Error(`The weights add up to ${total}, not 100`);
 
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       for (const { stage, weight } of input.weights) {
         if (weight < 0) throw new Error('A weight cannot be negative');
-        tx.update(schema.docStageWeights)
+        await tx.update(schema.docStageWeights)
           .set({ weight })
           .where(and(
             eq(schema.docStageWeights.projectId, input.projectId),
             eq(schema.docStageWeights.register, input.register),
             eq(schema.docStageWeights.stage, assertStage(stage)),
-          )).run();
+          ));
       }
     });
 
@@ -521,21 +401,6 @@ export async function saveStageWeights(input: {
   }
 }
 
-/* ---------------------------------------------------------- tending it */
-
-/**
- * A group can only be deleted once it is EMPTY.
- *
- * `docCategories` cascades to `documents`, which cascades to `doc_stages`:
- * deleting a group that still holds documents would take their whole history
- * with it and nobody would be asked. This condition is what stands in the way.
- */
-/**
- * A register's own words, weights and colours (Setup, 4 Oct 2026). The stage
- * and code KEYS never change here; only what they are called and how they
- * look. Weights must close at 100, because every percentage is computed from
- * them; a total of 90 would read a finished document as 90%.
- */
 export async function saveRegisterSettings(input: {
   projectId: string;
   register: RegisterKind;
@@ -543,46 +408,42 @@ export async function saveRegisterSettings(input: {
   codes?: { key: string; label: string; meaning: string }[];
   area?: string;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const register = assertRegister(input.register);
     const total = input.stages.reduce((a, w) => a + (Number.isFinite(w.weight) ? w.weight : 0), 0);
     if (Math.abs(total - 100) > 0.001) throw new Error(`The weights add up to ${total}%, not 100%`);
     const COLOR = /^#[0-9a-f]{6}$/i;
 
-    db.transaction((tx) => {
-      const rows = tx.select().from(schema.docStageWeights)
-        .where(and(eq(schema.docStageWeights.projectId, input.projectId), eq(schema.docStageWeights.register, register)))
-        .all();
+    await db.transaction(async (tx) => {
+      const rows = await tx.select().from(schema.docStageWeights)
+        .where(and(eq(schema.docStageWeights.projectId, input.projectId), eq(schema.docStageWeights.register, register)));
       if (rows.length === 0) {
-        tx.insert(schema.docStageWeights).values(STAGE_ORDER.map((stage, order) => ({
+        await tx.insert(schema.docStageWeights).values(STAGE_ORDER.map((stage, order) => ({
           id: randomUUID(), projectId: input.projectId, register, stage, weight: 0, order,
-        }))).run();
+        })));
       }
-      // A stage added on Setup and removed again (9 Oct 2026). The three are
-      // never removed; an added one only while no document has gone out at it,
-      // so no send or reply history is ever thrown away with it.
+
       const kept = new Set(input.stages.map((s) => s.stage));
       const gone = rows.filter((r) => isAddedStage(r.stage) && !kept.has(r.stage)).map((r) => r.stage);
       if (gone.length) {
         const keys = gone.flatMap((s) => [s, `RE_${s}` as DocStage]);
-        const docIds = tx.select({ id: schema.documents.id }).from(schema.documents)
-          .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)))
-          .all().map((d) => d.id);
-        const used = docIds.length === 0 ? [] : tx.select().from(schema.docStages)
-          .where(and(inArray(schema.docStages.documentId, docIds), inArray(schema.docStages.stage, keys)))
-          .all();
+        const docIdRows = await tx.select({ id: schema.documents.id }).from(schema.documents)
+          .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)));
+        const docIds = docIdRows.map((d) => d.id);
+        const used = docIds.length === 0 ? [] : await tx.select().from(schema.docStages)
+          .where(and(inArray(schema.docStages.documentId, docIds), inArray(schema.docStages.stage, keys)));
         const sent = used.filter((u) => u.submitted || u.submittedAt || u.returnedAt || u.returnCode);
         if (sent.length) {
           const label = rows.find((r) => r.stage === baseOfAdded(sent[0].stage))?.label || sent[0].stage;
           throw new Error(`${label} has already been sent on ${sent.length === 1 ? 'a document' : `${sent.length} documents`}, so it stays`);
         }
-        if (used.length) tx.delete(schema.docStages).where(inArray(schema.docStages.id, used.map((u) => u.id))).run();
-        tx.delete(schema.docStageWeights).where(and(
+        if (used.length) await tx.delete(schema.docStages).where(inArray(schema.docStages.id, used.map((u) => u.id)));
+        await tx.delete(schema.docStageWeights).where(and(
           eq(schema.docStageWeights.projectId, input.projectId),
           eq(schema.docStageWeights.register, register),
           inArray(schema.docStageWeights.stage, keys),
-        )).run();
+        ));
       }
 
       for (const s of input.stages) {
@@ -590,11 +451,11 @@ export async function saveRegisterSettings(input: {
         if (s.weight < 0) throw new Error('A weight cannot be negative');
         if (!s.label.trim()) throw new Error(`Give ${stage} a short name`);
         if (isAddedStage(stage) && !rows.some((r) => r.stage === stage)) {
-          tx.insert(schema.docStageWeights).values({
+          await tx.insert(schema.docStageWeights).values({
             id: randomUUID(), projectId: input.projectId, register, stage, weight: 0, order: stageRank(stage),
-          }).run();
+          });
         }
-        tx.update(schema.docStageWeights)
+        await tx.update(schema.docStageWeights)
           .set({
             weight: s.weight,
             label: s.label.trim().slice(0, 12),
@@ -606,14 +467,14 @@ export async function saveRegisterSettings(input: {
             eq(schema.docStageWeights.projectId, input.projectId),
             eq(schema.docStageWeights.register, register),
             eq(schema.docStageWeights.stage, stage),
-          )).run();
+          ));
       }
 
       if (input.codes !== undefined || input.area !== undefined) {
         const values: Partial<typeof schema.docNumbering.$inferInsert> = {};
-        const numbering = tx.select().from(schema.docNumbering)
-          .where(and(eq(schema.docNumbering.projectId, input.projectId), eq(schema.docNumbering.register, register)))
-          .all()[0];
+        const numberingRows = await tx.select().from(schema.docNumbering)
+          .where(and(eq(schema.docNumbering.projectId, input.projectId), eq(schema.docNumbering.register, register)));
+        const numbering = numberingRows[0];
         if (input.codes !== undefined) {
           const codes = input.codes.filter((c) => ['APP', 'AWC', 'RWC'].includes(c.key) || isAddedCode(c.key));
           const labels = new Set<string>();
@@ -623,19 +484,17 @@ export async function saveRegisterSettings(input: {
             if (labels.has(label)) throw new Error(`Two codes read ${label}`);
             labels.add(label);
           }
-          // An added code goes again only while no reply was recorded with it, as an added stage.
-          const kept = new Set(codes.map((c) => c.key));
-          const gone = parseCodes(numbering?.codes).filter((c) => isAddedCode(c.key) && !kept.has(c.key));
-          if (gone.length) {
-            const docIds = tx.select({ id: schema.documents.id }).from(schema.documents)
-              .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)))
-              .all().map((d) => d.id);
-            const used = docIds.length === 0 ? [] : tx.select({ code: schema.docStages.returnCode }).from(schema.docStages)
-              .where(and(inArray(schema.docStages.documentId, docIds), inArray(schema.docStages.returnCode, gone.map((c) => c.key))))
-              .all();
-            if (used.length) {
-              const label = gone.find((c) => c.key === used[0].code)?.label || used[0].code;
-              throw new Error(`${label} is already on ${used.length === 1 ? 'a reply' : `${used.length} replies`}, so it stays`);
+          const keptCodes = new Set(codes.map((c) => c.key));
+          const goneCodes = parseCodes(numbering?.codes).filter((c) => isAddedCode(c.key) && !keptCodes.has(c.key));
+          if (goneCodes.length) {
+            const docIdRows2 = await tx.select({ id: schema.documents.id }).from(schema.documents)
+              .where(and(eq(schema.documents.projectId, input.projectId), eq(schema.documents.register, register)));
+            const docIds2 = docIdRows2.map((d) => d.id);
+            const usedCodes = docIds2.length === 0 ? [] : await tx.select({ code: schema.docStages.returnCode }).from(schema.docStages)
+              .where(and(inArray(schema.docStages.documentId, docIds2), inArray(schema.docStages.returnCode, goneCodes.map((c) => c.key))));
+            if (usedCodes.length) {
+              const label = goneCodes.find((c) => c.key === usedCodes[0].code)?.label || usedCodes[0].code;
+              throw new Error(`${label} is already on ${usedCodes.length === 1 ? 'a reply' : `${usedCodes.length} replies`}, so it stays`);
             }
           }
           values.codes = JSON.stringify(codes
@@ -643,13 +502,14 @@ export async function saveRegisterSettings(input: {
         }
         if (input.area !== undefined) values.area = input.area.trim().toUpperCase().slice(0, 8) || null;
         if (numbering) {
-          tx.update(schema.docNumbering).set(values).where(eq(schema.docNumbering.id, numbering.id)).run();
+          await tx.update(schema.docNumbering).set(values).where(eq(schema.docNumbering.id, numbering.id));
         } else {
-          const project = tx.select().from(schema.projects).where(eq(schema.projects.id, input.projectId)).all()[0];
-          tx.insert(schema.docNumbering).values({
+          const projectRows = await tx.select().from(schema.projects).where(eq(schema.projects.id, input.projectId));
+          const project = projectRows[0];
+          await tx.insert(schema.docNumbering).values({
             id: randomUUID(), projectId: input.projectId, register,
             prefix: (project?.alias?.trim() || 'DOC').toUpperCase(), ...values,
-          }).run();
+          });
         }
       }
     });
@@ -664,27 +524,27 @@ export async function saveRegisterSettings(input: {
 export async function deleteCategory(input: {
   projectId: string; register: RegisterKind; categoryId: string;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const category = db.select().from(schema.docCategories)
+    const categoryRows = await db.select().from(schema.docCategories)
       .where(and(
         eq(schema.docCategories.id, input.categoryId),
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
-      )).all()[0];
+      ));
+    const category = categoryRows[0];
     if (!category) throw new Error('Group not found');
 
-    const docs = db.select().from(schema.documents)
-      .where(eq(schema.documents.categoryId, category.id)).all();
+    const [docs, children] = await Promise.all([
+      db.select().from(schema.documents).where(eq(schema.documents.categoryId, category.id)),
+      db.select().from(schema.docCategories).where(eq(schema.docCategories.parentId, category.id)),
+    ]);
     if (docs.length > 0) {
       throw new Error(`Empty it first — ${docs.length} document${docs.length === 1 ? '' : 's'} still inside`);
     }
-
-    const children = db.select().from(schema.docCategories)
-      .where(eq(schema.docCategories.parentId, category.id)).all();
     if (children.length > 0) throw new Error('Delete the groups inside it first');
 
-    db.delete(schema.docCategories).where(eq(schema.docCategories.id, category.id)).run();
+    await db.delete(schema.docCategories).where(eq(schema.docCategories.id, category.id));
     refreshRegister();
     return { ok: true, changed: 1 };
   } catch (err) {
@@ -692,22 +552,15 @@ export async function deleteCategory(input: {
   }
 }
 
-/**
- * Setup's changes to SAVED headings: renames, and removals that take every
- * heading and document under them (`doc_stages` cascades from `documents`).
- * A plan row reading a removed heading goes back to a typed percent, exactly
- * as switching its link off does, so no leaf points at a category that is gone.
- */
 export async function editSavedHeadings(input: {
   projectId: string; register: RegisterKind;
   renames: { id: string; name: string }[];
   removals: string[];
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const all = db.select().from(schema.docCategories)
-      .where(and(eq(schema.docCategories.projectId, input.projectId), eq(schema.docCategories.register, input.register)))
-      .all();
+    const all = await db.select().from(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, input.projectId), eq(schema.docCategories.register, input.register)));
     const gone = new Set<string>();
     const take = (id: string) => {
       if (gone.has(id) || !all.some((c) => c.id === id)) return;
@@ -717,18 +570,20 @@ export async function editSavedHeadings(input: {
     input.removals.forEach(take);
     const ids = [...gone];
 
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       for (const r of input.renames) {
         const name = r.name.trim();
         if (!name || gone.has(r.id) || !all.some((c) => c.id === r.id)) continue;
-        tx.update(schema.docCategories).set({ name }).where(eq(schema.docCategories.id, r.id)).run();
+        await tx.update(schema.docCategories).set({ name }).where(eq(schema.docCategories.id, r.id));
       }
       if (ids.length > 0) {
-        tx.update(schema.wbsNodes)
-          .set({ progressMethod: 'lumpsum', linkedCategoryId: null, linkedStage: null })
-          .where(inArray(schema.wbsNodes.linkedCategoryId, ids)).run();
-        tx.delete(schema.documents).where(inArray(schema.documents.categoryId, ids)).run();
-        tx.delete(schema.docCategories).where(inArray(schema.docCategories.id, ids)).run();
+        await Promise.all([
+          tx.update(schema.wbsNodes)
+            .set({ progressMethod: 'lumpsum', linkedCategoryId: null, linkedStage: null })
+            .where(inArray(schema.wbsNodes.linkedCategoryId, ids)),
+          tx.delete(schema.documents).where(inArray(schema.documents.categoryId, ids)),
+        ]);
+        await tx.delete(schema.docCategories).where(inArray(schema.docCategories.id, ids));
       }
     });
 
@@ -740,7 +595,6 @@ export async function editSavedHeadings(input: {
   }
 }
 
-/** `General Prosedur` → `GENERAL-PROSEDUR`, and `-2` when that is taken. */
 function categoryCode(name: string, taken: Set<string>): string {
   const base = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'CATEGORY';
   let code = base;
@@ -752,23 +606,23 @@ function categoryCode(name: string, taken: Set<string>): string {
 export async function addCategory(input: {
   projectId: string; register: RegisterKind; name: string; parentId: string | null;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Group name is required');
 
-    const siblings = db.select().from(schema.docCategories)
+    const siblings = await db.select().from(schema.docCategories)
       .where(and(
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
-      )).all();
+      ));
 
     if (siblings.some((c) => (c.parentId ?? null) === input.parentId
       && c.name.toLowerCase() === name.toLowerCase())) {
       throw new Error(`"${name}" is already here`);
     }
 
-    db.insert(schema.docCategories).values({
+    await db.insert(schema.docCategories).values({
       id: randomUUID(),
       projectId: input.projectId,
       register: input.register,
@@ -776,7 +630,7 @@ export async function addCategory(input: {
       code: categoryCode(name, new Set(siblings.map((c) => c.code))),
       name,
       order: siblings.reduce((a, c) => Math.max(a, c.order), -1) + 1,
-    }).run();
+    });
 
     refreshRegister();
     return { ok: true, changed: 1 };
@@ -788,19 +642,19 @@ export async function addCategory(input: {
 export async function renameCategory(input: {
   projectId: string; register: RegisterKind; categoryId: string; name: string;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
     const name = input.name.trim();
     if (!name) throw new Error('Group name is required');
 
-    const updated = db.update(schema.docCategories)
+    const updated = await db.update(schema.docCategories)
       .set({ name })
       .where(and(
         eq(schema.docCategories.id, input.categoryId),
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
-      )).run();
-    if (updated.changes === 0) throw new Error('Group not found');
+      ));
+    if (updated.length === 0) throw new Error('Group not found');
 
     refreshRegister();
     return { ok: true, changed: 1 };
@@ -809,19 +663,13 @@ export async function renameCategory(input: {
   }
 }
 
-/**
- * Deleting a document deletes its history with it — that is what was asked for,
- * and `doc_stages` already cascades from `documents`. What moves quietly is the
- * denominator: every percentage in this group is recomputed from the documents
- * that remain.
- */
 export async function deleteDocument(input: {
   projectId: string; register: RegisterKind; documentId: string;
 }): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const [doc] = ownedDocuments(input.projectId, input.register, [input.documentId]);
-    db.delete(schema.documents).where(eq(schema.documents.id, doc.id)).run();
+    const [doc] = await ownedDocuments(input.projectId, input.register, [input.documentId]);
+    await db.delete(schema.documents).where(eq(schema.documents.id, doc.id));
     refreshRegister();
     return { ok: true, changed: 1 };
   } catch (err) {
@@ -833,58 +681,43 @@ export async function deleteDocument(input: {
 
 export interface LinkInput {
   projectId: string;
-  /** The discipline branch — `Detail Engineering › Electrical`. */
   nodeId: string;
   categoryId: string;
   on: boolean;
 }
 
-/**
- * Point a discipline's engineering leaves at the register, or take them back.
- *
- * Nothing is copied. The leaf's method becomes `linked` and it names the
- * category it reads; the percentage is worked out when it is asked for. So the
- * switch is reversible at no cost — turning it off restores exactly the figures
- * that were there before, because they were never overwritten. That matters
- * here more than anywhere: this register is thirty weeks older than the report
- * it would feed, so the switch is off until a register of the same vintage
- * arrives.
- */
 export async function setDisciplineLink(input: LinkInput): Promise<ActionResult> {
-  await beforeWrite();
+  await requireEdit();
   try {
-    const leaves = db.select().from(schema.wbsNodes)
-      .where(and(eq(schema.wbsNodes.parentId, input.nodeId), eq(schema.wbsNodes.isLeaf, true)))
-      .all();
+    const [leaves, categoryRows] = await Promise.all([
+      db.select().from(schema.wbsNodes)
+        .where(and(eq(schema.wbsNodes.parentId, input.nodeId), eq(schema.wbsNodes.isLeaf, true))),
+      db.select().from(schema.docCategories)
+        .where(and(
+          eq(schema.docCategories.id, input.categoryId),
+          eq(schema.docCategories.projectId, input.projectId),
+        )),
+    ]);
     if (leaves.length === 0) throw new Error('This discipline has no engineering leaves');
-
-    const category = db.select().from(schema.docCategories)
-      .where(and(
-        eq(schema.docCategories.id, input.categoryId),
-        eq(schema.docCategories.projectId, input.projectId),
-      )).all()[0];
+    const category = categoryRows[0];
     if (!category) throw new Error('Register category not found');
 
     let changed = 0;
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       for (const leaf of leaves) {
         const stage = leaf.deskripsi.trim().toUpperCase().replace('-', '_') as DocStage;
         if (!(STAGE_ORDER as DocStage[]).includes(stage)) continue;
 
-        tx.update(schema.wbsNodes)
+        await tx.update(schema.wbsNodes)
           .set(input.on
             ? { progressMethod: 'linked', linkedCategoryId: category.id, linkedStage: stage }
-            // Back to how the workbook measured it. The stored weekly figures
-            // were never touched, so they are still exactly what they were.
             : { progressMethod: 'lumpsum', linkedCategoryId: null, linkedStage: null })
-          .where(eq(schema.wbsNodes.id, leaf.id))
-          .run();
+          .where(eq(schema.wbsNodes.id, leaf.id));
         changed += 1;
       }
     });
 
     refreshRegister();
-    // The weekly report reads these leaves too.
     revalidatePath('/weekly', 'layout');
     return { ok: true, changed };
   } catch (err) {

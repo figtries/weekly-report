@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
 import { getActiveProjectId } from '@/lib/projects';
+import { getSession } from '@/lib/auth/get-session';
+import { generatePdfToken } from '@/lib/pdf-token';
 
 export const maxDuration = 60;
 
@@ -13,8 +15,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ date
   // route. This handler runs in the user's own request and can read the cookie
   // that holds their open project; the headless browser that renders the page
   // cannot. See getPrintJsonDb.
-  const projectId = await getActiveProjectId();
+  const [projectId, session] = await Promise.all([getActiveProjectId(), getSession()]);
   if (projectId) target.searchParams.set('project', projectId);
+  // Short-lived HMAC token so the /print/* route is not publicly accessible.
+  if (session) target.searchParams.set('token', generatePdfToken(session.userId, `daily:${date}`));
   let pdf: Uint8Array;
   try {
     pdf = await renderReportPdf(target.toString());

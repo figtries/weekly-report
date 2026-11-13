@@ -1,9 +1,9 @@
 'use server';
 
+import { requireEdit } from './auth/require-edit';
 import { revalidatePath } from 'next/cache';
 import { connection } from 'next/server';
 
-import { beforeWrite, flushDbSnapshot } from './sqlite';
 import { applyKindInPlan } from './kind-plan';
 import { getBarFacts, type BarFact } from './bar-facts';
 import { getSheet, type Sheet } from './sheet';
@@ -22,15 +22,17 @@ export async function setKindInPlanAction(
   shape: Shape,
   steps: Milestone[]
 ): Promise<{ ok: true; sheet: Sheet; facts: Record<string, BarFact> } | { ok: false; error: string }> {
-  // The facts read the clock (the current week); a request read comes first.
+  await requireEdit();
   await connection();
-  await beforeWrite();
   try {
-    applyKindInPlan(projectId, nodeId, kindId, shape, steps);
+    await applyKindInPlan(projectId, nodeId, kindId, shape, steps);
     revalidatePath('/projects', 'layout');
     revalidatePath('/weekly', 'layout');
-    await flushDbSnapshot();
-    return { ok: true, sheet: getSheet(projectId), facts: getBarFacts(projectId).facts };
+    const [sheet, barResult] = await Promise.all([
+      getSheet(projectId),
+      getBarFacts(projectId),
+    ]);
+    return { ok: true, sheet, facts: barResult.facts };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Something went wrong' };
   }
