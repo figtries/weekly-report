@@ -11,8 +11,10 @@ import { RowButton, SectionRow, type SectionProps } from '../SectionRow';
 // iOS draws a time box at its own width and ignores `width: 100%` until its
 // native look is switched off: two of them side by side ran over each other and
 // out of the card (12 Nov 2026, iPhone). `appearance-none` gives the width back.
+// It stays `flex items-center`, the display iOS and Chrome give a time box of
+// their own: `block` left the time sitting at the top of the box (13 Nov 2026).
 const TIME_CLS =
-  'block w-full min-w-0 max-w-full appearance-none tabular-nums sm:w-32 [&::-webkit-date-and-time-value]:text-left';
+  'flex items-center w-full min-w-0 max-w-full appearance-none tabular-nums sm:w-32 [&::-webkit-date-and-time-value]:text-left';
 
 const OPTIONS = [
   ['hujanDeras', CloudRain],

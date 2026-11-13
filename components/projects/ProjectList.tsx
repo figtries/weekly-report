@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Search, Trash2 } from 'lucide-react';
+import { ArchiveRestore, Archive, FolderOpen, MoreHorizontal, Pencil, Search, Trash2 } from 'lucide-react';
 
 import type { ProjectCard } from '@/lib/projects';
 import {
@@ -275,11 +275,13 @@ function ActionsPanel({ project: p, onClose: onExited }: { project: ProjectCard;
         {mode === 'menu' && (
           <div className="mt-3 space-y-1">
             {!p.isActive && !p.archivedAt && (
-              <Row onClick={() => run(() => setActiveProjectAction(p.id))} disabled={pending}>
+              <Row
+                onClick={() => run(() => setActiveProjectAction(p.id))}
+                disabled={pending}
+                icon={<FolderOpen className="size-4" />}
+                primary
+              >
                 Open this project
-                <span className="ml-auto text-[11px] font-normal text-muted-foreground">
-                  the whole app follows
-                </span>
               </Row>
             )}
             <Row onClick={() => setMode('rename')} disabled={pending} icon={<Pencil className="size-4" />}>
@@ -364,12 +366,14 @@ function Row({
   disabled,
   icon,
   danger,
+  primary,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   icon?: React.ReactNode;
   danger?: boolean;
+  primary?: boolean;
 }) {
   return (
     <button
@@ -377,7 +381,7 @@ function Row({
       onClick={onClick}
       disabled={disabled}
       className={`flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 ${
-        danger ? 'text-destructive hover:bg-muted' : ''
+        danger ? 'text-destructive hover:bg-muted' : primary ? 'text-primary' : ''
       }`}
     >
       {icon}
