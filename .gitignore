@@ -42,12 +42,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# the prototype database — a file you can copy, but never one to commit.
-# Recreate it with: npm run db:migrate
-/data/report.db
-/data/report.db-shm
-/data/report.db-wal
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -56,29 +50,19 @@ next-env.d.ts
 /.next-verify/
 .next-dev*.log
 
-# Kembaran database untuk melihat layar register kosong (scripts/make-empty-db.mjs)
-/data/empty.db*
-/.next-empty/
-
-# Salinan database sebelum tiap migrasi drizzle (lihat AGENTS.md) — bukan kode,
-# dan 1,8 MB per berkas. Dibuat manual, dibuang manual.
-/data/report.db.before-*
-/data/db.json.bak
+# Screenshots and throwaway output from the verify scripts.
+/scratch/
 
 # Skill klon terpisah (punya .git sendiri) — bukan bagian aplikasi ini.
 /excalidraw-diagram-skill/
 
-# Sisi-berkas WAL dari snapshot; snapshot-nya sendiri (data/seed.db) ikut di-commit.
-/data/seed.db-shm
-/data/seed.db-wal
-/.next-verifydb/
-
-# Screenshots and throwaway output from the verify scripts.
-/scratch/
-/data/verify.db
-/data/verify.db-shm
-/data/verify.db-wal
-
 # accounts and sessions on a developer machine (lib/auth-store.ts)
 /data/auth.json
 /data/auth.key
+
+# Supabase local dev
+/supabase/.temp/
+
+# Throwaway build/test output
+build-output.txt
+test-db.mjs

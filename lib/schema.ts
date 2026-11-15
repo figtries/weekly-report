@@ -1,267 +1,125 @@
 /**
- * The relational shape of a project.
+ * The relational shape of a project — PostgreSQL edition (FASE 3).
  *
- * Written for SQLite because a prototype's database should be a file you can
- * copy, but every choice here is made so the same schema moves to Postgres
- * without being rewritten: ids are text, timestamps are ISO strings, and
- * nothing that is really a relation is folded into a JSON column. That last
- * rule is the one `lib/db.ts` broke, and it is why a workspace could only ever
- * have one writer.
+ * Translated from the SQLite schema; the mapping is deliberate:
+ * - `sqliteTable` → `pgTable`
+ * - `integer(mode:'boolean')` → `boolean`
+ * - `real` → `doublePrecision`
+ * - `datetime('now')` default → `now()::text` (kept as text so callers
+ *   that build/compare ISO strings need no changes in FASE 4)
  *
  * Percentages and weights are 0..100 throughout, matching `bobot` in
- * `lib/types.ts`. Fractions are only ever an implementation detail inside a
- * calculation.
+ * `lib/types.ts`.
  */
 import { sql } from 'drizzle-orm';
-import { integer, real, sqliteTable, text, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+import {
+  boolean,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
-const id = () => text('id').primaryKey();
-const now = () => text('created_at').notNull().default(sql`(datetime('now'))`);
+const id  = () => text('id').primaryKey();
+const now = () => text('created_at').notNull().default(sql`now()::text`);
 
 /* ------------------------------------------------------------------ people */
 
-export const users = sqliteTable('users', {
-  id: id(),
-  email: text('email').notNull(),
-  name: text('name').notNull(),
+export const users = pgTable('users', {
+  id:        id(),
+  email:     text('email').notNull(),
+  name:      text('name').notNull(),
   createdAt: now(),
 }, (t) => [uniqueIndex('users_email_idx').on(t.email)]);
 
-/**
- * What a person may do, per project — not globally. The same person is a
- * Project Control engineer on one job and a spectator on the next.
- */
 export type Role = 'admin' | 'control' | 'field' | 'approver' | 'client';
 
-export const memberships = sqliteTable('memberships', {
-  id: id(),
+export const memberships = pgTable('memberships', {
+  id:        id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: text('role').$type<Role>().notNull(),
+  userId:    text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role:      text('role').$type<Role>().notNull(),
   createdAt: now(),
 }, (t) => [uniqueIndex('memberships_project_user_idx').on(t.projectId, t.userId)]);
 
 /* ---------------------------------------------------------------- project */
 
-/**
- * `boq` means every weight was derived from a priced line and the total closes
- * at 100 by construction. `even` means it did not, and the report has to say so
- * — a rough number shown honestly beats a project that never gets set up.
- */
 export type WeightBasis = 'boq' | 'even';
 
-export const projects = sqliteTable('projects', {
-  id: id(),
-  name: text('name').notNull(),
-  /**
-   * A short handle for the project, for every place the full name does not fit.
-   *
-   * Asked when the project is created and pre-filled by `deriveAlias` in
-   * `lib/alias.ts`, so it is rarely null on anything made after 12 Sep 2026.
-   * Null on everything made before: deriving an alias for a project already
-   * running is the owner's decision, not a migration's side effect.
-   */
-  alias: text('alias'),
-  clientName: text('client_name'),
-  contractorName: text('contractor_name'),
-  contractNo: text('contract_no'),
-  /** Prefix for generated document numbers, e.g. `PRGG-00-G0`. */
-  docNoPrefix: text('doc_no_prefix'),
-  contractValue: real('contract_value'),
-  currency: text('currency').notNull().default('IDR'),
-  weightBasis: text('weight_basis').$type<WeightBasis>().notNull().default('boq'),
-  /** null = let the app choose from the plan. See BarPreset. */
-  barPreset: text('bar_preset').$type<BarPreset>(),
-  /** The Bars panel's choices as JSON, read by lib/bar-view.ts. Null = defaults. */
-  barView: text('bar_view'),
-  /** The project's field (lib/fields.ts). Null reads as EPC, the only one today. */
-  field: text('field'),
-  startDate: text('start_date'),
-  finishDate: text('finish_date'),
-  /**
-   * The week the owner PINNED as current, or null to let the dates decide.
-   *
-   * Only db.json could hold this before, as `project.currentWeek`, so "Set as
-   * current" was shown on the imported project and hidden everywhere else —
-   * and a project made in the app had its current week guessed as "the last
-   * week anybody recorded anything", which is 0 until somebody files one. The
-   * guess then fell through to the LAST week of the plan, so a fresh 22-week
-   * project opened on week 22 (17 Sep 2026). See `currentWeekOf` in
-   * `lib/current-week.ts` for the rule this feeds.
-   *
-   * Nullable on purpose: a pin is a statement, and most projects never need to
-   * make one. It is never written by the importer or by progress — only by
-   * somebody pressing the button.
-   */
+export const projects = pgTable('projects', {
+  id:               id(),
+  name:             text('name').notNull(),
+  alias:            text('alias'),
+  clientName:       text('client_name'),
+  contractorName:   text('contractor_name'),
+  contractNo:       text('contract_no'),
+  docNoPrefix:      text('doc_no_prefix'),
+  contractValue:    doublePrecision('contract_value'),
+  currency:         text('currency').notNull().default('IDR'),
+  weightBasis:      text('weight_basis').$type<WeightBasis>().notNull().default('boq'),
+  barPreset:        text('bar_preset').$type<BarPreset>(),
+  barView:          text('bar_view'),
+  field:            text('field'),
+  startDate:        text('start_date'),
+  finishDate:       text('finish_date'),
   pinnedCurrentWeek: integer('current_week'),
-  createdAt: now(),
-  archivedAt: text('archived_at'),
-
-  /** Drives "last touched" order on /projects. Written by every project mutation. */
-  updatedAt: text('updated_at'),
-
-  /**
-   * TEMPORARY, and it is meant to die.
-   *
-   * Dashboard, Weekly, Daily and Klaim still speak the old JSON `Database`
-   * shape. `lib/legacy-adapter.ts` builds that shape from these tables, but
-   * three of its fields — `daily`, `catalogs`, `photoMeta` — have no tables
-   * here yet, so for a project that HAS a db.json twin they are read across
-   * from it. Null means no twin, which is the normal case for every project
-   * made in the app: those fields come back empty, and empty is the right
-   * answer for a project that has never had a daily report.
-   *
-   * Delete this column when board items 08-14 move those pages onto SQLite.
-   */
-  legacyJsonId: text('legacy_json_id'),
-
-  /* Report-header text the old `ProjectInfo` demands and this table lacked. */
-  workLocation: text('work_location'),
+  createdAt:        now(),
+  archivedAt:       text('archived_at'),
+  updatedAt:        text('updated_at'),
+  legacyJsonId:     text('legacy_json_id'),
+  workLocation:     text('work_location'),
   documentNoWeekly: text('document_no_weekly'),
-  documentNoDaily: text('document_no_daily'),
-  /** JSON `{ company, name }` — a signature block is two strings, never a relation. */
-  signatureLeft: text('signature_left'),
-  signatureRight: text('signature_right'),
+  documentNoDaily:  text('document_no_daily'),
+  signatureLeft:    text('signature_left'),
+  signatureRight:   text('signature_right'),
 });
 
-/**
- * Which project the app is looking at. One row, forever.
- *
- * A cookie would give each browser its own, which is the honest answer once
- * there are logins — but reading cookies is a dynamic read, and under
- * `cacheComponents: true` that forces `<Suspense>` around every read in the
- * app. This repo has hit that wall twice. A single synchronous row prerenders
- * like everything else here.
- *
- * `set null` on delete is deliberate: deleting the open project empties the
- * pointer rather than dangling it, and `getActiveProjectId()` falls through to
- * the first unarchived project. The app is never left with nothing to show.
- */
-export const appState = sqliteTable('app_state', {
-  id: text('id').primaryKey().default('singleton'),
-  activeProjectId: text('active_project_id').references(() => projects.id, {
-    onDelete: 'set null',
-  }),
-  updatedAt: text('updated_at'),
+export const appState = pgTable('app_state', {
+  id:              text('id').primaryKey().default('singleton'),
+  activeProjectId: text('active_project_id').references(() => projects.id, { onDelete: 'set null' }),
+  updatedAt:       text('updated_at'),
 });
 
 /* -------------------------------------------------------------------- WBS */
 
-/**
- * `linked` is the new one: the leaf takes its percentage from the document
- * register instead of from someone typing. It is what stops engineering being
- * measured twice — once in the physical WBS and again in the EDL.
- */
 export type ProgressMethod = 'qty' | 'milestone' | 'lumpsum' | 'linked';
 
-/**
- * One tree per project. A reporting unit is not a level of its own — it is a
- * node someone marked, which is exactly how SPK-002 sits at WBS `1.2` in the
- * Gundih workbook. Marking a node normalises its subtree to 100 and earns it
- * its own tab and its own section in the PDF.
- */
-export const wbsNodes = sqliteTable('wbs_nodes', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  parentId: text('parent_id'),
-  wbsCode: text('wbs_code').notNull(),
-  deskripsi: text('deskripsi').notNull(),
-  order: integer('sort_order').notNull().default(0),
-  depth: integer('depth').notNull().default(0),
-  isLeaf: integer('is_leaf', { mode: 'boolean' }).notNull().default(false),
-
-  /**
-   * A point in time rather than a span. MS Project writes this as a duration of
-   * `0 days`, which is how the file stores it, not how anyone thinks about it —
-   * so here it is a property of the row and the zero duration follows from it.
-   * Without the flag a one-day task is indistinguishable from a milestone.
-   */
-  isMilestone: integer('is_milestone', { mode: 'boolean' }).notNull().default(false),
-
-  /* reporting unit — SPK / Paket / Lot / Area, the label is the client's word */
-  isReportingUnit: integer('is_reporting_unit', { mode: 'boolean' }).notNull().default(false),
-  unitLabel: text('unit_label'),
-  unitContractNo: text('unit_contract_no'),
-  unitContractValue: real('unit_contract_value'),
-
-  /**
-   * "Should be finished before this" — MS Project's `Deadline`, and the only
-   * date a person types on a row that has children.
-   *
-   * It is deliberately NOT part of the schedule: it never moves a bar, never
-   * feeds the plan curve, and never overwrites a summary's computed span. It
-   * sits beside the span and is compared against it, so a row that runs past it
-   * is marked instead of being quietly re-planned. That separation is the whole
-   * point — a deadline that pushes the work is just another finish date, and
-   * then nothing records what was actually promised.
-   *
-   * It lives on the node rather than on a baseline because it is a promise, not
-   * a revision: re-baselining the plan does not move what the contract asked
-   * for. This is also the first home each SPK's contractual completion date has
-   * ever had.
-   */
-  targetDate: text('target_date'),
-
-  /* leaf economics — null on every branch */
-  vol: real('vol'),
-  satuan: text('satuan'),
-  price: real('price'),
-  /** Share of the whole project, 0..100. Derived from price; never accepted from a client payload. */
-  bobot: real('bobot'),
-  /** Share of the enclosing reporting unit, 0..100. Gundih calls this `WF per SPK`. */
-  bobotInUnit: real('bobot_in_unit'),
-  /**
-   * How this node's weight was split off its parent — Gundih's `Workstep`
-   * column, 0.5 / 0.3 / 0.2 for IFR / IFA / AFC. Kept so a schedule or price
-   * revision can re-split the subtree instead of asking someone to retype it.
-   */
-  workstepFactor: real('workstep_factor'),
-
-  /* measurement */
-  progressMethod: text('progress_method').$type<ProgressMethod>().notNull().default('lumpsum'),
-  /** `qty` items only. `vol: 1, satuan: 'Ls'` is not a real quantity — see hasRealQuantity(). */
-  qtyTotal: real('qty_total'),
-  /** `linked` items only: the document category this leaf reads its percentage from. */
-  linkedCategoryId: text('linked_category_id'),
-  /**
-   * `linked` items only. Gundih splits engineering into an IFR, an IFA and an
-   * AFC leaf per discipline, so a leaf reads ONE stage of its category rather
-   * than the category's whole weighted figure.
-   */
-  linkedStage: text('linked_stage').$type<DocStage>(),
-
-  /**
-   * Which kind of work this row is, and therefore which question it is asked.
-   * Null means nobody has answered yet, which is what makes the panel ask.
-   * See `lib/work-kind.ts`.
-   */
-  workKind: text('work_kind'),
-  /**
-   * Construction only: which part (a discipline id, `lib/disciplines.ts`).
-   * Null means nobody has said, and Data Overall asks. The plan never writes
-   * it (8 Oct 2026): read off the rungs instead, the generic ladder every row
-   * got by default was indistinguishable from somebody answering Other.
-   */
-  workPart: text('work_part'),
-  /** The user's own bar label for this row (an id in the project's bar_view). */
-  barLabel: text('bar_label'),
-
-  /**
-   * When this activity's next rung (or, rung null, its finish) will happen
-   * according to someone outside the app: 'vendor' | 'site' | 'client'.
-   * `forecastWeek` is the week it was given in, so an earlier week's forecast
-   * never reads a date nobody had yet. On the ACTIVITY, not on the week's
-   * progress row, because a progress row is the record that somebody checked
-   * the progress (see lib/forecast.ts and the forecast plan, 27 Sep 2026).
-   */
-  forecastDate: text('forecast_date'),
-  forecastSource: text('forecast_source'),
-  forecastRung: text('forecast_rung'),
-  forecastWeek: integer('forecast_week'),
-  /** JSON array of the leaf ids this one waits for, confirmed by a person. */
-  waitsFor: text('waits_for'),
-
-  createdAt: now(),
+export const wbsNodes = pgTable('wbs_nodes', {
+  id:                id(),
+  projectId:         text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  parentId:          text('parent_id'),
+  wbsCode:           text('wbs_code').notNull(),
+  deskripsi:         text('deskripsi').notNull(),
+  order:             integer('sort_order').notNull().default(0),
+  depth:             integer('depth').notNull().default(0),
+  isLeaf:            boolean('is_leaf').notNull().default(false),
+  isMilestone:       boolean('is_milestone').notNull().default(false),
+  isReportingUnit:   boolean('is_reporting_unit').notNull().default(false),
+  unitLabel:         text('unit_label'),
+  unitContractNo:    text('unit_contract_no'),
+  unitContractValue: doublePrecision('unit_contract_value'),
+  targetDate:        text('target_date'),
+  vol:               doublePrecision('vol'),
+  satuan:            text('satuan'),
+  price:             doublePrecision('price'),
+  bobot:             doublePrecision('bobot'),
+  bobotInUnit:       doublePrecision('bobot_in_unit'),
+  workstepFactor:    doublePrecision('workstep_factor'),
+  progressMethod:    text('progress_method').$type<ProgressMethod>().notNull().default('lumpsum'),
+  qtyTotal:          doublePrecision('qty_total'),
+  linkedCategoryId:  text('linked_category_id'),
+  linkedStage:       text('linked_stage').$type<DocStage>(),
+  workKind:          text('work_kind'),
+  workPart:          text('work_part'),
+  barLabel:          text('bar_label'),
+  forecastDate:      text('forecast_date'),
+  forecastSource:    text('forecast_source'),
+  forecastRung:      text('forecast_rung'),
+  forecastWeek:      integer('forecast_week'),
+  waitsFor:          text('waits_for'),
+  createdAt:         now(),
 }, (t) => [
   index('wbs_project_idx').on(t.projectId),
   index('wbs_parent_idx').on(t.parentId),
@@ -270,131 +128,62 @@ export const wbsNodes = sqliteTable('wbs_nodes', {
 
 /* ------------------------------------------------------------- bar styles */
 
-/**
- * What a condition can ask about a row. Everything here is answerable from data
- * that actually exists today.
- *
- * `critical` reads the chain inferred in lib/chains.ts. `progress` is absent
- * on purpose: how far along a row is lives in Data Overall, by our own
- * decision, and the plan screen does not read it.
- */
 export type BarCondition =
-  | 'always'
-  | 'summary'
-  | 'milestone'
-  | 'task'
-  | 'in_unit'
-  | 'past_target'
-  | 'unscheduled'
-  | 'in_progress'
-  | 'unpriced'
-  | 'weight_above'
-  | 'weight_below'
-  | 'critical';
+  | 'always' | 'summary' | 'milestone' | 'task' | 'in_unit'
+  | 'past_target' | 'unscheduled' | 'in_progress' | 'unpriced'
+  | 'weight_above' | 'weight_below' | 'critical';
 
-/**
- * How a matching bar is drawn.
- *
- * `unit` is the important value: it means "the package's own colour", which is
- * how "colour = package" survives as the DEFAULT RULE rather than as a law. A
- * planner who wants lateness to outrank packages moves the past-target rule
- * above it; nothing in the code has an opinion about which they should prefer.
- */
 export type BarPaint =
-  | 'unit'
-  | 'foreground'
-  | 'warn'
-  | 'danger'
-  | 'ok'
-  | 'muted'
+  | 'unit' | 'foreground' | 'warn' | 'danger' | 'ok' | 'muted'
   | 'plan-1' | 'plan-2' | 'plan-3' | 'plan-4' | 'plan-5' | 'plan-6'
   | 'plan-7' | 'plan-8' | 'plan-9' | 'plan-10';
 
-/**
- * Which ready-made list a project is reading, when it has no rules of its own.
- *
- * `type` colours by what a row IS — MS Project's own default. `package` colours
- * by which SPK it belongs to, which is what a plan like Gundih wants. NULL means
- * nobody has chosen, and the app picks from the data: a plan with packages gets
- * package colours, a plan without gets type colours, and marking a second SPK
- * moves it across on its own.
- */
 export type BarPreset = 'type' | 'package';
+export type BarShape  = 'auto' | 'bar' | 'bracket' | 'diamond';
 
-/** `auto` keeps the shape the row's kind already implies — bracket, bar, diamond. */
-export type BarShape = 'auto' | 'bar' | 'bracket' | 'diamond';
-
-/**
- * An ORDERED list per project, first match wins.
- *
- * MS Project stacks bar styles and draws several at once; this does not, because
- * a result you can predict is worth more than one you can layer. The order is
- * the whole interface: move a rule up and it starts winning.
- *
- * A project with no rows here is not unstyled — `DEFAULT_BAR_STYLES` in
- * lib/bar-styles.ts is the fallback, so nothing has to be seeded for a new
- * project to read correctly. Rows appear the first time someone edits.
- */
-export const barStyles = sqliteTable('bar_styles', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  order: integer('sort_order').notNull().default(0),
-  label: text('label').notNull(),
-  condition: text('condition').$type<BarCondition>().notNull(),
-  /** The unit's node id for `in_unit`; the threshold for `weight_above`/`below`. */
+export const barStyles = pgTable('bar_styles', {
+  id:             id(),
+  projectId:      text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  order:          integer('sort_order').notNull().default(0),
+  label:          text('label').notNull(),
+  condition:      text('condition').$type<BarCondition>().notNull(),
   conditionValue: text('condition_value'),
-  paint: text('paint').$type<BarPaint>().notNull().default('unit'),
-  shape: text('shape').$type<BarShape>().notNull().default('auto'),
-  /** Hatched over the bar's tail — how "past target" reads without losing the package colour. */
-  hatched: integer('hatched', { mode: 'boolean' }).notNull().default(false),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  paint:          text('paint').$type<BarPaint>().notNull().default('unit'),
+  shape:          text('shape').$type<BarShape>().notNull().default('auto'),
+  hatched:        boolean('hatched').notNull().default(false),
+  enabled:        boolean('enabled').notNull().default(true),
 }, (t) => [index('bar_styles_project_idx').on(t.projectId)]);
 
-/** A named step of a leaf that can't be measured in units. Weights sum to 100. */
-export const milestones = sqliteTable('milestones', {
-  id: id(),
+export const milestones = pgTable('milestones', {
+  id:     id(),
   nodeId: text('node_id').notNull().references(() => wbsNodes.id, { onDelete: 'cascade' }),
-  label: text('label').notNull(),
-  weight: real('weight').notNull(),
-  order: integer('sort_order').notNull().default(0),
+  label:  text('label').notNull(),
+  weight: doublePrecision('weight').notNull(),
+  order:  integer('sort_order').notNull().default(0),
 }, (t) => [index('milestones_node_idx').on(t.nodeId)]);
 
 /* --------------------------------------------------------------- schedule */
 
-/**
- * `contractual` is stamped once and never moves — it is what a claim or an
- * extension of time is argued against. `active` is the latest agreed revision,
- * and it is what the work is managed against. Gundih keeps both side by side as
- * BASELINE-1 and RE-BASELINE, and so do we.
- */
 export type BaselineKind = 'contractual' | 'active';
 
-export const baselines = sqliteTable('baselines', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  kind: text('kind').$type<BaselineKind>().notNull(),
+export const baselines = pgTable('baselines', {
+  id:         id(),
+  projectId:  text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  kind:       text('kind').$type<BaselineKind>().notNull(),
   revisionNo: integer('revision_no').notNull().default(0),
-  label: text('label'),
-  /** Why the schedule moved. Blank here is what makes a revision unarguable later. */
-  reason: text('reason'),
+  label:      text('label'),
+  reason:     text('reason'),
   approvedBy: text('approved_by').references(() => users.id),
   approvedAt: text('approved_at'),
-  createdAt: now(),
+  createdAt:  now(),
 }, (t) => [index('baselines_project_idx').on(t.projectId)]);
 
-/**
- * Start and finish per leaf, per baseline — and that is all. The weekly plan
- * curve is NOT stored: each leaf spreads linearly across its own duration and
- * the S shape emerges from hundreds of leaves overlapping, which is exactly
- * what the Gundih numbers turn out to be. Deriving it means a schedule revision
- * is a date change, and a stale curve is impossible.
- */
-export const nodeSchedules = sqliteTable('node_schedules', {
-  id: id(),
-  baselineId: text('baseline_id').notNull().references(() => baselines.id, { onDelete: 'cascade' }),
-  nodeId: text('node_id').notNull().references(() => wbsNodes.id, { onDelete: 'cascade' }),
-  startDate: text('start_date').notNull(),
-  finishDate: text('finish_date').notNull(),
+export const nodeSchedules = pgTable('node_schedules', {
+  id:           id(),
+  baselineId:   text('baseline_id').notNull().references(() => baselines.id, { onDelete: 'cascade' }),
+  nodeId:       text('node_id').notNull().references(() => wbsNodes.id, { onDelete: 'cascade' }),
+  startDate:    text('start_date').notNull(),
+  finishDate:   text('finish_date').notNull(),
   durationDays: integer('duration_days').notNull(),
 }, (t) => [uniqueIndex('node_schedules_baseline_node_idx').on(t.baselineId, t.nodeId)]);
 
@@ -402,84 +191,61 @@ export const nodeSchedules = sqliteTable('node_schedules', {
 
 export type WeekStatus = 'open' | 'submitted' | 'approved';
 
-export const weeks = sqliteTable('weeks', {
-  id: id(),
+export const weeks = pgTable('weeks', {
+  id:        id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  weekNo: integer('week_no').notNull(),
+  weekNo:    integer('week_no').notNull(),
   startDate: text('start_date').notNull(),
-  endDate: text('end_date').notNull(),
-  status: text('status').$type<WeekStatus>().notNull().default('open'),
+  endDate:   text('end_date').notNull(),
+  status:    text('status').$type<WeekStatus>().notNull().default('open'),
   createdAt: now(),
 }, (t) => [uniqueIndex('weeks_project_no_idx').on(t.projectId, t.weekNo)]);
 
-/**
- * One row per leaf per week. For `qty`, `milestone` and `linked` items
- * `cumProgressPct` is only a cache of what the evidence already says —
- * `lib/progress.ts` recomputes it and is the only thing allowed to write it.
- * `lumpsum` still reads the typed value, unchanged.
- */
-export const leafProgress = sqliteTable('leaf_progress', {
-  id: id(),
-  weekId: text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
-  nodeId: text('node_id').notNull().references(() => wbsNodes.id, { onDelete: 'cascade' }),
-  method: text('method').$type<ProgressMethod>().notNull(),
-  cumProgressPct: real('cum_progress_pct').notNull().default(0),
-  /** `qty` items: cumulative quantity completed, in the item's own unit. */
-  qtyDone: real('qty_done'),
-  note: text('note'),
-  /**
-   * How this week's figure was arrived at: 'gate' | 'steps' | 'qty' | 'manual',
-   * plus 'quote' which is no longer written and is kept so old weeks read back.
-   *
-   * Gate and steps are also readable from the method, but quote and manual are
-   * both lumpsum and are not the same claim at all: one is somebody else's
-   * measurement, the other is this person's judgement. A report cannot say how
-   * much of it was judged unless the two are told apart here.
-   */
-  source: text('source'),
-  recordedBy: text('recorded_by').references(() => users.id),
-  recordedAt: text('recorded_at'),
+export const leafProgress = pgTable('leaf_progress', {
+  id:             id(),
+  weekId:         text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
+  nodeId:         text('node_id').notNull().references(() => wbsNodes.id, { onDelete: 'cascade' }),
+  method:         text('method').$type<ProgressMethod>().notNull(),
+  cumProgressPct: doublePrecision('cum_progress_pct').notNull().default(0),
+  qtyDone:        doublePrecision('qty_done'),
+  note:           text('note'),
+  source:         text('source'),
+  recordedBy:     text('recorded_by').references(() => users.id),
+  recordedAt:     text('recorded_at'),
 }, (t) => [uniqueIndex('leaf_progress_week_node_idx').on(t.weekId, t.nodeId)]);
 
-/** Which milestones a leaf had reached as of a given week. */
-export const milestoneProgress = sqliteTable('milestone_progress', {
-  id: id(),
-  weekId: text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
+export const milestoneProgress = pgTable('milestone_progress', {
+  id:          id(),
+  weekId:      text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
   milestoneId: text('milestone_id').notNull().references(() => milestones.id, { onDelete: 'cascade' }),
-  achieved: integer('achieved', { mode: 'boolean' }).notNull().default(false),
-  recordedBy: text('recorded_by').references(() => users.id),
-  recordedAt: text('recorded_at'),
+  achieved:    boolean('achieved').notNull().default(false),
+  recordedBy:  text('recorded_by').references(() => users.id),
+  recordedAt:  text('recorded_at'),
 }, (t) => [uniqueIndex('milestone_progress_week_ms_idx').on(t.weekId, t.milestoneId)]);
 
-/**
- * The figure that was signed, stored beside the signature. A signature that
- * silently follows the number it signed is worth nothing in a dispute, so if
- * the week is edited afterwards the panel can show the drift.
- */
-export const approvals = sqliteTable('approvals', {
-  id: id(),
-  weekId: text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
-  approvedBy: text('approved_by').notNull().references(() => users.id),
-  approvedAt: text('approved_at').notNull(),
-  snapshotActualPct: real('snapshot_actual_pct').notNull(),
-  snapshotPlanPct: real('snapshot_plan_pct').notNull(),
-  signerName: text('signer_name').notNull(),
-  signerTitle: text('signer_title'),
-  signerCompany: text('signer_company'),
-  note: text('note'),
+export const approvals = pgTable('approvals', {
+  id:                 id(),
+  weekId:             text('week_id').notNull().references(() => weeks.id, { onDelete: 'cascade' }),
+  approvedBy:         text('approved_by').notNull().references(() => users.id),
+  approvedAt:         text('approved_at').notNull(),
+  snapshotActualPct:  doublePrecision('snapshot_actual_pct').notNull(),
+  snapshotPlanPct:    doublePrecision('snapshot_plan_pct').notNull(),
+  signerName:         text('signer_name').notNull(),
+  signerTitle:        text('signer_title'),
+  signerCompany:      text('signer_company'),
+  note:               text('note'),
 }, (t) => [index('approvals_week_idx').on(t.weekId)]);
 
-/** Who changed what, when, and from what. The reason `#REF!` can't happen here. */
-export const auditLog = sqliteTable('audit_log', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id),
+export const auditLog = pgTable('audit_log', {
+  id:         id(),
+  projectId:  text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId:     text('user_id').references(() => users.id),
   entityType: text('entity_type').notNull(),
-  entityId: text('entity_id').notNull(),
-  field: text('field'),
-  oldValue: text('old_value'),
-  newValue: text('new_value'),
-  at: text('at').notNull().default(sql`(datetime('now'))`),
+  entityId:   text('entity_id').notNull(),
+  field:      text('field'),
+  oldValue:   text('old_value'),
+  newValue:   text('new_value'),
+  at:         text('at').notNull().default(sql`now()::text`),
 }, (t) => [
   index('audit_project_at_idx').on(t.projectId, t.at),
   index('audit_entity_idx').on(t.entityType, t.entityId),
@@ -487,175 +253,93 @@ export const auditLog = sqliteTable('audit_log', {
 
 /* ------------------------------------------------------- document control */
 
-/**
- * The second progress engine. It runs on the same arithmetic as the physical
- * WBS — weight, then stage weights, then a cumulative curve — which is why one
- * engine can serve both.
- */
-/**
- * Two registers run on one engine. `edl` is what we owe the client; `vdrl` is
- * what our vendors owe us. The chain, the arithmetic and the write path are
- * identical, so they share these tables and differ only by this flag, their
- * stage weights, and who is chasing whom.
- */
 export type RegisterKind = 'edl' | 'vdrl';
 
-export const docCategories = sqliteTable('doc_categories', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  register: text('register').$type<RegisterKind>().notNull().default('edl'),
-  parentId: text('parent_id'),
-  code: text('code').notNull(),
-  name: text('name').notNull(),
-  order: integer('sort_order').notNull().default(0),
-  /**
-   * How many documents this category is expected to hold. Gundih's `JUMLAH`.
-   * Weight is count ÷ total documents — every document counted equally — so
-   * this is only stored for categories whose register isn't complete yet.
-   */
+export const docCategories = pgTable('doc_categories', {
+  id:           id(),
+  projectId:    text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register:     text('register').$type<RegisterKind>().notNull().default('edl'),
+  parentId:     text('parent_id'),
+  code:         text('code').notNull(),
+  name:         text('name').notNull(),
+  order:        integer('sort_order').notNull().default(0),
   plannedCount: integer('planned_count'),
 }, (t) => [
   index('doc_categories_project_idx').on(t.projectId, t.register),
   uniqueIndex('doc_categories_project_code_idx').on(t.projectId, t.register, t.code),
 ]);
 
-export const documents = sqliteTable('documents', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  register: text('register').$type<RegisterKind>().notNull().default('edl'),
-  categoryId: text('category_id').notNull().references(() => docCategories.id, { onDelete: 'cascade' }),
-  /**
-   * Blank on 149 rows of Gundih's VDRL: the vendor owes the document but nobody
-   * has numbered it yet. It is still a deliverable and still counts against its
-   * package, so an empty number is allowed.
-   */
-  docNo: text('doc_no'),
-  /** The client's own drawing number, when the document replaces an existing one. */
+export const documents = pgTable('documents', {
+  id:            id(),
+  projectId:     text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register:      text('register').$type<RegisterKind>().notNull().default('edl'),
+  categoryId:    text('category_id').notNull().references(() => docCategories.id, { onDelete: 'cascade' }),
+  docNo:         text('doc_no'),
   existingDwgNo: text('existing_dwg_no'),
-  revision: text('revision'),
-  title: text('title').notNull(),
-  /** `Doc` or `Dwg` — Gundih's own distinction, and it drives sheet counts. */
-  kind: text('kind'),
-  size: text('size'),
-  sheets: integer('sheets'),
-  priority: text('priority'),
-  pic: text('pic'),
-  status: text('status'),
-  remarks: text('remarks'),
-  order: integer('sort_order').notNull().default(0),
+  revision:      text('revision'),
+  title:         text('title').notNull(),
+  kind:          text('kind'),
+  size:          text('size'),
+  sheets:        integer('sheets'),
+  priority:      text('priority'),
+  pic:           text('pic'),
+  status:        text('status'),
+  remarks:       text('remarks'),
+  order:         integer('sort_order').notNull().default(0),
 }, (t) => [
   index('documents_category_idx').on(t.categoryId),
   index('documents_project_register_idx').on(t.projectId, t.register),
-  // Document numbers are NOT guaranteed unique. Numbering discipline is real,
-  // but enforcing it here means refusing a register as it actually is: Gundih's
-  // VDRL uses `PRGG-VDR-KMI-IN-PSV-DOC-003` twice, and Petrogas' EDL — an EDL,
-  // where this rule was once thought safe — uses `WPP-IN-LAY-003` twice. What
-  // replaces the refusal is sight: the paste preview counts them before writing,
-  // and the workbench flags them afterwards.
 ]);
 
-/**
- * The review chain. `RE_*` stages are resubmissions of the stage before them
- * and carry no weight of their own — they exist so the register can say how
- * many times a drawing went round, which is what an extension-of-time argument
- * is actually built from.
- */
-export type BaseStage = 'IFR' | 'RE_IFR' | 'IFA' | 'RE_IFA' | 'AFC' | 'RE_AFC1' | 'RE_AFC2' | 'ASBUILT';
-/**
- * A stage a register added on Setup (9 Oct 2026): `S1`, `S2`… after AFC, each
- * with one resubmission `RE_S1`. Its words, colour and weight are the register's.
- */
+export type BaseStage  = 'IFR' | 'RE_IFR' | 'IFA' | 'RE_IFA' | 'AFC' | 'RE_AFC1' | 'RE_AFC2' | 'ASBUILT';
 export type AddedStage = `S${number}` | `RE_S${number}`;
-export type DocStage = BaseStage | AddedStage;
+export type DocStage   = BaseStage | AddedStage;
 
-export const docStages = sqliteTable('doc_stages', {
-  id: id(),
-  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  stage: text('stage').$type<DocStage>().notNull(),
-  order: integer('sort_order').notNull().default(0),
-  planSubmitDate: text('plan_submit_date'),
-  /**
-   * Whether the document ACTUALLY went out at this stage. A row now exists for
-   * a stage that was merely promised too — that is what lets the register draw
-   * a plan curve beside the real one — so the presence of a row is no longer
-   * evidence of anything. This flag is.
-   *
-   * Separate from `submittedAt` because the register marks 42 submissions whose
-   * date nobody wrote down with a bare `1`; the client's own summary counts
-   * them, and reading dates alone would undercount every stage.
-   */
-  submitted: integer('submitted', { mode: 'boolean' }).notNull().default(false),
-  submittedAt: text('submitted_at'),
-  submitTransmittalId: text('submit_transmittal_id').references(() => transmittals.id),
-  returnedAt: text('returned_at'),
-  returnTransmittalId: text('return_transmittal_id').references(() => transmittals.id),
-  /** APP, AWC, and friends. `AWC` is what quietly holds construction up. */
-  returnCode: text('return_code'),
+export const docStages = pgTable('doc_stages', {
+  id:                   id(),
+  documentId:           text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  stage:                text('stage').$type<DocStage>().notNull(),
+  order:                integer('sort_order').notNull().default(0),
+  planSubmitDate:       text('plan_submit_date'),
+  submitted:            boolean('submitted').notNull().default(false),
+  submittedAt:          text('submitted_at'),
+  submitTransmittalId:  text('submit_transmittal_id').references(() => transmittals.id),
+  returnedAt:           text('returned_at'),
+  returnTransmittalId:  text('return_transmittal_id').references(() => transmittals.id),
+  returnCode:           text('return_code'),
 }, (t) => [uniqueIndex('doc_stages_doc_stage_idx').on(t.documentId, t.stage)]);
 
-/** IFR 0.5 · IFA 0.3 · AFC 0.2 in Gundih — but it is a per-project agreement, not a law. */
-export const docStageWeights = sqliteTable('doc_stage_weights', {
-  id: id(),
+export const docStageWeights = pgTable('doc_stage_weights', {
+  id:        id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  register: text('register').$type<RegisterKind>().notNull().default('edl'),
-  stage: text('stage').$type<DocStage>().notNull(),
-  /** Share of a document, 0..100. The weighted stages should sum to 100. */
-  weight: real('weight').notNull(),
-  order: integer('sort_order').notNull().default(0),
-  /**
-   * What this project calls the stage, its full name and its colour (4 Oct
-   * 2026): the register's own words and bars, set on Setup. Null reads the
-   * defaults in `lib/register-settings.ts`; the stage key above never changes.
-   */
-  label: text('label'),
-  fullName: text('full_name'),
-  color: text('color'),
-  /**
-   * The revision a document goes out with at this stage (A for IFR, B for IFA,
-   * 0 for AFC), each resubmission one more: the project's own rule, set on
-   * Setup. A document's Rev is derived from it and its history, never typed.
-   */
-  revStart: text('rev_start'),
+  register:  text('register').$type<RegisterKind>().notNull().default('edl'),
+  stage:     text('stage').$type<DocStage>().notNull(),
+  weight:    doublePrecision('weight').notNull(),
+  order:     integer('sort_order').notNull().default(0),
+  label:     text('label'),
+  fullName:  text('full_name'),
+  color:     text('color'),
+  revStart:  text('rev_start'),
 }, (t) => [uniqueIndex('doc_stage_weights_project_stage_idx').on(t.projectId, t.register, t.stage)]);
 
-/**
- * How this project builds a document number: PROJECT-DISCIPLINE-TYPE-SEQUENCE.
- *
- * Stored per project and register because it IS per project — Petrogas numbers
- * `WPP-EL-DDS-001` and Gundih `PRGG-20-E0-DS-001`, the same idea with a
- * different alphabet. The per-section and per-group codes are JSON because they
- * are a map keyed by names the project chose, and a table of two-letter codes
- * would be a join for nothing.
- *
- * Set once and editable afterwards: a rule nobody can change is a rule people
- * work around.
- */
-export const docNumbering = sqliteTable('doc_numbering', {
-  id: id(),
-  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  register: text('register').$type<RegisterKind>().notNull().default('edl'),
-  /** `WPP`, `PRGG`. */
-  prefix: text('prefix').notNull(),
-  /** Section name → discipline code, as JSON. */
+export const docNumbering = pgTable('doc_numbering', {
+  id:          id(),
+  projectId:   text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  register:    text('register').$type<RegisterKind>().notNull().default('edl'),
+  prefix:      text('prefix').notNull(),
   disciplines: text('disciplines').notNull().default('{}'),
-  /** Group name → type code without its kind letter, as JSON. */
-  types: text('types').notNull().default('{}'),
-  digits: integer('digits').notNull().default(3),
-  /** The area segment after the project code (`GPF` in MRB-GPF-PR-RPT-001); null when the project numbers without one. */
-  area: text('area'),
-  /** The client's codes as this project words them, JSON (see `lib/register-settings.ts`). */
-  codes: text('codes'),
+  types:       text('types').notNull().default('{}'),
+  digits:      integer('digits').notNull().default(3),
+  area:        text('area'),
+  codes:       text('codes'),
 }, (t) => [uniqueIndex('doc_numbering_project_idx').on(t.projectId, t.register)]);
 
-export const transmittals = sqliteTable('transmittals', {
-  id: id(),
+export const transmittals = pgTable('transmittals', {
+  id:        id(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  register: text('register').$type<RegisterKind>().notNull().default('edl'),
-  no: text('no').notNull(),
-  /** `out` is ours to them, `in` is theirs back to us. */
+  register:  text('register').$type<RegisterKind>().notNull().default('edl'),
+  no:        text('no').notNull(),
   direction: text('direction').$type<'out' | 'in'>().notNull(),
-  date: text('date').notNull(),
-  note: text('note'),
-  // Both registers number their transmittals from T.001, and they are not the
-  // same letters: the EDL's go to Pertamina, the VDRL's come from vendors.
+  date:      text('date').notNull(),
+  note:      text('note'),
 }, (t) => [uniqueIndex('transmittals_project_no_dir_idx').on(t.projectId, t.register, t.no, t.direction)]);
