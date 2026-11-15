@@ -14,7 +14,7 @@
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.3.0",
     "@hugeicons/react": "^1.1.10",
-    "@sparticuz/chromium": "^149.0.0",
+    "@sparticuz/chromium-min": "^153.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",
     "@vercel/blob": "^2.8.0",

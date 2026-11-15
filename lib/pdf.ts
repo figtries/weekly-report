@@ -29,13 +29,19 @@ async function launch(): Promise<Browser> {
   // headless build from @sparticuz/chromium. Imported lazily: the package
   // unpacks a ~60MB binary and has no business loading during local dev.
   if (process.env.VERCEL) {
-    const chromium = (await import('@sparticuz/chromium')).default;
+    const chromium = (await import('@sparticuz/chromium-min')).default;
     // No WebGL on these pages (charts are plain SVG) — skipping the graphics
     // stack means the lambda doesn't unpack swiftshader on cold boot.
     chromium.setGraphicsMode = false;
     return puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      // chromium-min doesn't bundle the binary; it downloads from the URL on
+      // first cold start and caches to /tmp. CHROMIUM_PACK_URL can point to a
+      // faster CDN; the GitHub release is a safe default.
+      executablePath: await chromium.executablePath(
+        process.env.CHROMIUM_PACK_URL ??
+          'https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar',
+      ),
       // 'shell', NOT true: the binary is chrome-headless-shell, and true makes
       // puppeteer pass --headless=new, which headless-shell doesn't speak —
       // the process exits on boot and the route 500s instantly.

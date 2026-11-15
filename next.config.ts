@@ -13,15 +13,9 @@ const nextConfig: NextConfig = {
   // Auto-memoizes every client component — keeps typing in the big forms
   // (DailyForm, DataOverallWorkbench) smooth without manual memo() work.
   reactCompiler: true,
-  // Chromium and puppeteer must stay outside the bundle — the binary is loaded
-  // from disk at runtime (see lib/pdf.ts).
-  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
-  // Externalizing alone isn't enough on Vercel: the brotli-packed Chromium in
-  // bin/ is opened with computed fs paths the tracer can't follow, so without
-  // this the lambda ships the JS but not the browser and the PDF routes 500.
-  outputFileTracingIncludes: {
-    '/api/pdf/**': ['node_modules/@sparticuz/chromium/bin/**/*'],
-  },
+  // Chromium and puppeteer must stay outside the bundle — the binary is
+  // downloaded at runtime by chromium-min (see lib/pdf.ts).
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium-min'],
   cacheComponents: true,
   experimental: {
     viewTransition: true,
