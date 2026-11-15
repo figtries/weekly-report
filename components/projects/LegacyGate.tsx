@@ -14,8 +14,8 @@ import { getOpenProject } from '@/lib/legacy-bridge';
  * a plan to report against at all. Daily, Reports and Klaim have no SQLite path
  * yet (board item 14) and pass `planned={false}`, which is the old behaviour.
  */
-function planOf(projectId: string) {
-  const d = buildProjectDashboardData(projectId);
+async function planOf(projectId: string) {
+  const d = await buildProjectDashboardData(projectId);
   return { weighed: d?.hasPlan ?? false, scheduled: d?.hasSchedule ?? false };
 }
 
@@ -32,7 +32,7 @@ async function gateFor(planned: Planned, what: string): Promise<ReactNode | null
   const open = await getOpenProject();
   if (!open) return null;
   if (!planned) return <NoLegacyData what={what} />;
-  const plan = planOf(open.id);
+  const plan = await planOf(open.id);
   if (plan.weighed || (planned === 'schedule' && plan.scheduled)) return null;
   // Scheduled but nobody budgeted it: say what is missing and where it goes,
   // instead of a "Go to Data Overall" that lands on this same card.

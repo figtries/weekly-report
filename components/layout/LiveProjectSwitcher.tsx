@@ -28,10 +28,15 @@ import { listProjects } from '@/lib/projects';
  */
 export default async function LiveProjectSwitcher() {
   await connection();
-  const [projects, status] = await Promise.all([listProjects(), getOpenProjectStatus()]);
-  if (projects.length === 0) return null;
-
-  return <ProjectSwitcher projects={projects} status={status} />;
+  try {
+    const [projects, status] = await Promise.all([listProjects(), getOpenProjectStatus()]);
+    if (projects.length === 0) return null;
+    return <ProjectSwitcher projects={projects} status={status} />;
+  } catch {
+    // DB unavailable (e.g. Supabase project paused on free tier) — render the
+    // placeholder so the rest of the sidebar, including the login page, still works.
+    return <ProjectSwitcherFallback />;
+  }
 }
 
 /**

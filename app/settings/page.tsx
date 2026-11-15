@@ -35,8 +35,8 @@ async function SettingsBody() {
   const cat = getCatalogs(db);
   // Left at its own last movement rather than a chosen week: this decides where
   // a number comes from, so what matters is what the register currently knows.
-  const edl = getRegisterSummary(projectId, 'edl');
-  const disciplines = edl ? getDisciplineLinks(projectId) : [];
+  const edl = await getRegisterSummary(projectId, 'edl');
+  const disciplines = edl ? await getDisciplineLinks(projectId) : [];
 
   return (
     <RouteTransition id="settings">

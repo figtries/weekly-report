@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import GanttPrint from '@/components/print/GanttPrint';
 import { getProject } from '@/lib/projects';
-import { ensureFreshDb, refreshDbSnapshot } from '@/lib/sqlite';
 import { getSheet } from '@/lib/sheet';
 import { getBarView } from '@/lib/bar-view-read';
 import { getBarFacts } from '@/lib/bar-facts';
@@ -32,10 +31,7 @@ export default function ProjectPrintTarget(props: Props) {
 
 async function ProjectPrintBody({ params, searchParams }: Props) {
   const [{ id }, { scope = 'all', levels = '0', client, contractor }] = await Promise.all([params, searchParams]);
-  // After the request reads: both of these look at the clock.
-  await ensureFreshDb();
-  let project = getProject(id);
-  if (!project && (await refreshDbSnapshot())) project = getProject(id);
+  const project = await getProject(id);
 
   if (!project) {
     // Never an empty page: lib/pdf.ts waits for a sheet and would hang without one.
@@ -46,10 +42,10 @@ async function ProjectPrintBody({ params, searchParams }: Props) {
     );
   }
 
-  const sheet = getSheet(id);
+  const [sheet, barView, barFactsResult] = await Promise.all([getSheet(id), getBarView(id), getBarFacts(id)]);
   const depth = Math.max(0, Math.min(20, Math.trunc(Number(levels)) || 0));
   const rows = scopeRows(sheet.rows, scope, depth);
-  const { facts } = getBarFacts(id);
+  const { facts } = barFactsResult;
   // The day line, in the site's own time zone: the server runs on UTC, which
   // is the day before for the first seven hours of every Indonesian morning.
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
@@ -70,7 +66,7 @@ async function ProjectPrintBody({ params, searchParams }: Props) {
           rows={rows}
           allRows={sheet.rows}
           facts={facts}
-          view={getBarView(id)}
+          view={barView}
           network={analyseNetwork(sheet.rows)}
           today={today}
           contract={sheet.contract !== null}

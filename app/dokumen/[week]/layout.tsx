@@ -25,9 +25,16 @@ export const metadata = { title: 'Document Control' };
  * A superset is the right shape: unknown weeks still render on demand, and
  * every week that does exist gets its shell.
  */
-export function generateStaticParams() {
-  const weeks = new Set(getAllRegisterWeekNumbers());
-  return [...weeks].sort((a, b) => a - b).map((w) => ({ week: String(w) }));
+export async function generateStaticParams() {
+  let nums: number[] = [];
+  try {
+    nums = await getAllRegisterWeekNumbers();
+  } catch {
+    // DB unreachable during build — fall back to [1] so the segment has a
+    // shell; unknown weeks still render on demand.
+  }
+  const weeks = new Set(nums.length ? nums : [1]);
+  return [...weeks].sort((a: number, b: number) => a - b).map((w) => ({ week: String(w) }));
 }
 
 /**
@@ -86,7 +93,7 @@ export default async function DocumentControlLayout({
  */
 async function RegisterTabsForOpenProject({ week }: { week: number }) {
   const projectId = (await getActiveProjectId()) ?? '';
-  const weeks = getRegisterWeeks(projectId).map((w) => w.weekNo);
+  const weeks = (await getRegisterWeeks(projectId)).map((w) => w.weekNo);
   const db = await getOpenDb();
 
   return (

@@ -33,51 +33,68 @@ async function EdlDataPageBody({ params }: { params: Promise<{ week: string }> }
   // The open project comes from a cookie now, so this is a per-request read
   // and cannot be baked into a shell. See lib/projects.ts.
   const projectId = (await getActiveProjectId()) ?? '';
-  const shape = getRegisterShape(projectId, 'edl');
-  const summary = shape.documents > 0 ? getRegisterSummary(projectId, 'edl', week) : null;
+  const shape = await getRegisterShape(projectId, 'edl');
+  const summary = shape.documents > 0 ? await getRegisterSummary(projectId, 'edl', week) : null;
 
-  const parties = getRegisterParties(projectId);
+  const parties = await getRegisterParties(projectId);
 
   if (!summary) {
+    const [existing, settings, sources, numbering] = await Promise.all([
+      getRegisterExisting(projectId, 'edl'),
+      getRegisterSettings(projectId, 'edl'),
+      getRegisterSources(projectId, 'edl'),
+      getNumbering(projectId, 'edl'),
+    ]);
     return (
       <RouteTransition id="dokumen-edl-data">
         <RegisterSetup
           // Saved headings come back as fixed rows to keep adding into: the
           // page only becomes the workbench once a document exists.
           key={shape.categories}
-          existing={getRegisterExisting(projectId, 'edl')}
+          existing={existing}
           projectId={projectId}
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
           hasDocuments={false}
-          settings={getRegisterSettings(projectId, 'edl')}
-          sources={getRegisterSources(projectId, 'edl')}
-          numbering={getNumbering(projectId, 'edl')}
+          settings={settings}
+          sources={sources}
+          numbering={numbering}
         />
       </RouteTransition>
     );
   }
+
+  const [tree, cards, currentCards, currentObstacles, settings, numbering, sources, nextLetters] = await Promise.all([
+    getRegisterTree(projectId, 'edl', week),
+    getRegisterCards(projectId, 'edl', week),
+    getRegisterCards(projectId, 'edl'),
+    getObstacles(projectId, 'edl'),
+    getRegisterSettings(projectId, 'edl'),
+    getNumbering(projectId, 'edl'),
+    getRegisterSources(projectId, 'edl'),
+    getNextLetterNumbers(projectId, 'edl'),
+  ]);
 
   return (
     <RouteTransition id="dokumen-edl-data">
     <RegisterWorkbench
       projectId={projectId}
       register="edl"
-      tree={getRegisterTree(projectId, 'edl', week)}
-      cards={getRegisterCards(projectId, 'edl', week)}
+      tree={tree}
+      cards={cards}
       totalDocuments={summary.documents}
       weekNo={summary.asOfWeek}
       clientName={parties.clientName}
       contractorName={parties.contractorName}
-      numbering={getNumbering(projectId, 'edl')}
-      sources={getRegisterSources(projectId, 'edl')}
+      numbering={numbering}
+      sources={sources}
       // Recording a letter is a fact about today, whatever week is on screen,
       // so the transmittal dialog reads the register as it stands now.
-      currentCards={getRegisterCards(projectId, 'edl')}
-      currentObstacles={getObstacles(projectId, 'edl')}
-      settings={getRegisterSettings(projectId, 'edl')}
-      nextLetters={getNextLetterNumbers(projectId, 'edl')}
+      currentCards={currentCards}
+      currentObstacles={currentObstacles}
+      settings={settings}
+      nextLetters={nextLetters}
       overview={{ actual: summary.actual, plan: summary.plan, stages: summary.stages.filter((x) => ['IFR', 'IFA', 'AFC'].includes(x.stage) || isAddedStage(x.stage)) }}
     />
     </RouteTransition>

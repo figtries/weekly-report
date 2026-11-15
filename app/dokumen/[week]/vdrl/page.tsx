@@ -39,42 +39,55 @@ async function VdrlSummaryPageBody({ params }: { params: Promise<{ week: string 
   // The open project comes from a cookie now, so this is a per-request read
   // and cannot be baked into a shell. See lib/projects.ts.
   const projectId = (await getActiveProjectId()) ?? '';
-  const shape = getRegisterShape(projectId, 'vdrl');
-  const summary = shape.documents > 0 ? getRegisterSummary(projectId, 'vdrl', week) : null;
+  const shape = await getRegisterShape(projectId, 'vdrl');
+  const summary = shape.documents > 0 ? await getRegisterSummary(projectId, 'vdrl', week) : null;
 
   if (!summary) {
-    const parties = getRegisterParties(projectId);
+    const [parties, existing, settings, sources, numbering] = await Promise.all([
+      getRegisterParties(projectId),
+      getRegisterExisting(projectId, 'vdrl'),
+      getRegisterSettings(projectId, 'vdrl'),
+      getRegisterSources(projectId, 'vdrl'),
+      getNumbering(projectId, 'vdrl'),
+    ]);
     return (
       <RouteTransition id="dokumen-vdrl-summary">
         <RegisterSetup
           // Saved headings come back as fixed rows to keep adding into: the
           // page only becomes the workbench once a document exists.
           key={shape.categories}
-          existing={getRegisterExisting(projectId, 'vdrl')}
+          existing={existing}
           projectId={projectId}
           register="vdrl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
           hasDocuments={false}
-          settings={getRegisterSettings(projectId, 'vdrl')}
-          sources={getRegisterSources(projectId, 'vdrl')}
-          numbering={getNumbering(projectId, 'vdrl')}
+          settings={settings}
+          sources={sources}
+          numbering={numbering}
         />
       </RouteTransition>
     );
   }
+
+  const [groups, obstacles, movement, settings] = await Promise.all([
+    getRegisterTree(projectId, 'vdrl', week),
+    getObstacles(projectId, 'vdrl', week),
+    getWeekMovement(projectId, 'vdrl', week),
+    getRegisterSettings(projectId, 'vdrl'),
+  ]);
 
   return (
     <RouteTransition id="dokumen-vdrl-summary">
     <SummaryScreen
       summary={summary}
       // Vendor packages are the top level here — one card per package.
-      groups={getRegisterTree(projectId, 'vdrl', week)}
-      obstacles={getObstacles(projectId, 'vdrl', week)}
-      movement={getWeekMovement(projectId, 'vdrl', week)}
+      groups={groups}
+      obstacles={obstacles}
+      movement={movement}
       groupsTitle="By vendor package"
       foldEmptyGroups
-      settings={getRegisterSettings(projectId, 'vdrl')}
+      settings={settings}
       otherName={'vendors'}
       week={week}
     />

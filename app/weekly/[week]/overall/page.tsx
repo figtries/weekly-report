@@ -105,7 +105,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   // cover the whole plan, and a card that cannot be dismissed is worse than no
   // card. `wouldChange > 0` is what lets it finish.
   const open = await getOpenProject();
-  const wscreen = open ? loadWeightsScreen(open.id) : null;
+  const wscreen = open ? await loadWeightsScreen(open.id) : null;
   const estimated = wscreen
     ? [...wscreen.units.flatMap((u) => u.rows), ...wscreen.looseRows].filter(
         (r) => r.isLeaf && r.estimated
@@ -146,7 +146,7 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
   const gate = weightGate(db.wbsItems);
   // The first thing to fix, by name, so the guide's press lands on it rather
   // than on Weights' front page (8 Oct 2026). Same list as the dashboard.
-  const fix = !gate.ok && open ? loadWeightFixes(open.id, week)[0] : undefined;
+  const fix = !gate.ok && open ? (await loadWeightFixes(open.id, week))[0] : undefined;
   // The forecast is a figure like the four below, so it waits for the same
   // gate. What it needs looked at rides with it (lib/forecast-view.ts).
   const forecast = gate.ok ? buildForecastView(db, week) : null;

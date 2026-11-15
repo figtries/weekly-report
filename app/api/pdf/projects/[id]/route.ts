@@ -1,7 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
 import { getProject } from '@/lib/projects';
-import { refreshDbSnapshot } from '@/lib/sqlite';
 
 // The Gantt PDF: /print/projects/[id] rendered by the same Chromium as the
 // weekly report. Same maxDuration as the other PDF routes, so it shares their
@@ -19,9 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const scopeIds = scope.split(',');
   if (scope !== 'all' && (scopeIds.length > 200 || !scopeIds.every((s) => ID.test(s)))) return new Response('Bad scope', { status: 400 });
   if (!/^\d{1,2}$/.test(levels)) return new Response('Bad levels', { status: 400 });
-  // A project another instance made seconds ago: pull the snapshot once before saying no.
-  let project = getProject(id);
-  if (!project && (await refreshDbSnapshot())) project = getProject(id);
+  const project = await getProject(id);
   if (!project) return new Response('No such project', { status: 404 });
 
   const target = new URL(`/print/projects/${id}`, req.nextUrl.origin);

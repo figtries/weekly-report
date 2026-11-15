@@ -20,7 +20,7 @@ export async function weightGateView(week: number) {
   const open = await getOpenProject();
   return (
     <div className="px-3 py-4 sm:p-6 lg:p-8">
-      <WeightGateNotice gate={gate} week={week} fixes={open ? loadWeightFixes(open.id, week) : []} />
+      <WeightGateNotice gate={gate} week={week} fixes={open ? await loadWeightFixes(open.id, week) : []} />
     </div>
   );
 }

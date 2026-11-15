@@ -1,5 +1,6 @@
 import { getOpenWeekRollup, getOpenDb } from '@/lib/data';
-import { db as sqlite, schema } from '@/lib/sqlite';
+import { db } from '@/lib/pg';
+import * as schema from '@/lib/schema';
 import { validateWeek } from '@/lib/analysis';
 import { weightGate } from '@/lib/weight-gate';
 import { summariseUnits } from '@/lib/rollup';
@@ -25,7 +26,7 @@ export const unstable_instant = {
   samples: [{ params: { week: '1' }, cookies: [{ name: 'figtries_open_project', value: null }] }],
 };
 
-export async function generateStaticParams() {
+export async function generateStaticParams(): Promise<{ week: string }[]> {
   // This runs at BUILD time, where there is no request and therefore no open
   // project. It only decides which week numbers get a prerendered shell: every
   // week number any project in the database has. A week outside the list still
@@ -34,7 +35,14 @@ export async function generateStaticParams() {
   // the deployment weeks 1–60; that floor is kept so no week the live project
   // used to be served prerendered is served differently now. A deployment
   // builds against data/seed.db, whose plans are shorter than the live ones.
-  const last = Math.max(60, ...sqlite.select({ n: schema.weeks.weekNo }).from(schema.weeks).all().map((w) => w.n));
+  let last = 60;
+  try {
+    const rows = await db.select({ n: schema.weeks.weekNo }).from(schema.weeks);
+    if (rows.length) last = Math.max(60, ...rows.map((w) => w.n));
+  } catch {
+    // DB unreachable during build — prerender 60 weeks; unknown weeks still
+    // render on demand so this is a head start, not a whitelist.
+  }
   return Array.from({ length: last }, (_, i) => ({ week: String(i + 1) }));
 }
 

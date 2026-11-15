@@ -9,7 +9,6 @@ import GanttPdfButton from '@/components/projects/GanttPdfButton';
 import { packagesOf } from '@/lib/gantt-print';
 import ScheduleSheet from '@/components/projects/ScheduleSheet';
 import { getActiveProjectId, getProject, getProjectContents } from '@/lib/projects';
-import { refreshDbSnapshot } from '@/lib/sqlite';
 import { getSheet, getWeekSpans } from '@/lib/sheet';
 import { getWeightSummary } from '@/lib/weights-read';
 import { currentWeekForProject } from '@/lib/data';
@@ -60,23 +59,18 @@ function fmtDay(iso: string | null): string {
  */
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let project = getProject(id);
-  // A project this instance has never heard of is the one case where staleness
-  // is already proven rather than suspected: on a deployment the row may have
-  // been written by a different lambda seconds ago. Pull the snapshot once and
-  // ask again before deciding it does not exist — that redirect landing on a
-  // 404 is exactly what lib/db-snapshot.ts was written for. Costs nothing
-  // locally, where the refresh is a no-op.
-  if (!project && (await refreshDbSnapshot())) project = getProject(id);
+  const project = await getProject(id);
   if (!project) notFound();
 
-  const contents = getProjectContents(id);
-  const sheet = getSheet(id);
-  const weights = getWeightSummary(id);
-  // Both after `params`: the facts read the clock for the current week.
-  const barView = getBarView(id);
-  const barFacts = getBarFacts(id).facts;
-  const weeks = getWeekSpans(id);
+  const [contents, sheet, weights, barView, weeks, barFactsResult] = await Promise.all([
+    getProjectContents(id),
+    getSheet(id),
+    getWeightSummary(id),
+    getBarView(id),
+    getWeekSpans(id),
+    getBarFacts(id),
+  ]);
+  const barFacts = barFactsResult.facts;
   const isOpen = (await getActiveProjectId()) === id;
   // The week Data Overall opens on, for the button beside this title — and only
   // when this project is already the open one, which is the only case where the

@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 
 import { getActiveProjectId } from '@/lib/projects';
 import type { RegisterKind } from '@/lib/schema';
-import { db, schema } from '@/lib/sqlite';
+import { db } from '@/lib/pg';
+import * as schema from '@/lib/schema';
 import { buildRegisterWorkbook } from '@/lib/xlsx/register-export';
 
 /**
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const register = (url.searchParams.get('register') === 'vdrl' ? 'vdrl' : 'edl') as RegisterKind;
   const asked = Number(url.searchParams.get('week'));
-  const project = db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0];
+  const [project] = await db.select().from(schema.projects).where(eq(schema.projects.id, projectId));
 
   const { buffer, week } = await buildRegisterWorkbook({
     projectId,

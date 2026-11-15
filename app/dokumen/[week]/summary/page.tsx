@@ -44,32 +44,46 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
   // The open project comes from a cookie now, so this is a per-request read
   // and cannot be baked into a shell. See lib/projects.ts.
   const projectId = (await getActiveProjectId()) ?? '';
-  const shape = getRegisterShape(projectId, 'edl');
-  const summary = shape.documents > 0 ? getRegisterSummary(projectId, 'edl', week) : null;
+  const shape = await getRegisterShape(projectId, 'edl');
+  const summary = shape.documents > 0 ? await getRegisterSummary(projectId, 'edl', week) : null;
 
   if (!summary) {
-    const parties = getRegisterParties(projectId);
+    const [parties, existing, settings, sources, numbering] = await Promise.all([
+      getRegisterParties(projectId),
+      getRegisterExisting(projectId, 'edl'),
+      getRegisterSettings(projectId, 'edl'),
+      getRegisterSources(projectId, 'edl'),
+      getNumbering(projectId, 'edl'),
+    ]);
     return (
       <RouteTransition id="dokumen-edl-summary">
         <RegisterSetup
           // Saved headings come back as fixed rows to keep adding into: the
           // page only becomes the workbench once a document exists.
           key={shape.categories}
-          existing={getRegisterExisting(projectId, 'edl')}
+          existing={existing}
           projectId={projectId}
           register="edl"
           clientName={parties.clientName}
           contractorName={parties.contractorName}
           hasDocuments={false}
-          settings={getRegisterSettings(projectId, 'edl')}
-          sources={getRegisterSources(projectId, 'edl')}
-          numbering={getNumbering(projectId, 'edl')}
+          settings={settings}
+          sources={sources}
+          numbering={numbering}
         />
       </RouteTransition>
     );
   }
 
-  const tree = getRegisterTree(projectId, 'edl', week);
+  const [tree, obstacles, movement, bridge, settings, parties] = await Promise.all([
+    getRegisterTree(projectId, 'edl', week),
+    getObstacles(projectId, 'edl', week),
+    getWeekMovement(projectId, 'edl', week),
+    getEngineeringBridge(projectId, week),
+    getRegisterSettings(projectId, 'edl'),
+    getRegisterParties(projectId),
+  ]);
+
   // A card per HEADING, the level people choose in the builder (GENERAL,
   // INSTRUMENT), with its sub-headings inside it. Only a band whose every part
   // is itself split (an imported DETAIL ENGINEERING holding PROCESS, CIVIL...)
@@ -85,12 +99,12 @@ async function EdlSummaryPageBody({ params }: { params: Promise<{ week: string }
     <SummaryScreen
       summary={summary}
       groups={groups}
-      obstacles={getObstacles(projectId, 'edl', week)}
-      movement={getWeekMovement(projectId, 'edl', week)}
-      bridge={getEngineeringBridge(projectId, week)}
+      obstacles={obstacles}
+      movement={movement}
+      bridge={bridge}
       groupsTitle="By discipline"
-      settings={getRegisterSettings(projectId, 'edl')}
-      otherName={getRegisterParties(projectId).clientName}
+      settings={settings}
+      otherName={parties.clientName}
       week={week}
     />
     </RouteTransition>

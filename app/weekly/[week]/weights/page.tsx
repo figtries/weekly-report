@@ -42,7 +42,7 @@ async function WeightsPageBody({ params }: { params: Promise<{ week: string }> }
   const { week: weekParam } = await params;
   const week = Number(weekParam);
   const open = await getOpenProject();
-  const screen = open ? loadWeightsScreen(open.id) : null;
+  const screen = open ? await loadWeightsScreen(open.id) : null;
 
   return (
     <RouteTransition id="weekly-weights">

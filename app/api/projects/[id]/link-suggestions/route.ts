@@ -2,7 +2,6 @@ import { connection } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { buildProjectDashboardData } from '@/lib/dashboard-db';
-import { ensureFreshDb } from '@/lib/db-snapshot';
 import { unansweredLinks } from '@/lib/forecast-epc';
 
 /**
@@ -14,8 +13,8 @@ import { unansweredLinks } from '@/lib/forecast-epc';
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  await ensureFreshDb();
-  const items = buildProjectDashboardData(id)?.db.wbsItems ?? [];
+  const data = await buildProjectDashboardData(id);
+  const items = data?.db.wbsItems ?? [];
   return NextResponse.json(Object.fromEntries(unansweredLinks(items)), {
     headers: { 'Cache-Control': 'no-store' },
   });

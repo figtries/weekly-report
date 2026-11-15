@@ -147,7 +147,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
   const { week: weekParam } = await searchParams;
 
   const projectId = await getActiveProjectId();
-  const data = projectId ? buildProjectDashboardData(projectId) : null;
+  const data = projectId ? await buildProjectDashboardData(projectId) : null;
 
   if (!data) {
     return (
@@ -256,7 +256,7 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
           week={week}
           budget={db.project.projectBudget ?? null}
           currency={data.currency}
-          fixes={projectId ? loadWeightFixes(projectId, week) : []}
+          fixes={projectId ? await loadWeightFixes(projectId, week) : []}
         />
       </div>
     );
