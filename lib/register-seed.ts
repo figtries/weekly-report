@@ -10,7 +10,8 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { STAGE_ORDER } from './register-shared';
 import { parseRegisterPaste, type ColumnMapping, type PasteCategory } from './register-paste';
 import type { RegisterKind } from './schema';
@@ -48,7 +49,7 @@ export interface SeedResult {
   updated: number;
 }
 
-export function writeSeed(input: SeedInput): SeedResult {
+export async function writeSeed(input: SeedInput): Promise<SeedResult> {
   const plan = parseRegisterPaste(input.text, input.mapping);
   return writeCategories(input, plan.categories);
 }
@@ -56,12 +57,6 @@ export function writeSeed(input: SeedInput): SeedResult {
 /**
  * A register built section by section, where the structure was CHOSEN rather
  * than written out.
- *
- * Each group carries its own path — `['DETAIL ENGINEERING', 'ELECTRICAL',
- * 'Electrical Datasheet']` — so the same writer that handles a pasted sheet
- * handles this: a path becomes one category per level, and the documents hang
- * off the last. Nothing about grouping has to be expressed in text, which is
- * the whole point of picking a section by clicking it.
  */
 export interface DraftGroup {
   path: string[];
@@ -81,15 +76,11 @@ type SeedCategory = Omit<PasteCategory, 'documents'> & { documents: SeedDocument
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function writeDraft(
+export async function writeDraft(
   input: Omit<SeedInput, 'text' | 'mapping'> & { groups: DraftGroup[] },
-): SeedResult {
+): Promise<SeedResult> {
   const categories: SeedCategory[] = [];
   for (const group of input.groups) {
-    // A path with no documents is NOT skipped: it is a heading, a section or a
-    // group somebody created deliberately, and a register is built structure
-    // first. Dropping them meant "Add a heading" wrote nothing at all — the
-    // name lived on the screen until the page was left.
     group.path.forEach((name, depth) => {
       categories.push({
         name,
@@ -105,86 +96,59 @@ export function writeDraft(
   return writeCategories({ ...input, text: '' }, categories, { allowEmpty: true });
 }
 
-function writeCategories(
+async function writeCategories(
   input: SeedInput,
   categories: SeedCategory[],
   { allowEmpty = false }: { allowEmpty?: boolean } = {},
-): SeedResult {
+): Promise<SeedResult> {
   const clientName = input.clientName?.trim() ?? '';
   const contractorName = input.contractorName?.trim() ?? '';
 
   const total = categories.reduce((n, c) => n + c.documents.length, 0);
-  // Structure on its own is a real thing to save; a pasted list with no
-  // documents in it is not.
   if (total === 0 && !allowEmpty) throw new Error('Nothing to add — no documents were given');
   if (categories.length === 0) throw new Error('Nothing to add');
 
-  return db.transaction((tx) => {
-    // Only an import that names both sides writes them; anything else leaves
-    // the project's own names alone.
+  return db.transaction(async (tx) => {
     if (clientName && contractorName) {
-      tx.update(schema.projects)
+      await tx.update(schema.projects)
         .set({ clientName, contractorName })
-        .where(eq(schema.projects.id, input.projectId))
-        .run();
+        .where(eq(schema.projects.id, input.projectId));
     }
 
-    const existingWeights = tx.select().from(schema.docStageWeights)
+    const existingWeights = await tx.select().from(schema.docStageWeights)
       .where(and(
         eq(schema.docStageWeights.projectId, input.projectId),
         eq(schema.docStageWeights.register, input.register),
-      )).all();
+      ));
     if (existingWeights.length === 0) {
-      tx.insert(schema.docStageWeights).values(
+      await tx.insert(schema.docStageWeights).values(
         STAGE_ORDER.map((stage, order) => ({
           id: randomUUID(),
           projectId: input.projectId,
           register: input.register,
           stage,
-          // A resubmission carries no weight: it is evidence of how many times a
-          // drawing went round, not progress on top of the round before it.
           weight: DEFAULT_WEIGHT[stage] ?? 0,
           order,
         })),
-      ).run();
+      );
     }
 
-    const existing = tx.select().from(schema.docCategories)
+    const existing = await tx.select().from(schema.docCategories)
       .where(and(
         eq(schema.docCategories.projectId, input.projectId),
         eq(schema.docCategories.register, input.register),
-      )).all();
+      ));
 
     const taken = new Set(existing.map((c) => c.code));
     const byKey = new Map(existing.map((c) => [`${c.parentId ?? ''}|${c.name.toLowerCase()}`, c.id]));
     let order = existing.reduce((a, c) => Math.max(a, c.order), -1);
 
-    /**
-     * A numbered document that is already here is the SAME document.
-     *
-     * Without this, importing next month's revision of the same EDL — or
-     * pasting the list twice by accident — would leave two of everything, and
-     * the second copy would carry none of the dates and transmittals typed
-     * against the first. So a matching number refreshes the title and kind and
-     * nothing else: the row keeps its id, its group and its whole history.
-     *
-     * Documents with no number cannot be matched and are always added. That is
-     * the honest reading — the VDRL has 115 of them and nothing distinguishes
-     * one from another except the order they were written in.
-     *
-     * Each number holds a QUEUE, not a single row, and a match consumes one.
-     * The Petrogas EDL uses `WPP-IN-LAY-003` for two genuinely different
-     * drawings; matching both to the first row would quietly overwrite one of
-     * them, and refusing the second would drop it. Queued, a re-import of the
-     * same file updates the first with the first and the second with the
-     * second, and neither is invented or lost.
-     */
     const byNumber = new Map<string, string[]>();
-    for (const row of tx.select().from(schema.documents)
+    for (const row of (await tx.select().from(schema.documents)
       .where(and(
         eq(schema.documents.projectId, input.projectId),
         eq(schema.documents.register, input.register),
-      )).all().sort((a, b) => a.order - b.order)) {
+      ))).sort((a, b) => a.order - b.order)) {
       if (!row.docNo) continue;
       const queue = byNumber.get(row.docNo) ?? [];
       queue.push(row.id);
@@ -204,7 +168,7 @@ function writeCategories(
       if (!id) {
         id = randomUUID();
         order += 1;
-        tx.insert(schema.docCategories).values({
+        await tx.insert(schema.docCategories).values({
           id,
           projectId: input.projectId,
           register: input.register,
@@ -212,7 +176,7 @@ function writeCategories(
           code: codeFor(category.name, taken),
           name: category.name,
           order,
-        }).run();
+        });
         byKey.set(key, id);
         newCategories += 1;
       }
@@ -220,24 +184,23 @@ function writeCategories(
       stack.length = Math.min(stack.length, category.depth - 1);
       stack[category.depth - 1] = id;
 
-      const siblings = tx.select().from(schema.documents)
-        .where(eq(schema.documents.categoryId, id)).all();
+      const siblings = await tx.select().from(schema.documents)
+        .where(eq(schema.documents.categoryId, id));
       let docOrder = siblings.reduce((a, d) => Math.max(a, d.order), -1);
 
       for (const doc of category.documents) {
         const existingId = doc.docNo ? byNumber.get(doc.docNo)?.shift() : undefined;
         if (existingId) {
-          tx.update(schema.documents)
+          await tx.update(schema.documents)
             .set({ title: doc.title, kind: doc.kind ?? 'Doc' })
-            .where(eq(schema.documents.id, existingId))
-            .run();
+            .where(eq(schema.documents.id, existingId));
           updated += 1;
           continue;
         }
 
         docOrder += 1;
         const newId = randomUUID();
-        tx.insert(schema.documents).values({
+        await tx.insert(schema.documents).values({
           id: newId,
           projectId: input.projectId,
           register: input.register,
@@ -246,24 +209,18 @@ function writeCategories(
           title: doc.title,
           kind: doc.kind ?? 'Doc',
           order: docOrder,
-        }).run();
-        // Deliberately NOT registered in the queue: a number repeated inside
-        // one list is two documents that happen to share it, not the same one
-        // twice. See the comment on `byNumber`.
+        });
         newDocuments += 1;
 
-        // The builder asks for the IFR plan date beside the title, because the
-        // engineering plan curve is counted from these dates (3 Oct 2026). A
-        // plan is a promise, so the row is written NOT submitted.
         if (doc.planIfr && ISO_DATE.test(doc.planIfr)) {
-          tx.insert(schema.docStages).values({
+          await tx.insert(schema.docStages).values({
             id: randomUUID(),
             documentId: newId,
             stage: 'IFR',
             order: STAGE_ORDER.indexOf('IFR'),
             planSubmitDate: doc.planIfr,
             submitted: false,
-          }).run();
+          });
         }
       }
     }

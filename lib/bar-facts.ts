@@ -48,8 +48,9 @@ function reasonText(r: ForecastReason): string | null {
   }
 }
 
-export function getBarFacts(projectId: string, today: Date = new Date()): BarFacts {
-  const db = buildProjectDashboardData(projectId)?.db;
+export async function getBarFacts(projectId: string, today: Date = new Date()): Promise<BarFacts> {
+  const data = await buildProjectDashboardData(projectId);
+  const db = data?.db;
   if (!db) return { week: null, facts: {} };
   const week = db.weeks.length ? currentWeekOf(db, today) : null;
   const meta = week != null ? db.weeks.find((w) => w.week === week) : undefined;

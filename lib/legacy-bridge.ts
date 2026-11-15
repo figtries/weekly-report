@@ -13,7 +13,8 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { getActiveProjectId } from './projects';
 import { emptyDatabase } from './workspace';
 import type { Database } from './types';
@@ -26,25 +27,15 @@ export interface OpenProject {
 export async function getOpenProject(): Promise<OpenProject | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
-  const p = db
+  const rows = await db
     .select({ id: schema.projects.id, name: schema.projects.name })
     .from(schema.projects)
-    .where(eq(schema.projects.id, id))
-    .all()[0];
-  return p ?? null;
+    .where(eq(schema.projects.id, id));
+  return rows[0] ?? null;
 }
 
 /**
  * WHICH JSON RECORD A PROJECT READS AND WRITES: its own, keyed by its SQLite id.
- *
- * `db.json` has held a map of projects since the portfolio tier, and only
- * `readDb()` insisted on returning whichever one the FILE called active — which
- * is why the daily report could once only belong to one project. Keyed, two
- * projects can never write over each other's days. (The imported project used
- * to read its own record through `legacy_json_id`; it was removed 26 Sep 2026.)
- *
- * Kept as a function rather than inlined at its callers so the key has one
- * definition.
  */
 export function jsonKeyFor(projectId: string): string {
   return projectId;
@@ -53,13 +44,15 @@ export function jsonKeyFor(projectId: string): string {
 /**
  * The record a project starts from the first time it saves a daily report.
  *
- * Seeded with the identity SQLite already holds rather than left blank: the
- * printed daily report puts the project name, the contract number and both
- * companies in its header, and asking somebody to type them a second time —
- * into a second store — is how the two drift apart.
+ * Seeded with the identity SQLite already holds rather than left blank.
+ * Now async because it queries PostgreSQL.
  */
-export function jsonSeedFor(projectId: string): Database {
-  const p = db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0];
+export async function jsonSeedFor(projectId: string): Promise<Database> {
+  const rows = await db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId));
+  const p = rows[0];
   const seeded = emptyDatabase(p?.name ?? '');
   if (p) {
     seeded.project.contractNo = p.contractNo ?? '';

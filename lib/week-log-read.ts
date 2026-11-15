@@ -3,7 +3,6 @@ import 'server-only';
 import { getPrintDb } from './data';
 import { signedWeeksSqlite } from './progress-sqlite';
 import { getActiveProjectId } from './projects';
-import { ensureFreshDb } from './sqlite';
 import { buildLeafWeekLog, type LeafWeekLog } from './week-log';
 
 /**
@@ -31,11 +30,10 @@ export async function readLeafLog(
   { fresh = true }: { fresh?: boolean } = {}
 ): Promise<LeafWeekLog | null> {
   const projectId = forProject ?? (await getActiveProjectId());
-  if (fresh) await ensureFreshDb();
   const editable = Boolean(projectId);
   const db = await getPrintDb(projectId ?? null);
   const signedWeeks = editable
-    ? signedWeeksSqlite(projectId!)
+    ? await signedWeeksSqlite(projectId!)
     : new Set((db.approvals ?? []).map((a) => a.week));
   return buildLeafWeekLog(db, nodeId, { signedWeeks, editable });
 }

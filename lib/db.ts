@@ -121,7 +121,7 @@ export async function mutateProjectDb<T>(
   return mutateWorkspace(async (ws) => {
     let project = ws.projects[key];
     if (!project) {
-      project = jsonSeedFor(id);
+      project = await jsonSeedFor(id);
       ws.projects[key] = project;
       if (!ws.order.includes(key)) ws.order.push(key);
     }

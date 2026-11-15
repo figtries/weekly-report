@@ -5,21 +5,15 @@
  * `lib/workspace.ts`'s view of "which projects exist", which could only ever
  * see the JSON store, and which had no dates to draw a schedule from.
  *
- * Every query here is synchronous, and that is load-bearing rather than
- * stylistic: better-sqlite3 under Cache Components counts as a deterministic
- * operation, so these complete during prerendering and land in the static
- * shell. `app/layout.tsx` calls into this on every route in the app — an async
- * read here would force a `<Suspense>` around it and fail the build on
- * `/_not-found`. See the note at the top of `lib/sqlite.ts`.
- *
  * Writes live in `lib/project-actions.ts`; a file with `'use server'` at the
  * top turns every export into a server action, so they cannot share this one.
  */
-import { asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
 import { deriveInitial } from './initial';
-import { db, ensureFreshDb, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 
 /**
  * WHICH PROJECT IS OPEN LIVES IN THE BROWSER, NOT IN THE DATABASE.
@@ -87,80 +81,43 @@ export interface ProjectCard {
  * days; this keeps that promise.
  */
 export async function getActiveProjectId(): Promise<string | null> {
-  // THE COOKIE IS READ FIRST, AND THE ORDER IS CORRECTNESS.
-  //
-  // `ensureFreshDb()` throttles itself on `Date.now()`, and under
-  // `cacheComponents` reading the clock BEFORE any request data has been read
-  // is a static-generation bailout: "used `Date.now()` before accessing either
-  // uncached data or Request data". It only bites where the snapshot layer is
-  // actually configured — that is, on the deployment and nowhere else — which
-  // is why it survived every local build and every local `next start`.
-  //
-  // It cost Document Control outright (12 Sep 2026). Every `/dokumen/[week]`
-  // path that was NOT in `generateStaticParams` 500d on Vercel, because this is
-  // the first thing the section's tab row asks for; weeks 1–60 only looked
-  // alive because they were being served from the build-time ISR entry, whose
-  // revalidation had been failing silently since the deploy (`X-Vercel-Cache:
-  // STALE`, `Age` climbing forever). `/weekly` escaped it by accident:
-  // `LegacyChromeGate` calls `connection()` before it ever gets here.
-  //
-  // Reading the cookie first costs nothing and legitimises the clock for every
-  // caller in the app, so no screen has to remember to call `connection()`
-  // before asking which project is open.
   const jar = await cookies();
-  // Every screen that follows the open project passes through here, and it is
-  // already an uncached read, so this is where a deployment catches up with the
-  // writes another instance made before answering from its own stale bytes. A
-  // 304 at most once every 1.5 s, and nothing at all when no blob store is
-  // attached — see lib/db-snapshot.ts.
-  await ensureFreshDb();
   const chosen = jar.get(OPEN_PROJECT_COOKIE)?.value;
-  if (chosen) {
-    if (isOpenable(chosen)) return chosen;
-    // A COOKIE NAMING A PROJECT THIS DATABASE HAS NEVER HEARD OF IS NOT PROOF
-    // THE PROJECT IS GONE.
-    //
-    // On the deployment the database is a snapshot pulled over a copy of
-    // `data/seed.db` (see lib/db-snapshot.ts), and a cold instance can answer a
-    // request from the seed before that pull has landed. The seed holds Gundih
-    // and nothing made since, so any newer project's cookie failed this test
-    // and the reader fell through to `app_state` — which in the seed also says
-    // Gundih. That is the whole of "sometimes, on first open, Data Overall is
-    // Gundih whatever I had open": not a stale render, a cookie silently
-    // overruled by bytes that had not arrived yet.
-    //
-    // So a MISS re-checks against fresh bytes before giving up. An archived
-    // project still falls through, because that is a real answer.
-    const known = getProject(chosen) !== null;
-    if (!known) {
-      await ensureFreshDb(true);
-      if (isOpenable(chosen)) return chosen;
-    }
-  }
+  if (chosen && (await isOpenable(chosen))) return chosen;
 
-  const state = db.select().from(schema.appState).where(eq(schema.appState.id, 'singleton')).all()[0];
-  if (state?.activeProjectId && isOpenable(state.activeProjectId)) return state.activeProjectId;
-  const first = db
+  const state = await db
+    .select({ activeProjectId: schema.appState.activeProjectId })
+    .from(schema.appState)
+    .where(eq(schema.appState.id, 'singleton'));
+  const stateId = state[0]?.activeProjectId;
+  if (stateId && (await isOpenable(stateId))) return stateId;
+
+  const first = await db
     .select({ id: schema.projects.id })
     .from(schema.projects)
     .where(isNull(schema.projects.archivedAt))
     .orderBy(asc(schema.projects.createdAt))
-    .all()[0];
-  return first?.id ?? null;
+    .limit(1);
+  return first[0]?.id ?? null;
 }
 
 /** Live and not archived — the two ways a stored pointer goes bad. */
-function isOpenable(id: string): boolean {
-  const row = db
+async function isOpenable(id: string): Promise<boolean> {
+  const rows = await db
     .select({ id: schema.projects.id, archivedAt: schema.projects.archivedAt })
     .from(schema.projects)
     .where(eq(schema.projects.id, id))
-    .all()[0];
-  return !!row && !row.archivedAt;
+    .limit(1);
+  return rows.length > 0 && !rows[0].archivedAt;
 }
 
-export function getProject(projectId: string) {
-  return db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0] ?? null;
+export async function getProject(projectId: string) {
+  const rows = await db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function getActiveProject() {
@@ -193,32 +150,26 @@ export async function getActiveProject() {
 export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<ProjectCard[]> {
   const activeId = await getActiveProjectId();
 
-  const counts = new Map<string, number>(
+  const [countsRows, weekCountsRows, rows] = await Promise.all([
     db
-      .select({ projectId: schema.wbsNodes.projectId, n: sql<number>`count(*)` })
+      .select({ projectId: schema.wbsNodes.projectId, n: count() })
       .from(schema.wbsNodes)
-      .groupBy(schema.wbsNodes.projectId)
-      .all()
-      .map((r) => [r.projectId, Number(r.n)])
-  );
-
-  const weekCounts = new Map<string, number>(
+      .groupBy(schema.wbsNodes.projectId),
     db
-      .select({ projectId: schema.weeks.projectId, n: sql<number>`count(*)` })
+      .select({ projectId: schema.weeks.projectId, n: count() })
       .from(schema.weeks)
-      .groupBy(schema.weeks.projectId)
-      .all()
-      .map((r) => [r.projectId, Number(r.n)])
-  );
+      .groupBy(schema.weeks.projectId),
+    db
+      .select()
+      .from(schema.projects)
+      .orderBy(desc(schema.projects.updatedAt), desc(schema.projects.createdAt)),
+  ]);
 
-  const rows = db
-    .select()
-    .from(schema.projects)
-    .orderBy(desc(schema.projects.updatedAt), desc(schema.projects.createdAt))
-    .all()
-    .filter((p) => opts.includeArchived || !p.archivedAt);
+  const counts = new Map(countsRows.map((r) => [r.projectId, Number(r.n)]));
+  const weekCounts = new Map(weekCountsRows.map((r) => [r.projectId, Number(r.n)]));
 
   return rows
+    .filter((p) => opts.includeArchived || !p.archivedAt)
     .map((p) => ({
       id: p.id,
       name: p.name,
@@ -237,18 +188,15 @@ export async function listProjects(opts: { includeArchived?: boolean } = {}): Pr
       rowCount: counts.get(p.id) ?? 0,
       weekCount: weekCounts.get(p.id) ?? 0,
     }))
-    // Stable, so everything behind the open card keeps the newest-touch order
-    // the query just gave it.
     .sort((a, b) => Number(b.isActive) - Number(a.isActive));
 }
 
-export function countArchived(): number {
-  const r = db
-    .select({ n: sql<number>`count(*)` })
+export async function countArchived(): Promise<number> {
+  const rows = await db
+    .select({ n: count() })
     .from(schema.projects)
-    .where(sql`${schema.projects.archivedAt} is not null`)
-    .all()[0];
-  return Number(r?.n ?? 0);
+    .where(sql`${schema.projects.archivedAt} is not null`);
+  return Number(rows[0]?.n ?? 0);
 }
 
 /**
@@ -265,26 +213,49 @@ export interface ProjectContents {
   documents: number;
 }
 
-export function getProjectContents(projectId: string): ProjectContents {
-  return {
-    wbsRows: countRaw('select count(*) c from wbs_nodes where project_id = ?', projectId),
-    leaves: countRaw('select count(*) c from wbs_nodes where project_id = ? and is_leaf = 1', projectId),
-    reportingUnits: countRaw(
-      'select count(*) c from wbs_nodes where project_id = ? and is_reporting_unit = 1',
-      projectId
-    ),
-    scheduledRows: countRaw(
-      `select count(distinct s.node_id) c from node_schedules s
-       join wbs_nodes n on n.id = s.node_id where n.project_id = ?`,
-      projectId
-    ),
-    baselines: countRaw('select count(*) c from baselines where project_id = ?', projectId),
-    weeks: countRaw('select count(*) c from weeks where project_id = ?', projectId),
-    documents: countRaw('select count(*) c from documents where project_id = ?', projectId),
-  };
-}
+export async function getProjectContents(projectId: string): Promise<ProjectContents> {
+  const [wbsRows, leaves, reportingUnits, scheduledRows, baselines, weeksCount, documents] =
+    await Promise.all([
+      db
+        .select({ n: count() })
+        .from(schema.wbsNodes)
+        .where(eq(schema.wbsNodes.projectId, projectId)),
+      db
+        .select({ n: count() })
+        .from(schema.wbsNodes)
+        .where(and(eq(schema.wbsNodes.projectId, projectId), eq(schema.wbsNodes.isLeaf, true))),
+      db
+        .select({ n: count() })
+        .from(schema.wbsNodes)
+        .where(
+          and(eq(schema.wbsNodes.projectId, projectId), eq(schema.wbsNodes.isReportingUnit, true))
+        ),
+      db.execute(
+        sql`select count(distinct s.node_id) as n from node_schedules s
+            join wbs_nodes n on n.id = s.node_id
+            where n.project_id = ${projectId}`
+      ),
+      db
+        .select({ n: count() })
+        .from(schema.baselines)
+        .where(eq(schema.baselines.projectId, projectId)),
+      db
+        .select({ n: count() })
+        .from(schema.weeks)
+        .where(eq(schema.weeks.projectId, projectId)),
+      db
+        .select({ n: count() })
+        .from(schema.documents)
+        .where(eq(schema.documents.projectId, projectId)),
+    ]);
 
-function countRaw(query: string, ...params: unknown[]): number {
-  const row = db.$client.prepare(query).get(...(params as never[])) as { c: number } | undefined;
-  return Number(row?.c ?? 0);
+  return {
+    wbsRows: Number(wbsRows[0]?.n ?? 0),
+    leaves: Number(leaves[0]?.n ?? 0),
+    reportingUnits: Number(reportingUnits[0]?.n ?? 0),
+    scheduledRows: Number((scheduledRows[0] as { n: string | number } | undefined)?.n ?? 0),
+    baselines: Number(baselines[0]?.n ?? 0),
+    weeks: Number(weeksCount[0]?.n ?? 0),
+    documents: Number(documents[0]?.n ?? 0),
+  };
 }

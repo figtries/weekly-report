@@ -1,14 +1,13 @@
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { parseBarView, type BarView } from './bar-view';
 
-/** A project's Bars choices. Synchronous, like every read in this app. */
-export function getBarView(projectId: string): BarView {
-  const row = db
+export async function getBarView(projectId: string): Promise<BarView> {
+  const rows = await db
     .select({ v: schema.projects.barView })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
-  return parseBarView(row?.v ?? null);
+    .where(eq(schema.projects.id, projectId));
+  return parseBarView(rows[0]?.v ?? null);
 }

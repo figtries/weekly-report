@@ -4,16 +4,16 @@
  * Separate from `lib/data.ts`, which serves the old JSON store and still feeds
  * every other screen. The document register's own reads live in
  * `lib/register.ts`.
- *
- * Every query is synchronous on purpose. better-sqlite3 under Cache Components
- * counts as a deterministic operation, so these complete during prerendering
- * and land in the static shell — no `use cache`, no `<Suspense>`. See the note
- * at the top of `lib/sqlite.ts`.
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 
-export function getProject(projectId: string) {
-  return db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).all()[0] ?? null;
+export async function getProject(projectId: string) {
+  const rows = await db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId));
+  return rows[0] ?? null;
 }

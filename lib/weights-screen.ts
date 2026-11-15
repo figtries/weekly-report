@@ -24,7 +24,8 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import type { ProgressMethod } from './schema';
 import {
   allocationOf,
@@ -392,51 +393,43 @@ export function buildWeightsScreen(
   };
 }
 
-export function loadWeightsScreen(projectId: string): WeightsScreen | null {
-  const project = db
+export async function loadWeightsScreen(projectId: string): Promise<WeightsScreen | null> {
+  const projectRows = await db
     .select({
       currency: schema.projects.currency,
       contractValue: schema.projects.contractValue,
       weightBasis: schema.projects.weightBasis,
     })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project) return null;
 
-  const nodes = loadWeightNodes(projectId);
+  const baselineId = await getActiveBaselineId(projectId);
+  const [nodes, rows, schedRows, msRows] = await Promise.all([
+    loadWeightNodes(projectId),
+    db
+      .select({
+        id: schema.wbsNodes.id,
+        code: schema.wbsNodes.wbsCode,
+        name: schema.wbsNodes.deskripsi,
+        method: schema.wbsNodes.progressMethod,
+        milestone: schema.wbsNodes.isMilestone,
+        qtyTotal: schema.wbsNodes.vol,
+        qtyUnit: schema.wbsNodes.satuan,
+      })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, projectId)),
+    baselineId
+      ? db.select().from(schema.nodeSchedules).where(eq(schema.nodeSchedules.baselineId, baselineId))
+      : Promise.resolve([]),
+    db.select({ nodeId: schema.milestones.nodeId }).from(schema.milestones),
+  ]);
 
-  const rows = db
-    .select({
-      id: schema.wbsNodes.id,
-      code: schema.wbsNodes.wbsCode,
-      name: schema.wbsNodes.deskripsi,
-      method: schema.wbsNodes.progressMethod,
-      milestone: schema.wbsNodes.isMilestone,
-      qtyTotal: schema.wbsNodes.vol,
-      qtyUnit: schema.wbsNodes.satuan,
-    })
-    .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, projectId))
-    .all();
-
-  // The dates come from the ACTIVE baseline, the same one the planner and the
-  // plan curve read. A project with no baseline yet simply has no dates to
-  // show, which is a true thing to say about it.
-  const baselineId = getActiveBaselineId(projectId);
-  const sched = new Map(
-    (baselineId
-      ? db
-          .select()
-          .from(schema.nodeSchedules)
-          .where(eq(schema.nodeSchedules.baselineId, baselineId))
-          .all()
-      : []
-    ).map((s) => [s.nodeId, s] as const)
-  );
+  const sched = new Map(schedRows.map((s) => [s.nodeId, s] as const));
 
   const stepCount = new Map<string, number>();
-  for (const m of db.select({ nodeId: schema.milestones.nodeId }).from(schema.milestones).all()) {
+  for (const m of msRows) {
     stepCount.set(m.nodeId, (stepCount.get(m.nodeId) ?? 0) + 1);
   }
 

@@ -33,8 +33,8 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 
 import { leafPlanFraction } from './plan-curve';
-import { getActiveBaselineId } from './sheet';
-import { db as sqlite, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { parseSignature } from './signature';
 import { deriveWeights } from './weights';
 import { parseLinks } from './links';
@@ -99,32 +99,30 @@ function forecastOf(n: {
   };
 }
 
-export function buildProjectDashboardData(projectId: string): ProjectDashboardData | null {
-  const project = sqlite
+export async function buildProjectDashboardData(projectId: string): Promise<ProjectDashboardData | null> {
+  const projects = await db
     .select()
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projects[0];
   if (!project) return null;
 
-  const nodes = sqlite
+  const nodes = await db
     .select()
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(asc(schema.wbsNodes.order))
-    .all();
+    .orderBy(asc(schema.wbsNodes.order));
 
-  const weekRows = sqlite
+  const weekRows = await db
     .select()
     .from(schema.weeks)
     .where(eq(schema.weeks.projectId, projectId))
-    .orderBy(asc(schema.weeks.weekNo))
-    .all();
+    .orderBy(asc(schema.weeks.weekNo));
 
   // Milestones ride along, because a milestone item's percentage IS its
   // milestones — `resolveLeafProgress` reads them off the item, and without
   // them every milestone leaf resolves to zero no matter what was recorded.
-  const msRows = sqlite
+  const msRows = await db
     .select({
       id: schema.milestones.id,
       nodeId: schema.milestones.nodeId,
@@ -135,8 +133,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
     .from(schema.milestones)
     .innerJoin(schema.wbsNodes, eq(schema.wbsNodes.id, schema.milestones.nodeId))
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(asc(schema.milestones.order))
-    .all();
+    .orderBy(asc(schema.milestones.order));
   const msByNode = new Map<string, { id: string; label: string; weight: number }[]>();
   for (const m of msRows) {
     const list = msByNode.get(m.nodeId);
@@ -183,24 +180,29 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
 
   // Dates come from the ACTIVE baseline, like every other reader: the
   // contractual one is claim material, this is how the work is being managed.
-  const baselineId = getActiveBaselineId(projectId);
+  // (Inlined from getActiveBaselineId in lib/sheet.ts to avoid circular migration.)
+  const baselineRows = await db
+    .select({ id: schema.baselines.id, kind: schema.baselines.kind })
+    .from(schema.baselines)
+    .where(eq(schema.baselines.projectId, projectId));
+  const baselineId =
+    baselineRows.find((b) => b.kind === 'active')?.id ?? baselineRows[0]?.id ?? null;
+
   const schedules = baselineId
-    ? sqlite
+    ? await db
         .select()
         .from(schema.nodeSchedules)
         .where(eq(schema.nodeSchedules.baselineId, baselineId))
-        .all()
     : [];
   const dates = new Map(schedules.map((s) => [s.nodeId, s]));
 
   const leafIds = new Set(nodes.filter((n) => n.isLeaf).map((n) => n.id));
   const weekIds = weekRows.map((w) => w.id);
   const progress = weekIds.length
-    ? sqlite
+    ? await db
         .select()
         .from(schema.leafProgress)
         .where(inArray(schema.leafProgress.weekId, weekIds))
-        .all()
     : [];
 
   // The EVIDENCE, not just the percentage. `lib/progress.ts` is the single
@@ -209,7 +211,7 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
   // quantity box over a leaf that had one recorded, and re-saving it would
   // have written that emptiness back.
   const msDone = weekIds.length
-    ? sqlite
+    ? await db
         .select({
           weekId: schema.milestoneProgress.weekId,
           milestoneId: schema.milestoneProgress.milestoneId,
@@ -219,7 +221,6 @@ export function buildProjectDashboardData(projectId: string): ProjectDashboardDa
         .from(schema.milestoneProgress)
         .innerJoin(schema.milestones, eq(schema.milestones.id, schema.milestoneProgress.milestoneId))
         .where(inArray(schema.milestoneProgress.weekId, weekIds))
-        .all()
     : [];
 
   const byWeek = new Map<

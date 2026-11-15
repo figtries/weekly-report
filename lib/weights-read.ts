@@ -6,7 +6,8 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { formatMoney } from './currency';
 import {
   checkBudgetEdit,
@@ -19,8 +20,8 @@ import {
   type WeightSummary,
 } from './weights';
 
-export function loadWeightNodes(projectId: string): WeightNode[] {
-  return db
+export async function loadWeightNodes(projectId: string): Promise<WeightNode[]> {
+  const rows = await db
     .select({
       id: schema.wbsNodes.id,
       parentId: schema.wbsNodes.parentId,
@@ -35,34 +36,22 @@ export function loadWeightNodes(projectId: string): WeightNode[] {
     })
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(schema.wbsNodes.order)
-    .all()
-    .map((n) => ({
-      ...n,
-      parentId: n.parentId ?? null,
-      // A stored 0% is nobody's decision: the percent box wrote one when
-      // someone typed 0, and it read back as a row that had been set. The
-      // action writes null for it now; this covers what is already stored.
-      workstepFactor: n.workstepFactor != null && n.workstepFactor > 0 ? n.workstepFactor : null,
-    }));
+    .orderBy(schema.wbsNodes.order);
+  return rows.map((n) => ({
+    ...n,
+    parentId: n.parentId ?? null,
+    workstepFactor: n.workstepFactor != null && n.workstepFactor > 0 ? n.workstepFactor : null,
+  }));
 }
 
-export function getWeightSummary(projectId: string): WeightSummary | null {
-  const project = db
+export async function getWeightSummary(projectId: string): Promise<WeightSummary | null> {
+  const projectRows = await db
     .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project) return null;
-  // A project with no rows still has money. Returning null here hid the
-  // contract figure on exactly the project where it had just been typed, along
-  // with the currency picker and the gap — which on a new project is the whole
-  // contract. `summariseWeights` handles an empty list; the strip hides the
-  // parts that need rows.
-  const nodes = loadWeightNodes(projectId);
-  // `projects.contract_value` is the SIGNED figure now, not a cache of the sum.
-  // One source, read here and nowhere else, so the list card and the project
-  // page can never show two different numbers for the same project again.
+  const nodes = await loadWeightNodes(projectId);
   return summariseWeights(nodes, project.currency, project.contractValue);
 }
 
@@ -76,29 +65,31 @@ export interface WeightFix {
 
 /**
  * Every money issue on a project, in words and with the one place it is fixed.
- * What the dashboard, the report screens, Data Overall and the project page all
- * read, so they name the same rows in the same order. See `weightIssues`.
  */
-export function loadWeightFixes(projectId: string, week: number): WeightFix[] {
-  const project = db
+export async function loadWeightFixes(projectId: string, week: number): Promise<WeightFix[]> {
+  const projectRows = await db
     .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project) return [];
-  const rows = db
-    .select({
-      id: schema.wbsNodes.id,
-      code: schema.wbsNodes.wbsCode,
-      name: schema.wbsNodes.deskripsi,
-      milestone: schema.wbsNodes.isMilestone,
-    })
-    .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, projectId))
-    .all();
+
+  const [rows, nodes] = await Promise.all([
+    db
+      .select({
+        id: schema.wbsNodes.id,
+        code: schema.wbsNodes.wbsCode,
+        name: schema.wbsNodes.deskripsi,
+        milestone: schema.wbsNodes.isMilestone,
+      })
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, projectId)),
+    loadWeightNodes(projectId),
+  ]);
+
   const label = new Map(rows.map((r) => [r.id, `${r.code ?? ''} ${r.name ?? ''}`.trim()]));
   const milestones = new Set(rows.filter((r) => r.milestone).map((r) => r.id));
-  const result = deriveWeights(loadWeightNodes(projectId), project.contractValue ?? undefined);
+  const result = deriveWeights(nodes, project.contractValue ?? undefined);
   const say = (amount: number) => formatMoney(amount, project.currency);
   return weightIssues(result, milestones).map((issue) => ({
     key: 'id' in issue ? `${issue.kind}:${issue.id}` : issue.kind,
@@ -109,26 +100,27 @@ export function loadWeightFixes(projectId: string, week: number): WeightFix[] {
 
 /**
  * Why giving `nodeId` a budget of `next` would break the cap, or null when it
- * would not. The pure rule is `checkBudgetEdit`; this only gathers what it
- * needs from the database and says the figures in the project's own currency.
+ * would not.
  */
-export function budgetRefusal(projectId: string, nodeId: string, next: number | null): string | null {
-  const project = db
+export async function budgetRefusal(projectId: string, nodeId: string, next: number | null): Promise<string | null> {
+  const projectRows = await db
     .select({ currency: schema.projects.currency, contractValue: schema.projects.contractValue })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project) return null;
-  const names = new Map(
+
+  const [nodeRows, nodes] = await Promise.all([
     db
       .select({ id: schema.wbsNodes.id, code: schema.wbsNodes.wbsCode, name: schema.wbsNodes.deskripsi })
       .from(schema.wbsNodes)
-      .where(eq(schema.wbsNodes.projectId, projectId))
-      .all()
-      .map((r) => [r.id, `${r.code ?? ''} ${r.name ?? ''}`.trim()])
-  );
-  return checkBudgetEdit(
+      .where(eq(schema.wbsNodes.projectId, projectId)),
     loadWeightNodes(projectId),
+  ]);
+
+  const names = new Map(nodeRows.map((r) => [r.id, `${r.code ?? ''} ${r.name ?? ''}`.trim()]));
+  return checkBudgetEdit(
+    nodes,
     project.contractValue,
     nodeId,
     next,

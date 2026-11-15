@@ -8,59 +8,63 @@ import { randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { getActiveBaselineId } from './sheet';
 
-export function lockContractSqlite(projectId: string, reason: string): { baselineId: string; rows: number } {
+export async function lockContractSqlite(projectId: string, reason: string): Promise<{ baselineId: string; rows: number }> {
   const why = reason.trim();
   if (!why) throw new Error('Say why this plan is the contract: a reason is required');
-  const exists = db
-    .select({ id: schema.baselines.id })
-    .from(schema.baselines)
-    .where(and(eq(schema.baselines.projectId, projectId), eq(schema.baselines.kind, 'contractual')))
-    .all()[0];
-  if (exists) throw new Error('This project already has a contract');
-  const active = getActiveBaselineId(projectId);
+
+  const [existsRows, active] = await Promise.all([
+    db
+      .select({ id: schema.baselines.id })
+      .from(schema.baselines)
+      .where(and(eq(schema.baselines.projectId, projectId), eq(schema.baselines.kind, 'contractual'))),
+    getActiveBaselineId(projectId),
+  ]);
+
+  if (existsRows.length > 0) throw new Error('This project already has a contract');
   if (!active) throw new Error('This project has no schedule yet');
-  const leaves = new Set(
+
+  const [leafRows, schedules] = await Promise.all([
     db
       .select({ id: schema.wbsNodes.id })
       .from(schema.wbsNodes)
-      .where(and(eq(schema.wbsNodes.projectId, projectId), eq(schema.wbsNodes.isLeaf, true)))
-      .all()
-      .map((n) => n.id)
-  );
-  const schedules = db
-    .select()
-    .from(schema.nodeSchedules)
-    .where(eq(schema.nodeSchedules.baselineId, active))
-    .all()
-    .filter((s) => leaves.has(s.nodeId));
+      .where(and(eq(schema.wbsNodes.projectId, projectId), eq(schema.wbsNodes.isLeaf, true))),
+    db
+      .select()
+      .from(schema.nodeSchedules)
+      .where(eq(schema.nodeSchedules.baselineId, active)),
+  ]);
+
+  const leaves = new Set(leafRows.map((n) => n.id));
+  const filtered = schedules.filter((s) => leaves.has(s.nodeId));
   const baselineId = `${projectId}:contractual`;
-  db.transaction((tx) => {
-    tx.insert(schema.baselines)
-      .values({
-        id: baselineId,
-        projectId,
-        kind: 'contractual',
-        revisionNo: 0,
-        label: 'Contract',
-        reason: why,
-        approvedAt: new Date().toISOString(),
-      })
-      .run();
-    for (const s of schedules) {
-      tx.insert(schema.nodeSchedules)
-        .values({
+
+  await db.transaction(async (tx) => {
+    await tx.insert(schema.baselines).values({
+      id: baselineId,
+      projectId,
+      kind: 'contractual',
+      revisionNo: 0,
+      label: 'Contract',
+      reason: why,
+      approvedAt: new Date().toISOString(),
+    });
+    if (filtered.length) {
+      await tx.insert(schema.nodeSchedules).values(
+        filtered.map((s) => ({
           id: randomUUID(),
           baselineId,
           nodeId: s.nodeId,
           startDate: s.startDate,
           finishDate: s.finishDate,
           durationDays: s.durationDays,
-        })
-        .run();
+        }))
+      );
     }
   });
-  return { baselineId, rows: schedules.length };
+
+  return { baselineId, rows: filtered.length };
 }

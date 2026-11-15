@@ -28,7 +28,8 @@
  */
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import { defaultMilestones, hasRealQuantity, syncLeafSnapshot, totalQty } from './progress';
 import type { FieldProgressUpdate } from './mutations';
 import type { LeafSnapshot, Milestone, ProgressMethod, WbsItem } from './types';
@@ -41,24 +42,24 @@ function methodOfRow(m: string | null): ProgressMethod {
   return m === 'qty' || m === 'milestone' ? m : 'lumpsum';
 }
 
-function weekRow(projectId: string, weekNo: number) {
-  return db
+async function weekRow(projectId: string, weekNo: number) {
+  const rows = await db
     .select()
     .from(schema.weeks)
-    .where(and(eq(schema.weeks.projectId, projectId), eq(schema.weeks.weekNo, weekNo)))
-    .all()[0];
+    .where(and(eq(schema.weeks.projectId, projectId), eq(schema.weeks.weekNo, weekNo)));
+  return rows[0];
 }
 
 /** The node, plus its milestones, in the shape `lib/progress.ts` reads. */
-function itemOf(nodeId: string): (WbsItem & { projectId: string }) | null {
-  const n = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId)).all()[0];
+async function itemOf(nodeId: string): Promise<(WbsItem & { projectId: string }) | null> {
+  const ns = await db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId));
+  const n = ns[0];
   if (!n) return null;
-  const ms = db
+  const ms = await db
     .select()
     .from(schema.milestones)
     .where(eq(schema.milestones.nodeId, nodeId))
-    .orderBy(asc(schema.milestones.order))
-    .all();
+    .orderBy(asc(schema.milestones.order));
   return {
     id: n.id,
     projectId: n.projectId,
@@ -80,8 +81,8 @@ function itemOf(nodeId: string): (WbsItem & { projectId: string }) | null {
  * Where this leaf stood going INTO the given week — the last row at or before
  * it, never a later one. A week nobody filled in does not reset anything.
  */
-function standingAt(projectId: string, nodeId: string, weekNo: number): LeafSnapshot {
-  const row = db
+async function standingAt(projectId: string, nodeId: string, weekNo: number): Promise<LeafSnapshot> {
+  const rows = await db
     .select({
       cumProgressPct: schema.leafProgress.cumProgressPct,
       qtyDone: schema.leafProgress.qtyDone,
@@ -98,21 +99,21 @@ function standingAt(projectId: string, nodeId: string, weekNo: number): LeafSnap
         lte(schema.weeks.weekNo, weekNo)
       )
     )
-    .orderBy(desc(schema.weeks.weekNo))
-    .all()[0];
+    .orderBy(desc(schema.weeks.weekNo));
+  const row = rows[0];
 
   const done = row
-    ? db
-        .select({ milestoneId: schema.milestoneProgress.milestoneId })
-        .from(schema.milestoneProgress)
-        .where(
-          and(
-            eq(schema.milestoneProgress.weekId, row.weekId),
-            eq(schema.milestoneProgress.achieved, true)
+    ? (
+        await db
+          .select({ milestoneId: schema.milestoneProgress.milestoneId })
+          .from(schema.milestoneProgress)
+          .where(
+            and(
+              eq(schema.milestoneProgress.weekId, row.weekId),
+              eq(schema.milestoneProgress.achieved, true)
+            )
           )
-        )
-        .all()
-        .map((m) => m.milestoneId)
+      ).map((m) => m.milestoneId)
     : [];
 
   return {
@@ -126,15 +127,15 @@ function standingAt(projectId: string, nodeId: string, weekNo: number): LeafSnap
   };
 }
 
-function writeSnapshot(
+async function writeSnapshot(
   tx: Writer,
   weekId: string,
   item: WbsItem,
   snap: LeafSnapshot,
   at: string
-): void {
+): Promise<void> {
   const method = item.progressMethod ?? 'lumpsum';
-  tx.insert(schema.leafProgress)
+  await tx.insert(schema.leafProgress)
     .values({
       id: `${weekId}:${item.id}`,
       weekId,
@@ -156,14 +157,13 @@ function writeSnapshot(
         source: snap.source ?? null,
         recordedAt: at,
       },
-    })
-    .run();
+    });
 
   const all = item.milestones ?? [];
   if (all.length === 0) return;
   const done = new Set(snap.milestonesDone ?? []);
   for (const m of all) {
-    tx.insert(schema.milestoneProgress)
+    await tx.insert(schema.milestoneProgress)
       .values({
         id: `${weekId}:${m.id}`,
         weekId,
@@ -174,27 +174,26 @@ function writeSnapshot(
       .onConflictDoUpdate({
         target: [schema.milestoneProgress.weekId, schema.milestoneProgress.milestoneId],
         set: { achieved: done.has(m.id), recordedAt: at },
-      })
-      .run();
+      });
   }
 }
 
 /** The Fill in screen: a quantity, or the milestones reached. */
-export function saveFieldProgressSqlite(
+export async function saveFieldProgressSqlite(
   projectId: string,
   weekNo: number,
   updates: FieldProgressUpdate[]
-): void {
-  const week = weekRow(projectId, weekNo);
+): Promise<void> {
+  const week = await weekRow(projectId, weekNo);
   if (!week) throw new Error(`Week ${weekNo} is not in this project`);
   const at = new Date().toISOString();
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const u of updates) {
-      const item = itemOf(u.leafId);
+      const item = await itemOf(u.leafId);
       if (!item || item.projectId !== projectId) continue;
 
-      let next: LeafSnapshot = { ...standingAt(projectId, u.leafId, weekNo) };
+      let next: LeafSnapshot = { ...await standingAt(projectId, u.leafId, weekNo) };
       if (u.qtyDone !== undefined) {
         next.qtyDone = Math.max(0, Math.min(totalQty(item), u.qtyDone));
         // Real evidence just arrived through the quantity form, which is
@@ -211,7 +210,7 @@ export function saveFieldProgressSqlite(
       if (u.note !== undefined) next.note = u.note;
       if (u.source !== undefined) next.source = u.source;
       next = syncLeafSnapshot(item, next);
-      writeSnapshot(tx, week.id, item, next, at);
+      await writeSnapshot(tx, week.id, item, next, at);
     }
   });
 }
@@ -224,38 +223,38 @@ export function saveFieldProgressSqlite(
  * into this week, which is the same statement made in this store's own terms —
  * and it is what makes the week count as reported.
  */
-export function markNoProgressSqlite(projectId: string, weekNo: number, leafIds: string[]): void {
-  const week = weekRow(projectId, weekNo);
+export async function markNoProgressSqlite(projectId: string, weekNo: number, leafIds: string[]): Promise<void> {
+  const week = await weekRow(projectId, weekNo);
   if (!week) throw new Error(`Week ${weekNo} is not in this project`);
   const at = new Date().toISOString();
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const leafId of leafIds) {
-      const item = itemOf(leafId);
+      const item = await itemOf(leafId);
       if (!item || item.projectId !== projectId) continue;
-      const snap = standingAt(projectId, leafId, weekNo);
-      writeSnapshot(tx, week.id, item, syncLeafSnapshot(item, snap), at);
+      const snap = await standingAt(projectId, leafId, weekNo);
+      await writeSnapshot(tx, week.id, item, syncLeafSnapshot(item, snap), at);
     }
   });
 }
 
 /** The Detail table: a typed percentage, which only a lumpsum leaf really has. */
-export function saveWeekUpdatesSqlite(
+export async function saveWeekUpdatesSqlite(
   projectId: string,
   weekNo: number,
   updates: Record<string, Partial<LeafSnapshot>>
-): void {
-  const week = weekRow(projectId, weekNo);
+): Promise<void> {
+  const week = await weekRow(projectId, weekNo);
   if (!week) throw new Error(`Week ${weekNo} is not in this project`);
   const at = new Date().toISOString();
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const [nodeId, patch] of Object.entries(updates)) {
       // A target is the SCHEDULE's business — see the header.
       if (patch.cumProgressPct === undefined) continue;
-      const item = itemOf(nodeId);
+      const item = await itemOf(nodeId);
       if (!item || item.projectId !== projectId) continue;
-      const snap = standingAt(projectId, nodeId, weekNo);
+      const snap = await standingAt(projectId, nodeId, weekNo);
       snap.cumProgressPct = Math.max(0, Math.min(100, patch.cumProgressPct));
       if (patch.note !== undefined) snap.note = patch.note;
       if (patch.source !== undefined) snap.source = patch.source;
@@ -267,7 +266,7 @@ export function saveWeekUpdatesSqlite(
       // forward whatever `source` the row already stood at, `syncLeafSnapshot`
       // would see the OLD value (never 'manual'), and a percent typed through
       // the escape hatch would be silently recomputed away on this store.
-      writeSnapshot(tx, week.id, item, syncLeafSnapshot(item, snap), at);
+      await writeSnapshot(tx, week.id, item, syncLeafSnapshot(item, snap), at);
     }
   });
 }
@@ -280,12 +279,12 @@ export function saveWeekUpdatesSqlite(
  * for 27 weeks down to zero. Every week the leaf already has is re-expressed in
  * the new method's own terms instead.
  */
-export function setProgressMethodSqlite(
+export async function setProgressMethodSqlite(
   nodeId: string,
   method: ProgressMethod,
   opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {}
-): void {
-  const item = itemOf(nodeId);
+): Promise<void> {
+  const item = await itemOf(nodeId);
   if (!item) throw new Error('Item not found');
 
   if (method === 'qty') {
@@ -299,15 +298,14 @@ export function setProgressMethodSqlite(
   }
 
   const at = new Date().toISOString();
-  db.transaction((tx) => {
-    tx.update(schema.wbsNodes)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.wbsNodes)
       .set({
         progressMethod: method,
         ...(method === 'qty' && opts.vol !== undefined ? { vol: opts.vol } : {}),
         ...(method === 'qty' && opts.satuan !== undefined ? { satuan: opts.satuan } : {}),
       })
-      .where(eq(schema.wbsNodes.id, nodeId))
-      .run();
+      .where(eq(schema.wbsNodes.id, nodeId));
 
     // SWITCHING CLEARS THE OTHER METHOD'S EVIDENCE — a stale quantity sitting
     // behind a milestone item is a number nobody can explain later.
@@ -317,27 +315,25 @@ export function setProgressMethodSqlite(
     // one activity's kind of work took a project's actual from 66.01% to
     // 17.82% (4,656 ticks down to 188, found 7 Oct 2026; the line dates from
     // 12 Sep 2026). Scoped to this row's own rungs, by id.
-    const ownRungs = db
-      .select({ id: schema.milestones.id })
-      .from(schema.milestones)
-      .where(eq(schema.milestones.nodeId, nodeId))
-      .all()
-      .map((r) => r.id);
+    const ownRungs = (
+      await db
+        .select({ id: schema.milestones.id })
+        .from(schema.milestones)
+        .where(eq(schema.milestones.nodeId, nodeId))
+    ).map((r) => r.id);
     if (ownRungs.length) {
-      tx.delete(schema.milestoneProgress)
-        .where(inArray(schema.milestoneProgress.milestoneId, ownRungs))
-        .run();
+      await tx.delete(schema.milestoneProgress)
+        .where(inArray(schema.milestoneProgress.milestoneId, ownRungs));
     }
-    tx.delete(schema.milestones).where(eq(schema.milestones.nodeId, nodeId)).run();
+    await tx.delete(schema.milestones).where(eq(schema.milestones.nodeId, nodeId));
 
     let milestones: Milestone[] = [];
     if (method === 'milestone') {
       const source = opts.milestones?.length ? opts.milestones : defaultMilestones();
       milestones = source.map((m) => ({ ...m, id: `${nodeId}:${m.id}` }));
       for (const [i, m] of milestones.entries()) {
-        tx.insert(schema.milestones)
-          .values({ id: m.id, nodeId, label: m.label, weight: m.weight, order: i })
-          .run();
+        await tx.insert(schema.milestones)
+          .values({ id: m.id, nodeId, label: m.label, weight: m.weight, order: i });
       }
     }
 
@@ -349,7 +345,7 @@ export function setProgressMethodSqlite(
       milestones: milestones.length ? milestones : undefined,
     };
 
-    const rows = db
+    const rows = await db
       .select({
         weekId: schema.leafProgress.weekId,
         cumProgressPct: schema.leafProgress.cumProgressPct,
@@ -357,8 +353,7 @@ export function setProgressMethodSqlite(
         source: schema.leafProgress.source,
       })
       .from(schema.leafProgress)
-      .where(eq(schema.leafProgress.nodeId, nodeId))
-      .all();
+      .where(eq(schema.leafProgress.nodeId, nodeId));
 
     const total = totalQty(next);
     const totalW = milestones.reduce((a, m) => a + m.weight, 0) || 1;
@@ -390,14 +385,13 @@ export function setProgressMethodSqlite(
         }
         snap.milestonesDone = done;
       }
-      writeSnapshot(tx, row.weekId, next, syncLeafSnapshot(next, snap), at);
+      await writeSnapshot(tx, row.weekId, next, syncLeafSnapshot(next, snap), at);
     }
 
     if (method !== 'qty') {
-      tx.update(schema.leafProgress)
+      await tx.update(schema.leafProgress)
         .set({ qtyDone: null })
-        .where(eq(schema.leafProgress.nodeId, nodeId))
-        .run();
+        .where(eq(schema.leafProgress.nodeId, nodeId));
     }
   });
 }
@@ -411,27 +405,26 @@ export function setProgressMethodSqlite(
  * transaction shape so "switching clears the other method's evidence" keeps
  * holding here too.
  */
-export function setWorkKindSqlite(
+export async function setWorkKindSqlite(
   nodeId: string,
   kindId: string,
   method: ProgressMethod,
   opts: { vol?: number | null; satuan?: string | null; milestones?: Milestone[] } = {},
   /** Construction's part, as Data Overall was told it. Null everywhere else. */
   part: string | null = null
-): void {
+): Promise<void> {
   // The same ladder again (Other picked on a row already on the generic
   // ladder) is an answer, not a re-measure: the rungs and their ticks stay.
-  const node = db
+  const nodes = await db
     .select({ method: schema.wbsNodes.progressMethod })
     .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.id, nodeId))
-    .all()[0];
-  const own = db
+    .where(eq(schema.wbsNodes.id, nodeId));
+  const node = nodes[0];
+  const own = await db
     .select({ id: schema.milestones.id, weight: schema.milestones.weight })
     .from(schema.milestones)
     .where(eq(schema.milestones.nodeId, nodeId))
-    .orderBy(schema.milestones.order)
-    .all();
+    .orderBy(schema.milestones.order);
   const next = opts.milestones ?? [];
   const sameLadder =
     method === 'milestone' &&
@@ -439,11 +432,10 @@ export function setWorkKindSqlite(
     own.length > 0 &&
     own.length === next.length &&
     own.every((m, i) => m.id === `${nodeId}:${next[i].id}` && m.weight === next[i].weight);
-  if (!sameLadder) setProgressMethodSqlite(nodeId, method, opts);
-  db.update(schema.wbsNodes)
+  if (!sameLadder) await setProgressMethodSqlite(nodeId, method, opts);
+  await db.update(schema.wbsNodes)
     .set({ workKind: kindId, workPart: kindId === 'construction' ? part : null })
-    .where(eq(schema.wbsNodes.id, nodeId))
-    .run();
+    .where(eq(schema.wbsNodes.id, nodeId));
 }
 
 /* ----------------------------------------------- what only a person knows */
@@ -452,15 +444,15 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const FORECAST_SOURCES = new Set(['vendor', 'site', 'client']);
 
 /** A leaf of this project, or an error saying which it is not. */
-function leafOfProject(projectId: string, nodeId: string) {
-  const n = db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId)).all()[0];
+async function leafOfProject(projectId: string, nodeId: string) {
+  const ns = await db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.id, nodeId));
+  const n = ns[0];
   if (!n || n.projectId !== projectId) throw new Error('Item not found');
-  const child = db
+  const children = await db
     .select({ id: schema.wbsNodes.id })
     .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.parentId, nodeId))
-    .all()[0];
-  if (child) throw new Error('Only an activity can carry a forecast date or wait for another');
+    .where(eq(schema.wbsNodes.parentId, nodeId));
+  if (children[0]) throw new Error('Only an activity can carry a forecast date or wait for another');
   return n;
 }
 
@@ -470,30 +462,30 @@ function leafOfProject(projectId: string, nodeId: string) {
  * week's progress row: that row is the record that somebody checked the
  * progress, and a vendor's email is not that (lib/forecast.ts).
  */
-export function setLeafForecastSqlite(
+export async function setLeafForecastSqlite(
   projectId: string,
   nodeId: string,
   value: { date: string; source: string; rungId: string | null } | null,
   week: number
-): void {
-  leafOfProject(projectId, nodeId);
+): Promise<void> {
+  await leafOfProject(projectId, nodeId);
   if (value) {
     if (!ISO_DATE.test(value.date) || Number.isNaN(Date.parse(value.date))) throw new Error('That is not a date');
     if (!FORECAST_SOURCES.has(value.source)) throw new Error('Say who gave the date: vendor, site or client');
     if (value.rungId) {
-      const rung = db.select().from(schema.milestones).where(eq(schema.milestones.id, value.rungId)).all()[0];
+      const rungs = await db.select().from(schema.milestones).where(eq(schema.milestones.id, value.rungId));
+      const rung = rungs[0];
       if (!rung || rung.nodeId !== nodeId) throw new Error('That stage is not on this activity');
     }
   }
-  db.update(schema.wbsNodes)
+  await db.update(schema.wbsNodes)
     .set({
       forecastDate: value?.date ?? null,
       forecastSource: value?.source ?? null,
       forecastRung: value?.rungId ?? null,
       forecastWeek: value ? week : null,
     })
-    .where(eq(schema.wbsNodes.id, nodeId))
-    .run();
+    .where(eq(schema.wbsNodes.id, nodeId));
 }
 
 // Links between activities are written by lib/links-sqlite.ts (since 7 Oct
@@ -506,13 +498,12 @@ export function setLeafForecastSqlite(
  * it signed is worth nothing in a dispute, so the log will not write into one
  * of these unless the person has said, for this save, that they mean to.
  */
-export function signedWeeksSqlite(projectId: string): Set<number> {
-  const rows = db
+export async function signedWeeksSqlite(projectId: string): Promise<Set<number>> {
+  const rows = await db
     .select({ weekNo: schema.weeks.weekNo })
     .from(schema.approvals)
     .innerJoin(schema.weeks, eq(schema.weeks.id, schema.approvals.weekId))
-    .where(eq(schema.weeks.projectId, projectId))
-    .all();
+    .where(eq(schema.weeks.projectId, projectId));
   return new Set(rows.map((r) => r.weekNo));
 }
 
@@ -547,8 +538,8 @@ export interface LeafWeekBefore {
 }
 
 /** Each recorded week's evidence for one leaf, keyed by week number. */
-function recordedEvidence(projectId: string, nodeId: string): Map<number, WeekEvidence> {
-  const rows = db
+async function recordedEvidence(projectId: string, nodeId: string): Promise<Map<number, WeekEvidence>> {
+  const rows = await db
     .select({
       weekId: schema.leafProgress.weekId,
       weekNo: schema.weeks.weekNo,
@@ -559,14 +550,12 @@ function recordedEvidence(projectId: string, nodeId: string): Map<number, WeekEv
     })
     .from(schema.leafProgress)
     .innerJoin(schema.weeks, eq(schema.weeks.id, schema.leafProgress.weekId))
-    .where(and(eq(schema.leafProgress.nodeId, nodeId), eq(schema.weeks.projectId, projectId)))
-    .all();
-  const ms = db
+    .where(and(eq(schema.leafProgress.nodeId, nodeId), eq(schema.weeks.projectId, projectId)));
+  const ms = await db
     .select({ weekId: schema.milestoneProgress.weekId, milestoneId: schema.milestoneProgress.milestoneId })
     .from(schema.milestoneProgress)
     .innerJoin(schema.milestones, eq(schema.milestones.id, schema.milestoneProgress.milestoneId))
-    .where(and(eq(schema.milestones.nodeId, nodeId), eq(schema.milestoneProgress.achieved, true)))
-    .all();
+    .where(and(eq(schema.milestones.nodeId, nodeId), eq(schema.milestoneProgress.achieved, true)));
   const doneByWeek = new Map<string, string[]>();
   for (const m of ms) doneByWeek.set(m.weekId, [...(doneByWeek.get(m.weekId) ?? []), m.milestoneId]);
 
@@ -597,20 +586,19 @@ const SOURCES = new Set(['gate', 'steps', 'qty', 'quote', 'manual']);
  *
  * Returns the rows as they were, for Undo.
  */
-export function saveLeafWeeksSqlite(
+export async function saveLeafWeeksSqlite(
   projectId: string,
   nodeId: string,
   edits: { week: number; evidence: WeekEvidence }[],
   { allowSigned = false }: { allowSigned?: boolean } = {}
-): LeafWeekBefore[] {
-  const item = itemOf(nodeId);
+): Promise<LeafWeekBefore[]> {
+  const item = await itemOf(nodeId);
   if (!item || item.projectId !== projectId) throw new Error('Item not found');
 
-  const weekRows = db
+  const weekRows = await db
     .select({ id: schema.weeks.id, weekNo: schema.weeks.weekNo })
     .from(schema.weeks)
-    .where(eq(schema.weeks.projectId, projectId))
-    .all();
+    .where(eq(schema.weeks.projectId, projectId));
   const weekIdOf = new Map(weekRows.map((w) => [w.weekNo, w.id]));
 
   // What the client sent is a request, not a fact: clamp it to what the item
@@ -634,40 +622,40 @@ export function saveLeafWeeksSqlite(
   if (!clean.size) return [];
 
   const logItem = { progressMethod: item.progressMethod ?? 'lumpsum', vol: item.vol, milestones: item.milestones };
-  const { writes } = cascade(logItem, recordedEvidence(projectId, nodeId), clean);
+  const { writes } = cascade(logItem, await recordedEvidence(projectId, nodeId), clean);
 
-  const signed = signedWeeksSqlite(projectId);
+  const signed = await signedWeeksSqlite(projectId);
   const touchesSigned = [...writes.keys()].filter((w) => signed.has(w)).sort((a, b) => a - b);
   if (touchesSigned.length && !allowSigned) throw new SignedWeeksError(touchesSigned);
 
   const msIds = (item.milestones ?? []).map((m) => m.id);
-  const before: LeafWeekBefore[] = [...writes.keys()].map((w) => {
-    const weekId = weekIdOf.get(w)!;
-    const leaf =
-      db
+  const before: LeafWeekBefore[] = await Promise.all(
+    [...writes.keys()].map(async (w) => {
+      const weekId = weekIdOf.get(w)!;
+      const leafRows = await db
         .select()
         .from(schema.leafProgress)
-        .where(and(eq(schema.leafProgress.weekId, weekId), eq(schema.leafProgress.nodeId, nodeId)))
-        .all()[0] ?? null;
-    const milestones = msIds.length
-      ? db
-          .select()
-          .from(schema.milestoneProgress)
-          .where(
-            and(
-              eq(schema.milestoneProgress.weekId, weekId),
-              inArray(schema.milestoneProgress.milestoneId, msIds)
+        .where(and(eq(schema.leafProgress.weekId, weekId), eq(schema.leafProgress.nodeId, nodeId)));
+      const leaf = leafRows[0] ?? null;
+      const milestones = msIds.length
+        ? await db
+            .select()
+            .from(schema.milestoneProgress)
+            .where(
+              and(
+                eq(schema.milestoneProgress.weekId, weekId),
+                inArray(schema.milestoneProgress.milestoneId, msIds)
+              )
             )
-          )
-          .all()
-      : [];
-    return { weekId, leaf, milestones };
-  });
+        : [];
+      return { weekId, leaf, milestones };
+    })
+  );
 
   const at = new Date().toISOString();
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const [w, ev] of writes) {
-      writeSnapshot(tx, weekIdOf.get(w)!, item, syncLeafSnapshot(item, { targetWF: 0, ...ev }), at);
+      await writeSnapshot(tx, weekIdOf.get(w)!, item, syncLeafSnapshot(item, { targetWF: 0, ...ev }), at);
     }
   });
   return before;
@@ -680,16 +668,16 @@ export function saveLeafWeeksSqlite(
  * and the project before anything is written: a row for another leaf, another
  * project's week or another leaf's milestone is refused rather than restored.
  */
-export function restoreLeafWeeksSqlite(projectId: string, nodeId: string, before: LeafWeekBefore[]): void {
-  const item = itemOf(nodeId);
+export async function restoreLeafWeeksSqlite(projectId: string, nodeId: string, before: LeafWeekBefore[]): Promise<void> {
+  const item = await itemOf(nodeId);
   if (!item || item.projectId !== projectId) throw new Error('Item not found');
   const ownWeeks = new Set(
-    db
-      .select({ id: schema.weeks.id })
-      .from(schema.weeks)
-      .where(eq(schema.weeks.projectId, projectId))
-      .all()
-      .map((w) => w.id)
+    (
+      await db
+        .select({ id: schema.weeks.id })
+        .from(schema.weeks)
+        .where(eq(schema.weeks.projectId, projectId))
+    ).map((w) => w.id)
   );
   const msIds = (item.milestones ?? []).map((m) => m.id);
   const ownMs = new Set(msIds);
@@ -701,23 +689,21 @@ export function restoreLeafWeeksSqlite(projectId: string, nodeId: string, before
     }
   }
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const b of before) {
-      tx.delete(schema.leafProgress)
-        .where(and(eq(schema.leafProgress.weekId, b.weekId), eq(schema.leafProgress.nodeId, nodeId)))
-        .run();
+      await tx.delete(schema.leafProgress)
+        .where(and(eq(schema.leafProgress.weekId, b.weekId), eq(schema.leafProgress.nodeId, nodeId)));
       if (msIds.length) {
-        tx.delete(schema.milestoneProgress)
+        await tx.delete(schema.milestoneProgress)
           .where(
             and(
               eq(schema.milestoneProgress.weekId, b.weekId),
               inArray(schema.milestoneProgress.milestoneId, msIds)
             )
-          )
-          .run();
+          );
       }
-      if (b.leaf) tx.insert(schema.leafProgress).values(b.leaf).run();
-      for (const m of b.milestones) tx.insert(schema.milestoneProgress).values(m).run();
+      if (b.leaf) await tx.insert(schema.leafProgress).values(b.leaf);
+      for (const m of b.milestones) await tx.insert(schema.milestoneProgress).values(m);
     }
   });
 }

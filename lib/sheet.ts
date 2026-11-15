@@ -32,7 +32,8 @@
  */
 import { and, asc, eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db, type Db } from './pg';
+import * as schema from './schema';
 import { inclusiveDays } from './plan-curve';
 import { analyseNetwork, type WeekSpan } from './chains';
 import { parseLinks, type StoredLink } from './links';
@@ -74,36 +75,19 @@ export interface SheetRow {
   isSummary: boolean;
   /**
    * Which colour group the row's bar belongs to, or -1 for none.
-   *
-   * Colour here does a job rather than decorating: it says WHICH PACKAGE a bar
-   * belongs to, so a plan of hundreds of rows can be read as a handful of
-   * streams running alongside each other. The group is the nearest reporting
-   * unit above the row — SPK-002, SPK-003 and so on — because that is the
-   * division the client's own report is built from. A project with no units
-   * falls back to its top-level branches.
-   *
-   * Rows outside every group keep -1 and are drawn neutral. Groups are assigned
-   * in document order and never cycled: past the palette's length they become
-   * -1 too, rather than repeating a hue and claiming two packages are one.
    */
   colorGroup: number;
   /** The group's name, for the legend. Only set on the row that starts it. */
   groupLabel: string | null;
   /**
    * The nearest reporting unit at or above this row, by id, or null.
-   *
-   * `colorGroup` answers the same question as an index into a palette, which is
-   * fine for painting and useless for a rule: a bar style that says "inside
-   * SPK-007" must survive another unit being marked above it. This is the
-   * durable answer, and the one a package colour is kept under (lib/bar-view.ts).
    */
   unitId: string | null;
   /** That unit's label, for a rule editor to show without a second lookup. */
   unitName: string | null;
   /**
    * Days this row can slip before the project finish moves, through its links.
-   * Null on a group row and on a row not linked through to the finish (see
-   * `analyseNetwork` in lib/chains.ts).
+   * Null on a group row and on a row not linked through to the finish.
    */
   totalFloat: number | null;
   /** Zero float: delaying this row by a day moves the end of the project. */
@@ -134,48 +118,46 @@ export interface Sheet {
   contract: { lockedAt: string; reason: string | null } | null;
 }
 
-export function getActiveBaselineId(projectId: string): string | null {
-  const rows = db
+export async function getActiveBaselineId(projectId: string): Promise<string | null> {
+  const rows = await db
     .select({ id: schema.baselines.id, kind: schema.baselines.kind })
     .from(schema.baselines)
-    .where(eq(schema.baselines.projectId, projectId))
-    .all();
+    .where(eq(schema.baselines.projectId, projectId));
   return rows.find((b) => b.kind === 'active')?.id ?? rows[0]?.id ?? null;
 }
 
 /** The dates stored against a row itself, both of them or nothing. */
-function ownDates(nodeId: string, baselineId: string): { start: string; finish: string } | null {
-  const s = db
+async function ownDates(
+  nodeId: string,
+  baselineId: string,
+  source: Pick<Db, 'select'> = db
+): Promise<{ start: string; finish: string } | null> {
+  const rows = await source
     .select({ start: schema.nodeSchedules.startDate, finish: schema.nodeSchedules.finishDate })
     .from(schema.nodeSchedules)
     .where(
       and(eq(schema.nodeSchedules.baselineId, baselineId), eq(schema.nodeSchedules.nodeId, nodeId))
-    )
-    .all()[0];
+    );
+  const s = rows[0];
   return s?.start && s?.finish ? { start: s.start, finish: s.finish } : null;
 }
 
 /**
  * The dates a row SHOWS — the same answer `getSheet` renders, for one row.
- *
- * Its own box widened to cover whatever is underneath it, which for a leaf is
- * simply its own dates and for a branch with none is its children's span. The
- * writers ask this rather than reading `node_schedules` directly, so that "does
- * this fit inside its parent" is decided against what is on the screen and not
- * against a value the screen never shows. The FENCE is a different question and
- * a stricter one — see `boxAt`.
  */
-export function rowSpan(nodeId: string, baselineId: string): { start: string; finish: string } | null {
-  const own = ownDates(nodeId, baselineId);
+export async function rowSpan(
+  nodeId: string,
+  baselineId: string
+): Promise<{ start: string; finish: string } | null> {
+  const own = await ownDates(nodeId, baselineId);
   let start: string | null = own?.start ?? null;
   let finish: string | null = own?.finish ?? null;
-  const kids = db
+  const kids = await db
     .select({ id: schema.wbsNodes.id })
     .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.parentId, nodeId))
-    .all();
+    .where(eq(schema.wbsNodes.parentId, nodeId));
   for (const k of kids) {
-    const s = rowSpan(k.id, baselineId);
+    const s = await rowSpan(k.id, baselineId);
     if (!s) continue;
     if (!start || s.start < start) start = s.start;
     if (!finish || s.finish > finish) finish = s.finish;
@@ -185,32 +167,29 @@ export function rowSpan(nodeId: string, baselineId: string): { start: string; fi
 
 /**
  * The nearest row above this one that fences it in.
- *
- * Not simply the parent: a branch that was never given dates of its own has
- * nothing to fence anything with, and the promise that matters is the one
- * further up that somebody actually typed. Returns the row's name too, because
- * a refusal that cannot say WHICH row it is protecting is a refusal nobody can
- * act on.
  */
 export type Box = { id: string; name: string; start: string; finish: string };
 
-function nodeHead(id: string) {
-  return db
+async function nodeHead(
+  id: string,
+  source: Pick<Db, 'select'> = db
+): Promise<{ parentId: string | null; name: string | null } | undefined> {
+  const rows = await source
     .select({ parentId: schema.wbsNodes.parentId, name: schema.wbsNodes.deskripsi })
     .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.id, id))
-    .all()[0];
+    .where(eq(schema.wbsNodes.id, id));
+  return rows[0];
 }
 
 /** The fence this row sits in, itself included if it draws one. */
-export function boxAt(nodeId: string, baselineId: string): Box | null {
+export async function boxAt(nodeId: string, baselineId: string): Promise<Box | null> {
   let cursor: string | null = nodeId;
-  // Depth is small, but a cycle in the tree would hang the request rather than
-  // fail it, and this runs inside a write.
   for (let hops = 0; cursor && hops < 64; hops += 1) {
-    const own = ownDates(cursor, baselineId);
-    const n = nodeHead(cursor);
-    if (own && n) return { id: cursor, name: n.name, ...own };
+    const [own, n]: [
+      Awaited<ReturnType<typeof ownDates>>,
+      Awaited<ReturnType<typeof nodeHead>>
+    ] = await Promise.all([ownDates(cursor, baselineId), nodeHead(cursor)]);
+    if (own && n) return { id: cursor, name: n.name ?? '', ...own };
     cursor = n?.parentId ?? null;
   }
   return null;
@@ -218,49 +197,30 @@ export function boxAt(nodeId: string, baselineId: string): Box | null {
 
 /**
  * A PACKAGE COVERS WHAT IS INSIDE IT, in the stored box and not only on screen.
- *
- * A branch draws its own box widened to its children (`rowSpan`), but the fence
- * reads the box alone (`boxAt`). Nothing kept the two in step: a date typed on
- * a row is fenced, while INDENTING a row into a package, dragging one in or
- * pasting a block never looked at the package's dates at all. So a package
- * could end up holding a one-day box with months of work inside it, and then
- * every date under it was refused against a range that appears nowhere on
- * screen — reported 14 Sep 2026 on Engineering, stored 30 Dec 25 to 30 Dec 25,
- * drawn 30 Dec 25 to 08 Nov 26, and its two lines frozen for good.
- *
- * So the stored box catches up to the bar that is already drawn. It only ever
- * WIDENS: the box is one of the values the span is taken from, so a package
- * can never be narrowed onto its children by this, and what somebody typed
- * survives being widened around. Moving work into a package extends the
- * package; typing a date is still a promise the fence keeps, unchanged.
- *
- * Deepest first — `order` is a depth-first sequence, so walking it backwards
- * reaches every child before its parent and a grandchild carries all the way
- * up. Returns how many boxes moved, which is what the verify script asserts.
  */
-export function coverChildren(
+export async function coverChildren(
   projectId: string,
   baselineId: string,
-  tx: Pick<typeof db, 'update'> = db
-): number {
-  const nodes = db
+  tx?: Pick<Db, 'update' | 'select'>
+): Promise<number> {
+  const src = tx ?? db;
+  const nodes = await db
     .select({ id: schema.wbsNodes.id, parentId: schema.wbsNodes.parentId })
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(asc(schema.wbsNodes.order))
-    .all();
+    .orderBy(asc(schema.wbsNodes.order));
   if (!nodes.length) return 0;
 
-  const own = new Map<string, { start: string; finish: string }>();
-  for (const s of db
+  const schedRows = await db
     .select({
       nodeId: schema.nodeSchedules.nodeId,
       start: schema.nodeSchedules.startDate,
       finish: schema.nodeSchedules.finishDate,
     })
     .from(schema.nodeSchedules)
-    .where(eq(schema.nodeSchedules.baselineId, baselineId))
-    .all()) {
+    .where(eq(schema.nodeSchedules.baselineId, baselineId));
+  const own = new Map<string, { start: string; finish: string }>();
+  for (const s of schedRows) {
     if (s.start && s.finish) own.set(s.nodeId, { start: s.start, finish: s.finish });
   }
 
@@ -286,19 +246,17 @@ export function coverChildren(
       if (!finish || s.finish > finish) finish = s.finish;
     }
     if (start && finish) span.set(id, { start, finish });
-    // A branch with no box of its own has nothing to widen: it already shows
-    // its children's span and fences nothing. Leave it that way.
     if (!box || !start || !finish) continue;
     if (start === box.start && finish === box.finish) continue;
-    tx.update(schema.nodeSchedules)
+    await src
+      .update(schema.nodeSchedules)
       .set({ startDate: start, finishDate: finish, durationDays: inclusiveDays(start, finish) })
       .where(
         and(
           eq(schema.nodeSchedules.baselineId, baselineId),
           eq(schema.nodeSchedules.nodeId, id)
         )
-      )
-      .run();
+      );
     own.set(id, { start, finish });
     widened += 1;
   }
@@ -306,49 +264,48 @@ export function coverChildren(
 }
 
 /** The same fence, for a row that is not allowed to be its own. */
-export function boxAbove(nodeId: string, baselineId: string): Box | null {
-  const parentId = nodeHead(nodeId)?.parentId ?? null;
+export async function boxAbove(nodeId: string, baselineId: string): Promise<Box | null> {
+  const n = await nodeHead(nodeId);
+  const parentId = n?.parentId ?? null;
   return parentId ? boxAt(parentId, baselineId) : null;
 }
 
-export function getSheet(projectId: string): Sheet {
-  const project = db
+export async function getSheet(projectId: string): Promise<Sheet> {
+  const projectRows = await db
     .select({ startDate: schema.projects.startDate, finishDate: schema.projects.finishDate })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
 
-  const baselineId = getActiveBaselineId(projectId);
+  const baselineId = await getActiveBaselineId(projectId);
 
-  const nodes = db
+  const nodes = await db
     .select()
     .from(schema.wbsNodes)
     .where(eq(schema.wbsNodes.projectId, projectId))
-    .orderBy(asc(schema.wbsNodes.order))
-    .all();
+    .orderBy(asc(schema.wbsNodes.order));
 
   const schedules = baselineId
-    ? db
+    ? await db
         .select()
         .from(schema.nodeSchedules)
         .where(eq(schema.nodeSchedules.baselineId, baselineId))
-        .all()
     : [];
   const schedByNode = new Map(schedules.map((s) => [s.nodeId, s]));
 
-  const contractRow = db
+  const contractRows = await db
     .select()
     .from(schema.baselines)
-    .where(and(eq(schema.baselines.projectId, projectId), eq(schema.baselines.kind, 'contractual')))
-    .all()[0];
+    .where(and(eq(schema.baselines.projectId, projectId), eq(schema.baselines.kind, 'contractual')));
+  const contractRow = contractRows[0];
   const contractByNode = new Map(
     contractRow
-      ? db
-          .select()
-          .from(schema.nodeSchedules)
-          .where(eq(schema.nodeSchedules.baselineId, contractRow.id))
-          .all()
-          .map((s) => [s.nodeId, s] as const)
+      ? (
+          await db
+            .select()
+            .from(schema.nodeSchedules)
+            .where(eq(schema.nodeSchedules.baselineId, contractRow.id))
+        ).map((s) => [s.nodeId, s] as const)
       : []
   );
 
@@ -363,8 +320,6 @@ export function getSheet(projectId: string): Sheet {
   const rows: SheetRow[] = [];
   let pricedRows = 0;
 
-  // Depth-first, in sibling order, generating the outline code as we descend.
-  // Returns the subtree's span so a parent can take it without a second pass.
   function walk(
     parentId: string | null,
     depth: number,
@@ -379,8 +334,6 @@ export function getSheet(projectId: string): Sheet {
       const index = rows.length;
       const hasChildren = (childrenOf.get(n.id) ?? []).length > 0;
 
-      // Placeholder — a summary's dates are only known after its children are
-      // walked, and its children must sit directly beneath it in the list.
       rows.push({
         id: n.id,
         parentId: n.parentId ?? null,
@@ -416,13 +369,6 @@ export function getSheet(projectId: string): Sheet {
 
       let own: { start: string | null; finish: string | null };
       if (hasChildren) {
-        // The children are walked either way — that is what builds their rows.
-        // What the branch SHOWS is its own box WIDENED to cover them: the box
-        // is the promise, and a bar that does not reach its own children is a
-        // drawing of something that is not happening. Typed dates are fenced
-        // into the box by `updateRowDatesAction`, so the two agree except where
-        // a row was indented in from outside — and there the picture tells the
-        // truth while the promise stays what it was.
         const rolled = walk(n.id, depth + 1, code);
         const s = schedByNode.get(n.id);
         own = s?.startDate && s?.finishDate
@@ -441,9 +387,6 @@ export function getSheet(projectId: string): Sheet {
       row.finishDate = own.finish;
       row.durationDays =
         own.start && own.finish ? inclusiveDays(own.start, own.finish) : null;
-      // Late by however many days the finish sits past the target. Not late is
-      // null rather than 0, so a caller never has to ask which of the two it
-      // is looking at.
       if (row.targetDate && own.finish && own.finish > row.targetDate) {
         row.daysLate = inclusiveDays(row.targetDate, own.finish) - 1;
       }
@@ -458,8 +401,6 @@ export function getSheet(projectId: string): Sheet {
   const span = walk(null, 0, '');
   assignColorGroups(rows, nodes);
 
-  // What the stored links say about the typed plan — see analyseNetwork. A
-  // SheetRow carries exactly the NetNode fields, so the rows go in as they are.
   const net = analyseNetwork(rows);
   for (const r of rows) {
     const logic = net.rows.get(r.id);
@@ -482,16 +423,6 @@ export function getSheet(projectId: string): Sheet {
 
 /**
  * Paint each row with the package it belongs to.
- *
- * The grouping is the nearest REPORTING UNIT above a row, because that is the
- * division the client's report is already built from — colouring by depth or by
- * position would draw a rainbow that means nothing. A project that has marked
- * no units yet falls back to its top-level branches, which is the same idea one
- * level up.
- *
- * Groups are numbered in document order and never cycled. Beyond the palette a
- * row goes neutral instead of repeating a hue, because a repeated hue says two
- * packages are the same package.
  */
 function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: string | null }[]) {
   const parentOf = new Map(nodes.map((n) => [n.id, n.parentId ?? null]));
@@ -499,16 +430,8 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
 
   let anchors = rows.filter((r) => r.isReportingUnit);
   if (anchors.length === 0) {
-    // No units marked. Use the top-level branches — but if the whole plan hangs
-    // off one root, that root is the plan itself and colouring it paints
-    // everything the same; go one level down instead.
     const roots = rows.filter((r) => r.depth === 0);
     const level = roots.length === 1 ? rows.filter((r) => r.depth === 1) : roots;
-    // A package is a BRANCH. This used to count rows, so a plan of four
-    // top-level rows — three of them ordinary tasks — was handed four separate
-    // hues, one per row, and colour stopped meaning anything at all. A leaf is
-    // a job, not a package, and colouring it as one is the "noise wearing the
-    // costume of meaning" this guard was written to prevent.
     const branches = level.filter((r) => r.isSummary);
     anchors = branches.length >= 3 ? branches : [];
   }
@@ -518,9 +441,6 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
     if (i < MAX_COLOR_GROUPS) groupOf.set(a.id, i);
   });
 
-  // Membership is tracked by ID as well as by palette index. The index is for
-  // painting and shifts whenever a unit is added above; the id is what a bar
-  // style rule stores, and it does not move.
   const unitOf = new Map<string, { id: string; name: string }>();
   for (const a of rows.filter((r) => r.isReportingUnit)) {
     unitOf.set(a.id, { id: a.id, name: a.unitLabel || a.name });
@@ -553,14 +473,8 @@ function assignColorGroups(rows: SheetRow[], nodes: { id: string; parentId: stri
 
 /**
  * The reporting weeks, with the status each one is in.
- *
- * The sheet needs these because the plan curve is DERIVED from the dates: moving
- * a date today changes the planned figure for a week that may have been approved
- * last month. It never refuses the edit — a schedule that cannot be revised gets
- * revised in Excel instead — but it says which weeks moved and which of them had
- * already been signed. See `weeksTouched` in lib/chains.ts.
  */
-export function getWeekSpans(projectId: string): WeekSpan[] {
+export async function getWeekSpans(projectId: string): Promise<WeekSpan[]> {
   return db
     .select({
       weekNo: schema.weeks.weekNo,
@@ -570,6 +484,5 @@ export function getWeekSpans(projectId: string): WeekSpan[] {
     })
     .from(schema.weeks)
     .where(eq(schema.weeks.projectId, projectId))
-    .orderBy(asc(schema.weeks.weekNo))
-    .all();
+    .orderBy(asc(schema.weeks.weekNo));
 }

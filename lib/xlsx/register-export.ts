@@ -74,7 +74,7 @@ export interface RegisterWorkbookInput {
 
 export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promise<{ buffer: Buffer; week: number | null }> {
   const { projectId, register } = input;
-  const summary = getRegisterSummary(projectId, register, input.week);
+  const summary = await getRegisterSummary(projectId, register, input.week);
   const workbook = new ExcelJS.Workbook();
   const info = REGISTER_INFO[register];
   if (!summary) {
@@ -83,11 +83,13 @@ export async function buildRegisterWorkbook(input: RegisterWorkbookInput): Promi
   }
 
   const week = summary.asOfWeek;
-  const tree = getRegisterTree(projectId, register, week);
-  const lastTree = week > 1 ? getRegisterTree(projectId, register, week - 1) : [];
-  const cards = getRegisterCards(projectId, register, week);
-  const settings = getRegisterSettings(projectId, register);
-  const parties = getRegisterParties(projectId);
+  const [tree, lastTree, cards, settings, parties] = await Promise.all([
+    getRegisterTree(projectId, register, week),
+    week > 1 ? getRegisterTree(projectId, register, week - 1) : Promise.resolve([]),
+    getRegisterCards(projectId, register, week),
+    getRegisterSettings(projectId, register),
+    getRegisterParties(projectId),
+  ]);
   const contractor = parties.contractorName.trim() || 'Contractor';
   const client = parties.clientName.trim() || 'Client';
 

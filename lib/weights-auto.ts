@@ -6,13 +6,6 @@
  * wrong ones. That rule protects weights nobody can re-derive. It was never
  * meant to protect weights that do not exist.
  *
- * And on a project built in the app, they do not. Typing prices into the
- * planner left every leaf at `bobot = NULL`, which is not a small thing: the
- * dashboard's `hasPlan` is `totalBobot > 0`, so a project with a full WBS, real
- * dates and real prices answered "has no weights yet" and sent the person back
- * to the planner they had just come from. The way out was two taps deep behind
- * **Money**, and nothing on screen said so (12 Sep 2026).
- *
  * So: **`weight_basis = 'boq'` is the lock.** An imported project carries it
  * (`scripts/import-gundih.ts`), and so does one whose owner has explicitly
  * applied a derivation that covers the whole plan. Anything else has no
@@ -23,54 +16,50 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db, type Db } from './pg';
+import * as schema from './schema';
 import { bobotWrites, deriveWeights } from './weights';
 import { loadWeightNodes } from './weights-read';
 
 /** Anything that can write a row: the connection itself, or a transaction. */
-type Writer = Pick<typeof db, 'update'>;
+type Writer = Pick<Db, 'update'>;
 
 /**
  * Re-derive this project's leaf weights from its prices, unless its weights are
  * authoritative. Returns how many leaves moved — 0 when the project is locked.
  */
-export function syncDerivedWeights(projectId: string, tx: Writer = db): number {
-  const project = db
+export async function syncDerivedWeights(projectId: string, tx?: Writer): Promise<number> {
+  const writer = tx ?? db;
+  const projectRows = await db
     .select({
       basis: schema.projects.weightBasis,
       contractValue: schema.projects.contractValue,
     })
     .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-    .all()[0];
+    .where(eq(schema.projects.id, projectId));
+  const project = projectRows[0];
   if (!project || project.basis === 'boq') return 0;
 
-  const nodes = loadWeightNodes(projectId);
+  const nodes = await loadWeightNodes(projectId);
   if (nodes.length === 0) return 0;
 
-  // Measured against the SIGNED contract when there is one, exactly as the
-  // Money panel measures it. Against the sum of the prices typed so far it
-  // would close at 100 by definition and never show unpriced work.
   const signed = (project.contractValue ?? 0) > 0 ? (project.contractValue ?? undefined) : undefined;
   const result = deriveWeights(nodes, signed);
 
-  // Branches are written null: one of these projects had a branch sitting on
-  // 100 with four leaves under it adding up to another 100. Same stale-flag
-  // family as `isMilestone` in `renumber()`, and cleared for the same reason.
   const writes = bobotWrites(nodes, result);
-  for (const w of writes) {
-    tx.update(schema.wbsNodes).set({ bobot: w.bobot }).where(eq(schema.wbsNodes.id, w.id)).run();
-  }
+  await Promise.all(
+    writes.map((w) =>
+      writer.update(schema.wbsNodes).set({ bobot: w.bobot }).where(eq(schema.wbsNodes.id, w.id))
+    )
+  );
   return writes.length;
 }
 
 /** The project a row belongs to — every structural action is handed a row id. */
-export function projectOfNode(nodeId: string): string | null {
-  return (
-    db
-      .select({ projectId: schema.wbsNodes.projectId })
-      .from(schema.wbsNodes)
-      .where(eq(schema.wbsNodes.id, nodeId))
-      .all()[0]?.projectId ?? null
-  );
+export async function projectOfNode(nodeId: string): Promise<string | null> {
+  const rows = await db
+    .select({ projectId: schema.wbsNodes.projectId })
+    .from(schema.wbsNodes)
+    .where(eq(schema.wbsNodes.id, nodeId));
+  return rows[0]?.projectId ?? null;
 }

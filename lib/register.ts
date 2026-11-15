@@ -1,35 +1,10 @@
 /**
  * The register engine — one arithmetic for both registers.
- *
- * The EDL (what we owe Pertamina) and the VDRL (what our vendors owe us) run
- * the same chain and the same sums, so they share these functions and differ
- * only by the `register` argument.
- *
- * Three decisions are worth knowing before reading the code:
- *
- * **Every curve is derived from dates.** The client's own summary keeps a
- * hand-typed block of W1–W13 figures per discipline; W1 to W12 are literals
- * pasted each week and only W13 is a formula, so its history cannot be trusted
- * and cannot be corrected. Here both curves — planned and actual — are counted
- * from the dates already in the register, exactly as the project's own S-curve
- * is derived rather than imported.
- *
- * **A stage row is a promise; `submitted` is the fact.** The importer writes a
- * row for a stage that was merely planned too, which is what makes the plan
- * curve possible. Only the flag counts as progress.
- *
- * **Everything is measured as of the register's own date**, not today. This
- * file is `R2, 15 Jan 2026`; judging it against August would report every
- * document as months late and say nothing about the work. The as-of date is
- * returned with every summary so the screen can say which day it is talking
- * about.
- *
- * Percentages are 0..100 throughout. Every read is synchronous — see the note
- * at the top of `lib/sqlite.ts`.
  */
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db } from './pg';
+import * as schema from './schema';
 import {
   LOOKAHEAD_DAYS, REPLY_DAYS, STAGE_ORDER, codeAct, compareStages, daysBetween, isAddedStage, isApproved, isFull, stageChain,
   type DocumentCard, type LogEvent, type Obstacle,
@@ -62,45 +37,36 @@ interface Loaded {
   byDoc: Map<string, StageRow[]>;
   docsByCategory: Map<string, DocumentRow[]>;
   transmittalNo: Map<string, string>;
-  /** The week being looked at. Everything is counted as it stood at its end. */
   asOfWeek: number;
   asOfDate: string;
-  /** The last week anything actually happened in the register, whatever week is being viewed. */
   evidenceWeek: number;
   evidenceDate: string;
   weekOf: (iso: string) => number;
 }
 
-/**
- * @param week the week to read the register as of. Left out, it is the last
- *   week anything happened — which is what "now" means for a register whose
- *   own file stops in January.
- */
-function loadRegister(projectId: string, register: RegisterKind, week?: number): Loaded | null {
-  const documents = db.select().from(schema.documents)
-    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
-    .all();
+async function loadRegister(projectId: string, register: RegisterKind, week?: number): Promise<Loaded | null> {
+  const documents = await db.select().from(schema.documents)
+    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)));
   if (documents.length === 0) return null;
 
-  const stages = db.select().from(schema.docStages)
-    .where(inArray(schema.docStages.documentId, documents.map((d) => d.id))).all();
+  const [stages, categories, rawWeights, weeks, transmittals] = await Promise.all([
+    db.select().from(schema.docStages)
+      .where(inArray(schema.docStages.documentId, documents.map((d) => d.id))),
+    db.select().from(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register))),
+    db.select().from(schema.docStageWeights)
+      .where(and(eq(schema.docStageWeights.projectId, projectId), eq(schema.docStageWeights.register, register))),
+    db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId)),
+    db.select().from(schema.transmittals)
+      .where(and(eq(schema.transmittals.projectId, projectId), eq(schema.transmittals.register, register))),
+  ]);
 
-  const categories = db.select().from(schema.docCategories)
-    .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
-    .all();
-
-  const weights = db.select().from(schema.docStageWeights)
-    .where(and(
-      eq(schema.docStageWeights.projectId, projectId),
-      eq(schema.docStageWeights.register, register),
-    )).all()
+  const weights = rawWeights
     .filter((w) => w.weight > 0)
     .sort((a, b) => compareStages(a.stage, b.stage))
     .map((w) => ({ stage: w.stage, weight: w.weight }));
 
-  const weeks = db.select().from(schema.weeks)
-    .where(eq(schema.weeks.projectId, projectId)).all()
-    .sort((a, b) => a.weekNo - b.weekNo);
+  weeks.sort((a, b) => a.weekNo - b.weekNo);
 
   const byDoc = new Map<string, StageRow[]>();
   for (const s of stages) {
@@ -119,13 +85,8 @@ function loadRegister(projectId: string, register: RegisterKind, week?: number):
     docsByCategory.set(d.categoryId, list);
   }
 
-  const transmittalNo = new Map(
-    db.select().from(schema.transmittals)
-      .where(and(eq(schema.transmittals.projectId, projectId), eq(schema.transmittals.register, register)))
-      .all().map((t) => [t.id, t.no]),
-  );
+  const transmittalNo = new Map(transmittals.map((t) => [t.id, t.no]));
 
-  // The register's own date: the last thing that actually happened in it.
   let evidenceDate = weeks[0]?.startDate ?? '2025-10-27';
   for (const s of stages) {
     if (s.submittedAt && s.submittedAt > evidenceDate) evidenceDate = s.submittedAt;
@@ -140,8 +101,6 @@ function loadRegister(projectId: string, register: RegisterKind, week?: number):
 
   const evidenceWeek = weekOf(evidenceDate);
   const lastWeek = weeks[weeks.length - 1]?.weekNo ?? evidenceWeek;
-  // A week outside the project is not an error worth throwing over — it is a
-  // stale bookmark, and clamping shows the nearest week that exists.
   const asOfWeek = week === undefined ? evidenceWeek : Math.min(Math.max(1, Math.trunc(week)), lastWeek);
   const asOfDate = weeks.find((w) => w.weekNo === asOfWeek)?.endDate ?? evidenceDate;
 
@@ -151,34 +110,18 @@ function loadRegister(projectId: string, register: RegisterKind, week?: number):
   };
 }
 
-/**
- * The week a document reached a stage.
- *
- * 42 submissions in the EDL are marked with a bare `1` because nobody wrote the
- * date down. They count — the client's own summary counts them, and dropping
- * them would leave the curve's last point below the headline it is meant to
- * explain — so they are placed at the week they were promised for, capped at
- * the register's own date. That is an estimate and the screen says so; piling
- * all 42 onto the as-of week instead would invent a twelve-point cliff in the
- * last column, which is a worse lie than an acknowledged one.
- */
 function reachedWeek(s: StageRow, loaded: Loaded): number | null {
   if (!s.submitted) return null;
   if (s.submittedAt) return loaded.weekOf(s.submittedAt);
-  // Anchored to the register's own last movement, never to the week being
-  // viewed: otherwise looking at week 43 would drag 42 dateless submissions
-  // forward with it and the earlier weeks would lose them.
   if (s.planSubmitDate) return Math.min(loaded.weekOf(s.planSubmitDate), loaded.evidenceWeek);
   return loaded.evidenceWeek;
 }
 
-/** Whether the document had reached this stage by the week being viewed. */
 function reachedBy(s: StageRow, loaded: Loaded): boolean {
   const week = reachedWeek(s, loaded);
   return week !== null && week <= loaded.asOfWeek;
 }
 
-/** The week a stage came back, on the same terms. */
 function returnedWeek(s: StageRow, loaded: Loaded): number | null {
   if (!s.returnedAt && !s.returnCode) return null;
   return s.returnedAt ? loaded.weekOf(s.returnedAt) : loaded.evidenceWeek;
@@ -193,7 +136,6 @@ function plannedWeek(s: StageRow, loaded: Loaded): number | null {
   return s.planSubmitDate ? loaded.weekOf(s.planSubmitDate) : null;
 }
 
-/** Weighted percent for one set of documents. */
 function percentOf(docs: DocumentRow[], loaded: Loaded, upToWeek = loaded.asOfWeek): number {
   if (docs.length === 0) return 0;
   let total = 0;
@@ -246,19 +188,6 @@ interface OpenState {
   days: number | null;
 }
 
-/**
- * Where one document stands as of the week being viewed: who holds the ball,
- * and whether that makes it outstanding. ONE place, so the summary's tiles,
- * its list, the data screen's badges and its worklist cannot disagree.
- *
- * `awaiting` is the days since its latest send when that send has had no reply
- * (null when the ball is not with the other side, or the send has no date).
- */
-/**
- * Who holds a document as of the week being viewed: the furthest stage that
- * went out, and whether it is still with the other side (sent, no reply).
- * Outstanding and the document cards both start here.
- */
 function ballOf(rows: StageRow[], loaded: Loaded): { furthest: number; latest: StageRow | null; out: boolean } {
   let furthest = -1;
   rows.forEach((s, i) => { if (reachedBy(s, loaded)) furthest = i; });
@@ -266,17 +195,6 @@ function ballOf(rows: StageRow[], loaded: Loaded): { furthest: number; latest: S
   return { furthest, latest, out: Boolean(latest && !returnedBy(latest, loaded)) };
 }
 
-/**
- * The stage a document goes out at next, when the ball is ours (null while it
- * is out, or once the last weighted stage came back approved).
- *
- * Read off the last reply, the way a document controller reads it: APP moves
- * on to the next weighted stage; RWC is a rejection and goes back out as the
- * RE- stage (IFR to RE-IFR, AFC to RE-AFC 1, RE-AFC 1 to RE-AFC 2); AWC moves
- * on, or past the last weighted stage goes out as the RE- one after it. The
- * first cut offered RE-AFC 1 again after an AWC at RE-AFC 1, which overwrote
- * the round it was answering (found by pressing, 4 Oct 2026).
- */
 function sendNextOf(rows: StageRow[], loaded: Loaded): DocStage | null {
   const { latest, out } = ballOf(rows, loaded);
   if (out) return null;
@@ -300,8 +218,6 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
   const { asOfDate } = loaded;
   const { furthest, latest, out } = ballOf(rows, loaded);
 
-  // With the other side: the furthest stage sent has not come back. Nothing on
-  // our side can be late or due then; the next stage waits on their reply.
   if (latest && out) {
     const awaiting = latest.submittedAt ? daysBetween(latest.submittedAt, asOfDate) : null;
     const open: OpenState | null = awaiting !== null && awaiting > REPLY_DAYS
@@ -310,7 +226,6 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
     return { open, withOtherSide: true, awaiting };
   }
 
-  // The ball is with us: nothing sent yet, or the last send came back.
   const ahead = rows.slice(furthest + 1).filter((s) => s.planSubmitDate)
     .sort((a, b) => (a.planSubmitDate! < b.planSubmitDate! ? -1 : 1));
   const unanswered = latest && latest.returnCode && !isApproved(latest.returnCode) ? latest : null;
@@ -322,8 +237,6 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
         kind: 'late',
         stage: late.stage,
         returnCode: unanswered?.returnCode ?? null,
-        // What goes out, not the stage whose date passed: rejected at IFA with
-        // AFC's date gone, it is RE-IFA that has to be sent (8 Oct 2026).
         next: sendNextOf(rows, loaded),
         since: late.planSubmitDate,
         days: daysBetween(late.planSubmitDate!, asOfDate),
@@ -339,7 +252,6 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
         kind: 'comments',
         stage: unanswered.stage,
         returnCode: unanswered.returnCode,
-        // The answer to a comment is whatever goes out next (see sendNextOf).
         next: sendNextOf(rows, loaded),
         since: unanswered.returnedAt,
         days: unanswered.returnedAt ? daysBetween(unanswered.returnedAt, asOfDate) : null,
@@ -375,11 +287,6 @@ function openStateOf(rows: StageRow[], loaded: Loaded): {
   return { open: null, withOtherSide: false, awaiting: null };
 }
 
-/**
- * What one document needs, as of the week viewed: THE rule behind the
- * Summary's Needs action and every chip, row and sheet on Data. A document at
- * 100% needs nothing (`isFull`), whoever holds it.
- */
 function actionOf(doc: DocumentRow, rows: StageRow[], loaded: Loaded): OpenState | null {
   if (isFull(percentOf([doc], loaded))) return null;
   return openStateOf(rows, loaded).open;
@@ -420,82 +327,57 @@ export interface RegisterWeek {
   endDate: string;
 }
 
-/** Every week of the project, for the week picker. */
-export function getRegisterWeeks(projectId: string): RegisterWeek[] {
-  return db.select().from(schema.weeks)
-    .where(eq(schema.weeks.projectId, projectId)).all()
+export async function getRegisterWeeks(projectId: string): Promise<RegisterWeek[]> {
+  const rows = await db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId));
+  return rows
     .sort((a, b) => a.weekNo - b.weekNo)
     .map((w) => ({ weekNo: w.weekNo, startDate: w.startDate, endDate: w.endDate }));
 }
 
-
-/**
- * How far this register exists at all — two cheap counts, not its contents.
- *
- * Pages use it to choose between the working screen and the paste screen. It
- * must not go through `loadRegister`, which gives up on zero documents: a
- * category somebody just created and has not filled yet is still a register,
- * and hiding it takes their work out of their sight.
- */
-export function getRegisterShape(projectId: string, register: RegisterKind): {
+export async function getRegisterShape(projectId: string, register: RegisterKind): Promise<{
   documents: number; categories: number;
-} {
-  const documents = db.select().from(schema.documents)
-    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
-    .all().length;
-  const categories = db.select().from(schema.docCategories)
-    .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
-    .all().length;
-  return { documents, categories };
+}> {
+  const [docs, cats] = await Promise.all([
+    db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register))),
+    db.select().from(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register))),
+  ]);
+  return { documents: docs.length, categories: cats.length };
 }
 
-/**
- * The two sides' names, to fill the paste screen in ahead of the person.
- *
- * Read straight from the `projects` table rather than through `lib/data.ts` —
- * that file reads the older JSON store and knows nothing about this table. A
- * synchronous read like this prerenders as it is (see `lib/sqlite.ts`), so it
- * needs neither `'use cache'` nor a `<Suspense>` around it.
- */
-export function getRegisterParties(projectId: string): {
+export async function getRegisterParties(projectId: string): Promise<{
   clientName: string; contractorName: string;
-} {
-  const project = db.select().from(schema.projects)
-    .where(eq(schema.projects.id, projectId)).all()[0];
+}> {
+  const rows = await db.select().from(schema.projects).where(eq(schema.projects.id, projectId));
+  const project = rows[0];
   return { clientName: project?.clientName ?? '', contractorName: project?.contractorName ?? '' };
 }
 
-/**
- * The numbering rule for this register, and the numbers already spoken for.
- *
- * Both travel together because the builder needs both to propose the next
- * number: the rule gives its shape, the existing numbers give its sequence.
- */
-export function getNumbering(projectId: string, register: RegisterKind): {
+export async function getNumbering(projectId: string, register: RegisterKind): Promise<{
   rule: NumberingRule | null;
-  /** Every number already in this register, so a proposal cannot collide. */
   taken: string[];
-  /** A guess at the project code, for a register that has none yet. */
   suggestedPrefix: string;
-} {
-  // A vendor document carries the number its vendor gave it, typed as it
-  // comes (9 Oct 2026): the VDRL has no number format, so no rule and no
-  // prefix, which is what keeps Setup and Add from proposing one.
+}> {
   if (register === 'vdrl') {
-    const taken = db.select().from(schema.documents)
-      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
-      .all().map((d) => d.docNo).filter((n): n is string => Boolean(n));
+    const rows = await db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)));
+    const taken = rows.map((d) => d.docNo).filter((n): n is string => Boolean(n));
     return { rule: null, taken, suggestedPrefix: '' };
   }
-  const row = db.select().from(schema.docNumbering)
-    .where(and(
-      eq(schema.docNumbering.projectId, projectId),
-      eq(schema.docNumbering.register, register),
-    )).all()[0];
 
-  const taken = db.select().from(schema.documents)
-    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
-    .all().map((d) => d.docNo).filter((n): n is string => Boolean(n));
+  const [rowArr, takenDocs, projectRows, numberingRows] = await Promise.all([
+    db.select().from(schema.docNumbering)
+      .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register))),
+    db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register))),
+    db.select().from(schema.projects).where(eq(schema.projects.id, projectId)),
+    db.select().from(schema.docNumbering)
+      .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register))),
+  ]);
+  const row = numberingRows[0];
+  const taken = takenDocs.map((d) => d.docNo).filter((n): n is string => Boolean(n));
+  const project = projectRows[0];
 
   const parse = (raw: string): Record<string, string> => {
     try {
@@ -503,9 +385,6 @@ export function getNumbering(projectId: string, register: RegisterKind): {
       return value && typeof value === 'object' ? value as Record<string, string> : {};
     } catch { return {}; }
   };
-
-  const project = db.select().from(schema.projects)
-    .where(eq(schema.projects.id, projectId)).all()[0];
 
   return {
     rule: row
@@ -519,16 +398,12 @@ export function getNumbering(projectId: string, register: RegisterKind): {
       : null,
     taken,
     suggestedPrefix: detectPrefix(taken)
-      // A register with no numbers yet takes the project's initial (JPI,
-      // MRB), the three letters people already write it by.
       ?? (project?.alias?.trim() || project?.docNoPrefix?.split('-')[0]
-        // No initial stored: the same guess the sidebar card shows ("ASD").
         || (project ? deriveInitial(project.name) : '')),
   };
 }
 
 export interface ExportRow {
-  /** `A`, `A.1`, `A.1.1` for a group; a running number for a document. */
   no: string;
   docNo: string;
   title: string;
@@ -538,16 +413,8 @@ export interface ExportRow {
     returnedAt: string | null; returnTransmittal: string | null; returnCode: string | null }[];
 }
 
-/**
- * The register flattened for export, in the order it reads on screen.
- *
- * It lives here rather than in the route because the SQL belongs with the rest
- * of the register's reads — and because the shape it produces is the shape the
- * PASTE PARSER understands, which is what lets an exported file be edited in
- * Excel and imported straight back.
- */
-export function getRegisterExportRows(projectId: string, register: RegisterKind): ExportRow[] {
-  const loaded = loadRegister(projectId, register);
+export async function getRegisterExportRows(projectId: string, register: RegisterKind): Promise<ExportRow[]> {
+  const loaded = await loadRegister(projectId, register);
   if (!loaded) return [];
 
   const childrenOf = new Map<string | null, CategoryRow[]>();
@@ -566,8 +433,6 @@ export function getRegisterExportRows(projectId: string, register: RegisterKind)
       const here = [...path, index + 1];
       out.push({
         no: outlineCode(here),
-        // The name sits in the number column exactly as Gundih's and Petrogas'
-        // own sheets write it — first filled cell right of the outline code.
         docNo: category.name,
         title: '',
         kind: '',
@@ -606,35 +471,29 @@ export function getRegisterExportRows(projectId: string, register: RegisterKind)
   return out;
 }
 
-/**
- * The stage weights as they stand, zeros included — the screen that edits them
- * needs every row, not just the ones that carry weight.
- */
-export function getStageWeights(projectId: string, register: RegisterKind): {
+export async function getStageWeights(projectId: string, register: RegisterKind): Promise<{
   stage: DocStage; weight: number;
-}[] {
-  return db.select().from(schema.docStageWeights)
+}[]> {
+  const rows = await db.select().from(schema.docStageWeights)
     .where(and(
       eq(schema.docStageWeights.projectId, projectId),
       eq(schema.docStageWeights.register, register),
-    )).all()
+    ));
+  return rows
     .sort((a, b) => a.order - b.order)
     .map((w) => ({ stage: w.stage, weight: w.weight }));
 }
 
-/**
- * The register's own words and colours (lib/register-settings.ts): its stages
- * as stored, else the defaults, and its client codes and area segment.
- */
-export function getRegisterSettings(projectId: string, register: RegisterKind): RegisterSettings {
-  const rows = db.select().from(schema.docStageWeights)
-    .where(and(eq(schema.docStageWeights.projectId, projectId), eq(schema.docStageWeights.register, register)))
-    .all().sort((a, b) => a.order - b.order);
-  const numbering = db.select().from(schema.docNumbering)
-    .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register)))
-    .all()[0];
-  // The three always, every stage the register added, and any other that carries weight.
-  const shown = rows.filter((r) => MAIN_STAGES.includes(r.stage) || isAddedStage(r.stage) || r.weight > 0)
+export async function getRegisterSettings(projectId: string, register: RegisterKind): Promise<RegisterSettings> {
+  const [rows, numberingRows] = await Promise.all([
+    db.select().from(schema.docStageWeights)
+      .where(and(eq(schema.docStageWeights.projectId, projectId), eq(schema.docStageWeights.register, register))),
+    db.select().from(schema.docNumbering)
+      .where(and(eq(schema.docNumbering.projectId, projectId), eq(schema.docNumbering.register, register))),
+  ]);
+  const numbering = numberingRows[0];
+  const sorted = rows.sort((a, b) => a.order - b.order);
+  const shown = sorted.filter((r) => MAIN_STAGES.includes(r.stage) || isAddedStage(r.stage) || r.weight > 0)
     .sort((a, b) => compareStages(a.stage, b.stage));
   const stages = (shown.length ? shown : MAIN_STAGES.map((stage) => ({ stage, weight: undefined, label: null, fullName: null, color: null, revStart: null })))
     .map((r) => {
@@ -644,15 +503,9 @@ export function getRegisterSettings(projectId: string, register: RegisterKind): 
   return { stages, codes: parseCodes(numbering?.codes), area: numbering?.area ?? '' };
 }
 
-/**
- * The next letter number each way, continuing the register's own pattern
- * (`MRB-TRM-O-0017` → `MRB-TRM-O-0018`). Empty when there is no pattern yet:
- * a first letter's number is the person's to type.
- */
-export function getNextLetterNumbers(projectId: string, register: RegisterKind): { out: string; in: string } {
-  const letters = db.select().from(schema.transmittals)
-    .where(and(eq(schema.transmittals.projectId, projectId), eq(schema.transmittals.register, register)))
-    .all();
+export async function getNextLetterNumbers(projectId: string, register: RegisterKind): Promise<{ out: string; in: string }> {
+  const letters = await db.select().from(schema.transmittals)
+    .where(and(eq(schema.transmittals.projectId, projectId), eq(schema.transmittals.register, register)));
   const next = (direction: 'out' | 'in') => {
     let best: { head: string; n: number; width: number } | null = null;
     for (const l of letters) {
@@ -667,12 +520,12 @@ export function getNextLetterNumbers(projectId: string, register: RegisterKind):
   return { out: next('out'), in: next('in') };
 }
 
-export function getRegisterSummary(
+export async function getRegisterSummary(
   projectId: string,
   register: RegisterKind,
   week?: number,
-): RegisterSummary | null {
-  const loaded = loadRegister(projectId, register, week);
+): Promise<RegisterSummary | null> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return null;
   const { documents, weights, asOfWeek } = loaded;
 
@@ -685,8 +538,6 @@ export function getRegisterSummary(
     }).length,
   }));
 
-  // The curve runs to whichever ends latest: the week being viewed, the last
-  // evidence, or the last promise. Anything beyond that is empty chart.
   let lastPlanWeek = Math.max(asOfWeek, loaded.evidenceWeek);
   for (const s of loaded.stages) {
     const w = plannedWeek(s, loaded);
@@ -734,14 +585,8 @@ export function getRegisterSummary(
   };
 }
 
-/**
- * The register as a tree — sections and packages with their groups inside.
- *
- * A parent's figures are its whole subtree's, so a vendor package reads as one
- * number without anyone adding up its groups by hand.
- */
-export function getRegisterTree(projectId: string, register: RegisterKind, week?: number): RegisterNode[] {
-  const loaded = loadRegister(projectId, register, week);
+export async function getRegisterTree(projectId: string, register: RegisterKind, week?: number): Promise<RegisterNode[]> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const childrenOf = new Map<string | null, CategoryRow[]>();
@@ -794,16 +639,8 @@ export function getRegisterTree(projectId: string, register: RegisterKind, week?
   return (childrenOf.get(null) ?? []).map((c) => build(c, 0));
 }
 
-/**
- * Every document that is outstanding, each once, in the order decided with the
- * user: late, then comments, then waiting too long, then due soon, then (for
- * the vendor register) never sent. The rule is `openStateOf`.
- *
- * Within a kind the longest-standing comes first, except due soon, which runs
- * soonest first because that is the order the work has to happen in.
- */
-export function getObstacles(projectId: string, register: RegisterKind, week?: number): Obstacle[] {
-  const loaded = loadRegister(projectId, register, week);
+export async function getObstacles(projectId: string, register: RegisterKind, week?: number): Promise<Obstacle[]> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const categoryName = new Map(loaded.categories.map((c) => [c.id, c.name]));
@@ -828,20 +665,13 @@ export function getObstacles(projectId: string, register: RegisterKind, week?: n
     || (a.kind === 'soon' ? (a.days ?? 0) - (b.days ?? 0) : (b.days ?? 0) - (a.days ?? 0)));
 }
 
-/**
- * Every movement in the register, most recent first.
- *
- * This is the thing the Excel file can never answer: its columns are overwritten
- * on each revision, so how many times a drawing went round, and how long each
- * lap took, is gone. An extension-of-time argument is built out of exactly this.
- */
-export function getRegisterLog(
+export async function getRegisterLog(
   projectId: string,
   register: RegisterKind,
   limit = 200,
   week?: number,
-): LogEvent[] {
-  const loaded = loadRegister(projectId, register, week);
+): Promise<LogEvent[]> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return [];
 
   const categoryName = new Map(loaded.categories.map((c) => [c.id, c.name]));
@@ -883,20 +713,12 @@ export function getRegisterLog(
   return events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, limit);
 }
 
-/**
- * Every document in the register, keyed by category.
- *
- * The whole register goes to the client in one payload, history and all. It is
- * affordable — 143 documents and 445 stage rows in the EDL, 311 and 67 in the
- * VDRL — and it is what lets the working screen open a document's timeline
- * without a round trip, on a site connection that may not have one to spare.
- */
-export function getRegisterCards(
+export async function getRegisterCards(
   projectId: string,
   register: RegisterKind,
   week?: number,
-): Record<string, DocumentCard[]> {
-  const loaded = loadRegister(projectId, register, week);
+): Promise<Record<string, DocumentCard[]>> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return {};
 
   const out: Record<string, DocumentCard[]> = {};
@@ -910,11 +732,8 @@ export function getRegisterCards(
         const moved = rows.filter((s) => reachedBy(s, loaded));
         const last = moved[moved.length - 1] ?? null;
         const ball = ballOf(rows, loaded);
-        // Read off the LATEST stage, as the Summary's `comments` is: an RWC at
-        // IFA is answered once RE-IFA has gone out, and stopped showing then.
         const open = ball.latest && !ball.out && ball.latest.returnCode && !isApproved(ball.latest.returnCode)
           ? ball.latest.returnCode : null;
-        // After the furthest stage reached, never a stage skipped before it.
         const next = rows[ball.furthest + 1] ?? null;
 
         return {
@@ -962,17 +781,6 @@ export function getRegisterCards(
 
 /* ----------------------------------------------------- the link to the WBS */
 
-/**
- * Gundih's WBS splits engineering into five disciplines, each with an IFR, an
- * IFA and an AFC leaf — the same five the EDL Summary counts. That is the seam
- * the `linked` method exists for: the leaf reads its figure from the register
- * instead of being measured a second time.
- *
- * The proposal is by name — the WBS's `General`/`Process`/`Mechanical`/
- * `Electrical`/`Instrument` against the register's top-level sections — and it
- * is only a proposal until someone turns the switch on, because this register
- * is thirty weeks older than the report it would feed.
- */
 const DISCIPLINE_CATEGORY: Record<string, string> = {
   general: 'A',
   process: 'B.1',
@@ -981,32 +789,25 @@ const DISCIPLINE_CATEGORY: Record<string, string> = {
   instrument: 'B.4',
 };
 
-export function getDisciplineLinks(projectId: string, week?: number): DisciplineLink[] {
-  const loaded = loadRegister(projectId, 'edl', week);
+export async function getDisciplineLinks(projectId: string, week?: number): Promise<DisciplineLink[]> {
+  const loaded = await loadRegister(projectId, 'edl', week);
   if (!loaded) return [];
 
-  const nodes = db.select().from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, projectId)).all();
+  const [nodes, allWeeks, recordedRows] = await Promise.all([
+    db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.projectId, projectId)),
+    db.select().from(schema.weeks).where(eq(schema.weeks.projectId, projectId)),
+    db.selectDistinct({ weekId: schema.leafProgress.weekId }).from(schema.leafProgress),
+  ]);
 
-  // The last week that was actually REPORTED, not the last week on the
-  // calendar: Gundih's schedule runs to week 60 while the workbook stops at 43,
-  // and reading the empty tail would show every leaf at zero and make the
-  // register look like pure gain.
-  const weeks = db.select().from(schema.weeks)
-    .where(eq(schema.weeks.projectId, projectId)).all()
-    .sort((a, b) => b.weekNo - a.weekNo);
-  const recorded = new Set(db.selectDistinct({ weekId: schema.leafProgress.weekId })
-    .from(schema.leafProgress).all().map((r) => r.weekId));
-  // Compare like with like: the WBS figure for the week being viewed, if that
-  // week was reported at all, otherwise the last week that was.
+  const weeks = allWeeks.sort((a, b) => b.weekNo - a.weekNo);
+  const recorded = new Set(recordedRows.map((r) => r.weekId));
   const latestWeek = weeks.find((w) => w.weekNo <= loaded.asOfWeek && recorded.has(w.id))
     ?? weeks.find((w) => recorded.has(w.id))
     ?? null;
-  const progress = latestWeek
-    ? new Map(db.select().from(schema.leafProgress)
-        .where(eq(schema.leafProgress.weekId, latestWeek.id)).all()
-        .map((p) => [p.nodeId, p.cumProgressPct]))
-    : new Map<string, number>();
+  const progressRows = latestWeek
+    ? await db.select().from(schema.leafProgress).where(eq(schema.leafProgress.weekId, latestWeek.id))
+    : [];
+  const progress = new Map(progressRows.map((p) => [p.nodeId, p.cumProgressPct]));
 
   const categoryByCode = new Map(loaded.categories.map((c) => [c.code, c]));
   const subtreeDocs = (code: string) =>
@@ -1060,25 +861,12 @@ export function getDisciplineLinks(projectId: string, week?: number): Discipline
   return out.sort((a, b) => order.indexOf(a.name.toLowerCase()) - order.indexOf(b.name.toLowerCase()));
 }
 
-/**
- * What moved inside one week, counted from the dates in the register.
- *
- * The summary used to report the week as a single delta — `+0.00 this week` —
- * which cannot tell a quiet week apart from a stale file. A controller's week
- * is three events: what went out, what came back with comments, and what was
- * finally approved. All three are counted the same way progress is, from the
- * stage rows, so the block can never disagree with the headline above it.
- *
- * Dateless submissions are deliberately left out. `reachedWeek` places them on
- * the week they were promised for so the curve keeps its shape, but claiming a
- * particular week saw them go out would be inventing a fact about that week.
- */
-export function getWeekMovement(
+export async function getWeekMovement(
   projectId: string,
   register: RegisterKind,
   week?: number,
-): WeekMovement | null {
-  const loaded = loadRegister(projectId, register, week);
+): Promise<WeekMovement | null> {
+  const loaded = await loadRegister(projectId, register, week);
   if (!loaded) return null;
 
   const { asOfWeek, documents } = loaded;
@@ -1131,24 +919,12 @@ export function getWeekMovement(
   };
 }
 
-/**
- * The seam between the EDL and the weekly report, weighted the same way.
- *
- * Both screens describe the same engineering work and used to do it without
- * ever mentioning each other, so a reader could leave one and be surprised by
- * the other. This rolls `getDisciplineLinks` up into a single pair of figures —
- * what the report carries, what the register counts — and each screen shows it
- * as a band pointing at the other.
- *
- * Weighted by each discipline's project weight rather than averaged flat: a
- * discipline worth six times another should move this number six times as far.
- */
-export function getEngineeringBridge(projectId: string, week?: number): EngineeringBridge | null {
-  const links = getDisciplineLinks(projectId, week);
-  if (links.length === 0) return null;
-
-  const loaded = loadRegister(projectId, 'edl', week);
-  if (!loaded) return null;
+export async function getEngineeringBridge(projectId: string, week?: number): Promise<EngineeringBridge | null> {
+  const [links, loaded] = await Promise.all([
+    getDisciplineLinks(projectId, week),
+    loadRegister(projectId, 'edl', week),
+  ]);
+  if (links.length === 0 || !loaded) return null;
 
   let weight = 0;
   let typed = 0;
@@ -1177,37 +953,23 @@ export function getEngineeringBridge(projectId: string, week?: number): Engineer
   };
 }
 
-/**
- * Every week number that exists in any project's register.
- *
- * Used only by `generateStaticParams` for Document Control, which runs at build
- * time and therefore cannot ask which project a person has open — that answer
- * is a cookie now (see lib/projects.ts). A superset across all projects is the
- * honest thing to prerender: no visitor gets somebody else's week list baked
- * into their shell, and a week that belongs to only one project still gets one.
- */
-export function getAllRegisterWeekNumbers(): number[] {
-  return db.select({ weekNo: schema.weeks.weekNo }).from(schema.weeks).all().map((w) => w.weekNo);
+export async function getAllRegisterWeekNumbers(): Promise<number[]> {
+  const rows = await db.select({ weekNo: schema.weeks.weekNo }).from(schema.weeks);
+  return rows.map((w) => w.weekNo);
 }
 
 /* ------------------------------------------------- what a builder copies */
 
-/**
- * A register as headings, sub-headings and titles, for the builder to start
- * from (3 Oct 2026). Dates, letters and status never travel: a copy is a list
- * of what to produce, not a record of what happened on another project.
- *
- * The whole tree, at the depth it was written in (4 Oct 2026): the builder is
- * one outline now, so a three-level register (A GENERAL > A.2 PROCEDURE >
- * A.2.1 General Procedure) arrives as the three levels it is.
- */
-export function getRegisterOutline(projectId: string, register: RegisterKind): OutlineNode[] {
-  const categories = db.select().from(schema.docCategories)
-    .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register)))
-    .all().sort((a, b) => a.order - b.order);
-  const documents = db.select().from(schema.documents)
-    .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register)))
-    .all().sort((a, b) => a.order - b.order);
+export async function getRegisterOutline(projectId: string, register: RegisterKind): Promise<OutlineNode[]> {
+  const [categories, documents] = await Promise.all([
+    db.select().from(schema.docCategories)
+      .where(and(eq(schema.docCategories.projectId, projectId), eq(schema.docCategories.register, register))),
+    db.select().from(schema.documents)
+      .where(and(eq(schema.documents.projectId, projectId), eq(schema.documents.register, register))),
+  ]);
+
+  categories.sort((a, b) => a.order - b.order);
+  documents.sort((a, b) => a.order - b.order);
 
   const children = new Map<string | null, typeof categories>();
   for (const c of categories) {
@@ -1224,35 +986,32 @@ export function getRegisterOutline(projectId: string, register: RegisterKind): O
   return (children.get(null) ?? []).map(node);
 }
 
-/**
- * What a register already holds, for the builder to add into: every heading
- * with the documents under it counted. Read from the categories, not from the
- * figures, so a register of headings with no document yet still has a shape.
- */
-export function getRegisterExisting(projectId: string, register: RegisterKind): ExistingNode[] {
+export async function getRegisterExisting(projectId: string, register: RegisterKind): Promise<ExistingNode[]> {
+  const outline = await getRegisterOutline(projectId, register);
   const map = (n: OutlineNode): ExistingNode => {
-    const children = n.children.map(map);
-    return { id: n.id, name: n.name, documents: n.documents.length + children.reduce((sum, c) => sum + c.documents, 0), children };
+    const ch = n.children.map(map);
+    return { id: n.id, name: n.name, documents: n.documents.length + ch.reduce((sum, c) => sum + c.documents, 0), children: ch };
   };
-  return getRegisterOutline(projectId, register).map(map);
+  return outline.map(map);
 }
 
-/** Every OTHER project with something in this register, to copy from. */
-export function getRegisterSources(currentProjectId: string, register: RegisterKind): RegisterSource[] {
-  const projects = db.select().from(schema.projects).all();
-  const docs = db.select({ projectId: schema.documents.projectId }).from(schema.documents)
-    .where(eq(schema.documents.register, register)).all();
-  const roots = db.select({ projectId: schema.docCategories.projectId, parentId: schema.docCategories.parentId })
-    .from(schema.docCategories).where(eq(schema.docCategories.register, register)).all()
-    .filter((c) => c.parentId === null);
+export async function getRegisterSources(currentProjectId: string, register: RegisterKind): Promise<RegisterSource[]> {
+  const [projects, docs, roots] = await Promise.all([
+    db.select().from(schema.projects),
+    db.select({ projectId: schema.documents.projectId }).from(schema.documents)
+      .where(eq(schema.documents.register, register)),
+    db.select({ projectId: schema.docCategories.projectId, parentId: schema.docCategories.parentId })
+      .from(schema.docCategories).where(eq(schema.docCategories.register, register)),
+  ]);
 
+  const rootsFiltered = roots.filter((c) => c.parentId === null);
   return projects
     .filter((p) => p.id !== currentProjectId)
     .map((p) => ({
       projectId: p.id,
       name: p.name,
       documents: docs.filter((d) => d.projectId === p.id).length,
-      headings: roots.filter((c) => c.projectId === p.id).length,
+      headings: rootsFiltered.filter((c) => c.projectId === p.id).length,
     }))
     .filter((s) => s.documents > 0)
     .sort((a, b) => a.name.localeCompare(b.name));

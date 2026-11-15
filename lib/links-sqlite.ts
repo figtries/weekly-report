@@ -3,24 +3,23 @@
  * scripts can call it; `saveRowLinksAction` in lib/sheet-actions.ts wraps it.
  *
  * Everything the Links panel and the Gantt drag refuse is refused here too,
- * because a payload from the browser can say anything. Reads go through `db`
- * (inside a better-sqlite3 transaction it is the same connection and sees the
- * transaction's own writes); writes go through the writer handed in.
+ * because a payload from the browser can say anything.
  */
 import { eq } from 'drizzle-orm';
 
-import { db, schema } from './sqlite';
+import { db, type Db } from './pg';
+import * as schema from './schema';
 import { wouldLoop, type NetNode } from './chains';
 import { cleanLink, parseLinks, serializeLinks, type StoredLink } from './links';
 
-type Writer = Pick<typeof db, 'update'>;
+type Writer = Pick<Db, 'update'>;
 
-function projectNodes(projectId: string) {
-  return db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.projectId, projectId)).all();
+async function projectNodes(projectId: string) {
+  return db.select().from(schema.wbsNodes).where(eq(schema.wbsNodes.projectId, projectId));
 }
 
-function validate(projectId: string, nodeId: string, links: StoredLink[]): StoredLink[] {
-  const nodes = projectNodes(projectId);
+async function validate(projectId: string, nodeId: string, links: StoredLink[]): Promise<StoredLink[]> {
+  const nodes = await projectNodes(projectId);
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const self = byId.get(nodeId);
   if (!self) throw new Error('Row not found');
@@ -38,8 +37,6 @@ function validate(projectId: string, nodeId: string, links: StoredLink[]): Store
     seen.add(l.id);
     clean.push(l);
   }
-  // Loops, against the rest of the stored graph. Dates do not matter here, but
-  // the network only reads scheduled leaves, so every leaf gets a nominal day.
   const graph: NetNode[] = nodes.map((n) => ({
     id: n.id,
     isLeaf: n.isLeaf,
@@ -60,25 +57,25 @@ function validate(projectId: string, nodeId: string, links: StoredLink[]): Store
   return clean;
 }
 
-export function setLinksSqlite(projectId: string, nodeId: string, links: StoredLink[]): void {
-  const clean = validate(projectId, nodeId, links);
-  db.update(schema.wbsNodes).set({ waitsFor: serializeLinks(clean) }).where(eq(schema.wbsNodes.id, nodeId)).run();
+export async function setLinksSqlite(projectId: string, nodeId: string, links: StoredLink[]): Promise<void> {
+  const clean = await validate(projectId, nodeId, links);
+  await db.update(schema.wbsNodes).set({ waitsFor: serializeLinks(clean) }).where(eq(schema.wbsNodes.id, nodeId));
 }
 
 /**
  * The panel's Save: this row's own links, and how each follower waits for it.
- * A follower that was waiting for this row and is no longer listed stops
- * waiting for it; its other links are left alone. One transaction.
  */
-export function saveRowLinksSqlite(projectId: string, nodeId: string, waitsFor: StoredLink[], holdsUp: StoredLink[]): void {
-  const known = new Set(projectNodes(projectId).map((n) => n.id));
+export async function saveRowLinksSqlite(projectId: string, nodeId: string, waitsFor: StoredLink[], holdsUp: StoredLink[]): Promise<void> {
+  const known = new Set((await projectNodes(projectId)).map((n) => n.id));
   for (const h of holdsUp) if (!known.has(h.id)) throw new Error('That activity was not found');
-  db.transaction((tx) => {
-    const own = validate(projectId, nodeId, waitsFor);
-    tx.update(schema.wbsNodes).set({ waitsFor: serializeLinks(own) }).where(eq(schema.wbsNodes.id, nodeId)).run();
+
+  await db.transaction(async (tx) => {
+    const own = await validate(projectId, nodeId, waitsFor);
+    await tx.update(schema.wbsNodes).set({ waitsFor: serializeLinks(own) }).where(eq(schema.wbsNodes.id, nodeId));
 
     const wanted = new Map(holdsUp.map((h) => [h.id, h]));
-    for (const n of projectNodes(projectId)) {
+    const nodes = await projectNodes(projectId);
+    for (const n of nodes) {
       if (n.id === nodeId) continue;
       const current = parseLinks(n.waitsFor);
       const had = (current ?? []).some((l) => l.id === nodeId);
@@ -86,33 +83,34 @@ export function saveRowLinksSqlite(projectId: string, nodeId: string, waitsFor: 
       if (!had && !want) continue;
       const rest = (current ?? []).filter((l) => l.id !== nodeId);
       const next = want ? [...rest, { id: nodeId, type: want.type, wait: want.wait }] : rest;
-      const clean = validate(projectId, n.id, next);
-      tx.update(schema.wbsNodes).set({ waitsFor: serializeLinks(clean) }).where(eq(schema.wbsNodes.id, n.id)).run();
+      const clean = await validate(projectId, n.id, next);
+      await tx.update(schema.wbsNodes).set({ waitsFor: serializeLinks(clean) }).where(eq(schema.wbsNodes.id, n.id));
     }
   });
 }
 
 /**
- * Called from both `renumber()` copies, the funnel every structural change
- * passes through: a group row carries no links, and no link points at a row
- * that is gone or has become a group. The stale-flag family of `isMilestone`.
- * An undo that brings a deleted row back restores its own links, not the
- * links other rows had to it.
+ * Called from both `renumber()` copies: a group row carries no links, and no
+ * link points at a row that is gone or has become a group.
  */
-export function pruneLinks(projectId: string, tx: Writer = db): void {
-  const nodes = projectNodes(projectId);
+export async function pruneLinks(projectId: string, tx?: Writer): Promise<void> {
+  const writer = tx ?? db;
+  const nodes = await projectNodes(projectId);
   const leaf = new Set(nodes.filter((n) => n.isLeaf).map((n) => n.id));
-  for (const n of nodes) {
-    if (!n.waitsFor) continue;
-    if (!n.isLeaf) {
-      tx.update(schema.wbsNodes).set({ waitsFor: null }).where(eq(schema.wbsNodes.id, n.id)).run();
-      continue;
-    }
-    const links = parseLinks(n.waitsFor);
-    if (links === null) continue;
-    const kept = links.filter((l) => leaf.has(l.id) && l.id !== n.id);
-    if (kept.length !== links.length) {
-      tx.update(schema.wbsNodes).set({ waitsFor: serializeLinks(kept) }).where(eq(schema.wbsNodes.id, n.id)).run();
-    }
-  }
+  await Promise.all(
+    nodes
+      .filter((n) => n.waitsFor)
+      .map(async (n) => {
+        if (!n.isLeaf) {
+          await writer.update(schema.wbsNodes).set({ waitsFor: null }).where(eq(schema.wbsNodes.id, n.id));
+          return;
+        }
+        const links = parseLinks(n.waitsFor);
+        if (links === null) return;
+        const kept = links.filter((l) => leaf.has(l.id) && l.id !== n.id);
+        if (kept.length !== links.length) {
+          await writer.update(schema.wbsNodes).set({ waitsFor: serializeLinks(kept) }).where(eq(schema.wbsNodes.id, n.id));
+        }
+      })
+  );
 }

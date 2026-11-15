@@ -10,7 +10,8 @@
  * output on the hardest plan in the app, it can survive a workbook.
  */
 import { parsePaste, completeDates, parseAmount } from '../lib/paste';
-import { db, schema } from '../lib/sqlite';
+import { db } from '../lib/pg';
+import * as schema from '../lib/schema';
 import { eq, asc } from 'drizzle-orm';
 
 let failures = 0;
@@ -165,37 +166,33 @@ check(
 
 /* ------------------------------------------------------- the real workbook */
 
-{
+(async () => {
   // The largest plan in the database, written out the way Excel copies it.
   // This was Gundih's 285 rows until that project was removed (26 Sep 2026).
+  const allProjectIds = await db
+    .select({ id: schema.wbsNodes.projectId })
+    .from(schema.wbsNodes);
   const PROJECT = (
     [
-      ...db
-        .select({ id: schema.wbsNodes.projectId })
-        .from(schema.wbsNodes)
-        .all()
+      ...allProjectIds
         .reduce((acc, r) => acc.set(r.id, (acc.get(r.id) ?? 0) + 1), new Map<string, number>())
         .entries(),
     ].sort((a, b) => b[1] - a[1])[0] ?? ['none']
   )[0];
-  const nodes = db
-    .select()
-    .from(schema.wbsNodes)
-    .where(eq(schema.wbsNodes.projectId, PROJECT))
-    .orderBy(asc(schema.wbsNodes.order))
-    .all();
-  const baseline = db
-    .select()
-    .from(schema.baselines)
-    .where(eq(schema.baselines.projectId, PROJECT))
-    .all()
-    .find((b) => b.kind === 'active');
-  const sched = new Map(
-    (baseline
-      ? db.select().from(schema.nodeSchedules).where(eq(schema.nodeSchedules.baselineId, baseline.id)).all()
-      : []
-    ).map((s) => [s.nodeId, s])
-  );
+  const [nodes, baselines] = await Promise.all([
+    db.select()
+      .from(schema.wbsNodes)
+      .where(eq(schema.wbsNodes.projectId, PROJECT))
+      .orderBy(asc(schema.wbsNodes.order)),
+    db.select()
+      .from(schema.baselines)
+      .where(eq(schema.baselines.projectId, PROJECT)),
+  ]);
+  const baseline = baselines.find((b) => b.kind === 'active');
+  const schedRows = baseline
+    ? await db.select().from(schema.nodeSchedules).where(eq(schema.nodeSchedules.baselineId, baseline.id))
+    : [];
+  const sched = new Map(schedRows.map((s) => [s.nodeId, s]));
 
   // Written the way Excel writes it: dd/mm/yyyy dates, thousands separators.
   const dmy = (s: string) => {
@@ -250,7 +247,7 @@ check(
     priced.length === nodes.filter((n) => (n.price ?? 0) > 0).length && Math.abs(sum - wantSum) < 1e-6,
     `${priced.length} priced rows, ${sum.toFixed(6)} vs ${wantSum.toFixed(6)}`
   );
-}
 
-console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`);
-process.exit(failures === 0 ? 0 : 1);
+  console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((err) => { console.error(err); process.exit(1); });

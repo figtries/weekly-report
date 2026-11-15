@@ -125,7 +125,7 @@ const NO_PROJECT: Database = {
 export async function getOpenDb(): Promise<Database> {
   const id = await getActiveProjectId();
   if (!id) return NO_PROJECT;
-  return buildProjectDashboardData(id)?.db ?? NO_PROJECT;
+  return (await buildProjectDashboardData(id))?.db ?? NO_PROJECT;
 }
 
 /* ------------------------------------ the JSON store, read PER PROJECT */
@@ -156,19 +156,19 @@ async function getJsonProject(key: string): Promise<Database | null> {
 export async function getOpenJsonDb(): Promise<Database> {
   const id = await getActiveProjectId();
   if (!id) return NO_PROJECT;
-  return (await getJsonProject(jsonKeyFor(id))) ?? jsonSeedFor(id);
+  return (await getJsonProject(jsonKeyFor(id))) ?? await jsonSeedFor(id);
 }
 
 /** The same, for the PDF — told which project rather than asking. See `getPrintDb`. */
 export async function getPrintJsonDb(projectId: string | null): Promise<Database> {
   if (!projectId) return getOpenJsonDb();
-  return (await getJsonProject(jsonKeyFor(projectId))) ?? jsonSeedFor(projectId);
+  return (await getJsonProject(jsonKeyFor(projectId))) ?? await jsonSeedFor(projectId);
 }
 
 export async function getOpenWeekRollup(week: number): Promise<WeekRollup | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
-  const db = buildProjectDashboardData(id)?.db;
+  const db = (await buildProjectDashboardData(id))?.db;
   return db ? getWeekRollup(db, week) : null;
 }
 
@@ -215,7 +215,7 @@ export interface OpenProjectStatus {
 export async function getOpenWeekGrid(): Promise<{ anchorEnd: string; lastWeek: number } | null> {
   const id = await getActiveProjectId();
   if (!id) return null;
-  const db = buildProjectDashboardData(id)?.db;
+  const db = (await buildProjectDashboardData(id))?.db;
   if (!db || db.weeks.length === 0 || !db.project.weekAnchorEndDate) return null;
   return { anchorEnd: db.project.weekAnchorEndDate, lastWeek: Math.max(...db.weeks.map((w) => w.week)) };
 }
@@ -232,7 +232,7 @@ export async function getOpenProjectStatus(): Promise<OpenProjectStatus | null> 
  * request read.
  */
 export async function getProjectStatus(id: string): Promise<OpenProjectStatus | null> {
-  const db = buildProjectDashboardData(id)?.db;
+  const db = (await buildProjectDashboardData(id))?.db;
   if (!db || db.weeks.length === 0) return null;
 
   const week = currentWeekOf(db);
@@ -263,7 +263,7 @@ export async function getProjectStatus(id: string): Promise<OpenProjectStatus | 
 export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]> {
   const id = await getActiveProjectId();
   if (!id) return [];
-  const db = buildProjectDashboardData(id)?.db;
+  const db = (await buildProjectDashboardData(id))?.db;
   return db ? buildSCurveSeries(db, upToWeek) : [];
 }
 
@@ -285,7 +285,7 @@ export async function getOpenSCurveSeries(upToWeek: number): Promise<SCurveRow[]
  */
 export async function getPrintDb(projectId: string | null): Promise<Database> {
   if (!projectId) return getOpenDb();
-  return buildProjectDashboardData(projectId)?.db ?? NO_PROJECT;
+  return (await buildProjectDashboardData(projectId))?.db ?? NO_PROJECT;
 }
 
 /**
@@ -311,6 +311,6 @@ export async function getPrintWeekRollup(
   week: number
 ): Promise<WeekRollup | null> {
   if (!projectId) return getOpenWeekRollup(week);
-  const db = buildProjectDashboardData(projectId)?.db;
+  const db = (await buildProjectDashboardData(projectId))?.db;
   return db ? getWeekRollup(db, week) : null;
 }
