@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { renderReportPdf } from '@/lib/pdf';
 import { getProject } from '@/lib/projects';
+import { getSession } from '@/lib/auth/get-session';
+import { generatePdfToken } from '@/lib/pdf-token';
 
 // The Gantt PDF: /print/projects/[id] rendered by the same Chromium as the
 // weekly report. Same maxDuration as the other PDF routes, so it shares their
@@ -27,6 +29,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   for (const k of ['client', 'contractor']) {
     if (req.nextUrl.searchParams.get(k) === '1') target.searchParams.set(k, '1');
   }
+  // Short-lived HMAC token so the proxy does not block headless Chromium at /print/*.
+  const session = await getSession();
+  if (session) target.searchParams.set('token', generatePdfToken(session.userId, `gantt:${id}`));
 
   let pdf: Uint8Array;
   try {

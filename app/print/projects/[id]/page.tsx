@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { notFound } from 'next/navigation';
 import GanttPrint from '@/components/print/GanttPrint';
 import { getProject } from '@/lib/projects';
 import { getSheet } from '@/lib/sheet';
@@ -6,6 +7,7 @@ import { getBarView } from '@/lib/bar-view-read';
 import { getBarFacts } from '@/lib/bar-facts';
 import { analyseNetwork } from '@/lib/chains';
 import { scopeRows } from '@/lib/gantt-print';
+import { verifyPdfToken } from '@/lib/pdf-token';
 
 // The page headless Chromium renders into the Gantt PDF (see lib/pdf.ts and
 // app/api/pdf/projects/[id]/route.ts). Under /print, outside the app's own
@@ -16,7 +18,7 @@ import { scopeRows } from '@/lib/gantt-print';
 // `contractor` are '1' when ticked in the dialog; otherwise they stay off the page.
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ scope?: string; levels?: string; client?: string; contractor?: string }>;
+  searchParams: Promise<{ scope?: string; levels?: string; client?: string; contractor?: string; token?: string }>;
 };
 
 // searchParams is a runtime read: behind Suspense, with a null fallback that
@@ -30,7 +32,8 @@ export default function ProjectPrintTarget(props: Props) {
 }
 
 async function ProjectPrintBody({ params, searchParams }: Props) {
-  const [{ id }, { scope = 'all', levels = '0', client, contractor }] = await Promise.all([params, searchParams]);
+  const [{ id }, { scope = 'all', levels = '0', client, contractor, token }] = await Promise.all([params, searchParams]);
+  if (!token || !verifyPdfToken(token)) notFound();
   const project = await getProject(id);
 
   if (!project) {

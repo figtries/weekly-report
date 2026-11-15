@@ -29,9 +29,13 @@ import DailyDetailLoading from './loading';
 export async function generateStaticParams() {
   // Every day any project has filed. With none filed anywhere, one sample date
   // so the build still has a shell to prerender; its body is per request.
-  const ws = await getWorkspace();
-  const dates = [...new Set(Object.values(ws.projects).flatMap((p) => p.daily.map((d) => d.date)))];
-  return dates.length ? dates.map((date) => ({ date })) : [{ date: '2026-01-01' }];
+  try {
+    const ws = await getWorkspace();
+    const dates = [...new Set(Object.values(ws.projects).flatMap((p) => p.daily.map((d) => d.date)))];
+    return dates.length ? dates.map((date) => ({ date })) : [{ date: '2026-01-01' }];
+  } catch {
+    return [{ date: '2026-01-01' }];
+  }
 }
 
 /**
