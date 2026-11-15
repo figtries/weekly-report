@@ -54,7 +54,7 @@ const initials = (n: string) =>
 const roleOf = (roles: Role[], key: string | null) => roles.find((r) => r.key === key);
 const isCustom = (a: Account, roles: Role[]) => {
   const r = roleOf(roles, a.preset);
-  return !a.master && !!r && !same(a.access, r.access);
+  return !a.master && !!r && AREAS.some(({ key }) => a.access[key] !== r.access[key]);
 };
 const levelOf = (a: Account) =>
   Object.values(a.access).includes('edit') ? 'edit' : Object.values(a.access).includes('view') ? 'view' : 'none';
@@ -358,11 +358,15 @@ function AccountsView({ tabs, accounts, roles, projects }: { tabs: React.ReactNo
           saveAccounts([...accounts, a]).then(
             () => {
               setAdding(false);
-              toast.success('Account added', { description: a.name });
+              toast.success('Invitation sent', { description: `${a.name} · ${a.email}` });
               setSelectedId(a.id);
               setDraft(null);
             },
-            () => {}
+            (err: unknown) => {
+              toast.error('Could not send invite', {
+                description: err instanceof Error ? err.message : 'Unknown error',
+              });
+            }
           );
         }}
       />
@@ -539,25 +543,22 @@ function AddAccountSheet({
 }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [preset, setPreset] = useState('');
   const [scope, setScope] = useState<Account['projects']>([]);
   const [access, setAccess] = useState<Account['access']>(NO_ACCESS);
   const [error, setError] = useState('');
 
-  const reset = () => { setName(''); setEmail(''); setPassword(''); setPreset(''); setScope([]); setAccess(NO_ACCESS); setError(''); };
+  const reset = () => { setName(''); setEmail(''); setPreset(''); setScope([]); setAccess(NO_ACCESS); setError(''); };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError('Type a name first.');
     if (!validEmail(email)) return setError('Type a valid email.');
     if (taken.includes(email.trim().toLowerCase())) return setError('That email already has an account.');
-    if (password.length < MIN_PASSWORD) return setError(`Set a password of ${MIN_PASSWORD} or more characters.`);
     onAdd({
       id: `u${Date.now().toString(36)}`,
       name: name.trim(),
       email: email.trim(),
-      password,
       preset: preset || null,
       status: 'invited',
       lastActive: null,
@@ -573,7 +574,7 @@ function AddAccountSheet({
           head={
             <>
               <h2 className="text-base font-semibold text-foreground">Add account</h2>
-              <p className="text-xs text-muted-foreground">Give them this email and password. They show as Invited until they first sign in.</p>
+              <p className="text-xs text-muted-foreground">An invitation email is sent so they can set their own password. They show as Invited until they first sign in.</p>
             </>
           }
           foot={
@@ -593,9 +594,6 @@ function AddAccountSheet({
               </Field>
               <Field label="Email">
                 <Input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} className="h-11 sm:h-9" autoComplete="off" />
-              </Field>
-              <Field label="Password" className="sm:col-span-2">
-                <PasswordField value={password} onChange={(v) => { setPassword(v); setError(''); }} />
               </Field>
             </div>
           </Section>

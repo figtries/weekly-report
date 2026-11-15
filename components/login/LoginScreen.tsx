@@ -8,12 +8,10 @@ import { DashboardIcon, DataOverallIcon, ProjectsIcon } from '@/components/layou
 import { useBareScreen } from '@/components/layout/use-bare-screen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchAuth, login, setupMaster } from '@/lib/signed-in';
+import { login } from '@/lib/supabase/auth-actions';
+import { createBrowserClient } from '@supabase/ssr';
 import { cn } from '@/lib/utils';
 
-// Checked on the server (app/api/auth). While nobody has an account yet, this
-// card makes the first Master instead (once, ever); after that only the Master
-// makes accounts, on Roles.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // 'wrong' and 'suspended' are worded below; anything else is shown as written.
@@ -22,8 +20,35 @@ type Phase = 'idle' | 'checking' | 'done';
 
 export function LoginScreen() {
   useBareScreen();
+  const [setupOpen, setSetupOpen] = useState(false);
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    // Case 1: redirected from /auth/callback?next=/login?setup=1 (PKCE flow)
+    if (search.get('setup') === '1') {
+      setSetupOpen(true);
+      return;
+    }
+    // Case 2: Supabase invite used implicit flow — token is in the URL hash.
+    // The /auth/callback redirect adds ?error=missing_code which prevents Supabase
+    // from auto-detecting the hash. Extract tokens explicitly and call setSession().
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hash.get('access_token');
+    const refreshToken = hash.get('refresh_token') ?? '';
+    if (hash.get('type') === 'invite' && accessToken) {
+      const supabase = getSupabase();
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ data: { session }, error }) => {
+          if (session && !error) {
+            window.history.replaceState({}, '', '/login?setup=1');
+            setSetupOpen(true);
+          }
+        });
+    }
+  }, []);
+
   return (
     <div data-login className="login-mesh relative isolate min-h-[calc(100dvh/var(--z))] overflow-hidden">
+      {setupOpen && <SetupPasswordDialog onDone={() => { setSetupOpen(false); window.location.assign('/'); }} />}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="login-blob -left-[14%] -top-[20%] size-[46rem] bg-[#c5dbfe]/70" />
         <div className="login-blob left-[16%] top-[50%] size-[30rem] bg-[#00d0d4]/20" />
@@ -74,14 +99,6 @@ function SignInCard() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [problem, setProblem] = useState<Problem>(null);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [name, setName] = useState('');
-  const [setup, setSetup] = useState(false);
-
-  // Nobody has an account yet: this card makes the first Master.
-  useEffect(() => {
-    fetchAuth().then((v) => setSetup(v.needsSetup), () => {});
-  }, []);
-
   // Back from the app restores this page from the bfcache still on "Signed in".
   useEffect(() => {
     const reset = (e: PageTransitionEvent) => {
@@ -104,17 +121,15 @@ function SignInCard() {
     if (next.email) return emailRef.current?.focus();
     if (next.password) return passwordRef.current?.focus();
 
-    if (setup && !name.trim()) return setProblem('Type your name.');
-    if (setup && password.length < 6) return setProblem('Set a password of 6 or more characters.');
-
     setPhase('checking');
     try {
-      if (setup) await setupMaster(name.trim(), typed, password);
-      else await login(typed, password);
+      await login(typed, password);
     } catch (err) {
       const status = (err as { status?: number }).status;
-      setProblem(setup ? (err as Error).message : status === 403 ? 'suspended' : status === 401 ? 'wrong' : "Can't reach the server. Try again.");
-      if (setup && status === 409) setSetup(false);
+      const msg = status === 401 ? 'wrong'
+                : status === 403 ? 'Email not confirmed. Check your inbox and click the link, then try again.'
+                : "Can't reach the server. Try again.";
+      setProblem(msg);
       setPhase('idle');
       if (status === 401) passwordRef.current?.select();
       return;
@@ -136,12 +151,8 @@ function SignInCard() {
 
   return (
     <div className="animate-enter stagger-1 w-full max-w-[440px] rounded-2xl border border-border/70 bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_28px_64px_-32px_rgba(20,60,140,0.4)] sm:p-9">
-      <h2 className="text-2xl font-semibold tracking-tight text-foreground">{setup ? 'Create the Master account' : 'Sign in'}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {setup
-          ? 'Nobody has an account yet. You become the Master and give everyone else their access.'
-          : 'Use the account your Master gave you.'}
-      </p>
+      <h2 className="text-2xl font-semibold tracking-tight text-foreground">Sign in</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Use the account your Master gave you.</p>
 
       <div aria-live="polite">
         {problem && (
@@ -164,23 +175,6 @@ function SignInCard() {
       </div>
 
       <form noValidate onSubmit={submit} className="mt-6 space-y-5">
-        {setup && (
-          <div>
-            <label htmlFor={`${emailId}-name`} className="text-sm font-medium text-foreground">
-              Your name
-            </label>
-            <Input
-              id={`${emailId}-name`}
-              autoComplete="name"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (problem) setProblem(null);
-              }}
-              className={FIELD}
-            />
-          </div>
-        )}
         <div>
           <label htmlFor={emailId} className="text-sm font-medium text-foreground">
             Email
@@ -224,7 +218,7 @@ function SignInCard() {
               ref={passwordRef}
               id={passwordId}
               type={show ? 'text' : 'password'}
-              autoComplete={setup ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => edit('password', e.target.value)}
               aria-invalid={errors.password ? true : undefined}
@@ -266,7 +260,7 @@ function SignInCard() {
               Signed in
             </>
           ) : (
-            setup ? 'Create Master account' : 'Sign in'
+            'Sign in'
           )}
         </Button>
       </form>
@@ -290,6 +284,115 @@ function FieldError({ id, children }: { id: string; children: string }) {
       <CircleAlert className="size-4 shrink-0" aria-hidden />
       {children}
     </p>
+  );
+}
+
+const MIN_PASSWORD = 8;
+
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+}
+
+function SetupPasswordDialog({ onDone }: { onDone: () => void }) {
+  const pwdId = useId();
+  const confirmId = useId();
+  const pwdRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+
+  const [pwd, setPwd] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [errors, setErrors] = useState<{ pwd?: string; confirm?: string }>({});
+  const [problem, setProblem] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'done'>('idle');
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (phase !== 'idle') return;
+    const next = {
+      pwd: !pwd ? 'Enter a password.' : pwd.length < MIN_PASSWORD ? `Use at least ${MIN_PASSWORD} characters.` : undefined,
+      confirm: !confirm ? 'Confirm your password.' : pwd !== confirm ? 'Passwords do not match.' : undefined,
+    };
+    setErrors(next);
+    if (next.pwd) return pwdRef.current?.focus();
+    if (next.confirm) return confirmRef.current?.focus();
+
+    setPhase('saving');
+    const { error } = await getSupabase().auth.updateUser({ password: pwd });
+    if (error) { setProblem(error.message); setPhase('idle'); return; }
+    setPhase('done');
+    window.setTimeout(onDone, 600);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="animate-enter w-full max-w-md rounded-2xl border border-border/70 bg-card p-6 shadow-[0_8px_32px_-8px_rgba(20,60,140,0.35)] sm:p-8">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">Set your password</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Choose a password to sign in with from now on.</p>
+
+        {problem && (
+          <div className="animate-fade-in-up mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>{problem}</p>
+          </div>
+        )}
+
+        <form noValidate onSubmit={submit} className="mt-5 space-y-4">
+          <div>
+            <label htmlFor={pwdId} className="text-sm font-medium text-foreground">New password</label>
+            <div className="relative">
+              <Input
+                ref={pwdRef}
+                id={pwdId}
+                type={showPwd ? 'text' : 'password'}
+                autoComplete="new-password"
+                autoFocus
+                value={pwd}
+                onChange={(e) => { setPwd(e.target.value); setErrors((v) => ({ ...v, pwd: undefined })); }}
+                aria-invalid={errors.pwd ? true : undefined}
+                className={cn(FIELD, 'pr-12')}
+              />
+              <button type="button" aria-label={showPwd ? 'Hide' : 'Show'} onClick={() => setShowPwd((v) => !v)}
+                className="absolute right-0 top-1.5 grid size-11 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground">
+                {showPwd ? <EyeOff className="size-[1.125rem]" /> : <Eye className="size-[1.125rem]" />}
+              </button>
+            </div>
+            {errors.pwd && <p role="alert" className="animate-fade-in-up mt-1.5 flex items-center gap-1.5 text-sm text-red-700"><CircleAlert className="size-4 shrink-0" aria-hidden />{errors.pwd}</p>}
+          </div>
+
+          <div>
+            <label htmlFor={confirmId} className="text-sm font-medium text-foreground">Confirm password</label>
+            <div className="relative">
+              <Input
+                ref={confirmRef}
+                id={confirmId}
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => { setConfirm(e.target.value); setErrors((v) => ({ ...v, confirm: undefined })); }}
+                aria-invalid={errors.confirm ? true : undefined}
+                className={cn(FIELD, 'pr-12')}
+              />
+              <button type="button" aria-label={showConfirm ? 'Hide' : 'Show'} onClick={() => setShowConfirm((v) => !v)}
+                className="absolute right-0 top-1.5 grid size-11 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground">
+                {showConfirm ? <EyeOff className="size-[1.125rem]" /> : <Eye className="size-[1.125rem]" />}
+              </button>
+            </div>
+            {errors.confirm && <p role="alert" className="animate-fade-in-up mt-1.5 flex items-center gap-1.5 text-sm text-red-700"><CircleAlert className="size-4 shrink-0" aria-hidden />{errors.confirm}</p>}
+          </div>
+
+          <Button type="submit" aria-disabled={phase !== 'idle' || undefined} className="mt-2 h-11 w-full text-[0.9375rem] font-semibold">
+            {phase === 'saving' ? <><Loader2 className="animate-spin" aria-hidden />Saving…</>
+              : phase === 'done' ? <><Check aria-hidden />Password set</>
+              : 'Set password'}
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }
 

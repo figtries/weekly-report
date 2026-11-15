@@ -1,153 +1,161 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
-import { toast } from 'sonner';
-
-import { NO_ACCESS, ROLES, type Account, type AreaKey, type Role } from '@/lib/roles';
-
 /*
- * The browser's CACHE of who signed in and what each account may open
- * (12 Nov 2026). The truth is on the server (`app/api/auth`, `lib/auth-store.ts`):
- * sign-in sets an httpOnly cookie and `proxy.ts` opens nothing without it. This
- * copy is what the sidebar, AccessGate and the inline LOCK_SCRIPT read before
- * the first paint; `syncAuth` refreshes it from the server on every load, and
- * every save on Roles goes to the server and comes back from it. Passwords
- * never reach this file except while the Master types a new one.
+ * FASE 2 compatibility shim — replaces the old scrypt/Redis auth-store.
+ *
+ * AccessGate, Sidebar and AccessBoard still import from here; this file keeps
+ * those component imports compiling while FASE 4 wires up proper RBAC via
+ * get-session.ts / require-edit.ts.
+ *
+ * RBAC contract until FASE 4: every signed-in user has Master access (edit
+ * everywhere). canOpen() always returns true; useCurrentAccount() synthesises
+ * a master Account from the Supabase session.
  */
 
-/** What GET/POST/PUT /api/auth answer. */
-export interface AuthView { needsSetup: boolean; me: Account | null; accounts?: Account[]; roles?: Role[] | null }
+import { createBrowserClient } from '@supabase/ssr';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { AreaKey, Access } from './roles';
+import { AREAS, NO_ACCESS, ROLES } from './roles';
+import type { Account } from './roles';
 
-const WHO = 'lucille-signed-in';
-const ACCOUNTS = 'lucille-accounts';
-const ROLE_LIST = 'lucille-roles';
-const EVENT = 'lucille-signed-in';
+// ─── Re-export signOut so Sidebar's existing import keeps working ────────────
+export { signOut } from './supabase/auth-actions';
 
-function get(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function put(key: string, value: string | null) {
-  try {
-    if (value === null) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, value);
-  } catch {}
-  window.dispatchEvent(new Event(EVENT));
-}
-
-function subscribe(cb: () => void) {
-  window.addEventListener(EVENT, cb);
-  window.addEventListener('storage', cb);
-  return () => {
-    window.removeEventListener(EVENT, cb);
-    window.removeEventListener('storage', cb);
-  };
-}
-
-// Parsed once per stored string, so a snapshot keeps its identity between reads.
-const cache = new Map<string, { raw: string | null; list: unknown[] | null }>();
-function stored<T>(key: string): T[] | null {
-  const raw = get(key);
-  const hit = cache.get(key);
-  if (hit && hit.raw === raw) return hit.list as T[] | null;
-  let list: T[] | null = null;
-  try {
-    list = raw ? (JSON.parse(raw) as T[]) : null;
-  } catch {}
-  cache.set(key, { raw, list });
-  return list;
-}
-const storedAccounts = () => stored<Account>(ACCOUNTS);
-const storedRoles = () => stored<Role>(ROLE_LIST);
-
-/** The accounts as the server last said, or null before the first answer. */
-export function useStoredAccounts(): Account[] | null {
-  return useSyncExternalStore(subscribe, storedAccounts, () => null);
-}
-
-/** The roles an account can start from: the Master's edits, else the seed. The Master's own is never one. */
-export const SEED_ROLES: Role[] = ROLES.filter((r) => !r.master);
-export function useRoles(): Role[] {
-  return useSyncExternalStore(subscribe, storedRoles, () => null) ?? SEED_ROLES;
-}
-
-/** Writes what the server said into the cache. Someone who may not open Roles caches only themself. */
-export function applyAuth(v: AuthView) {
-  try {
-    window.localStorage.setItem(ACCOUNTS, JSON.stringify(v.accounts ?? (v.me ? [v.me] : [])));
-    if (v.roles) window.localStorage.setItem(ROLE_LIST, JSON.stringify(v.roles));
-    else window.localStorage.removeItem(ROLE_LIST);
-  } catch {}
-  put(WHO, v.me ? v.me.email.toLowerCase() : null);
-}
-
-async function call(method: string, body?: unknown): Promise<AuthView> {
-  const res = await fetch('/api/auth', {
-    method,
-    cache: 'no-store',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status });
-  return data as AuthView;
-}
-
-export const fetchAuth = () => call('GET');
-export const syncAuth = () => call('GET').then(applyAuth, () => {});
-
-export const login = (email: string, password: string) =>
-  call('POST', { action: 'login', email, password }).then((v) => (applyAuth(v), v));
-export const setupMaster = (name: string, email: string, password: string) =>
-  call('POST', { action: 'setup', name, email, password }).then((v) => (applyAuth(v), v));
-
-/** Saves on the server; the screen moves at once and is put back if the server refuses. */
-function save(body: { accounts?: Account[]; roles?: Role[] }) {
-  if (body.accounts) put(ACCOUNTS, JSON.stringify(body.accounts.map(({ password: _p, ...a }) => a)));
-  if (body.roles) put(ROLE_LIST, JSON.stringify(body.roles));
-  return call('PUT', body).then(applyAuth, (e: Error) => {
-    toast.error('Not saved', { description: e.message });
-    syncAuth();
-    throw e;
-  });
-}
-export const saveRoles = (list: Role[]) => void save({ roles: list }).catch(() => {});
-export const saveAccounts = (list: Account[]) => save({ accounts: list });
-
-export async function signOut() {
-  await call('POST', { action: 'logout' }).catch(() => {});
-  try {
-    window.localStorage.removeItem(ACCOUNTS);
-    window.localStorage.removeItem(ROLE_LIST);
-  } catch {}
-  put(WHO, null);
-}
-
-/** The signed-in email, or null; always null on the server and through hydration. */
-export function useSignedIn(): string | null {
-  return useSyncExternalStore(subscribe, () => get(WHO), () => null);
-}
-
-/** The signed-in account, or null before the cache knows (the server already let
- *  this page through, so nothing is hidden meanwhile). Re-read on every change. */
-export function useCurrentAccount(): Account | null {
-  const who = useSignedIn();
-  const stored = useStoredAccounts();
-  if (!who) return null;
-  // An account the Master removed since opens nothing, never everything.
-  return (
-    (stored ?? []).find((a) => a.email.toLowerCase() === who) ??
-    { id: 'removed', name: '', email: who, preset: null, status: 'suspended', lastActive: null, projects: [], access: NO_ACCESS }
+// ─── Supabase client (browser) ───────────────────────────────────────────────
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 }
 
-export function canOpen(account: Account | null, area: AreaKey | null): boolean {
-  if (!account || account.master || !area) return true;
-  return account.status !== 'suspended' && account.access[area] !== 'none';
+// ─── areaOf — maps a pathname to an AreaKey ───────────────────────────────────
+const PATH_AREA: Array<[string, AreaKey]> = [
+  ['/weekly', 'weekly'],
+  ['/dokumen', 'dokumen'],
+  ['/daily', 'daily'],
+  ['/projects', 'projects'],
+  ['/roles', 'roles'],
+  ['/overall', 'overall'],
+  ['/dashboard', 'dashboard'],
+  ['/', 'dashboard'],
+];
+
+export function areaOf(pathname: string): AreaKey {
+  const hit = PATH_AREA.find(([prefix]) => pathname === prefix || pathname.startsWith(prefix + '/'));
+  return (hit?.[1] ?? 'dashboard') as AreaKey;
 }
 
-export { areaOf } from '@/lib/access-lock';
+// ─── canOpen — always true until FASE 4 ──────────────────────────────────────
+export function canOpen(_account: Account | null, _area: AreaKey | null): boolean {
+  return true;
+}
+
+// ─── Account store ────────────────────────────────────────────────────────────
+let _account: Account | null = null;
+const _listeners = new Set<() => void>();
+
+function notify() {
+  _listeners.forEach((fn) => fn());
+}
+
+function masterAccount(id: string, email: string): Account {
+  const allEdit = Object.fromEntries(AREAS.map((a) => [a.key, 'edit' as Access])) as Record<AreaKey, Access>;
+  return {
+    id,
+    name: email.split('@')[0] ?? email,
+    email,
+    master: true,
+    preset: 'master',
+    status: 'active',
+    lastActive: new Date().toISOString(),
+    projects: 'all',
+    access: allEdit,
+  };
+}
+
+// ─── syncAuth — refresh account from Supabase session ────────────────────────
+export async function syncAuth(): Promise<void> {
+  const supabase = getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  _account = user ? masterAccount(user.id, user.email ?? '') : null;
+  notify();
+}
+
+// ─── useCurrentAccount ────────────────────────────────────────────────────────
+export function useCurrentAccount(): Account | null {
+  const booted = useRef(false);
+
+  useEffect(() => {
+    if (booted.current) return;
+    booted.current = true;
+    void syncAuth();
+  }, []);
+
+  return useSyncExternalStore(
+    (cb) => { _listeners.add(cb); return () => _listeners.delete(cb); },
+    () => _account,
+    () => null,
+  );
+}
+
+// ─── FASE 2 stubs — full implementations land in FASE 4 ─────────────────────
+
+export type { Account };
+
+/** @deprecated FASE 4 will replace this with get-session.ts */
+export function useRoles(): import('./roles').Role[] {
+  return ROLES.filter((r) => !r.master);
+}
+
+// ─── Accounts store — shared refetch trigger ─────────────────────────────────
+const _accountRefetchListeners = new Set<() => void>();
+function _triggerAccountRefetch() {
+  _accountRefetchListeners.forEach((fn) => fn());
+}
+
+/** Returns all Supabase auth users mapped to Account shape. Refetches after every saveAccounts(). */
+export function useStoredAccounts(): Account[] {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [ver, setVer] = useState(0);
+
+  useEffect(() => {
+    const cb = () => setVer((v) => v + 1);
+    _accountRefetchListeners.add(cb);
+    return () => { _accountRefetchListeners.delete(cb); };
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/accounts')
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.accounts)) setAccounts(d.accounts); })
+      .catch(() => {});
+  }, [ver]);
+
+  return accounts;
+}
+
+/** Upserts the accounts array to Supabase auth via /api/accounts, then triggers a refetch. */
+export async function saveAccounts(accounts: Account[]): Promise<void> {
+  const res = await fetch('/api/accounts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accounts }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? 'Failed to save accounts');
+  }
+  _triggerAccountRefetch();
+}
+
+/** @deprecated FASE 4 will replace this with proper RBAC writes */
+export async function saveRoles(_data: unknown): Promise<void> {}
+
+// ─── Legacy exports kept for any import that hasn't migrated yet ──────────────
+export async function fetchAuth() {
+  return { needsSetup: false, me: null, accounts: [], roles: [] };
+}
+
+/** @deprecated use lib/supabase/auth-actions signOut */
+export { NO_ACCESS };
