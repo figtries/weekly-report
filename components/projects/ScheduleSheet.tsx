@@ -111,6 +111,8 @@ const ROW_H = 44;
 const HEAD_H = 36;
 /** Rows mounted by the first render, before the scroller can be measured. */
 const INITIAL_WINDOW = 30;
+/** Up to this many rows, every row is mounted once the page is idle (see `whole`). */
+const WHOLE_LIMIT = 400;
 // A SHARE of the shell, not a pixel width. Stored as pixels it was 720 on
 // every screen, so a 1240px laptop gave the timeline 290px — a quarter of the
 // window, which is what "the Gantt is cut off" meant.
@@ -344,7 +346,18 @@ export default function ScheduleSheet({
   // entirely under the fold and is invisible; above it there would be one
   // frame of a short list, which is why this is not tuned down to the twenty a
   // phone would prefer.
-  const [range, setRange] = useState({ start: 0, end: INITIAL_WINDOW });
+  const [windowRange, setRange] = useState({ start: 0, end: INITIAL_WINDOW });
+  /**
+   * Once the page is idle, a plan of up to WHOLE_LIMIT rows mounts EVERY row and
+   * stops windowing (Nov 2026, "scroll masih g alus"). Measured at DPR 1.25 on
+   * Merbau: with the window following the scroll, each wheel step cost a
+   * re-render of the rows crossing a block plus their style, layout and paint,
+   * and input-to-pixels sat at p50 33-60 ms; with no work on scroll it is
+   * ~25 ms. The first render stays at INITIAL_WINDOW so the load does not pay
+   * for it; the rest arrives in a transition, which yields to input.
+   */
+  const [whole, setWhole] = useState(false);
+  const wholeRef = useRef(false);
   // Declared here rather than beside the mirror below, because the window
   // arithmetic reads the scroller's own height.
   const leftRef = useRef<HTMLDivElement>(null);
@@ -608,7 +621,7 @@ export default function ScheduleSheet({
       from && from.clientHeight > 0
         ? from
         : (leftRef.current?.clientHeight ? leftRef.current : rightRef.current);
-    if (!el) return;
+    if (!el || wholeRef.current) return;
     const first = Math.floor(el.scrollTop / ROW_H);
     const fits = Math.ceil(el.clientHeight / ROW_H);
     setRange((prev) => {
@@ -737,6 +750,33 @@ export default function ScheduleSheet({
       setMenuMode('kind');
     });
   }, []);
+
+  const all = whole && visible.length <= WHOLE_LIMIT;
+  const range = useMemo(() => (all ? { start: 0, end: visible.length } : windowRange), [all, visible.length, windowRange]);
+  useEffect(() => {
+    wholeRef.current = all;
+    // Dropping back to the window (the plan grew past the limit): measure it now.
+    if (!all) recomputeRange();
+  }, [all, recomputeRange]);
+  useEffect(() => {
+    const go = () => startTransition(() => setWhole(true));
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(go, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(go, 1000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Stable, so the memoised GanttChart does not redraw every bar on a press.
+  const clearSelection = useCallback(() => setSelectedId(null), []);
+  // The card loads on the drag's first press; setting the link after that
+  // promise means a quick release still gets its card.
+  const linkFromChart = useCallback(
+    (fromId: string, toId: string, type: LinkType) =>
+      void warmLinkDragCard().then(() => setPendingLink({ fromId, toId, type })),
+    []
+  );
 
   const windowed = useMemo(
     () => visible.slice(range.start, Math.min(range.end, visible.length)),
@@ -2105,10 +2145,8 @@ export default function ScheduleSheet({
             rows={drawnRows}
             network={network}
             parentOf={parentOf}
-            onClear={() => setSelectedId(null)}
-            // The card loads on the drag's first press; setting the link after
-            // that promise means a quick release still gets its card.
-            onLink={(fromId, toId, type) => void warmLinkDragCard().then(() => setPendingLink({ fromId, toId, type }))}
+            onClear={clearSelection}
+            onLink={linkFromChart}
             spanStart={ganttStart}
             spanFinish={ganttFinish}
             rowH={ROW_H}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Flag } from 'lucide-react';
 
 import type { SheetRow } from '@/lib/sheet';
@@ -101,7 +101,15 @@ export function ScrollShield() {
   return <div aria-hidden className="absolute inset-0 z-50 hidden [[data-scrolling]_&]:block" />;
 }
 
-export default function GanttChart({
+/**
+ * Memoised: with every row mounted (ScheduleSheet's `whole`), a re-render here
+ * rebuilds every bar, and the sheet re-renders on presses that change nothing
+ * the chart draws (opening a row's menu). The props are all stable or memoised
+ * in ScheduleSheet; keep them that way.
+ */
+export default memo(GanttChart);
+
+function GanttChart({
   rows,
   spanStart,
   spanFinish,
