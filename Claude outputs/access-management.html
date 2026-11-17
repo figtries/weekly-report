@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Access Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f9fafb; --card:#fff; --line:#e5e7eb; --line-soft:#f1f3f5;
+  --ink:#111827; --ink-2:#374151; --muted:#6b7280; --faint:#9ca3af;
+  --blue:#2563eb; --blue-soft:#eff6ff; --blue-line:#bfdbfe;
+  --green:#16a34a; --green-soft:#ecfdf5; --red:#dc2626; --red-soft:#fef2f2;
+  --amber:#d97706; --amber-soft:#fffbeb; --violet:#7c3aed; --violet-soft:#f5f3ff;
+  --r:14px; --shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px}
+
+.shell{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.side{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 8px 18px;font-weight:800;font-size:18px;letter-spacing:-.01em}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:grid;place-items:center;color:#fff;font-size:15px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-weight:500;min-height:44px}
+.nav a:hover{background:var(--line-soft)}
+.nav a[aria-current=page]{background:var(--blue);color:#fff}
+.nav svg{width:18px;height:18px;flex:none}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.proj-card{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg)}
+.proj-card small{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.proj-card b{display:block;font-size:13px;margin-top:4px;line-height:1.35}
+.proj-card .bar{height:4px;background:var(--line);border-radius:4px;margin-top:10px;overflow:hidden}
+.proj-card .bar i{display:block;height:100%;width:62%;background:#3b82f6}
+
+.topbar{display:none}
+main{padding:28px 32px 48px;min-width:0}
+
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font-size:26px;letter-spacing:-.02em;margin:0;font-weight:800}
+.sub{color:var(--muted);margin:4px 0 0}
+.draft-note{display:inline-flex;align-items:center;gap:8px;margin-top:12px;background:var(--amber-soft);border:1px solid #fde68a;color:#92400e;padding:7px 12px;border-radius:10px;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:#fff;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--line-soft)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:#1d4ed8}
+.btn.danger{color:var(--red);border-color:#fecaca}
+.btn.danger:hover{background:var(--red-soft)}
+.btn.solid-danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.sm{min-height:34px;padding:0 12px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn svg{width:16px;height:16px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0 20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow)}
+.stat .k{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.stat .v{font-size:34px;font-weight:800;letter-spacing:-.03em;margin-top:6px;line-height:1.1}
+.stat .seg{display:flex;height:6px;border-radius:6px;overflow:hidden;margin-top:12px;background:var(--line-soft)}
+.stat .seg i{display:block;height:100%}
+.stat .foot{color:var(--muted);font-size:12px;margin-top:8px}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;box-shadow:var(--shadow)}
+.search{flex:1 1 260px;position:relative}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--faint)}
+.search input{width:100%;min-height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px 0 36px;background:var(--bg)}
+.toolbar select{min-height:40px;border:1px solid var(--line);border-radius:10px;padding:0 32px 0 12px;background:#fff;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;max-width:100%}
+
+.split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:20px;margin-top:20px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.table-card{overflow:hidden}
+.table-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.table-head h2{font-size:15px;margin:0;font-weight:700}
+.table-head span{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tbody tr{cursor:pointer;transition:background .15s}
+tbody tr:hover{background:#fafbfc}
+tbody tr[aria-selected=true]{background:var(--blue-soft);box-shadow:inset 3px 0 0 var(--blue)}
+tbody tr:last-child td{border-bottom:0}
+.acct{display:flex;align-items:center;gap:11px;min-width:0}
+.av{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.acct .n{font-weight:600}
+.acct .e{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.badge{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:3px 9px;border-radius:7px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-active,.b-invited,.b-suspended{width:88px}
+.b-active{background:var(--green-soft);color:var(--green)}
+.b-invited{background:var(--amber-soft);color:var(--amber)}
+.b-suspended{background:var(--red-soft);color:var(--red)}
+.b-preset{background:var(--line-soft);color:var(--ink-2)}
+.b-master{background:var(--violet-soft);color:var(--violet)}
+.b-custom{background:var(--blue-soft);color:var(--blue)}
+.scope{color:var(--ink-2);font-size:13px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:var(--muted)}
+.row-act{width:36px;height:36px;border-radius:9px;border:1px solid transparent;background:transparent;cursor:pointer;display:grid;place-items:center;color:var(--muted)}
+.row-act:hover{background:#fff;border-color:var(--line)}
+.access-mini{display:flex;gap:3px;margin-top:6px}
+.access-mini i{width:14px;height:4px;border-radius:2px;background:var(--line)}
+.access-mini i.v{background:#93c5fd}.access-mini i.e{background:var(--blue)}
+
+.empty{padding:56px 24px;text-align:center}
+.empty .ic{width:52px;height:52px;border-radius:14px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;margin:0 auto 14px}
+.empty h3{margin:0 0 4px;font-size:16px}
+.empty p{margin:0 0 16px;color:var(--muted)}
+
+.panel{position:sticky;top:20px;display:flex;flex-direction:column;max-height:calc(100vh - 40px)}
+.panel-body{padding:20px;overflow:auto}
+.p-top{display:flex;gap:14px;align-items:center}
+.p-top .av{width:52px;height:52px;border-radius:14px;font-size:17px}
+.p-top h2{margin:0;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.p-top .e{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.sec{margin-top:22px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.sec-h h3{margin:0;font-size:13px;font-weight:700;color:var(--ink-2)}
+.field{display:grid;gap:6px;margin-bottom:12px}
+.field label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.field input,.field select{min-height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff;width:100%}
+.field input:disabled{background:var(--bg);color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.status-row b{display:block;font-size:13.5px}
+.status-row span{color:var(--muted);font-size:12.5px}
+.switch{position:relative;width:46px;height:26px;border-radius:26px;background:var(--line);border:0;cursor:pointer;flex:none;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s}
+.switch[aria-checked=true]{background:var(--green)}
+.switch[aria-checked=true]::after{transform:translateX(20px)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:13px;text-align:left}
+.chip[aria-pressed=true]{border-color:var(--blue-line);background:var(--blue-soft);color:var(--blue);font-weight:600}
+.chip .box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--faint);display:grid;place-items:center;flex:none}
+.chip[aria-pressed=true] .box{background:var(--blue);border-color:var(--blue)}
+.chip[aria-pressed=true] .box::after{content:"";width:8px;height:4px;border:2px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.chip:disabled{cursor:not-allowed;opacity:.7}
+
+.matrix{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 14px;border-bottom:1px solid var(--line-soft)}
+.mrow:last-child{border-bottom:0}
+.mrow .pg{font-weight:600;font-size:13.5px}
+.mrow .pg small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.seg-ctl{display:inline-grid;grid-template-columns:repeat(3,auto);background:var(--line-soft);border-radius:10px;padding:3px;flex:none}
+.seg-ctl button{border:0;background:transparent;min-height:32px;padding:0 11px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg-ctl button[aria-checked=true]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg-ctl button[aria-checked=true][data-v=view]{color:#1d4ed8}
+.seg-ctl button[aria-checked=true][data-v=edit]{background:var(--blue);color:#fff}
+.seg-ctl button:disabled{cursor:not-allowed}
+.preset-row{display:flex;gap:8px;flex-wrap:wrap}
+.preset-row select{flex:1 1 160px;min-height:34px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff;font-size:13px}
+.lock{display:flex;gap:10px;align-items:flex-start;background:var(--violet-soft);border:1px solid #ddd6fe;color:#5b21b6;border-radius:12px;padding:12px 14px;font-size:13px;margin-top:16px}
+.lock svg{width:18px;height:18px;flex:none;margin-top:1px}
+.danger-zone{display:flex;gap:8px;flex-wrap:wrap;padding-top:18px;margin-top:22px;border-top:1px solid var(--line)}
+
+.dirty-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--line);background:#fff;border-radius:0 0 var(--r) var(--r);animation:up .22s cubic-bezier(.16,1,.3,1)}
+.dirty-bar span{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dirty-bar div{display:flex;gap:8px}
+@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.panel-empty{padding:48px 24px;text-align:center;color:var(--muted)}
+
+dialog{border:0;border-radius:16px;padding:0;box-shadow:0 20px 50px rgba(16,24,40,.2);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
+dialog.small{width:min(420px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(17,24,39,.4)}
+.dlg-h{padding:20px 22px 0}
+.dlg-h h2{margin:0;font-size:18px}
+.dlg-h p{margin:4px 0 0;color:var(--muted)}
+.dlg-b{padding:18px 22px;overflow:auto;max-height:calc(100vh - 200px)}
+.dlg-f{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;border-top:1px solid var(--line);background:var(--bg)}
+.err{color:var(--red);font-size:12.5px;min-height:1px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;z-index:50;animation:up .22s}
+
+#tableWrap{overflow-x:auto}
+@media (max-width:1560px){
+  .col-last,.split .col-preset{display:none}
+  .preset-inline{display:block!important}
+  .scope{max-width:150px}
+  .acct .e{max-width:170px}
+}
+@media (max-width:560px){.preset-inline{display:none!important}}
+@media (max-width:1180px){
+  .split{grid-template-columns:1fr}
+  .panel{position:static;max-height:none}
+  .col-last{display:none}
+}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{position:fixed;inset:0 auto 0 0;width:270px;z-index:40;transform:translateX(-100%);transition:transform .25s cubic-bezier(.16,1,.3,1);box-shadow:0 10px 40px rgba(0,0,0,.15)}
+  .side.open{transform:none}
+  .scrim{position:fixed;inset:0;background:rgba(17,24,39,.35);z-index:39}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+  main{padding:20px 16px 40px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:12px}
+  .stat .v{font-size:28px}
+  .col-scope,.col-preset{display:none}
+}
+@media (max-width:560px){
+  h1{font-size:22px}
+  .head>.btn.primary{width:100%}
+  .toolbar select{flex:1 1 calc(50% - 5px)}
+  .acct .e{max-width:150px}
+  .two{grid-template-columns:1fr}
+  .mrow{flex-direction:column;align-items:stretch;gap:8px}
+  .seg-ctl{grid-template-columns:repeat(3,1fr)}
+  .col-act{display:none}
+  td{padding:12px 10px}
+  th{padding:10px}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo" style="padding:0"><span class="logo-mark">L</span>Lucille</div>
+  <button class="btn ghost" id="menuBtn" aria-label="Open menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+</div>
+<div class="shell">
+  <aside class="side" id="side" aria-label="Main navigation">
+    <div class="logo"><span class="logo-mark">L</span>Lucille</div>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Dashboard</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/></svg>Data Overall</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>Reports</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h6l2 2h8v11H4z"/></svg>Document Control</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h7"/></svg>Projects</a>
+    </nav>
+    <div class="side-foot">
+      <div class="proj-card"><small>Active project</small><b>EPC Gas Processing Facility &amp; Pipeline Lapangan Merbau</b><div class="bar"><i></i></div></div>
+      <nav class="nav"><a href="#" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.7.8 2.8 2.6 3 5.2"/></svg>Roles</a></nav>
+    </div>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div>
+        <h1>Access Management</h1>
+        <p class="sub">Decide who can open what, one account at a time.</p>
+        <div class="draft-note" role="note"><b>Draft.</b> Changes here aren't saved and don't restrict anyone yet. That comes with login.</div>
+      </div>
+      <button class="btn primary" id="addBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>Add account</button>
+    </div>
+
+    <section class="stats" id="stats" aria-label="Account summary"></section>
+
+    <div class="toolbar" role="search">
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search name or email" aria-label="Search accounts by name or email">
+      </label>
+      <select id="fStatus" aria-label="Filter by status"><option value="">All statuses</option><option value="active">Active</option><option value="invited">Invited</option><option value="suspended">Suspended</option></select>
+      <select id="fProject" aria-label="Filter by project"><option value="">All projects</option></select>
+      <select id="fLevel" aria-label="Filter by access level"><option value="">Any access</option><option value="edit">Can edit something</option><option value="view">View only</option></select>
+    </div>
+
+    <div class="split">
+      <section class="card table-card" aria-labelledby="tblTitle">
+        <div class="table-head"><h2 id="tblTitle">Accounts</h2><span id="count"></span></div>
+        <div id="tableWrap"></div>
+      </section>
+      <aside class="card panel" id="panel" aria-label="Account access"></aside>
+    </div>
+  </main>
+</div>
+
+<dialog id="addDlg" aria-labelledby="addTitle">
+  <form id="addForm" novalidate>
+    <div class="dlg-h"><h2 id="addTitle">Add account</h2><p>They get an invite by email and show as Invited until they sign in.</p></div>
+    <div class="dlg-b">
+      <div class="two">
+        <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off"></div>
+        <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="off"></div>
+      </div>
+      <div class="err" id="aErr" role="alert"></div>
+      <div class="field"><label for="aPreset">Start from a preset (optional)</label><select id="aPreset"></select></div>
+      <div class="sec"><div class="sec-h"><h3>Projects</h3></div><div class="chips" id="aProjects"></div></div>
+      <div class="sec"><div class="sec-h"><h3>Page access</h3></div><div class="matrix" id="aMatrix"></div></div>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Send invite</button></div>
+  </form>
+</dialog>
+
+<dialog id="confirmDlg" class="small" aria-labelledby="cTitle">
+  <div class="dlg-h"><h2 id="cTitle"></h2><p id="cText"></p></div>
+  <div class="dlg-f" style="margin-top:18px"><button class="btn" id="cNo">Cancel</button><button class="btn solid-danger" id="cYes"></button></div>
+</dialog>
+
+<script>
+const PAGES = [
+  ['dashboard','Dashboard','Figures and the week at a glance'],
+  ['overall','Data Overall','Progress per activity'],
+  ['reports','Reports','Weekly and daily reports, exports'],
+  ['doc','Document Control','EDL, VDRL, transmittals'],
+  ['projects','Projects','Plan, dates, links'],
+  ['roles','Roles','This page'],
+];
+const PROJECTS = [
+  {id:'merbau', name:'EPC Gas Processing Facility & Pipeline Lapangan Merbau'},
+  {id:'samberah', name:'PHSS Samberah'},
+  {id:'tuban', name:'Wellpad Upgrade Kedung Tuban'},
+];
+const PRESETS = {
+  pm:     {label:'Project Manager',    access:{dashboard:'edit',overall:'edit',reports:'edit',doc:'edit',projects:'edit',roles:'none'}},
+  pc:     {label:'Project Control',    access:{dashboard:'view',overall:'edit',reports:'edit',doc:'view',projects:'edit',roles:'none'}},
+  site:   {label:'Site Engineer',      access:{dashboard:'view',overall:'edit',reports:'edit',doc:'none',projects:'view',roles:'none'}},
+  dc:     {label:'Document Controller',access:{dashboard:'view',overall:'none',reports:'view',doc:'edit',projects:'none',roles:'none'}},
+  viewer: {label:'Client Viewer',      access:{dashboard:'view',overall:'view',reports:'view',doc:'view',projects:'none',roles:'none'}},
+};
+const NONE = Object.fromEntries(PAGES.map(p=>[p[0],'none']));
+const ALL_EDIT = Object.fromEntries(PAGES.map(p=>[p[0],'edit']));
+const AV_COLORS = [['#dbeafe','#1d4ed8'],['#dcfce7','#15803d'],['#fef3c7','#b45309'],['#fce7f3','#be185d'],['#e0e7ff','#4338ca'],['#ccfbf1','#0f766e'],['#ffedd5','#c2410c'],['#f3e8ff','#7e22ce']];
+
+let accounts = [
+  {id:'u01', name:'Fajar Nugroho', email:'fajar@figtries.id', master:true, preset:null, status:'active', last:'Now', projects:['*'], access:{...ALL_EDIT}},
+  {id:'u02', name:'Rina Wulandari', email:'rina.w@figtries.id', preset:'pm', status:'active', last:'12 min ago', projects:['merbau','samberah'], access:{...PRESETS.pm.access}},
+  {id:'u03', name:'Dimas Prakoso', email:'dimas.p@figtries.id', preset:'pc', status:'active', last:'1 hr ago', projects:['merbau'], access:{...PRESETS.pc.access, doc:'edit'}},
+  {id:'u04', name:'Ayu Lestari', email:'ayu.lestari@figtries.id', preset:'dc', status:'active', last:'Yesterday', projects:['merbau','tuban'], access:{...PRESETS.dc.access}},
+  {id:'u05', name:'Bagus Santoso', email:'bagus.s@figtries.id', preset:'site', status:'active', last:'3 hr ago', projects:['merbau'], access:{...PRESETS.site.access}},
+  {id:'u06', name:'Andika Wijaya', email:'andika.wijaya@client.co.id', preset:'viewer', status:'active', last:'2 days ago', projects:['merbau'], access:{...PRESETS.viewer.access}},
+  {id:'u07', name:'Sari Handayani', email:'sari.h@figtries.id', preset:'site', status:'invited', last:null, projects:['samberah'], access:{...PRESETS.site.access}},
+  {id:'u08', name:'Yoga Pratama', email:'yoga.p@figtries.id', preset:'pc', status:'invited', last:null, projects:['tuban'], access:{...PRESETS.pc.access}},
+  {id:'u09', name:'Hendra Kusuma', email:'hendra.k@figtries.id', preset:'pm', status:'suspended', last:'3 weeks ago', projects:['samberah'], access:{...PRESETS.pm.access}},
+];
+let selectedId = 'u02';
+let draft = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const initials = n => n.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+const avColor = id => AV_COLORS[[...id].reduce((a,c)=>a+c.charCodeAt(0),0) % AV_COLORS.length];
+const projName = id => id==='*' ? 'All projects' : PROJECTS.find(p=>p.id===id)?.name ?? id;
+const clone = o => JSON.parse(JSON.stringify(o));
+const same = (a,b) => JSON.stringify(a)===JSON.stringify(b);
+const isCustom = a => a.preset && !same(a.access, PRESETS[a.preset].access);
+const levelOf = a => Object.values(a.access).includes('edit') ? 'edit' : Object.values(a.access).includes('view') ? 'view' : 'none';
+const scopeText = a => a.projects.includes('*') ? 'All projects' : a.projects.length===0 ? 'No project yet' : a.projects.length===1 ? projName(a.projects[0]) : `${a.projects.length} projects`;
+const STATUS_LABEL = {active:'Active', invited:'Invited', suspended:'Suspended'};
+const ICON = {
+  more:'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  user:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6 8-6s7.2 2 8 6"/></svg>',
+  search:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+};
+
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.setAttribute('role','status'); t.textContent=msg; document.body.append(t); setTimeout(()=>t.remove(),2200); }
+
+function renderStats(){
+  const n = s => accounts.filter(a=>a.status===s).length;
+  const total = accounts.length || 1, act=n('active'), inv=n('invited'), sus=n('suspended');
+  const seg = `<div class="seg" aria-hidden="true"><i style="width:${act/total*100}%;background:var(--green)"></i><i style="width:${inv/total*100}%;background:#f59e0b"></i><i style="width:${sus/total*100}%;background:var(--red)"></i></div>`;
+  const tile = (k,dot,v,foot,extra='') => `<div class="stat"><div class="k"><span class="dot" style="background:${dot}"></span>${k}</div><div class="v">${v}</div>${extra}<div class="foot">${foot}</div></div>`;
+  $('#stats').innerHTML =
+    tile('Total accounts','var(--blue)',accounts.length,`1 Master · ${Math.max(accounts.length-1,0)} others`,seg) +
+    tile('Active','var(--green)',act,`${Math.round(act/total*100)}% of accounts`) +
+    tile('Pending invites','#f59e0b',inv, inv? 'Waiting for first sign-in':'Nobody waiting') +
+    tile('Suspended','var(--red)',sus, sus? 'Kept, but locked out':'Nobody suspended');
+}
+
+function filtered(){
+  const q=$('#q').value.trim().toLowerCase(), st=$('#fStatus').value, pr=$('#fProject').value, lv=$('#fLevel').value;
+  return accounts.filter(a =>
+    (!q || a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)) &&
+    (!st || a.status===st) &&
+    (!pr || a.projects.includes('*') || a.projects.includes(pr)) &&
+    (!lv || levelOf(a)===lv));
+}
+function renderTable(){
+  const rows = filtered();
+  $('#count').textContent = rows.length===accounts.length ? `${accounts.length} accounts` : `${rows.length} of ${accounts.length}`;
+  if (!accounts.length){
+    $('#tableWrap').innerHTML = `<div class="empty"><div class="ic">${ICON.user}</div><h3>No accounts yet</h3><p>Add the first person who should use Lucille.</p><button class="btn primary" onclick="openAdd()">Add account</button></div>`;
+    return;
+  }
+  if (!rows.length){
+    $('#tableWrap').innerHTML = `<div class="empty"><div class="ic">${ICON.search}</div><h3>Nobody matches</h3><p>No account fits this search and these filters.</p><button class="btn" id="clearF">Clear filters</button></div>`;
+    $('#clearF').onclick = () => { $('#q').value=''; ['#fStatus','#fProject','#fLevel'].forEach(s=>$(s).value=''); renderTable(); };
+    return;
+  }
+  $('#tableWrap').innerHTML = `<table aria-labelledby="tblTitle"><thead><tr>
+    <th>Account</th><th class="col-preset">Preset</th><th class="col-scope">Projects</th><th>Status</th><th class="col-last">Last active</th><th class="col-act"><span hidden>Actions</span></th>
+  </tr></thead><tbody>${rows.map(a=>{
+    const [bg,fg]=avColor(a.id);
+    const preset = a.master ? `<span class="badge b-master">Master</span>` : a.preset ? `<span class="badge ${isCustom(a)?'b-custom':'b-preset'}">${PRESETS[a.preset].label}${isCustom(a)?' · Custom':''}</span>` : `<span class="badge b-custom">Custom</span>`;
+    const mini = PAGES.map(p=>`<i class="${a.access[p[0]]==='edit'?'e':a.access[p[0]]==='view'?'v':''}"></i>`).join('');
+    return `<tr tabindex="0" data-id="${a.id}" aria-selected="${a.id===selectedId}">
+      <td><div class="acct"><div class="av" style="background:${bg};color:${fg}">${initials(a.name)}</div><div style="min-width:0"><div class="n">${esc(a.name)}</div><div class="e">${esc(a.email)}</div><div class="preset-inline" style="display:none;margin-top:6px">${preset}</div><div class="access-mini" aria-hidden="true">${mini}</div></div></div></td>
+      <td class="col-preset">${preset}</td>
+      <td class="col-scope"><div class="scope" title="${esc(a.projects.map(projName).join(', '))}">${esc(scopeText(a))}</div></td>
+      <td><span class="badge b-${a.status}">${STATUS_LABEL[a.status]}</span></td>
+      <td class="col-last muted">${a.last ?? 'Not yet'}</td>
+      <td class="col-act" style="width:44px"><button class="row-act" aria-label="Open ${esc(a.name)}">${ICON.more}</button></td>
+    </tr>`;}).join('')}</tbody></table>`;
+  $('#tableWrap').querySelectorAll('tbody tr').forEach(tr=>{
+    tr.onclick = () => select(tr.dataset.id);
+    tr.onkeydown = e => {
+      if (e.target!==tr) return;
+      if (e.key==='Enter'||e.key===' '){ e.preventDefault(); select(tr.dataset.id); }
+      if (e.key==='ArrowDown'){ e.preventDefault(); tr.nextElementSibling?.focus(); }
+      if (e.key==='ArrowUp'){ e.preventDefault(); tr.previousElementSibling?.focus(); }
+    };
+  });
+}
+
+async function select(id){
+  if (id!==selectedId){
+    if (dirty() && !await confirmBox('Leave without saving?', `Your changes to ${current().name} will be lost.`, 'Discard changes')) return;
+    selectedId=id; loadDraft(); renderTable(); renderPanel();
+  }
+  if (innerWidth<=1180) $('#panel').scrollIntoView({behavior:'smooth'});
+}
+const current = () => accounts.find(a=>a.id===selectedId);
+function loadDraft(){ const a=current(); draft = a ? clone(a) : null; }
+const dirty = () => !!draft && !same(draft, current());
+
+function matrixHtml(access, locked){
+  return PAGES.map(([k,label,hint])=>`<div class="mrow"><div class="pg">${label}<small>${hint}</small></div>
+    <div class="seg-ctl" role="radiogroup" aria-label="${label} access">${['none','view','edit'].map(v=>
+      `<button type="button" role="radio" data-page="${k}" data-v="${v}" aria-checked="${access[k]===v}" ${locked?'disabled':''} tabindex="${access[k]===v?0:-1}">${v==='none'?'No access':v==='view'?'View':'Edit'}</button>`).join('')}</div></div>`).join('');
+}
+function projectChips(sel, locked){
+  const all = sel.includes('*');
+  return `<button type="button" class="chip" data-proj="*" aria-pressed="${all}" ${locked?'disabled':''}><span class="box"></span>All projects</button>` +
+    PROJECTS.map(p=>`<button type="button" class="chip" data-proj="${p.id}" aria-pressed="${all||sel.includes(p.id)}" ${locked||all?'disabled':''}><span class="box"></span>${esc(p.name)}</button>`).join('');
+}
+function wireMatrix(root, obj, onChange){
+  root.querySelectorAll('.seg-ctl').forEach(g=>{
+    g.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b||b.disabled) return; obj.access[b.dataset.page]=b.dataset.v; onChange(); root.querySelector(`[data-page="${b.dataset.page}"][data-v="${b.dataset.v}"]`)?.focus(); });
+    g.addEventListener('keydown', e=>{
+      if(!['ArrowLeft','ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      const bs=[...g.querySelectorAll('button')], i=bs.indexOf(document.activeElement), n=bs[(i+(e.key==='ArrowRight'?1:2))%3];
+      obj.access[n.dataset.page]=n.dataset.v; onChange(); root.querySelector(`[data-page="${n.dataset.page}"][data-v="${n.dataset.v}"]`)?.focus();
+    });
+  });
+}
+function wireChips(root, obj, onChange){
+  root.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+    const id=c.dataset.proj;
+    if (id==='*') obj.projects = obj.projects.includes('*') ? [] : ['*'];
+    else obj.projects = obj.projects.includes(id) ? obj.projects.filter(x=>x!==id) : [...obj.projects, id];
+    onChange();
+    root.querySelector(`[data-proj="${id}"]`)?.focus();
+  });
+}
+const presetOptions = first => `<option value="">${first}</option>`+Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.label}</option>`).join('');
+
+function renderPanel(){
+  const p=$('#panel');
+  if (!draft){ p.innerHTML=`<div class="panel-empty">${ICON.user}<p>Pick an account to see what it can open.</p></div>`; return; }
+  const a=draft, locked=!!a.master, [bg,fg]=avColor(a.id);
+  p.innerHTML = `<div class="panel-body">
+    <div class="p-top"><div class="av" style="background:${bg};color:${fg}">${initials(a.name)}</div>
+      <div style="min-width:0"><h2>${esc(a.name||'Unnamed')} ${a.master?'<span class="badge b-master">Master</span>':`<span class="badge b-${a.status}">${STATUS_LABEL[a.status]}</span>`}</h2><div class="e">${esc(a.email)} · <span class="mono">${a.id.toUpperCase()}</span></div></div></div>
+    ${locked?`<div class="lock">${ICON.shield}<div><b>This is the Master account.</b> It always has Edit on every page and every project, and it can't be suspended or removed.</div></div>`:''}
+
+    <div class="sec"><div class="sec-h"><h3>Account</h3></div>
+      <div class="two">
+        <div class="field"><label for="pName">Name</label><input id="pName" value="${esc(a.name)}"></div>
+        <div class="field"><label for="pEmail">Email</label><input id="pEmail" type="email" value="${esc(a.email)}" ${locked?'disabled':''}></div>
+      </div>
+      ${locked?'':`<div class="status-row"><div><b>${a.status==='suspended'?'Suspended':'Can sign in'}</b><span>${a.status==='invited'?'Invite sent, not signed in yet':a.status==='suspended'?'Locked out. Access below is kept.':'Signs in and uses the pages below'}</span></div>
+        <button class="switch" id="pStatus" role="switch" aria-checked="${a.status!=='suspended'}" aria-label="Account can sign in"></button></div>`}
+    </div>
+
+    <div class="sec"><div class="sec-h"><h3>Projects</h3><span class="muted" style="font-size:12.5px">${esc(scopeText(a))}</span></div>
+      <div class="chips" id="pProjects">${projectChips(a.projects, locked)}</div>
+    </div>
+
+    <div class="sec"><div class="sec-h"><h3>Page access</h3>${a.preset&&!locked?`<span class="badge ${isCustom(a)?'b-custom':'b-preset'}">${PRESETS[a.preset].label}${isCustom(a)?' · Custom':''}</span>`:''}</div>
+      ${locked?'':`<div class="preset-row" style="margin-bottom:10px"><select id="pPreset" aria-label="Preset">${presetOptions('Choose a preset')}</select><button class="btn sm" id="pApply">Apply preset</button><button class="btn sm ghost" id="pReset" ${a.preset&&isCustom(a)?'':'disabled'}>Reset to default</button></div>`}
+      <div class="matrix" id="pMatrix">${matrixHtml(a.access, locked)}</div>
+    </div>
+
+    ${locked?'':`<div class="danger-zone">
+      ${a.status==='invited'?'<button class="btn sm" id="pResend">Resend invite</button>':''}
+      ${a.status==='suspended'?'<button class="btn sm" id="pReact">Reactivate</button>':'<button class="btn sm danger" id="pSuspend">Suspend</button>'}
+      <button class="btn sm danger" id="pRemove">Remove account</button>
+    </div>`}
+  </div>
+  ${dirty()?`<div class="dirty-bar" role="region" aria-label="Unsaved changes"><span><i class="dot" style="background:var(--amber)"></i>Unsaved changes</span><div><button class="btn sm" id="pDiscard">Discard</button><button class="btn sm primary" id="pSave">Save</button></div></div>`:''}`;
+
+  const re = () => renderPanel();
+  $('#pName').oninput = e => { draft.name=e.target.value; refreshDirty(); };
+  if (!locked){
+    $('#pEmail').oninput = e => { draft.email=e.target.value; refreshDirty(); };
+    const toggle = async () => {
+      if (draft.status!=='suspended'){
+        if (!await confirmBox(`Suspend ${draft.name}?`,'They are locked out until you reactivate them. Their access settings are kept.','Suspend')) return;
+        draft._prev = draft.status; draft.status='suspended';
+      } else { draft.status = draft._prev || 'active'; delete draft._prev; }
+      re();
+    };
+    $('#pStatus').onclick = toggle;
+    $('#pSuspend')?.addEventListener('click', toggle);
+    $('#pReact')?.addEventListener('click', toggle);
+    wireChips($('#pProjects'), draft, re);
+    wireMatrix($('#pMatrix'), draft, re);
+    $('#pApply').onclick = () => { const k=$('#pPreset').value; if(!k) return $('#pPreset').focus(); draft.preset=k; draft.access={...PRESETS[k].access}; re(); };
+    $('#pReset').onclick = () => { draft.access={...PRESETS[draft.preset].access}; re(); };
+    $('#pResend')?.addEventListener('click', ()=>toast('Invite sent again to '+draft.email));
+    $('#pRemove').onclick = async () => {
+      const a=current();
+      if (!await confirmBox(`Remove ${a.name}?`,'The account and its access settings are deleted. What they entered in reports stays.','Remove')) return;
+      accounts = accounts.filter(x=>x.id!==a.id); selectedId = accounts[0]?.id ?? null; loadDraft(); renderAll(); toast(a.name+' removed');
+    };
+  }
+  $('#pDiscard')?.addEventListener('click', ()=>{ loadDraft(); re(); });
+  $('#pSave')?.addEventListener('click', save);
+}
+function refreshDirty(){
+  if (!!$('.dirty-bar') === dirty()) return;
+  const el=document.activeElement, id=el?.id, pos=el?.selectionStart;
+  renderPanel();
+  if (id){ const n=document.getElementById(id); n?.focus(); try{ n.setSelectionRange(pos,pos); }catch{} }
+}
+function save(){
+  if (!draft.name.trim() || !/^\S+@\S+\.\S+$/.test(draft.email)) return toast('A name and a valid email are needed');
+  delete draft._prev;
+  accounts = accounts.map(a=>a.id===draft.id?clone(draft):a);
+  loadDraft(); renderAll(); toast('Saved');
+}
+
+function confirmBox(title, text, yes){
+  return new Promise(res=>{
+    const d=$('#confirmDlg'); $('#cTitle').textContent=title; $('#cText').textContent=text; $('#cYes').textContent=yes;
+    const done=v=>{ d.close(); res(v); };
+    $('#cYes').onclick=()=>done(true); $('#cNo').onclick=()=>done(false); d.oncancel=e=>{e.preventDefault();done(false)};
+    d.showModal(); $('#cNo').focus();
+  });
+}
+
+let fresh;
+function openAdd(){
+  fresh = {projects:[],preset:null,access:{...NONE}};
+  $('#aName').value=''; $('#aEmail').value=''; $('#aErr').textContent='';
+  $('#aPreset').innerHTML = presetOptions('No preset, set by hand');
+  drawAdd(); $('#addDlg').showModal(); $('#aName').focus();
+}
+function drawAdd(){
+  $('#aProjects').innerHTML = projectChips(fresh.projects,false); wireChips($('#aProjects'), fresh, drawAdd);
+  $('#aMatrix').innerHTML = matrixHtml(fresh.access,false); wireMatrix($('#aMatrix'), fresh, drawAdd);
+}
+$('#aPreset').onchange = e => { const k=e.target.value; fresh.preset=k||null; fresh.access = k?{...PRESETS[k].access}:{...NONE}; drawAdd(); };
+$('#addDlg [data-close]').onclick = () => $('#addDlg').close();
+['#aName','#aEmail'].forEach(s=>$(s).addEventListener('input',()=>$('#aErr').textContent=''));
+$('#addForm').onsubmit = e => {
+  e.preventDefault();
+  const name=$('#aName').value.trim(), email=$('#aEmail').value.trim();
+  if (!name){ $('#aErr').textContent='Type a name first.'; return $('#aName').focus(); }
+  if (!/^\S+@\S+\.\S+$/.test(email)){ $('#aErr').textContent='Type a valid email.'; return $('#aEmail').focus(); }
+  if (accounts.some(a=>a.email.toLowerCase()===email.toLowerCase())){ $('#aErr').textContent='That email already has an account.'; return $('#aEmail').focus(); }
+  const id='u'+String(Date.now()).slice(-4);
+  accounts.push({id,name,email,preset:fresh.preset,status:'invited',last:null,projects:fresh.projects,access:fresh.access});
+  $('#addDlg').close(); selectedId=id; loadDraft(); renderAll(); toast('Invite sent to '+email);
+};
+
+$('#fProject').innerHTML += PROJECTS.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+['#q','#fStatus','#fProject','#fLevel'].forEach(s=>$(s).addEventListener('input', renderTable));
+$('#addBtn').onclick = openAdd;
+const side=$('#side'), menu=$('#menuBtn');
+menu.onclick = () => {
+  const open = side.classList.toggle('open'); menu.setAttribute('aria-expanded', open);
+  if (open){ const s=document.createElement('div'); s.className='scrim'; s.onclick=()=>menu.click(); document.body.append(s); } else $('.scrim')?.remove();
+};
+function renderAll(){ renderStats(); renderTable(); renderPanel(); }
+loadDraft(); renderAll();
+</script>
+</body>
+</html>
