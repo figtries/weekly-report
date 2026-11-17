@@ -2104,3 +2104,34 @@ html[data-bare] [data-app-chrome] {
 @media (prefers-reduced-motion: reduce) {
   .login-blob { animation: none !important; }
 }
+
+/*
+ * Planner column headers pan WITH their column, on the compositor (Nov 2026,
+ * "sliding ke samping lag dan bug"). The header sits above the planner's one
+ * vertical scroller, so it cannot be sticky inside the column; a scroll-driven
+ * animation on the column's horizontal timeline moves it in the same frame as
+ * the bars. --pan-max is the column's scrollWidth - clientWidth, set by
+ * ScheduleSheet. Longhands, not the `animation` shorthand, which would reset
+ * animation-timeline; durations pinned so the reduced-motion rule above
+ * (0.01ms on everything) cannot turn the pan into a snap.
+ */
+@keyframes pan-x {
+  to {
+    transform: translateX(calc(-1px * var(--pan-max, 0)));
+  }
+}
+@supports (animation-timeline: --a) {
+  .pan-head > * {
+    animation-name: pan-x !important;
+    animation-timing-function: linear !important;
+    animation-fill-mode: both !important;
+    animation-duration: auto !important;
+    animation-delay: 0s !important;
+  }
+  .pan-head-sheet > * {
+    animation-timeline: --pan-sheet;
+  }
+  .pan-head-gantt > * {
+    animation-timeline: --pan-gantt;
+  }
+}

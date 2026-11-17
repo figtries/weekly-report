@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Flag } from 'lucide-react';
 
@@ -115,6 +116,7 @@ function GanttChart({
   spanFinish,
   rowH,
   headH,
+  headEl,
   selectedId,
   onSelect,
   view,
@@ -132,6 +134,12 @@ function GanttChart({
   spanFinish: string | null;
   rowH: number;
   headH: number;
+  /**
+   * Where the month header goes. The planner scrolls vertically in ONE box and
+   * this chart only pans sideways, so a sticky header here would stick to
+   * nothing; it is drawn into the planner's header row instead.
+   */
+  headEl?: HTMLElement | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /** The planner's Bars choices: what colour says, which marks show. */
@@ -513,21 +521,22 @@ function GanttChart({
   return (
     <div ref={paneRef} className="relative" style={{ width }}>
       <ScrollShield />
-      <div
-        className="sticky top-0 z-20 border-b bg-card"
-        style={{ height: headH }}
-        aria-hidden
-      >
-        {months.map((m) => (
-          <span
-            key={m.key}
-            className="absolute top-0 whitespace-nowrap border-l pl-1 text-[10px] font-medium text-muted-foreground"
-            style={{ left: m.x, lineHeight: `${headH}px` }}
-          >
-            {m.label}
-          </span>
-        ))}
-      </div>
+      {(() => {
+        const head = (
+          <div className="relative border-b bg-card" style={{ height: headH, width }} aria-hidden>
+            {months.map((m) => (
+              <span
+                key={m.key}
+                className="absolute top-0 whitespace-nowrap border-l pl-1 text-[10px] font-medium text-muted-foreground"
+                style={{ left: m.x, lineHeight: `${headH}px` }}
+              >
+                {m.label}
+              </span>
+            ))}
+          </div>
+        );
+        return headEl ? createPortal(head, headEl) : null;
+      })()}
 
       <div
         ref={bodyRef}

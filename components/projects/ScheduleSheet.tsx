@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -111,6 +112,10 @@ const ROW_H = 44;
 const HEAD_H = 36;
 /** Rows mounted by the first render, before the scroller can be measured. */
 const INITIAL_WINDOW = 30;
+/** Whether this browser pans the column headers with CSS (see `.pan-head`). Client only. */
+let panByCss: boolean | null = null;
+const PAN_BY_CSS = () =>
+  (panByCss ??= typeof CSS !== 'undefined' && CSS.supports('animation-timeline: --a'));
 /** Up to this many rows, every row is mounted once the page is idle (see `whole`). */
 const WHOLE_LIMIT = 400;
 // A SHARE of the shell, not a pixel width. Stored as pixels it was 720 on
@@ -360,8 +365,32 @@ export default function ScheduleSheet({
   const wholeRef = useRef(false);
   // Declared here rather than beside the mirror below, because the window
   // arithmetic reads the scroller's own height.
+  /**
+   * ONE vertical scroller carries the sheet and the Gantt (Nov 2026). They were
+   * two scrollers kept level by a scroll handler, and the one the wheel was not
+   * over always arrived a frame late: measured at DPR 1.25, a wheel over the
+   * Gantt presented ~1 frame in 8 late (screen gap p90 33 ms against the
+   * sheet's 17) whatever was drawn in it. In one scroller both move in the
+   * same compositor frame. Each column still pans sideways on its own
+   * (`leftRef` / `rightRef`, overflow-x only), and the column headers sit above
+   * the scroller, following that pan.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null);
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
+  const sheetHeadRef = useRef<HTMLDivElement>(null);
+  const sheetBarRef = useRef<HTMLDivElement>(null);
+  const ganttBarRef = useRef<HTMLDivElement>(null);
+  // State, not a ref: GanttChart portals its month header into it.
+  const [ganttHead, setGanttHead] = useState<HTMLDivElement | null>(null);
+  // The same element as a ref, for the sideways pan to write to.
+  const ganttHeadRef = useRef<HTMLDivElement | null>(null);
+  const holdGanttHead = useCallback((el: HTMLDivElement | null) => {
+    ganttHeadRef.current = el;
+    setGanttHead(el);
+  }, []);
+  // How wide each column's content is, for the sideways scrollbars under them.
+  const [panWidths, setPanWidths] = useState({ sheet: 0, gantt: 0, sheetMax: 0, ganttMax: 0 });
   const [shellWidth, setShellWidth] = useState(0);
   const [, startTransition] = useTransition();
   /** The Gantt's own span, which a row added past the end has to be able to widen. */
@@ -613,14 +642,8 @@ export default function ScheduleSheet({
    * blank strip the overscan exists to prevent cannot come back through this.
    */
   const BLOCK = 12;
-  const recomputeRange = useCallback((from?: HTMLDivElement | null) => {
-    // Whichever pane is actually scrolling, because below 768px the two take
-    // turns and the hidden one reports a height of zero — reading the sheet
-    // while the timeline is on screen windowed the chart down to fourteen bars.
-    const el =
-      from && from.clientHeight > 0
-        ? from
-        : (leftRef.current?.clientHeight ? leftRef.current : rightRef.current);
+  const recomputeRange = useCallback(() => {
+    const el = scrollRef.current;
     if (!el || wholeRef.current) return;
     const first = Math.floor(el.scrollTop / ROW_H);
     const fits = Math.ceil(el.clientHeight / ROW_H);
@@ -641,16 +664,13 @@ export default function ScheduleSheet({
    * which is the most a window can usefully move anyway.
    */
   const rangeRaf = useRef(0);
-  const scheduleRange = useCallback(
-    (el: HTMLDivElement | null) => {
-      if (rangeRaf.current) return;
-      rangeRaf.current = requestAnimationFrame(() => {
-        rangeRaf.current = 0;
-        recomputeRange(el);
-      });
-    },
-    [recomputeRange]
-  );
+  const scheduleRange = useCallback(() => {
+    if (rangeRaf.current) return;
+    rangeRaf.current = requestAnimationFrame(() => {
+      rangeRaf.current = 0;
+      recomputeRange();
+    });
+  }, [recomputeRange]);
   useEffect(() => () => cancelAnimationFrame(rangeRaf.current), []);
 
   // A new filter or a fresh set of rows can leave the window pointing past the
@@ -684,9 +704,7 @@ export default function ScheduleSheet({
     revealRef.current = null;
     const i = visible.findIndex((r) => r.id === id);
     if (i < 0) return;
-    // Whichever pane is on screen — below 768px they take turns and the hidden
-    // one measures zero, the same rule `recomputeRange` follows.
-    const el = leftRef.current?.clientHeight ? leftRef.current : rightRef.current;
+    const el = scrollRef.current;
     if (!el) return;
     const top = i * ROW_H;
     if (top >= el.scrollTop && top + ROW_H <= el.scrollTop + el.clientHeight) return;
@@ -723,16 +741,15 @@ export default function ScheduleSheet({
     });
     setSelectedId(id);
     const i = visible.findIndex((r) => r.id === id);
-    const el = leftRef.current?.clientHeight ? leftRef.current : rightRef.current;
+    const el = scrollRef.current;
     if (i < 0 || !el?.clientHeight) {
       // Folded away or not measurable yet: the reveal effect finds it later.
       revealRef.current = id;
       return;
     }
     const top = Math.max(0, i * ROW_H - el.clientHeight / 3);
-    if (leftRef.current) leftRef.current.scrollTop = top;
-    if (rightRef.current) rightRef.current.scrollTop = top;
-    recomputeRange(el);
+    el.scrollTop = top;
+    recomputeRange();
     // Once, on arrival: the hash is gone after the first read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1375,23 +1392,23 @@ export default function ScheduleSheet({
   const autoScroll = useRef(0);
   useEffect(() => {
     const gapFrom = (clientY: number) => {
-      const el = leftRef.current;
+      const el = scrollRef.current;
       if (!el) return null;
       const rect = el.getBoundingClientRect();
-      const y = clientY - rect.top + el.scrollTop - HEAD_H;
+      const y = clientY - rect.top + el.scrollTop;
       return Math.max(0, Math.min(visibleRef.current.length, Math.round(y / ROW_H)));
     };
 
     const edge = (clientY: number) => {
-      const el = leftRef.current;
+      const el = scrollRef.current;
       if (!el) return 0;
       const r = el.getBoundingClientRect();
-      if (clientY < r.top + HEAD_H + 44) return -1;
+      if (clientY < r.top + 44) return -1;
       if (clientY > r.bottom - 44) return 1;
       return 0;
     };
     const tick = () => {
-      const el = leftRef.current;
+      const el = scrollRef.current;
       if (!autoScroll.current || !el) return;
       el.scrollTop += autoScroll.current * 14;
       requestAnimationFrame(tick);
@@ -1624,28 +1641,16 @@ export default function ScheduleSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, selectedId, visible, structureUndoable, addRow, resolveId]);
 
-  const syncing = useRef(false);
   const scrollIdle = useRef(0);
   useEffect(() => () => clearTimeout(scrollIdle.current), []);
-  const mirror = (from: 'l' | 'r') => {
-    const a = from === 'l' ? leftRef.current : rightRef.current;
-    const b = from === 'l' ? rightRef.current : leftRef.current;
-    // The mirror stays on the event itself. It is one property write and it has
-    // to land in the SAME frame the wheel moved the other pane, or the two
-    // halves of one table visibly drift apart while you scroll.
-    if (!syncing.current && a && b && a.scrollTop !== b.scrollTop) {
-      syncing.current = true;
-      b.scrollTop = a.scrollTop;
-      requestAnimationFrame(() => {
-        syncing.current = false;
-      });
-    }
-    // The window does not. Every scroll of either pane asks for a recompute,
-    // mirrored or not, but they collapse into one per frame.
-    scheduleRange(a);
-    // No hover while the list moves (see `ScrollShield`): a row
-    // sliding under a still cursor lit up and faded out every 44px, and each
-    // of those was a repaint the main thread owed before it could mirror.
+  const onBodyScroll = () => {
+    // The window (only above WHOLE_LIMIT rows), at most once per frame.
+    scheduleRange();
+    markScrolling();
+  };
+  // No hover while anything moves (see `ScrollShield`): a row or a bar
+  // sliding under a still cursor lit up and faded out as it passed.
+  const markScrolling = () => {
     const shell = shellRef.current;
     if (shell) {
       if (!('scrolling' in shell.dataset)) shell.dataset.scrolling = '';
@@ -1655,6 +1660,68 @@ export default function ScheduleSheet({
       }, 150);
     }
   };
+  /**
+   * A column panned sideways: its header and its scrollbar follow. The bar is
+   * the column's own scrollbar moved to the foot of the planner (the column's
+   * real one sits under its last row, out of reach), so a drag on it pans the
+   * column back.
+   *
+   * The two must never answer each other. At DPR 1.25 a column rests at a
+   * FRACTIONAL scrollLeft (1036.8) and the bar rounds it (1037), so a bar that
+   * wrote its value back pushed the column on every step, fighting the
+   * trackpad's own momentum: that was the stutter in a sideways slide. So the
+   * bar follows once per frame, its scroll events caused by that write are
+   * ignored, and anything under a pixel apart counts as level.
+   */
+  const panEcho = useRef({ sheet: false, gantt: false });
+  const panRaf = useRef({ sheet: 0, gantt: 0 });
+  useEffect(() => () => {
+    cancelAnimationFrame(panRaf.current.sheet);
+    cancelAnimationFrame(panRaf.current.gantt);
+  }, []);
+  const panFrom = (side: 'sheet' | 'gantt', source: 'column' | 'bar') => {
+    const col = side === 'sheet' ? leftRef.current : rightRef.current;
+    const bar = side === 'sheet' ? sheetBarRef.current : ganttBarRef.current;
+    const head = side === 'sheet' ? sheetHeadRef.current : ganttHeadRef.current;
+    if (!col) return;
+    if (source === 'bar') {
+      if (panEcho.current[side]) return;
+      if (bar && Math.abs(col.scrollLeft - bar.scrollLeft) >= 1) col.scrollLeft = bar.scrollLeft;
+      return;
+    }
+    // Where scroll-driven animations exist the header is panned by CSS on the
+    // compositor (see .pan-head in globals.css), in the same frame as the
+    // column; a scrollLeft written here would land a frame late.
+    if (head && !PAN_BY_CSS()) head.scrollLeft = col.scrollLeft;
+    markScrolling();
+    if (!bar || panRaf.current[side]) return;
+    panRaf.current[side] = requestAnimationFrame(() => {
+      panRaf.current[side] = 0;
+      if (Math.abs(bar.scrollLeft - col.scrollLeft) < 1) return;
+      panEcho.current[side] = true;
+      bar.scrollLeft = col.scrollLeft;
+      // The bar's scroll event for this write arrives before the next frame.
+      requestAnimationFrame(() => {
+        panEcho.current[side] = false;
+      });
+    });
+  };
+  const hasRows = rows.length > 0;
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const measure = () =>
+      setPanWidths({
+        sheet: leftRef.current?.scrollWidth ?? 0,
+        gantt: rightRef.current?.scrollWidth ?? 0,
+        sheetMax: leftRef.current ? leftRef.current.scrollWidth - leftRef.current.clientWidth : 0,
+        ganttMax: rightRef.current ? rightRef.current.scrollWidth - rightRef.current.clientWidth : 0,
+      });
+    const ro = new ResizeObserver(measure);
+    for (const el of [leftRef.current, rightRef.current, leftRef.current?.firstElementChild, rightRef.current?.firstElementChild]) {
+      if (el) ro.observe(el);
+    }
+    return () => ro.disconnect();
+  }, [pane, hasRows]);
 
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1904,7 +1971,7 @@ export default function ScheduleSheet({
           e.stopPropagation();
           e.preventDefault();
         }}
-        className="relative flex min-h-0 w-full min-w-0 flex-1 overflow-hidden max-md:h-[65dvh] max-md:flex-none"
+        className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden [timeline-scope:--pan-sheet,--pan-gantt] max-md:h-[65dvh] max-md:flex-none"
       >
         {/* A PRESSED ROW, SAID WHOLE, on the phone's List tab (12 Oct 2026).
             Three columns leave the name "Heat & …"; widening it would cost the
@@ -1947,9 +2014,63 @@ export default function ScheduleSheet({
             </m.div>
           )}
         </AnimatePresence>
+        {/* The column headers, above the one scroller and panned with their
+            columns (`panFrom`), so they stay put while the rows move. */}
+        <div className="flex shrink-0">
+          <div
+            ref={sheetHeadRef}
+            style={{ ...(splitPx > 0 ? { width: splitPx } : { flex: '1 1 0%' }), '--pan-max': panWidths.sheetMax } as unknown as CSSProperties}
+            className={`pan-head pan-head-sheet min-w-0 shrink-0 overflow-hidden bg-card max-md:!w-full ${pane === 'gantt' ? 'max-md:hidden' : ''}`}
+          >
+              <div
+                className={`grid min-w-[19rem] items-center gap-x-1.5 border-b bg-card px-3 sm:min-w-[30.625rem] text-[11px] font-medium text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
+                style={{ height: HEAD_H }}
+              >
+                {/* `invisible`, not `hidden`. A display:none grid child leaves the
+                    grid entirely, so below `sm` this header shifted one column
+                    left and "Task name" was rendered into the 12px colour-stripe
+                    cell, where it read "T..". The rows never had that problem —
+                    their first cell, the stripe, is always in flow. */}
+                <span className="invisible sm:visible">#</span>
+                <span>Task name</span>
+                {/* Everything that is a number or a date is RIGHT-aligned, header
+                    and value alike, so each column ends on one straight edge. The
+                    header used to sit left of figures that sat right, which is
+                    what made "DAYS  START" and "PRICE WEIGHT" read as one word
+                    each with a hole beside them. */}
+                <span className="text-right sm:hidden">Days</span>
+                <span className="hidden text-right sm:block">Duration</span>
+                {/* Desktop only, so GRID_SM stays at five children and GRID_LG at
+                    six. See the note on GRID_SM for why the phone does not take
+                    this column even though it now fits. */}
+                <span className="hidden text-right sm:block">Start</span>
+                <span className="text-right">Finish</span>
+                <span className="sr-only">Row actions</span>
+              </div>
+
+          </div>
+          <div
+            onPointerDown={onDragDivider}
+            aria-hidden
+            className="hidden w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-200 hover:bg-foreground md:block"
+          />
+          <div
+            ref={holdGanttHead}
+            className={`pan-head pan-head-gantt min-w-0 flex-1 overflow-hidden bg-card ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
+            style={{ height: HEAD_H, '--pan-max': panWidths.ganttMax } as unknown as CSSProperties}
+          />
+        </div>
+        <div
+          ref={scrollRef}
+          onScroll={onBodyScroll}
+          // Opaque on purpose: below 1.5x pixel density Chrome only scrolls a
+          // box on the GPU if its background is (19 Oct 2026).
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-card"
+        >
+        <div className="flex min-h-full">
         <div
           ref={leftRef}
-          onScroll={() => mirror('l')}
+          onScroll={() => panFrom('sheet', 'column')}
           style={splitPx > 0 ? { width: splitPx } : { flex: '1 1 0%' }}
           // bg-card is what makes this scroll SMOOTH, not a colour (19 Oct 2026).
           // Below 1.5x pixel density Chrome will only hand a scroller to the
@@ -1957,7 +2078,7 @@ export default function ScheduleSheet({
           // scroll repainted the whole planner on the main thread (measured:
           // no scroll layer at DPR 1, two with this). Windows at 100-125% is
           // exactly that screen.
-          className={`min-h-0 min-w-0 shrink-0 overflow-auto bg-card max-md:!w-full ${
+          className={`min-w-0 shrink-0 overflow-x-auto overflow-y-hidden overscroll-x-contain bg-card [scroll-timeline:--pan-sheet_x] [scrollbar-width:none] max-md:!w-full [&::-webkit-scrollbar]:hidden ${
             pane === 'gantt' ? 'max-md:hidden' : ''
           }`}
         >
@@ -1982,7 +2103,7 @@ export default function ScheduleSheet({
               <div
                 aria-hidden
                 className={`pointer-events-none absolute inset-x-0 z-30 grid items-center gap-x-1.5 px-3 ${GRID_SM} ${GRID_LG}`}
-                style={{ top: HEAD_H + drag.gap * ROW_H - 1 }}
+                style={{ top: drag.gap * ROW_H - 1 }}
               >
                 <div
                   className="col-[2/-1] h-0.5 rounded-full bg-foreground"
@@ -1990,32 +2111,6 @@ export default function ScheduleSheet({
                 />
               </div>
             )}
-            <div
-              className={`sticky top-0 z-20 grid items-center gap-x-1.5 border-b bg-card px-3 text-[11px] font-medium text-muted-foreground [&>span]:truncate ${GRID_SM} ${GRID_LG}`}
-              style={{ height: HEAD_H }}
-            >
-              {/* `invisible`, not `hidden`. A display:none grid child leaves the
-                  grid entirely, so below `sm` this header shifted one column
-                  left and "Task name" was rendered into the 12px colour-stripe
-                  cell, where it read "T..". The rows never had that problem —
-                  their first cell, the stripe, is always in flow. */}
-              <span className="invisible sm:visible">#</span>
-              <span>Task name</span>
-              {/* Everything that is a number or a date is RIGHT-aligned, header
-                  and value alike, so each column ends on one straight edge. The
-                  header used to sit left of figures that sat right, which is
-                  what made "DAYS  START" and "PRICE WEIGHT" read as one word
-                  each with a hole beside them. */}
-              <span className="text-right sm:hidden">Days</span>
-              <span className="hidden text-right sm:block">Duration</span>
-              {/* Desktop only, so GRID_SM stays at five children and GRID_LG at
-                  six. See the note on GRID_SM for why the phone does not take
-                  this column even though it now fits. */}
-              <span className="hidden text-right sm:block">Start</span>
-              <span className="text-right">Finish</span>
-              <span className="sr-only">Row actions</span>
-            </div>
-
             {/* A search that matches nothing used to fall through to the
                 first-run empty state below: "Nothing planned yet", with Import
                 from Excel as the loudest thing on screen. Typing three letters
@@ -2132,13 +2227,13 @@ export default function ScheduleSheet({
           className="hidden w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-200 hover:bg-foreground md:block"
         />
 
-        <div className={`relative min-h-0 min-w-0 flex-1 ${pane === 'sheet' ? 'max-md:hidden' : ''}`}>
-          <div
-            ref={rightRef}
-            onScroll={() => mirror('r')}
-            // Opaque for the same reason as the sheet's pane: composited scroll.
-            className="h-full min-h-0 min-w-0 overflow-auto bg-card"
-          >
+        <div
+          ref={rightRef}
+          onScroll={() => panFrom('gantt', 'column')}
+          className={`min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain bg-card [scroll-timeline:--pan-gantt_x] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+            pane === 'sheet' ? 'max-md:hidden' : ''
+          }`}
+        >
           {/* The FULL list, plus the window. The surface has to keep its true
               height or every bar below the fold sits on the wrong line. */}
           <GanttChart
@@ -2151,6 +2246,7 @@ export default function ScheduleSheet({
             spanFinish={ganttFinish}
             rowH={ROW_H}
             headH={HEAD_H}
+            headEl={ganttHead}
             selectedId={selectedId}
             onSelect={setSelectedId}
             view={view}
@@ -2159,6 +2255,28 @@ export default function ScheduleSheet({
             labels={labelMap}
             range={range}
           />
+        </div>
+        </div>
+        </div>
+
+        {/* Each column's sideways scrollbar, at the foot where a hand can reach
+            it. Only drawn while that column is wider than its box. */}
+        <div className="flex shrink-0">
+          <div
+            ref={sheetBarRef}
+            onScroll={() => panFrom('sheet', 'bar')}
+            style={splitPx > 0 ? { width: splitPx } : { flex: '1 1 0%' }}
+            className={`min-w-0 shrink-0 overflow-x-auto overflow-y-hidden overscroll-x-contain max-md:!w-full ${pane === 'gantt' ? 'max-md:hidden' : ''}`}
+          >
+            <div style={{ width: panWidths.sheet, height: 1 }} />
+          </div>
+          <div aria-hidden className="hidden w-1.5 shrink-0 md:block" />
+          <div
+            ref={ganttBarRef}
+            onScroll={() => panFrom('gantt', 'bar')}
+            className={`min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain ${pane === 'sheet' ? 'max-md:hidden' : ''}`}
+          >
+            <div style={{ width: panWidths.gantt, height: 1 }} />
           </div>
         </div>
       </div>
