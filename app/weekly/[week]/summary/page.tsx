@@ -25,11 +25,10 @@ export const unstable_instant = {
  * names, and the four report tabs are meant to be siblings — one sheet each —
  * rather than one fat page and three thin ones.
  *
- * Nothing was deleted, only unmounted. `WeekAnalysis`, `ContractValueField`
- * and `DocumentControlLink` are still in `components/weekly/`, and every figure
- * they showed is still computed by `computeHealth` / `findLaggards` /
- * `buildLookAhead` — the Dashboard reads all three. Putting any of them back is
- * re-adding the component here and nothing else.
+ * `WeekAnalysis`, `DocumentControlLink` and `ContractValueField` are gone
+ * (`git log` has them).
+ * Every figure they showed is still computed by `computeHealth` /
+ * `findLaggards` / `buildLookAhead`, which the Dashboard reads.
  *
  * AND THE CONTRACT VALUE IS NOT COMING BACK HERE. `ContractValueField` was the
  * only place in the running app that could type `project.contractValue`, and

@@ -49,6 +49,7 @@ mkdirSync('scratch', { recursive: true });
 
 const browser = await puppeteer.launch({ executablePath: exe, headless: true });
 const page = await browser.newPage();
+if (process.env.SESSION) await page.setCookie({ name: 'lucille_session', value: process.env.SESSION, url: base });
 await page.setViewport(
   PHONE
     ? { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true }

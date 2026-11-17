@@ -34,7 +34,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 
 import { leafPlanFraction } from './plan-curve';
 import { getActiveBaselineId } from './sheet';
-import { db as sqlite, schema } from './sqlite';
+import { db as sqlite, dbVersion, schema } from './sqlite';
 import { parseSignature } from './signature';
 import { deriveWeights } from './weights';
 import { parseLinks } from './links';
@@ -99,7 +99,24 @@ function forecastOf(n: {
   };
 }
 
+/**
+ * Built once per database version, not once per call. A page asks for this
+ * four or five times (the sidebar card, the page, the week grid, the S-curve)
+ * at ~65 ms each on Merbau; it is pure over SQLite, so until `dbVersion()`
+ * moves the answer is the same. Readers must not mutate what it returns.
+ */
+const built = new Map<string, { version: string; data: ProjectDashboardData | null }>();
+
 export function buildProjectDashboardData(projectId: string): ProjectDashboardData | null {
+  const version = dbVersion();
+  const hit = built.get(projectId);
+  if (hit && hit.version === version) return hit.data;
+  const data = buildFresh(projectId);
+  built.set(projectId, { version, data });
+  return data;
+}
+
+function buildFresh(projectId: string): ProjectDashboardData | null {
   const project = sqlite
     .select()
     .from(schema.projects)

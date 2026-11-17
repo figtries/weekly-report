@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { useOverlayLayer } from '@/components/motion/overlay-layer';
 
 // The Record transmittal pop-up went on 9 Oct 2026: a status is set on the
-// document itself (DocumentSheet's StatusForm). TransmittalDialog.tsx stays, unlinked.
+// document itself (DocumentSheet's StatusForm). TransmittalDialog.tsx was deleted 17 Nov 2026.
 const DocumentSheet = dynamic(() => import('./DocumentSheet').then((x) => x.DocumentSheet));
 
 /**

@@ -17,6 +17,7 @@ const out = {};
 
 async function open(phone) {
   const page = await browser.newPage();
+  if (process.env.SESSION) await page.setCookie({ name: 'lucille_session', value: process.env.SESSION, url: base });
   await page.setViewport(phone ? { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { width: 1440, height: 900 });
   const cdp = await page.createCDPSession();
   if (phone) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
