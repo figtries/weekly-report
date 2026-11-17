@@ -110,22 +110,7 @@ function replace(bytes: Buffer): void {
   writeDbFile(bytes);
   live = open();
   orm = drizzle(live, { schema });
-  generation++;
   if (process.env.NODE_ENV !== 'production') globalForDb.__reportSqlite = live;
-}
-
-let generation = 0;
-
-/**
- * A string that changes whenever the database may have: a write on this
- * connection (`total_changes()`), a commit by any other connection or process
- * (`data_version`), or a snapshot swapped in underneath (`generation`). Two
- * cheap reads, so a reader can keep a figure built from the database until
- * this moves instead of rebuilding it on every request.
- */
-export function dbVersion(): string {
-  const changes = (live.prepare('select total_changes() as n').get() as { n: number }).n;
-  return `${generation}:${live.pragma('data_version', { simple: true })}:${changes}`;
 }
 
 registerConnection({ serialize: () => live.serialize(), replace });

@@ -32,10 +32,6 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     viewTransition: true,
-    // A page visited in the last 30 s comes back from the client cache instead
-    // of a server round trip. Writes still show at once: every write path
-    // calls revalidatePath/updateTag/refresh() or sets a cookie, which clears it.
-    staleTimes: { dynamic: 30 },
   },
   async rewrites() {
     // Photos live outside public/ (Redis, or /tmp on Vercel) whenever the
