@@ -1,0 +1,145 @@
+RENCANA PRODUCTION - WEEKLY REPORT
+Dibuat: 1 Oktober 2026
+==================================================================
+
+
+1. KEPUTUSAN YANG SUDAH DIAMBIL
+------------------------------------------------------------------
+[x] Production TIDAK pakai Vercel
+[x] Satu VPS (Jakarta / Singapura), bukan dedicated server
+[x] Backup ke object storage (R2 / Wasabi), bukan server kedua
+[x] Database: PostgreSQL 17, di VPS yang sama (container)
+[x] db.json (Daily, Klaim, katalog) pindah ke Postgres sebagai jsonb
+[x] Migrasi ke Postgres dikerjakan SEBELUM production
+
+Catatan:
+
+
+
+2. SPESIFIKASI SERVER
+------------------------------------------------------------------
+Rekomendasi : 4 vCPU / 8 GB RAM / 160-250 GB SSD NVMe
+Minimum     : 2 vCPU / 4 GB RAM / 80 GB SSD
+OS          : Ubuntu 24.04 LTS
+Software    : Docker + Docker Compose
+Bandwidth   : 2-4 TB / bulan
+Region      : Jakarta atau Singapura
+
+Setelan Postgres (RAM 8 GB):
+  shared_buffers=2GB, effective_cache_size=5GB,
+  work_mem=16MB, max_connections=50, pool app 10
+
+Perkiraan data: +/- 10 GB foto per tahun (10 project, 6 foto/hari)
+
+Catatan:
+
+
+
+3. ESTIMASI BIAYA (perkiraan, cek ulang di situs provider)
+------------------------------------------------------------------
+                         A. Hemat        B. Rekomendasi    C. + Standby
+VPS utama                Rp 200-400 rb   Rp 450-800 rb     Rp 450-800 rb
+VPS standby              -               -                 Rp 200-400 rb
+Object storage backup    Rp 0-15 rb      Rp 5-15 rb        Rp 5-15 rb
+Domain (per bulan)       Rp 20 rb        Rp 20 rb          Rp 20 rb
+SSL + monitoring         gratis          gratis            gratis
+------------------------------------------------------------------
+TOTAL / bulan            Rp 220-435 rb   Rp 475-835 rb     Rp 675 rb-1,2 jt
+TOTAL / tahun            Rp 2,6-5,2 jt   Rp 5,7-10 jt      Rp 8-14,5 jt
+
+Pilihan: B (Rekomendasi)
+Provider kandidat: Biznet Gio / IDCloudHost / DigitalOcean SG / Vultr SG
+Belum termasuk: biaya jasa setup & migrasi
+
+Catatan:
+
+
+
+4. ARSITEKTUR
+------------------------------------------------------------------
+GitHub -> GitHub Actions (cek, build image) -> GHCR -> deploy via SSH
+
+Di VPS (Docker Compose):
+  - caddy     : HTTPS otomatis, port 80/443, kunci akses,
+                /uploads/* disajikan langsung dari volume foto
+  - app       : Next.js standalone + Chromium (untuk PDF)
+  - postgres  : versi 17, hanya jaringan internal, TIDAK dibuka publik
+
+Backup setiap malam -> Object Storage:
+  - pg_dump (simpan 30 hari) + WAL-G (pulih ke menit tertentu)
+  - restic untuk folder foto/dokumen
+
+Akses DB dari laptop: SSH tunnel, lalu drizzle-kit studio / DBeaver
+
+Catatan:
+
+
+
+5. ALUR GIT
+------------------------------------------------------------------
+feature/*   -> kerja per nomor papan, tidak di-deploy
+main        -> otomatis deploy ke STAGING
+tag v1.x.x  -> otomatis deploy ke PRODUCTION (perlu approve 1 klik)
+Rollback    -> jalankan ulang image dengan tag SHA lama
+
+Catatan:
+
+
+
+6. KEAMANAN
+------------------------------------------------------------------
+!! App BELUM punya login (papan nomor 22) !!
+Sampai login ada, wajib pasang salah satu:
+  [ ] Basic auth di Caddy (satu password per tim)
+  [ ] Cloudflare Access (gratis s/d 50 user, login OTP email)
+
+Server:
+  [ ] SSH key saja, login password dimatikan
+  [ ] Firewall ufw: hanya 22, 80, 443
+  [ ] fail2ban + unattended-upgrades
+  [ ] Zona waktu Asia/Jakarta
+
+Catatan:
+
+
+
+7. URUTAN PENGERJAAN (estimasi total +/- 3-5 minggu)
+------------------------------------------------------------------
+[ ] 1. Postgres lokal + schema pgTable (21 tabel + project_json)
+[ ] 2. Lapisan data jadi async (243 query di 24 file)
+       baca: 'use cache' + cacheTag, tulis: updateTag
+[ ] 3. db.json -> jsonb di Postgres
+[ ] 4. Script pindah data SQLite + Redis -> Postgres
+       bukti: jumlah baris sama, angka dashboard identik
+[ ] 5. Verify scripts pindah ke database uji
+[ ] 6. Dockerfile + compose + Caddyfile, uji di laptop
+[ ] 7. GitHub Actions + setup VPS + staging
+[ ] 8. Pindah data production + pindah DNS + backup + monitoring
+
+Masih menggantung:
+  - Image lama di Vercel Blob (1,99 MB) baru bisa dibaca setelah
+    31 Okt 2026, harus digabung manual
+
+Catatan:
+
+
+
+8. MONITORING
+------------------------------------------------------------------
+- UptimeRobot (gratis): cek /api/health/db tiap 5 menit,
+  notifikasi email / Telegram
+- Log container dirotasi otomatis (20 MB x 5)
+- Alert disk > 80%
+- Uji restore backup sebulan sekali
+
+Catatan:
+
+
+
+==================================================================
+CATATAN BEBAS
+==================================================================
+
+
+
+
