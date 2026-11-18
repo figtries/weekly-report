@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { pressMotion } from '@/components/motion/Press';
 import DateField from '@/components/ui/DateField';
@@ -118,16 +118,18 @@ export default function AocSection({ report, commit, state, open, onToggle, onOp
                 <button type="button" className={LINK} onClick={() => setEditing(edit ? null : r.id)}>
                   {edit ? 'Done' : 'Edit'}
                 </button>
-                {edit && (
-                  <m.button
-                    type="button"
-                    {...pressMotion}
-                    onClick={() => setRows(rows.filter((x) => x.id !== r.id))}
-                    className="min-h-11 text-[13px] text-muted-foreground transition-colors hover:text-bad sm:min-h-8"
-                  >
-                    Remove
-                  </m.button>
-                )}
+                {/* Always shown (18 Nov 2026): a concern raised by mistake
+                    must be removable without opening it first. */}
+                <m.button
+                  type="button"
+                  {...pressMotion}
+                  aria-label="Remove"
+                  title="Remove"
+                  onClick={() => setRows(rows.filter((x) => x.id !== r.id))}
+                  className="-mr-2 ml-auto inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-bad sm:size-8"
+                >
+                  <Trash2 className="size-4" />
+                </m.button>
               </div>
             </div>
           );

@@ -15,6 +15,7 @@ import {
   paginate,
   rowHeight,
   textWidth,
+  type Axis,
 } from '@/lib/gantt-print';
 
 /**
@@ -104,11 +105,6 @@ export default function GanttPrint({
       reach(r.contractFinish);
     }
   }
-  const axis = first && last ? axisOf(first, last, W) : null;
-  const ppd = axis?.pxPerDay ?? 0;
-  const xOf = (d: string) => (axis ? daysBetween(axis.start, d) * ppd : 0);
-  const todayX = axis && today >= axis.start && daysBetween(axis.start, today) < axis.days ? xOf(today) : null;
-
   // ------------------------------------------------------------- the marks
   const late = (r: SheetRow) => {
     const ff = facts[r.id]?.forecastFinish;
@@ -116,6 +112,51 @@ export default function GanttPrint({
   };
   const slip = (r: SheetRow) =>
     view.marks.slip && late(r) === 0 && !r.isSummary && r.totalFloat != null && r.totalFloat > 0 ? r.totalFloat : 0;
+
+  // A "+N d" or "+N days" written past a bar's end must fit inside the sheet, so
+  // the calendar reaches past the last date by as much as the widest tag needs
+  // (18 Nov 2026: "+7 d" on the last rows was squeezed onto its own hatch).
+  // A link leaving a late bar's finish starts past its tag (see the stubs
+  // below), so when it may become a stub its number needs room too. Reserved
+  // for every such link, as which sheet each end lands on is not known yet.
+  const allCodes = new Map(allRows.map((r) => [r.id, r.code]));
+  const stubCode = new Map<string, number>();
+  if (view.marks.links)
+    for (const l of network.links) {
+      const [own, other] = l.type === 'FF' ? [l.toId, l.fromId] : l.type === 'SS' ? [null, null] : [l.fromId, l.toId];
+      if (own && other) stubCode.set(own, Math.max(stubCode.get(own) ?? 0, textWidth(allCodes.get(other) ?? '', true, 10)));
+    }
+  const tagOverflow = (a: Axis) => {
+    let over = 0;
+    for (const r of rows) {
+      if (!r.finishDate || r.isSummary) continue;
+      const endX = (daysBetween(a.start, r.finishDate) + 1) * a.pxPerDay;
+      const l = late(r);
+      const s = slip(r);
+      const stub = stubCode.has(r.id) ? 4 + 9 + stubCode.get(r.id)! : 0;
+      const tip =
+        l > 0
+          ? endX + Math.max(l * a.pxPerDay, 3) + 4 + textWidth(`+${l} d`, true, 10) + stub
+          : s > 0
+            ? endX + s * a.pxPerDay + 4 + textWidth(`+${s} ${s === 1 ? 'day' : 'days'}`, false, 10)
+            : 0;
+      over = Math.max(over, tip + 4 - W);
+    }
+    return over;
+  };
+  let axis: Axis | null = first && last ? axisOf(first, last, W) : null;
+  for (let k = 0; axis && last && k < 3; k++) {
+    const over = tagOverflow(axis);
+    if (over <= 0) break;
+    const moved: Date = new Date(`${last as string}T00:00:00Z`);
+    moved.setUTCDate(moved.getUTCDate() + Math.ceil(over / axis.pxPerDay));
+    const next: string = moved.toISOString().slice(0, 10);
+    last = next;
+    axis = axisOf(first as unknown as string, next, W);
+  }
+  const ppd = axis?.pxPerDay ?? 0;
+  const xOf = (d: string) => (axis ? daysBetween(axis.start, d) * ppd : 0);
+  const todayX = axis && today >= axis.start && daysBetween(axis.start, today) < axis.days ? xOf(today) : null;
   const onSite = (r: SheetRow) => {
     const f = facts[r.id];
     return !r.isSummary && f?.kindId === 'procurement' && f.rungs.at(-1)?.label === 'On site';

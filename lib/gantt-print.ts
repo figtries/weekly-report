@@ -236,15 +236,24 @@ export function axisOf(first: string, last: string, width: number): Axis {
   const s = new Date(utc(first));
   const e = new Date(utc(last));
   const start = Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), 1);
-  const end = Date.UTC(e.getUTCFullYear(), e.getUTCMonth() + 1, 1);
-  const days = Math.round((end - start) / MS_PER_DAY);
-  const pxPerDay = width / days;
+  let end = Date.UTC(e.getUTCFullYear(), e.getUTCMonth() + 1, 1);
+  let days = Math.round((end - start) / MS_PER_DAY);
+  let pxPerDay = width / days;
+  const weekly = pxPerDay * 7 >= 40;
+  // In weeks, the calendar closes on a Monday, so the last week is a whole
+  // cell with room for its date (18 Nov 2026: "30" ran off a sheet that ended
+  // on 1 Dec, one day after its week began).
+  if (weekly) {
+    end += ((8 - new Date(end).getUTCDay()) % 7) * MS_PER_DAY;
+    days = Math.round((end - start) / MS_PER_DAY);
+    pxPerDay = width / days;
+  }
   const x = (t: number) => ((t - start) / MS_PER_DAY) * pxPerDay;
   const top: Axis['top'] = [];
   const bottom: Axis['bottom'] = [];
   const grid: Axis['grid'] = [];
 
-  if (pxPerDay * 7 >= 40) {
+  if (weekly) {
     for (let t = start; t < end; ) {
       const d = new Date(t);
       top.push({ x: x(t), label: `${MN[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}` });
@@ -257,7 +266,7 @@ export function axisOf(first: string, last: string, width: number): Axis {
       bottom.push({ x: x(t), label: iso(t).slice(8) });
       grid.push({ x: x(t), strong: false });
     }
-    return { start: iso(start), days, pxPerDay, top, bottom, grid };
+    return fitLabels({ start: iso(start), days, pxPerDay, top, bottom, grid }, width);
   }
 
   const perMonth = pxPerDay * 30.4;
@@ -270,7 +279,16 @@ export function axisOf(first: string, last: string, width: number): Axis {
     if (perMonth >= 6 || m % 3 === 0) grid.push({ x: x(t), strong: m === 0 });
     t = Date.UTC(d.getUTCFullYear(), m + 1, 1);
   }
-  return { start: iso(start), days, pxPerDay, top, bottom: bottom.filter((b) => b.label), grid };
+  return fitLabels({ start: iso(start), days, pxPerDay, top, bottom: bottom.filter((b) => b.label), grid }, width);
+}
+
+/** A label whose text would run past the sheet's right edge is left out; its grid line stays. */
+function fitLabels(a: Axis, width: number): Axis {
+  return {
+    ...a,
+    top: a.top.filter((t) => t.x + 4 + textWidth(t.label, true, 11) <= width),
+    bottom: a.bottom.filter((b) => b.x + 3 + textWidth(b.label, false, 10.5) <= width),
+  };
 }
 
 /** `09 Mar 26`, the planner's own format. */

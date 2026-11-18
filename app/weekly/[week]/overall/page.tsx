@@ -53,7 +53,9 @@ type PageProps = {
  */
 export default function DataOverallPage({ params, searchParams }: PageProps) {
   return (
-    <LegacyGate what="weekly reports" planned>
+    // `prefetchable` (18 Nov 2026): without it `connection()` ended the runtime
+    // prefetch, so pressing a row on Check waited a full round trip on a skeleton.
+    <LegacyGate what="weekly reports" prefetchable planned>
       <DataOverallPageBody params={params} searchParams={searchParams} />
     </LegacyGate>
   );
@@ -233,9 +235,8 @@ async function DataOverallPageBody({ params, searchParams }: PageProps) {
       label: 'Deviation',
       value: grandTotal.deviationPct,
       tone: 'text-deviation',
-      // One word, not a sentence: the figure above already says how much, and
-      // the sign is the one thing about it a newcomer reads wrong.
-      sub: grandTotal.deviationPct < 0 ? 'Behind plan' : grandTotal.deviationPct > 0 ? 'Ahead of plan' : 'On plan',
+      // No caption (18 Nov 2026, asked): the sign already says behind or ahead.
+      sub: undefined,
     },
   ];
 

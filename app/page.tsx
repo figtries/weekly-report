@@ -394,7 +394,9 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
 
               {/* The rail carries the three figures that qualify the headline,
                   each said exactly once on this page. */}
-              <dl className="mt-6 grid grid-cols-3 divide-x rounded-xl border bg-muted/40">
+              {/* A track never narrower than its figure: "100.00%" outgrew a
+                  plain 1fr third and ran into the divider. */}
+              <dl className="mt-6 grid grid-cols-[repeat(3,minmax(min-content,1fr))] divide-x rounded-xl border bg-muted/40">
                 <Stat label="Plan this week" value={<Tween value={health.planPct} />} />
                 <Stat label="Schedule index" value={<Tween value={health.spi} suffix="" decimals={3} />} />
                 <Stat label="Weeks left" value={<Tween value={weeksLeft} suffix="" decimals={0} />} />

@@ -475,9 +475,17 @@ export function DocumentSheet({
                 Remarks
                 {/* Said beside the box: the foot's "Saved" was too far away to
                     tell anyone that typing here had been kept (Nov 2026). */}
-                {noteAt > 0 && (
-                  <span className="ml-auto inline-flex items-center gap-1">
-                    {pending ? 'Saving…' : savedAt >= noteAt ? <><Check className="h-3.5 w-3.5 text-ok" />Saved</> : null}
+                {/* A green chip, not a caption: grey "Saved" in the label's size
+                    went unseen and the note read as unsaved (18 Nov 2026). */}
+                {noteAt > 0 && (pending || savedAt >= noteAt) && (
+                  <span
+                    key={pending ? 'saving' : 'saved'}
+                    className={cn(
+                      'ml-auto inline-flex animate-fade-in-up items-center gap-1 rounded-md px-2 py-0.5 text-[13px] font-semibold',
+                      pending ? 'bg-muted text-muted-foreground' : 'bg-ok-soft text-ok'
+                    )}
+                  >
+                    {pending ? 'Saving…' : <><Check className="h-4 w-4" strokeWidth={2.5} />Saved</>}
                   </span>
                 )}
               </span>
