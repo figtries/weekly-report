@@ -58,7 +58,9 @@
     ".next-preview-kind/types/**/*.ts",
     ".next-preview-kind/dev/types/**/*.ts",
     ".next-buildcheck/types/**/*.ts",
-    ".next-buildcheck/dev/types/**/*.ts"
+    ".next-buildcheck/dev/types/**/*.ts",
+    ".next-preview-ov/types/**/*.ts",
+    ".next-preview-ov/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
