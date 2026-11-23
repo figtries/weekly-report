@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { blockingIds, type Finding, type ValidationResult } from '@/lib/analysis';
+import {
+  blockingIds,
+  elideTrail,
+  groupFindingRows,
+  type Finding,
+  type FindingRow,
+  type ValidationResult,
+} from '@/lib/analysis';
 import { Reveal } from '@/components/motion/Reveal';
 import { cn } from '@/lib/utils';
 
@@ -28,8 +35,34 @@ const STYLE: Record<
   ok: { ring: 'ring-foreground/10', icon: 'bg-ok text-white', mark: '✓', label: 'text-ok' },
 };
 
+/** A heading, or an activity under it. `at` is the activity's position in the
+ *  whole list — a heading borrows its own first activity's, so the cap below
+ *  goes on counting ACTIVITIES and a heading hides with the rows it heads. */
+type Entry =
+  | { kind: 'head'; trail: string; at: number; key: string }
+  | { kind: 'row'; row: FindingRow; at: number; key: string };
+
+const VISIBLE = 6;
+
+function entriesOf(rows: FindingRow[]): Entry[] {
+  const out: Entry[] = [];
+  let at = 0;
+  groupFindingRows(rows).forEach((group, gi) => {
+    if (group.trail) out.push({ kind: 'head', trail: group.trail, at, key: `h${gi}` });
+    group.rows.forEach((row, ri) => {
+      // Index in the key, not the label alone: a WBS legitimately carries the
+      // same description under several parents ("RTS", "Material On Site" each
+      // appear more than once on Gundih), and React drops the duplicates.
+      out.push({ kind: 'row', row, at, key: `${gi}-${ri}-${row.label}` });
+      at += 1;
+    });
+  });
+  return out;
+}
+
 function CheckRow({ f, week }: { f: Finding; week: number }) {
   const s = STYLE[f.level];
+  const entries = f.rows ? entriesOf(f.rows) : [];
   return (
     <li className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
       <span
@@ -52,11 +85,21 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
             scanned, and the person then has to go hunting for the other three. */}
         {f.rows && f.rows.length > 0 && (
           <ul className="group/more mt-2.5 divide-y overflow-hidden rounded-lg bg-muted/50">
-            {/* Index in the key, not the label alone: a WBS legitimately
-                carries the same description under several parents ("RTS",
-                "Material On Site" each appear more than once on Gundih), and
-                React drops the duplicates. */}
-            {f.rows.map((r, i) => {
+            {entries.map((e) => {
+              const hidden = e.at >= VISIBLE && 'hidden group-has-checked/more:block';
+              // The branch this group sits in, said ONCE. Printed under every
+              // row it read as six copies of one heading and grew the list
+              // exactly when the plan had many branches. A heading is not an
+              // activity: no link, no chevron. Semibold, not 11px muted —
+              // quiet text on this screen reads as absent.
+              if (e.kind === 'head') {
+                return (
+                  <li key={e.key} className={cn('text-[12px]', hidden)}>
+                    <p className="px-3 py-2 font-semibold text-foreground/70">{elideTrail(e.trail)}</p>
+                  </li>
+                );
+              }
+              const r = e.row;
               const body = (
                 // A short value ("0%") sits beside the name; a long one ("Waits
                 // for Building MEP ...") wraps under it. Kept beside at any
@@ -65,20 +108,12 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                 <span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-0.5">
                   <span className="min-w-0 flex-1 basis-40">
                     <span className="line-clamp-2 font-medium">{r.label}</span>
-                    {/* The last two ancestors. Without them six rows read
-                        "RTS", "Material On Site", "RTS" — the same WBS
-                        description under different parents. */}
-                    {r.trail && (
-                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                        {r.trail}
-                      </span>
-                    )}
                   </span>
                   <span className="line-clamp-2 max-w-full font-semibold tabular-nums text-foreground/70">{r.value}</span>
                 </span>
               );
               return (
-                <li key={`${i}-${r.label}`} className={cn('text-[13px]', i >= 6 && 'hidden group-has-checked/more:block')}>
+                <li key={e.key} className={cn('text-[13px]', hidden)}>
                   {/* A row is a way INTO the item, not a description of it:
                       pressing it opens that activity's panel on Fill in, where
                       the figure is edited. The chevron is what tells a phone,
@@ -97,13 +132,13 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                 </li>
               );
             })}
-            {f.rows.length > 6 && (
+            {f.rows.length > VISIBLE && (
               <li className="group-has-checked/more:hidden">
                 <label
                   className="flex min-h-11 cursor-pointer items-center px-3 py-2 text-[12px] font-medium text-chart-1"
                 >
                   <input type="checkbox" className="hidden" />
-                  Show {f.rows.length - 6} more
+                  Show {f.rows.length - VISIBLE} more
                 </label>
               </li>
             )}
