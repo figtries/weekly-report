@@ -454,6 +454,39 @@ export function elideTrail(trail: string): string {
   return [parts[0], '…', ...parts.slice(-2)].join(TRAIL_SEP);
 }
 
+export interface FindingRowGroup {
+  /** The whole branch, unelided. `''` for rows the tree does not place. */
+  trail: string;
+  rows: FindingRow[];
+}
+
+/**
+ * A finding's rows, gathered under the branch each one sits in.
+ *
+ * Printing the branch under every row read as six copies of one heading and
+ * grew the list exactly when the plan had many branches — the opposite of what
+ * a person scanning a failed check needs. Stating it once per group shrinks
+ * the list as the plan deepens.
+ *
+ * Group order is the order each group's first member appears, so a check that
+ * already sorts worst-first keeps its worst group at the top without this
+ * inventing a sort of its own. Rows the tree cannot place keep their place in
+ * the list, in one unheaded group at the end.
+ */
+export function groupFindingRows(rows: FindingRow[]): FindingRowGroup[] {
+  const by = new Map<string, FindingRow[]>();
+  rows.forEach((r) => {
+    const key = r.trail ?? '';
+    const bucket = by.get(key);
+    if (bucket) bucket.push(r);
+    else by.set(key, [r]);
+  });
+  const out = [...by.entries()].map(([trail, rs]) => ({ trail, rows: rs }));
+  const loose = out.findIndex((gr) => gr.trail === '');
+  if (loose >= 0) out.push(...out.splice(loose, 1));
+  return out;
+}
+
 /**
  * The checks a senior would run before signing.
  *

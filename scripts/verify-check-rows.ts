@@ -19,7 +19,12 @@
  * Run: node --import ./scripts/ts-resolve.mjs scripts/verify-check-rows.ts
  */
 import type { RollupNode } from '../lib/rollup.ts';
-import { elideTrail, trailIndex } from '../lib/analysis.ts';
+import {
+  elideTrail,
+  groupFindingRows,
+  trailIndex,
+  type FindingRow,
+} from '../lib/analysis.ts';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -70,6 +75,32 @@ check('the chain is whole, root dropped', t.get('L') === 'A › B › C', `got $
 check('three segments print whole', elideTrail('A › B › C') === 'A › B › C');
 check('four segments elide the middle', elideTrail('A › B › C › D') === 'A › … › C › D', `got ${elideTrail('A › B › C › D')}`);
 check('one segment is untouched', elideTrail('P') === 'P');
+
+const rows: FindingRow[] = [
+  { label: 'Server', value: '', trail: 'R › Lucille' },
+  { label: 'Payment Gateway', value: '', trail: 'R › Backend' },
+  { label: 'Database', value: '', trail: 'R › Lucille' },
+  { label: 'Orphan', value: '' },
+];
+const g = groupFindingRows(rows);
+
+check(
+  'group order follows first appearance',
+  g.map((x) => x.trail).join('|') === 'R › Lucille|R › Backend|',
+  g.map((x) => x.trail).join('|')
+);
+check('no row is lost or duplicated', g.flatMap((x) => x.rows).length === 4);
+check('row order inside a group is kept', g[0].rows.map((r) => r.label).join(',') === 'Server,Database');
+check('a row with no trail is still listed', g[2].rows[0].label === 'Orphan');
+
+// Two headings legitimately carry the same description — the WBS does this on
+// Gundih ("RTS", "Material On Site"). Grouping is on the WHOLE chain, so they
+// must not collapse into one.
+const sameLeaf = groupFindingRows([
+  { label: 'one', value: '', trail: 'R › A › Work' },
+  { label: 'two', value: '', trail: 'R › B › Work' },
+]);
+check('same last segment, different branch, two groups', sameLeaf.length === 2);
 
 console.log(failed ? `\n${failed} failed` : '\nAll passed');
 process.exit(failed ? 1 : 0);
