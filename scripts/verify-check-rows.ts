@@ -20,6 +20,7 @@
  */
 import type { RollupNode } from '../lib/rollup.ts';
 import {
+  contributions,
   elideTrail,
   groupFindingRows,
   trailIndex,
@@ -32,7 +33,12 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failed += 1;
 };
 
-function node(id: string, children: RollupNode[] = [], name = id): RollupNode {
+function node(
+  id: string,
+  children: RollupNode[] = [],
+  name = id,
+  extra: Partial<RollupNode> = {}
+): RollupNode {
   return {
     id,
     parentId: null,
@@ -53,6 +59,7 @@ function node(id: string, children: RollupNode[] = [], name = id): RollupNode {
     thisWeekWF: 0,
     targetWF: 0,
     variance: 0,
+    ...extra,
   } as RollupNode;
 }
 
@@ -113,6 +120,22 @@ const sameLeaf = groupFindingRows([
   { label: 'two', value: '', trail: 'R › B › Work' },
 ]);
 check('same last segment, different branch, two groups', sameLeaf.length === 2);
+
+// The dashboard's "Where the gap comes from" names three activities and used
+// to identify each by a WBS code alone ("4.1.2"), which says nothing about
+// which contract the work belongs to. It reads the same branch the Check
+// screen does, so one activity is described the same way wherever it appears.
+const parts = contributions(
+  [
+    node('s1', [node('cv', [], 'Control Valves', { bobot: 50, variance: -10 })], 'SPK-001'),
+    node('s3', [node('ge', [], 'Gas Engine', { bobot: 50, variance: -10 })], 'SPK-003'),
+  ],
+  -20
+);
+const cv = parts.find((c) => c.id === 'cv');
+const ge = parts.find((c) => c.id === 'ge');
+check('a contribution says which branch it is from', cv?.trail === 'SPK-001', `got ${JSON.stringify(cv?.trail)}`);
+check('two contracts are not described the same', cv?.trail !== ge?.trail, `${cv?.trail} vs ${ge?.trail}`);
 
 console.log(failed ? `\n${failed} failed` : '\nAll passed');
 process.exit(failed ? 1 : 0);

@@ -277,6 +277,12 @@ export interface Contribution {
   actualPct: number;
   /** Project percent this item adds to (+) or takes from (−) the deviation. */
   share: number;
+  /**
+   * Where the item sits, same chain and same words the Check screen groups by
+   * (`trailIndex`). The dashboard identified these rows by a WBS code alone,
+   * which says nothing about which contract the work belongs to.
+   */
+  trail?: string;
 }
 
 /**
@@ -289,6 +295,7 @@ export interface Contribution {
 export function contributions(roots: RollupNode[], deviationPct: number): Contribution[] {
   const leaves = flattenTree(roots).filter((n) => n.isLeaf && n.bobot > 0);
   const total = leaves.reduce((s, n) => s + n.bobot, 0);
+  const trails = trailIndex(roots);
   const shares = apportion(
     leaves.map((n) => (total > 0 ? (n.variance / total) * 100 : 0)),
     deviationPct
@@ -301,6 +308,7 @@ export function contributions(roots: RollupNode[], deviationPct: number): Contri
       planPct: n.bobot > 0 ? (n.targetWF / n.bobot) * 100 : 0,
       actualPct: n.curProgressPct,
       share: shares[i],
+      trail: trails.get(n.id),
     }))
     .filter((c) => c.share !== 0);
 }
