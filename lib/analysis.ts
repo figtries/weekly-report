@@ -366,10 +366,13 @@ export interface FindingRow {
   /** Already formatted — what "the problem" is differs per check. */
   value: string;
   /**
-   * Where the item sits, as its last two ancestors. A WBS legitimately carries
-   * the same description under several parents — "RTS" and "Material On Site"
-   * each appear more than once on Gundih — so a bare label leaves six
-   * identical-looking rows and no way to tell which one failed.
+   * Where the item sits: every ancestor above it, joined by ` › `, and the
+   * project dropped only when the plan has one top row. A WBS legitimately
+   * carries the same description under several parents — "RTS" and "Material
+   * On Site" each appear more than once on Gundih — so a bare label leaves six
+   * identical-looking rows and no way to tell which one failed. The Check
+   * screen groups its rows under this, so it must never name two branches the
+   * same. Arrives on non-leaf rows too, from the two link checks.
    */
   trail?: string;
   /**
@@ -413,24 +416,30 @@ export function blockingIds(validation: ValidationResult): string[] {
   return [...new Set(ids)];
 }
 
+const TRAIL_SEP = ' › ';
+
 /**
- * Where a leaf sits, as its last two ancestors: 'Electrical › Busduct'.
+ * Where a node sits: every ancestor above it, 'SPK-001 › Procurement'.
  *
  * Built from the SAME promoted tree the Update screen walks, so a row named
  * here can be found there. Without it the evidence lists read as six copies of
  * "RTS" — the WBS carries that description under several parents.
+ *
+ * THE OUTERMOST ANCESTOR IS DROPPED ONLY WHEN THERE IS ONE ROOT. Then it is
+ * the project, identical on every row and worth nothing. A plan does not have
+ * to have one top row — pdemo-merbau has five — and there the first segment is
+ * the row's own CONTRACT. Dropping it put SPK-001's and SPK-003's procurement
+ * rows under one heading reading "Procurement", two contracts declared
+ * siblings: the exact claim this index exists to stop making.
  */
-const TRAIL_SEP = ' › ';
-
 export function trailIndex(roots: RollupNode[]): Map<string, string> {
   const out = new Map<string, string>();
+  const dropRoot = roots.length === 1;
   const visit = (node: RollupNode, trail: string[]) => {
-    // The outermost ancestor is the project itself and is identical on every
-    // row, so it is dropped — UNLESS it is the only ancestor there is. An
-    // activity hanging straight off the root used to print no trail at all,
-    // which is how "Backend" the activity and "Backend" the heading came to
-    // read as the same thing on one screen.
-    const above = trail.length > 1 ? trail.slice(1) : trail;
+    // Never drop the LAST ancestor either: an activity hanging straight off
+    // the root used to print no trail at all, which is how "Backend" the
+    // activity and "Backend" the heading came to read as the same thing.
+    const above = dropRoot && trail.length > 1 ? trail.slice(1) : trail;
     out.set(node.id, above.join(TRAIL_SEP));
     // EVERY node, not only the leaves. The two link checks build their rows
     // from a `names` map and had no trail at all until this indexed branches

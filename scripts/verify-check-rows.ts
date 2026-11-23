@@ -32,12 +32,12 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failed += 1;
 };
 
-function node(id: string, children: RollupNode[] = []): RollupNode {
+function node(id: string, children: RollupNode[] = [], name = id): RollupNode {
   return {
     id,
     parentId: null,
     wbsCode: id,
-    deskripsi: id,
+    deskripsi: name,
     bobot: 0,
     vol: null,
     satuan: null,
@@ -71,6 +71,18 @@ const t = trailIndex([P]);
 check('leaf off the root names the project', t.get('D') === 'P', `got ${JSON.stringify(t.get('D'))}`);
 check('a branch is indexed too', t.get('A') === 'P', `got ${JSON.stringify(t.get('A'))}`);
 check('the chain is whole, root dropped', t.get('L') === 'A › B › C', `got ${JSON.stringify(t.get('L'))}`);
+
+// A plan does not have to have one top row. pdemo-merbau has five, and then
+// the outermost ancestor is NOT the project — it is that row's own contract.
+// Dropping it there put "SPK-001 › Procurement › Control Valves" and
+// "SPK-003 › Procurement › Gas Engine" under one heading reading "Procurement",
+// which is the exact claim this whole change exists to stop making.
+const t2 = trailIndex([
+  node('s1', [node('p1', [node('cv', [], 'Control Valves')], 'Procurement')], 'SPK-001'),
+  node('s3', [node('p3', [node('ge', [], 'Gas Engine')], 'Procurement')], 'SPK-003'),
+]);
+check('several roots: the contract is kept', t2.get('cv') === 'SPK-001 › Procurement', `got ${JSON.stringify(t2.get('cv'))}`);
+check('same branch name under another root stays distinct', t2.get('ge') === 'SPK-003 › Procurement', `got ${JSON.stringify(t2.get('ge'))}`);
 
 check('three segments print whole', elideTrail('A › B › C') === 'A › B › C');
 check('four segments elide the middle', elideTrail('A › B › C › D') === 'A › … › C › D', `got ${elideTrail('A › B › C › D')}`);
