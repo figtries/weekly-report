@@ -420,19 +420,38 @@ export function blockingIds(validation: ValidationResult): string[] {
  * here can be found there. Without it the evidence lists read as six copies of
  * "RTS" — the WBS carries that description under several parents.
  */
-function trailIndex(roots: RollupNode[]): Map<string, string> {
+const TRAIL_SEP = ' › ';
+
+export function trailIndex(roots: RollupNode[]): Map<string, string> {
   const out = new Map<string, string>();
   const visit = (node: RollupNode, trail: string[]) => {
-    if (node.children.length > 0) {
-      const next = [...trail, node.deskripsi];
-      node.children.forEach((c) => visit(c, next));
-      return;
-    }
-    // The outermost ancestor is the project itself, identical on every row.
-    out.set(node.id, trail.slice(1).slice(-2).join(' › '));
+    // The outermost ancestor is the project itself and is identical on every
+    // row, so it is dropped — UNLESS it is the only ancestor there is. An
+    // activity hanging straight off the root used to print no trail at all,
+    // which is how "Backend" the activity and "Backend" the heading came to
+    // read as the same thing on one screen.
+    const above = trail.length > 1 ? trail.slice(1) : trail;
+    out.set(node.id, above.join(TRAIL_SEP));
+    // EVERY node, not only the leaves. The two link checks build their rows
+    // from a `names` map and had no trail at all until this indexed branches
+    // too; and a heading is what the Check screen now groups its rows under.
+    node.children.forEach((c) => visit(c, [...trail, node.deskripsi]));
   };
   roots.forEach((r) => visit(r, []));
   return out;
+}
+
+/**
+ * A chain too long to print loses its middle, VISIBLY. Three ancestors or
+ * fewer print whole; past that the first and the last two are kept and the
+ * rest becomes one mark. Not left to CSS `truncate`: an ellipsis the browser
+ * draws looks exactly like a name that happens to end there, and nothing in
+ * this app may live only in a tooltip.
+ */
+export function elideTrail(trail: string): string {
+  const parts = trail.split(TRAIL_SEP);
+  if (parts.length <= 3) return trail;
+  return [parts[0], '…', ...parts.slice(-2)].join(TRAIL_SEP);
 }
 
 /**
@@ -816,6 +835,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
               id,
               label: names.get(id) ?? id,
               value: `Waits for ${names.get(r.conflicts[0].fromId) ?? r.conflicts[0].fromId}`,
+              trail: trails.get(id),
             })),
           }
         : { level: 'ok', title: 'Links between activities agree with the plan', detail: 'No activity starts before what it waits for.' }
@@ -829,6 +849,7 @@ export function validateWeek(db: Database, week: number): ValidationResult {
           id: l.toId,
           label: names.get(l.toId) ?? l.toId,
           value: `Waits for ${names.get(l.fromId) ?? l.fromId}`,
+          trail: trails.get(l.toId),
         })),
       });
     }
