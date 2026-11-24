@@ -17,6 +17,8 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import Database from 'better-sqlite3';
+
 import { copyDbFixture } from './db-fixture.ts';
 
 const work = path.join(os.tmpdir(), `snapshot-guard-${Date.now()}.db`);
@@ -59,6 +61,19 @@ await snap.beforeWrite();
 snap.scheduleSnapshotPush();
 await snap.flushDbSnapshot();
 check('still nothing after a failed pre-write refresh', serialized === 0, `serialize() called ${serialized}x`);
+
+// And the SCREENS have to be able to tell this state apart. An instance that
+// never adopted the image is holding data/seed.db, so a project list read from
+// it is not the user's — which is how a keyboard-mash project reached the
+// sidebar on 1 Oct 2026.
+check('a failed pull leaves the instance pending', snap.snapshotPending());
+
+// Which only costs nothing because the seed carries no project of its own.
+// Anything left in here is shown to a person as theirs.
+const seed = new Database('data/seed.db', { readonly: true });
+const seedProjects = (seed.prepare('select count(*) c from projects').get() as { c: number }).c;
+check('the seed carries no project', seedProjects === 0, `${seedProjects} in data/seed.db`);
+seed.close();
 
 if (failed) {
   console.log(`\n${failed} failed`);

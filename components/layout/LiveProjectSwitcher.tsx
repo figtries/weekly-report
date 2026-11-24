@@ -2,6 +2,7 @@ import { connection } from 'next/server';
 
 import ProjectSwitcher from '@/components/portfolio/ProjectSwitcher';
 import { getOpenProjectStatus } from '@/lib/data';
+import { snapshotPending } from '@/lib/db-snapshot';
 import { listProjects } from '@/lib/projects';
 
 /**
@@ -29,7 +30,10 @@ import { listProjects } from '@/lib/projects';
 export default async function LiveProjectSwitcher() {
   await connection();
   const [projects, status] = await Promise.all([listProjects(), getOpenProjectStatus()]);
-  if (projects.length === 0) return null;
+  // Empty because there is nothing, or empty because this instance has not
+  // read the store yet? Only the second is a lie, and it is the one that put
+  // a keyboard-mash project in the sidebar. Hold the skeleton instead.
+  if (projects.length === 0) return snapshotPending() ? <ProjectSwitcherFallback /> : null;
 
   return <ProjectSwitcher projects={projects} status={status} />;
 }

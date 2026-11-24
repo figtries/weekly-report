@@ -162,6 +162,27 @@ let adopted = false;
 let queue: Promise<void> = Promise.resolve();
 
 /**
+ * The store is configured but THIS instance has not read it yet, or the read
+ * failed.
+ *
+ * What the database holds in that state is `data/seed.db`, which is not the
+ * user's data. On 1 Oct 2026 that meant every lambda served the seed's two
+ * test projects, and what a person saw on first load was an almost empty
+ * project with a keyboard-mash name ("asdaqweqw") where theirs should have
+ * been — intermittently, because only an instance that had not adopted the
+ * image did it. The seed carries no projects any more, so the lie would now
+ * be an empty app instead: still a lie, since a person with two projects is
+ * told they have none.
+ *
+ * A screen that would render the project list asks this first and holds a
+ * loading state instead. Nothing here retries; the next request served by an
+ * instance that has adopted the image answers properly.
+ */
+export function snapshotPending(): boolean {
+  return snapshotConfigured && !adopted;
+}
+
+/**
  * The last swallowed failure, kept so it can be asked for.
  *
  * Every failure in here is deliberately non-fatal — a store that is reachable

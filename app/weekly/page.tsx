@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 
 import { getOpenDb } from '@/lib/data';
+import { snapshotPending } from '@/lib/db-snapshot';
 import { currentWeekOf } from '@/lib/current-week';
 
 /**
@@ -25,8 +26,30 @@ export default function WeeklyIndexPage() {
   );
 }
 
-async function GoToCurrentWeek(): Promise<never> {
+async function GoToCurrentWeek() {
   await connection();
+  // Redirecting on a database this instance has not read yet lands on week 1
+  // of a project that is not the user's — the empty page with a keyboard-mash
+  // name. Wait instead, and say so.
+  if (snapshotPending()) return <ReadingTheDatabase />;
   const db = await getOpenDb();
   redirect(`/weekly/${currentWeekOf(db)}/overall`);
+}
+
+/**
+ * Held space and one line, with a plain reload behind it.
+ *
+ * The reload is a `<meta>` rather than a script on purpose: this renders
+ * before any of the app has hydrated, and the instance serving the next
+ * request may be one that has already read the store.
+ */
+function ReadingTheDatabase() {
+  return (
+    <div className="mx-auto w-full max-w-md px-4 py-16">
+      <meta httpEquiv="refresh" content="3" />
+      <div className="h-11 animate-pulse rounded-xl border bg-muted/40" />
+      <div className="mt-3 h-40 animate-pulse rounded-xl border bg-muted/40" />
+      <p className="mt-4 text-center text-sm text-muted-foreground">Reading the database…</p>
+    </div>
+  );
 }
