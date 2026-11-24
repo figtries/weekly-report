@@ -77,6 +77,23 @@ export interface ForecastLeafView {
   suggested: LinkRef[];
 }
 
+/**
+ * Which of the four answerable findings this is, and the part of it that is
+ * particular to this row.
+ *
+ * It used to be one rendered sentence per row, and "to check" was the only
+ * reminder whose rows carried prose rather than a figure — four rows could
+ * hold six violet sentences with nothing ranking them, and an activity with
+ * two findings read as one paragraph. The JOB is now said once, as the group's
+ * heading on the screen, and only `detail` varies per row. The screen words
+ * it, not this file.
+ */
+export type CheckReason =
+  | { group: 'kind-missing'; detail: string }
+  | { group: 'kind-mismatch'; detail: string }
+  | { group: 'ticked-early'; detail: string }
+  | { group: 'needs-date' };
+
 export interface ForecastView {
   week: number;
   finishWeek: number;
@@ -86,7 +103,7 @@ export interface ForecastView {
   /** Activities finishing past their plan on evidence, most weeks first ("will slip"). */
   slipping: { leaf: LinkRef; weeks: number; line: string }[];
   /** Activities with a finding somebody can answer, in plan order, with why ("to check"). */
-  toCheck: { leaf: LinkRef; reasons: string[] }[];
+  toCheck: { leaf: LinkRef; reasons: CheckReason[] }[];
   leaves: Record<string, ForecastLeafView>;
   /** Every scheduled activity, in plan order, for "What has to finish before this one?". */
   options: LinkRef[];
@@ -151,8 +168,8 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
   });
 
   const leaves: Record<string, ForecastLeafView> = {};
-  const reasons = new Map<string, string[]>();
-  const say = (id: string, why: string) => reasons.set(id, [...(reasons.get(id) ?? []), why]);
+  const reasons = new Map<string, CheckReason[]>();
+  const say = (id: string, why: CheckReason) => reasons.set(id, [...(reasons.get(id) ?? []), why]);
   const ordered = db.wbsItems
     .filter((i) => forecast.leaves.has(i.id))
     .sort((a, b) => a.order - b.order);
@@ -226,17 +243,17 @@ export function buildForecastView(db: Database, week: number): ForecastView | nu
       say(
         c.leafId,
         currentLabel
-          ? `Set as ${currentLabel}, but it sits under ${tidyName(c.heading)}`
-          : `No kind of work yet; it sits under ${tidyName(c.heading)}`
+          ? { group: 'kind-mismatch', detail: `Set as ${currentLabel}, under ${tidyName(c.heading)}` }
+          : { group: 'kind-missing', detail: `Sits under ${tidyName(c.heading)}` }
       );
     } else if (c.kind === 'ticked-early') {
       const first = ref(c.waiting[0].id);
-      say(
-        c.leafId,
-        `${c.rungLabel} ticked, but ${first.code} ${first.name} is at ${fmt1(c.waiting[0].pct)}%${c.waiting.length > 1 ? ` and ${c.waiting.length - 1} more` : ''}`
-      );
+      say(c.leafId, {
+        group: 'ticked-early',
+        detail: `${c.rungLabel} ticked, but ${first.code} ${first.name} is at ${fmt1(c.waiting[0].pct)}%${c.waiting.length > 1 ? ` and ${c.waiting.length - 1} more` : ''}`,
+      });
     } else if (c.kind === 'needs-date') {
-      say(c.leafId, 'Sets the finish, and has no vendor, site or client date yet');
+      say(c.leafId, { group: 'needs-date' });
     }
   }
 

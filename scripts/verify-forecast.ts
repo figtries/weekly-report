@@ -300,9 +300,9 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [`${row.id}:material`] };
   const v = buildForecastView(db, 38)!;
   const said = v.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? [];
-  check('C6: material ticked before the delivery is listed to check, with why', said.some((r) => r.startsWith('Material on site ticked, but 2.3') && r.endsWith('and 1 more')), JSON.stringify(said));
+  check('C6: material ticked before the delivery is listed to check, with why', said.some((r) => r.group === 'ticked-early' && r.detail.startsWith('Material on site ticked, but 2.3') && r.detail.endsWith('and 1 more')), JSON.stringify(said));
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [] };
-  check('C6: nothing ticked, nothing flagged', !(buildForecastView(db, 38)!.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? []).some((r) => r.startsWith('Material on site')));
+  check('C6: nothing ticked, nothing flagged', !(buildForecastView(db, 38)!.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? []).some((r) => r.group === 'ticked-early'));
 }
 
 /* ------------------------------------------ 5. what the app finds by itself */

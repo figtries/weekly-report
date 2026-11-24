@@ -1,12 +1,12 @@
 'use client';
 
 import { m } from 'framer-motion';
-import { memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CalendarClock, Clock, ListChecks, TriangleAlert } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 import ActivityPanel from '@/components/weekly/ActivityPanel';
-import type { ForecastView } from '@/lib/forecast-view';
+import type { CheckReason, ForecastView } from '@/lib/forecast-view';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { Expand } from '@/components/motion/Expand';
 import CodeChip, { splitCode } from '@/components/ui/CodeChip';
@@ -502,6 +502,39 @@ interface ReminderRow {
   tag: string | null;
   name: string;
   lines: string[];
+  /** "to check" only: which of the four findings this row is listed for. */
+  group?: CheckReason['group'];
+  /** "to check" only: the branch it sits in, in the Check screen's words. */
+  trail?: string;
+}
+
+/**
+ * The JOB each finding asks of somebody, said ONCE over the rows that need it.
+ * In plan-damage order: a missing date moves the project finish, a missing
+ * kind only leaves a row unmeasured. Printed per row instead, these put six
+ * violet sentences in a four-row list with nothing ranking them.
+ */
+const CHECK_GROUP: { key: CheckReason['group']; title: string; note?: string }[] = [
+  {
+    key: 'needs-date',
+    title: 'Give these a vendor, site or client date',
+    note: 'Each one sets the project finish',
+  },
+  { key: 'kind-missing', title: 'Nobody has said what kind of work this is' },
+  { key: 'kind-mismatch', title: 'The kind of work disagrees with the heading' },
+  { key: 'ticked-early', title: 'A stage is ticked before what it waits for' },
+];
+
+/**
+ * Where a row sits, from the map's own tree.
+ *
+ * Nothing is dropped: `buildOverallMap` has ALREADY unwrapped a single root,
+ * so every ancestor left here is a real one. (`trailIndex` in lib/analysis.ts
+ * does drop one, because it walks the RollupNode tree where the root IS the
+ * project.)
+ */
+function branchOf(units: MapNode[], id: string): string | undefined {
+  return trailOf(units, id).map((a) => splitCode(a.name).name).join(' › ') || undefined;
 }
 
 /**
@@ -514,7 +547,20 @@ function reminderRows(kind: NonNullable<Reminder>, units: MapNode[], forecast: F
     return (forecast?.slipping ?? []).map(({ leaf, line }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: [line] }));
   }
   if (kind === 'check') {
-    return (forecast?.toCheck ?? []).map(({ leaf, reasons }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: reasons }));
+    // ONE ROW PER FINDING, not per activity. An activity with two findings is
+    // two separate jobs and is listed under both headings; stacked in one row
+    // they read as a single four-line paragraph.
+    return (forecast?.toCheck ?? []).flatMap(({ leaf, reasons }) => {
+      const trail = branchOf(units, leaf.id);
+      return reasons.map((r) => ({
+        id: leaf.id,
+        tag: leaf.code || null,
+        name: splitCode(leaf.name).name,
+        lines: 'detail' in r ? [r.detail] : [],
+        group: r.group,
+        trail,
+      }));
+    });
   }
   const out: MapNode[] = [];
   const walk = (n: MapNode) => {
@@ -565,8 +611,16 @@ function ReminderList({
 }) {
   const tone = REMINDER_TONE[kind];
   const shown = all ? rows : rows.slice(0, REMINDER_ROWS);
-  const n = rows.length;
+  // "to check" lists one row per FINDING, so an activity with two is two rows.
+  // The title counts activities, which is what the button above it counts.
+  const n = kind === 'check' ? new Set(rows.map((r) => r.id)).size : rows.length;
   const one = n === 1;
+  const groups =
+    kind === 'check'
+      ? CHECK_GROUP.map((g) => ({ ...g, rows: shown.filter((r) => r.group === g.key) })).filter(
+          (g) => g.rows.length > 0
+        )
+      : [{ key: 'all', title: null as string | null, note: undefined, rows: shown }];
   const title = {
     late: `${n} ${one ? 'activity has' : 'activities have'} passed the plan and ${one ? 'is' : 'are'} not finished`,
     soon: `${n} ${one ? 'activity ends' : 'activities end'} within 3 weeks and ${one ? 'is' : 'are'} not finished`,
@@ -578,27 +632,52 @@ function ReminderList({
     <div className={cn('mt-3 overflow-hidden rounded-xl border', tone.box)}>
       <p className={cn('px-3.5 pb-2 pt-3 text-[13px] font-semibold', tone.text)}>{title}</p>
       <ul>
-        {shown.map((r) => (
-          <li key={r.id}>
-            <button
-              type="button"
-              onClick={() => onOpen(r.id)}
-              className={cn('flex min-h-12 w-full items-center gap-3 border-t px-3.5 py-2.5 text-left transition-colors duration-200 ease-ios', tone.row)}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  {r.tag && <CodeChip>{r.tag}</CodeChip>}
-                  <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{r.name}</span>
-                </span>
-                {r.lines.map((line) => (
-                  <span key={line} className={cn('mt-0.5 block text-[12px] tabular-nums', tone.text)}>
-                    {line}
+        {groups.map((g) => (
+          <Fragment key={g.key}>
+            {/* The job, over the rows that need it. Not a pressable row: it
+                names work, not an activity. */}
+            {g.title && (
+              <li className={cn('border-t px-3.5 pb-1.5 pt-2.5', tone.row)}>
+                <p className={cn('text-[13px] font-semibold', tone.text)}>{g.title}</p>
+                {g.note && <p className="mt-0.5 text-[12px] text-muted-foreground">{g.note}</p>}
+              </li>
+            )}
+            {g.rows.map((r, i) => (
+              <li key={`${r.id}-${r.group ?? ''}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(r.id)}
+                  className={cn(
+                    'flex min-h-12 w-full items-center gap-3 border-t px-3.5 py-2.5 text-left transition-colors duration-200 ease-ios',
+                    // A rule between a heading and its own first row would cut
+                    // the group in two.
+                    g.title && i === 0 && 'border-t-0',
+                    tone.row
+                  )}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      {r.tag && <CodeChip>{r.tag}</CodeChip>}
+                      <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{r.name}</span>
+                    </span>
+                    {r.trail && (
+                      <span className="mt-0.5 block truncate text-[12px] font-medium text-foreground/70">
+                        {r.trail}
+                      </span>
+                    )}
+                    {r.lines.map((line) => (
+                      // `tabular-nums` lines up digits; on the prose "to check"
+                      // carries it only spaces the words oddly.
+                      <span key={line} className={cn('mt-0.5 block text-[12px]', kind !== 'check' && 'tabular-nums', tone.text)}>
+                        {line}
+                      </span>
+                    ))}
                   </span>
-                ))}
-              </span>
-              <span className={cn('shrink-0 text-[13px] font-semibold', tone.text)}>Open ›</span>
-            </button>
-          </li>
+                  <span className={cn('shrink-0 text-[13px] font-semibold', tone.text)}>Open ›</span>
+                </button>
+              </li>
+            ))}
+          </Fragment>
         ))}
       </ul>
       {!all && n > REMINDER_ROWS && (
