@@ -223,7 +223,8 @@ export interface Axis {
   top: { x: number; label: string }[];
   /** Months, quarters' months, or week-start days. */
   bottom: { x: number; label: string }[];
-  grid: { x: number; strong: boolean }[];
+  /** `head`: drawn in the top label band only (a month edge on the week scale, which lands mid-week and would cut a week's cell and its date). */
+  grid: { x: number; strong: boolean; head?: boolean }[];
 }
 
 /**
@@ -257,7 +258,7 @@ export function axisOf(first: string, last: string, width: number): Axis {
     for (let t = start; t < end; ) {
       const d = new Date(t);
       top.push({ x: x(t), label: `${MN[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}` });
-      grid.push({ x: x(t), strong: true });
+      grid.push({ x: x(t), strong: true, head: true });
       t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
     }
     // Mondays.

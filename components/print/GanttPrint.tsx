@@ -432,7 +432,7 @@ export default function GanttPrint({
 
                   {/* the calendar */}
                   {axis.grid.map((g, k) => (
-                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={svgH} stroke="var(--gantt-line)" strokeWidth="0.3" />
+                    <line key={k} x1={g.x} y1={g.strong ? 0 : 20} x2={g.x} y2={g.head ? 20 : svgH} stroke="var(--gantt-line)" strokeWidth="0.3" />
                   ))}
                   <line x1="0" y1="20" x2={W} y2="20" stroke="var(--gantt-line)" strokeWidth="0.3" />
                   {/* the table/calendar divider, full height like a year line, so the first year's cell is closed */}
