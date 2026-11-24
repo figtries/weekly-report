@@ -27,6 +27,13 @@ export const metadata = { title: 'Document Control' };
  */
 export function generateStaticParams() {
   const weeks = new Set(getAllRegisterWeekNumbers());
+  // NEVER EMPTY. Under Cache Components a `generateStaticParams` that returns
+  // nothing fails the build outright ("must return at least one result"), and
+  // a deployment builds against `data/seed.db` — which carries no project at
+  // all since 24 Nov 2026, so there is no register and no week to find. This
+  // built before only because the seed happened to hold two test projects.
+  // Week 1 is the floor; every other week still renders on demand.
+  if (weeks.size === 0) return [{ week: '1' }];
   return [...weeks].sort((a, b) => a - b).map((w) => ({ week: String(w) }));
 }
 
