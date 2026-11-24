@@ -409,25 +409,19 @@ async function DashboardBody({ searchParams }: { searchParams: Promise<{ week?: 
                 tall. On a phone the curve is 160px and its leading end reaches
                 exactly where an absolute legend would sit, so the legend only
                 floats on desktop. */}
-            <div className="relative flex min-h-44 flex-col justify-end text-foreground sm:min-h-56">
-              {/* TOP-LEFT on desktop, where the plot is empty because the curve
-                  starts low. It floated top-RIGHT until the endpoint chips
-                  moved in there — "Plan 71.93%" sat straight on top of it and
-                  clipped the word "Actual" in half. On a phone the legend is
-                  still in flow above the chart and never overlapped anything,
-                  so only the floating case moves. */}
-              <MeasureLegend className="justify-end px-5 pb-2 lg:absolute lg:left-8 lg:top-6 lg:justify-start lg:px-0 lg:pb-0" />
-              <ProgressCurve rows={curve} padTo={health.lastWeek} className="block h-40 w-full sm:h-56 lg:h-full" />
-              <div
-                className={cn(
-                  'pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-5 pb-2 lg:px-8 lg:pb-3',
-                  TYPE.meta
-                )}
-              >
-                {/* On its own tinted ground: the curve is flat at the left of a
-                    60-week project and runs straight through a bare label. */}
-                <span className="rounded bg-card/85 px-1">Week {firstWeek}</span>
-                <span className="rounded bg-card/85 px-1">Week {health.week}</span>
+            {/* Legend above, week labels below, the plot between them: each in
+                its OWN band, never floating over the lines. Floated, a plan at
+                100% ran straight through "Actual --- Plan" and an actual near
+                0% through "Week 4" (24 Nov 2026, "masa ketutupan"). The legend
+                stays left so the plan's chip, top right, never meets it. */}
+            <div className="flex min-h-44 flex-col text-foreground sm:min-h-56">
+              <MeasureLegend className="justify-start px-5 pb-2 pt-3 lg:px-8 lg:pb-3 lg:pt-6" />
+              <div className="relative h-40 sm:h-56 lg:h-auto lg:min-h-40 lg:flex-1">
+                <ProgressCurve rows={curve} padTo={health.lastWeek} className="absolute inset-0" />
+              </div>
+              <div className={cn('pointer-events-none flex justify-between px-5 pb-2 pt-1.5 lg:px-8 lg:pb-3', TYPE.meta)}>
+                <span>Week {firstWeek}</span>
+                <span>Week {health.week}</span>
               </div>
             </div>
           </div>

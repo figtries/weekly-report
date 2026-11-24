@@ -292,6 +292,9 @@ function Curve({
         topPct={(actualEnd.y / H) * 100}
         value={actualValue}
         tone="actual"
+        // Near the floor a chip below the dot leaves the plot; above it is
+        // free whenever the plan's dot (chip above) is well clear.
+        above={actualEnd.y / H > 0.7 && (!planEnd || planEnd.y / H < actualEnd.y / H - 0.3)}
       />
     )}
     </div>
@@ -316,11 +319,13 @@ function EndDot({
   topPct,
   value,
   tone,
+  above = tone === 'plan',
 }: {
   leftPct: number;
   topPct: number;
   value: number;
   tone: 'plan' | 'actual';
+  above?: boolean;
 }) {
   const actual = tone === 'actual';
   return (
@@ -348,7 +353,8 @@ function EndDot({
       <span
         className={cn(
           'absolute right-3 animate-fade-in-up whitespace-nowrap rounded-md bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold leading-tight tabular-nums shadow-sm ring-1 ring-border/60',
-          actual ? 'top-1 text-chart-1' : 'bottom-1 text-chart-2'
+          above ? 'bottom-1' : 'top-1',
+          actual ? 'text-chart-1' : 'text-chart-2'
         )}
         style={{ animationDelay: actual ? '1.15s' : '1.05s' }}
       >
