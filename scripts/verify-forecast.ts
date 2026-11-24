@@ -300,7 +300,7 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [`${row.id}:material`] };
   const v = buildForecastView(db, 38)!;
   const said = v.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? [];
-  check('C6: material ticked before the delivery is listed to check, with why', said.some((r) => r.group === 'ticked-early' && r.detail.startsWith('Material on site ticked, but 2.3') && r.detail.endsWith('and 1 more')), JSON.stringify(said));
+  check('C6: material ticked before the delivery is listed to check, with why', said.some((r) => r.group === 'ticked-early' && r.detail === 'Material on site ticked before 2.3 is done'), JSON.stringify(said));
   w38.leafData[row.id] = { ...w38.leafData[row.id], milestonesDone: [] };
   check('C6: nothing ticked, nothing flagged', !(buildForecastView(db, 38)!.toCheck.find((t) => t.leaf.id === row.id)?.reasons ?? []).some((r) => r.group === 'ticked-early'));
 }
@@ -386,7 +386,7 @@ check('past the last week, counted on in whole weeks', weekContaining('2026-01-2
   const viewed = Object.fromEntries(v.slipping.map((s) => [s.leaf.id, s.weeks]));
   check('will slip names the same rows as the dashboard', JSON.stringify(viewed, Object.keys(viewed).sort()) === JSON.stringify(health, Object.keys(health).sort()) && v.slipping.length > 0, `${JSON.stringify(viewed)} vs ${JSON.stringify(health)}`);
   const s33 = v.slipping.find((s) => s.leaf.id === nid('3.3'));
-  check('and its line recomputes: forecast less plan is the weeks late', !!s33 && s33.line === `Plan ends W${l33.planFinishWeek} · Forecast W${l33.finishWeek} · ${s33.weeks} ${s33.weeks === 1 ? 'week' : 'weeks'} late` && s33.weeks === l33.finishWeek - l33.planFinishWeek, s33?.line);
+  check('and its line recomputes: forecast less plan is the weeks late', !!s33 && s33.line === `${s33.weeks} ${s33.weeks === 1 ? 'week' : 'weeks'} late · W${l33.planFinishWeek} → W${l33.finishWeek}` && s33.weeks === l33.finishWeek - l33.planFinishWeek, s33?.line);
   check('most weeks first', v.slipping.every((s, i, a) => i === 0 || a[i - 1].weeks >= s.weeks), v.slipping.map((s) => s.weeks).join());
 }
 

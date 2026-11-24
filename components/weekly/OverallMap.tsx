@@ -388,9 +388,7 @@ export default function OverallMap({
                 />
               )}
             </Expand>
-            <p className="mt-1.5 text-[12px] text-muted-foreground">
-              {reminder ? 'Press it again to close the list' : 'Press one to see which, and why'}
-            </p>
+            {!reminder && <p className="mt-1.5 text-[12px] text-muted-foreground">Press one to see which</p>}
           </div>
         )}
 
@@ -506,7 +504,7 @@ interface ReminderRow {
   lines: string[];
   /** "to check" only: which of the four findings this row is listed for. */
   group?: CheckReason['group'];
-  /** "to check" only: the branch it sits in, in the Check screen's words. */
+  /** The branch it sits in, in the Check screen's words. */
   trail?: string;
 }
 
@@ -517,14 +515,10 @@ interface ReminderRow {
  * violet sentences in a four-row list with nothing ranking them.
  */
 const CHECK_GROUP: { key: CheckReason['group']; title: string; note?: string }[] = [
-  {
-    key: 'needs-date',
-    title: 'Give these a vendor, site or client date',
-    note: 'Each one sets the project finish',
-  },
-  { key: 'kind-missing', title: 'Nobody has said what kind of work this is' },
-  { key: 'kind-mismatch', title: 'The kind of work disagrees with the heading' },
-  { key: 'ticked-early', title: 'A stage is ticked before what it waits for' },
+  { key: 'needs-date', title: 'No vendor, site or client date', note: 'Sets the project finish' },
+  { key: 'kind-missing', title: 'No kind of work yet' },
+  { key: 'kind-mismatch', title: 'Kind differs from its heading' },
+  { key: 'ticked-early', title: 'Stage ticked too early' },
 ];
 
 /**
@@ -546,7 +540,7 @@ function branchOf(units: MapNode[], id: string): string | undefined {
  */
 function reminderRows(kind: NonNullable<Reminder>, units: MapNode[], forecast: ForecastView | null): ReminderRow[] {
   if (kind === 'slip') {
-    return (forecast?.slipping ?? []).map(({ leaf, line }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: [line] }));
+    return (forecast?.slipping ?? []).map(({ leaf, line }) => ({ id: leaf.id, tag: leaf.code || null, name: splitCode(leaf.name).name, lines: [line], trail: branchOf(units, leaf.id) }));
   }
   if (kind === 'check') {
     // ONE ROW PER FINDING, not per activity. An activity with two findings is
@@ -580,10 +574,11 @@ function reminderRows(kind: NonNullable<Reminder>, units: MapNode[], forecast: F
       id: n.id,
       tag,
       name,
+      trail: branchOf(units, n.id),
       lines: [
         kind === 'late'
-          ? `Plan ended W${n.finishWeek} · Done ${fmt1(n.actualPct)}% · ${weeks(n.lateBy ?? 0)} late`
-          : `Plan ends W${n.finishWeek} · Done ${fmt1(n.actualPct)}% · ${n.dueIn === 0 ? 'Ends this week' : `Ends in ${weeks(n.dueIn ?? 0)}`}`,
+          ? `${weeks(n.lateBy ?? 0)} late · ${fmt1(n.actualPct)}% done`
+          : `${n.dueIn === 0 ? 'Ends this week' : `Ends in ${weeks(n.dueIn ?? 0)}`} · ${fmt1(n.actualPct)}% done`,
       ],
     };
   });
@@ -616,7 +611,6 @@ function ReminderList({
   // "to check" lists one row per FINDING, so an activity with two is two rows.
   // The title counts activities, which is what the button above it counts.
   const n = kind === 'check' ? new Set(rows.map((r) => r.id)).size : rows.length;
-  const one = n === 1;
   // "to check" caps PER GROUP, not across the list. Capped across it, one
   // noisy finding filled the six and the other three kinds were invisible
   // behind "Show all" — and how many KINDS of thing are wrong is the first
@@ -630,10 +624,10 @@ function ReminderList({
       : [{ key: 'all', title: null as string | null, note: undefined, rows: shown, total: rows.length }];
   const truncated = groups.some((g) => g.rows.length < g.total);
   const title = {
-    late: `${n} ${one ? 'activity has' : 'activities have'} passed the plan and ${one ? 'is' : 'are'} not finished`,
-    soon: `${n} ${one ? 'activity ends' : 'activities end'} within 3 weeks and ${one ? 'is' : 'are'} not finished`,
-    slip: `${n} ${one ? 'activity' : 'activities'} will finish after the plan`,
-    check: `${n} ${one ? 'activity needs' : 'activities need'} a look`,
+    late: `${n} late`,
+    soon: `${n} ending within 3 weeks`,
+    slip: `${n} will finish after the plan`,
+    check: `${n} to check`,
   }[kind];
 
   return (
