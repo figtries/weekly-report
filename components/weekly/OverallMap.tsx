@@ -134,6 +134,8 @@ type Reminder = 'late' | 'soon' | 'slip' | 'check' | null;
 
 /** How many reminder rows show before "Show all". */
 const REMINDER_ROWS = 6;
+/** "to check" is capped per group instead, so every kind of finding is seen. */
+const CHECK_ROWS_PER_GROUP = 3;
 
 export default function OverallMap({
   map,
@@ -615,12 +617,18 @@ function ReminderList({
   // The title counts activities, which is what the button above it counts.
   const n = kind === 'check' ? new Set(rows.map((r) => r.id)).size : rows.length;
   const one = n === 1;
+  // "to check" caps PER GROUP, not across the list. Capped across it, one
+  // noisy finding filled the six and the other three kinds were invisible
+  // behind "Show all" — and how many KINDS of thing are wrong is the first
+  // thing this screen is for.
   const groups =
     kind === 'check'
-      ? CHECK_GROUP.map((g) => ({ ...g, rows: shown.filter((r) => r.group === g.key) })).filter(
-          (g) => g.rows.length > 0
-        )
-      : [{ key: 'all', title: null as string | null, note: undefined, rows: shown }];
+      ? CHECK_GROUP.map((g) => {
+          const mine = rows.filter((r) => r.group === g.key);
+          return { ...g, rows: all ? mine : mine.slice(0, CHECK_ROWS_PER_GROUP), total: mine.length };
+        }).filter((g) => g.total > 0)
+      : [{ key: 'all', title: null as string | null, note: undefined, rows: shown, total: rows.length }];
+  const truncated = groups.some((g) => g.rows.length < g.total);
   const title = {
     late: `${n} ${one ? 'activity has' : 'activities have'} passed the plan and ${one ? 'is' : 'are'} not finished`,
     soon: `${n} ${one ? 'activity ends' : 'activities end'} within 3 weeks and ${one ? 'is' : 'are'} not finished`,
@@ -642,7 +650,12 @@ function ReminderList({
                 {g.note && <p className="mt-0.5 text-[12px] text-muted-foreground">{g.note}</p>}
               </li>
             )}
-            {g.rows.map((r, i) => (
+            {g.rows.map((r, i) => {
+              // Grouping here is by PROBLEM, so the branch is what repeats:
+              // four Pipeline Installation rows printed it four times. Say it
+              // on the first row of a run and let the rest inherit it.
+              const branch = r.trail && r.trail !== g.rows[i - 1]?.trail ? r.trail : null;
+              return (
               <li key={`${r.id}-${r.group ?? ''}`}>
                 <button
                   type="button"
@@ -658,11 +671,14 @@ function ReminderList({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       {r.tag && <CodeChip>{r.tag}</CodeChip>}
-                      <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{r.name}</span>
+                      {/* Wraps. The name is the one thing a person reads a
+                          reminder for, and "Handover & As-Built Dossi…" is
+                          the part they cannot act on. */}
+                      <span className="min-w-0 line-clamp-2 text-[14px] font-medium text-foreground">{r.name}</span>
                     </span>
-                    {r.trail && (
-                      <span className="mt-0.5 block truncate text-[12px] font-medium text-foreground/70">
-                        {r.trail}
+                    {branch && (
+                      <span className="mt-0.5 block line-clamp-2 text-[12px] font-medium text-foreground/70">
+                        {branch}
                       </span>
                     )}
                     {r.lines.map((line) => (
@@ -676,11 +692,12 @@ function ReminderList({
                   <span className={cn('shrink-0 text-[13px] font-semibold', tone.text)}>Open ›</span>
                 </button>
               </li>
-            ))}
+              );
+            })}
           </Fragment>
         ))}
       </ul>
-      {!all && n > REMINDER_ROWS && (
+      {!all && truncated && (
         <button
           type="button"
           onClick={onShowAll}

@@ -40,7 +40,7 @@ const STYLE: Record<
  *  goes on counting ACTIVITIES and a heading hides with the rows it heads. */
 type Entry =
   | { kind: 'head'; trail: string; at: number; key: string }
-  | { kind: 'row'; row: FindingRow; at: number; key: string };
+  | { kind: 'row'; row: FindingRow; at: number; key: string; trail?: string };
 
 const VISIBLE = 6;
 
@@ -48,12 +48,24 @@ function entriesOf(rows: FindingRow[]): Entry[] {
   const out: Entry[] = [];
   let at = 0;
   groupFindingRows(rows).forEach((group, gi) => {
-    if (group.trail) out.push({ kind: 'head', trail: group.trail, at, key: `h${gi}` });
+    // A HEADING ONLY EARNS ITS LINE OVER TWO ROWS OR MORE. On a plan whose
+    // late activities each sit in a different branch — Merbau, week 30, six
+    // branches for seven rows — a heading per row is heading/row/heading/row
+    // and twice the list for the same words. A lone row carries its branch
+    // under its name instead, as the dashboard's gap card does.
+    const headed = Boolean(group.trail) && group.rows.length > 1;
+    if (headed) out.push({ kind: 'head', trail: group.trail, at, key: `h${gi}` });
     group.rows.forEach((row, ri) => {
       // Index in the key, not the label alone: a WBS legitimately carries the
       // same description under several parents ("RTS", "Material On Site" each
       // appear more than once on Gundih), and React drops the duplicates.
-      out.push({ kind: 'row', row, at, key: `${gi}-${ri}-${row.label}` });
+      out.push({
+        kind: 'row',
+        row,
+        at,
+        key: `${gi}-${ri}-${row.label}`,
+        trail: headed ? undefined : group.trail || undefined,
+      });
       at += 1;
     });
   });
@@ -108,6 +120,16 @@ function CheckRow({ f, week }: { f: Finding; week: number }) {
                 <span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-0.5">
                   <span className="min-w-0 flex-1 basis-40">
                     <span className="line-clamp-2 font-medium">{r.label}</span>
+                    {/* Only when this row is alone in its branch; otherwise the
+                        heading above it already says this. */}
+                    {e.trail && (
+                      // WRAPS, never truncates: CSS cuts the END of the
+                      // string, which is the row's own parent — the one
+                      // segment that tells two same-named rows apart.
+                      <span className="mt-0.5 block line-clamp-2 text-[12px] font-medium text-foreground/70">
+                        {elideTrail(e.trail)}
+                      </span>
+                    )}
                   </span>
                   <span className="line-clamp-2 max-w-full font-semibold tabular-nums text-foreground/70">{r.value}</span>
                 </span>

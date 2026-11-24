@@ -198,7 +198,7 @@ export function ContributionList({ rows, limit = 3 }: { rows: Contribution[]; li
                     its own ("4.1.2") says where it sits only to somebody who
                     already knows the plan by heart. */}
                 {c.trail && (
-                  <p className="truncate text-[12px] font-medium text-foreground/70">
+                  <p className="line-clamp-2 text-[12px] font-medium text-foreground/70">
                     {elideTrail(c.trail)}
                   </p>
                 )}
