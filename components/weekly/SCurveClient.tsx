@@ -1,5 +1,6 @@
 'use client';
 
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   Area,
   CartesianGrid,
@@ -61,6 +62,47 @@ import type { ProjectInfo } from '@/lib/types';
  * the card would run under them exactly on the device this app is tested on
  * first.
  */
+/**
+ * The plot's height, MEASURED so the page ends exactly at the fold (24 Nov
+ * 2026: "dipenuh tapi g ampe bikin layarnya harus di scroll"). The CSS guess
+ * below (`--plot-gap`, capped at 460px) left a third of a 1080px screen empty,
+ * and any guess is wrong on some header height or zoom. This reads how far the
+ * scroller's content falls short of (or runs past) its visible bottom and gives
+ * the difference to the plot. Everything is read from rects, the one unit CSS
+ * `zoom` (lib/fit-screen.ts) cannot make disagree. The CSS clamp stays as the
+ * server's first paint.
+ */
+const PLOT_MIN = 220;
+
+function useFitPlot() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const plot = ref.current;
+    if (!plot) return;
+    let box: HTMLElement | null = plot.parentElement;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    const scroller = box ?? document.documentElement;
+    const fit = () => {
+      const plotR = plot.getBoundingClientRect();
+      if (plotR.height === 0 || plot.offsetHeight === 0) return;
+      const k = plotR.height / plot.offsetHeight; // rect px per CSS px
+      const boxR = scroller.getBoundingClientRect();
+      const visibleBottom = scroller === document.documentElement ? window.innerHeight : boxR.bottom;
+      const contentBottom = Math.max(...Array.from(scroller.children, (c) => c.getBoundingClientRect().bottom));
+      const slack = visibleBottom - (contentBottom + scroller.scrollTop * k);
+      const next = Math.max(PLOT_MIN, Math.floor((plotR.height + slack) / k));
+      setHeight((prev) => (prev !== null && Math.abs(prev - next) < 2 ? prev : next));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(scroller);
+    Array.from(scroller.children).forEach((c) => ro.observe(c));
+    return () => ro.disconnect();
+  }, []);
+  return { ref, height };
+}
+
 /**
  * One line's figure at the cut-off: a dot on the line and a chip to its left
  * ("Actual 51.42%"), above or below the dot. The chip is SVG because Recharts'
@@ -155,6 +197,7 @@ export default function SCurveClient({
   // the chips part however close the lines finish. Never by which is which: a
   // project ahead of plan and one behind it need opposite sides.
   const actualAbove = endActual && endPlan ? endActual.value >= endPlan.value : endActual !== null;
+  const { ref: plotRef, height: plotHeight } = useFitPlot();
 
   return (
     <Reveal>
@@ -166,8 +209,11 @@ export default function SCurveClient({
               calc()/clamp() ever failed to compile the height would silently be
               zero and ResponsiveContainer would render nothing at all. */}
           <div
+            ref={plotRef}
             className="w-full [--plot-gap:560px] sm:[--plot-gap:480px]"
-            style={{ height: 'clamp(220px, calc(100dvh / var(--z) - var(--plot-gap, 560px)), 460px)' }}
+            style={{
+              height: plotHeight !== null ? `${plotHeight}px` : 'clamp(220px, calc(100dvh / var(--z) - var(--plot-gap, 560px)), 460px)',
+            }}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 32, right: 14, left: 8, bottom: 4 }}>
