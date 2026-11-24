@@ -82,3 +82,6 @@ next-env.d.ts
 # accounts and sessions on a developer machine (lib/auth-store.ts)
 /data/auth.json
 /data/auth.key
+
+# Uploaded photos are user data, never shipped
+/public/uploads/
